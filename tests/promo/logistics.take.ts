@@ -279,7 +279,7 @@ const CREW = defineTask<Record<string, any>, Record<string, any>>({
   source: javaTask({
     imports: [
       "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
-      "io.github.izakyl.folkways.core.api.resident.body.Bodies",
+      "io.github.izakyl.folkways.core.resident.api.Bodies",
       "net.minecraft.server.MinecraftServer",
     ],
     body: `
@@ -344,8 +344,8 @@ const ASSIGN_ROLES = defineTask<Record<string, any>, Record<string, any>>({
   source: javaTask({
     imports: [
       "io.github.izakyl.folkways.front.engine.colony.*",
-      "io.github.izakyl.folkways.core.api.resident.body.Bodies",
-      "io.github.izakyl.folkways.core.api.vocation.Vocations",
+      "io.github.izakyl.folkways.core.resident.api.Bodies",
+      "io.github.izakyl.folkways.core.vocation.api.Vocations",
       "net.minecraft.server.MinecraftServer",
       "net.minecraft.core.BlockPos",
       "net.minecraft.resources.ResourceLocation",
@@ -395,8 +395,8 @@ const RETIRE = defineTask<Record<string, any>, Record<string, any>>({
   timeoutMs: 20_000,
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.core.api.resident.body.Bodies",
-      "io.github.izakyl.folkways.core.api.vocation.Vocations",
+      "io.github.izakyl.folkways.core.resident.api.Bodies",
+      "io.github.izakyl.folkways.core.vocation.api.Vocations",
       "net.minecraft.server.MinecraftServer",
     ],
     body: `
@@ -447,9 +447,10 @@ const KIT_UP = defineTask<Record<string, any>, Record<string, any>>({
   source: javaTask({
     imports: [
       "io.github.izakyl.folkways.front.engine.colony.*",
-      "io.github.izakyl.folkways.core.api.resident.body.Bodies",
-      "io.github.izakyl.folkways.core.api.vocation.Vocations",
-      "io.github.izakyl.folkways.core.api.terms.*",
+      "io.github.izakyl.folkways.core.resident.api.Bodies",
+      "io.github.izakyl.folkways.core.vocation.api.Vocations",
+      "io.github.izakyl.folkways.core.world.api.*",
+      "io.github.izakyl.folkways.core.item.api.*",
       "net.minecraft.server.MinecraftServer",
       "net.minecraft.core.BlockPos",
       "net.minecraft.world.Container",
@@ -547,7 +548,7 @@ const POINT_BOOK = defineTask<Record<string, any>, Record<string, any>>({
   timeoutMs: 20_000,
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.core.engine.colony.ColonyMembership",
+      "io.github.izakyl.folkways.core.colony.internal.ColonyMembership",
       "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
       "io.github.izakyl.folkways.front.engine.colony.MemberToggle",
       "io.github.izakyl.folkways.create.dispatch.DispatchContent",

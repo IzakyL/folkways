@@ -1,5 +1,6 @@
 package io.github.izakyl.folkways.plugins.wares.mixin;
 
+import io.github.izakyl.folkways.base.persist.Required;
 import io.github.izakyl.folkways.plugins.wares.FurnaceTraining;
 import java.util.ArrayList;
 import java.util.List;
@@ -29,14 +30,14 @@ public abstract class FurnaceTrainingMixin implements FurnaceTraining {
     @Unique private ItemStack folkways$input = ItemStack.EMPTY;
 
     @Unique private void folkways$sync(int count) {
-        int known = folkways$batches.stream().mapToInt(tag -> tag.getInt("count")).sum();
+        int known = folkways$batches.stream().mapToInt(tag -> Required.integer(tag, "count")).sum();
         int removed = Math.max(0, known - count);
         while (removed > 0 && !folkways$batches.isEmpty()) {
             CompoundTag first = folkways$batches.getFirst();
-            int used = Math.min(removed, first.getInt("count"));
-            first.putInt("count", first.getInt("count") - used);
+            int used = Math.min(removed, Required.integer(first, "count"));
+            first.putInt("count", Required.integer(first, "count") - used);
             removed -= used;
-            if (first.getInt("count") == 0) { folkways$batches.removeFirst(); folkways$fraction = 0; }
+            if (Required.integer(first, "count") == 0) { folkways$batches.removeFirst(); folkways$fraction = 0; }
         }
         if (count > known) { folkways$append(count - known, 0); }
     }
@@ -63,7 +64,7 @@ public abstract class FurnaceTrainingMixin implements FurnaceTraining {
             folkways$fraction = 0;
             folkways$input = next.copy();
         } else {
-            int known = folkways$batches.stream().mapToInt(tag -> tag.getInt("count")).sum();
+            int known = folkways$batches.stream().mapToInt(tag -> Required.integer(tag, "count")).sum();
             if (next.getCount() < known) { folkways$sync(next.getCount()); }
         }
     }
@@ -88,7 +89,7 @@ public abstract class FurnaceTrainingMixin implements FurnaceTraining {
         self.folkways$sync(input.getCount());
         if (self.cookingProgress <= 0 || self.cookingTotalTime <= 1 || self.folkways$batches.isEmpty()
                 || !state.getValue(BlockStateProperties.LIT)) { return; }
-        self.folkways$fraction += self.folkways$batches.getFirst().getDouble("speed");
+        self.folkways$fraction += Required.doubleValue(self.folkways$batches.getFirst(), "speed");
         int extra = (int) self.folkways$fraction;
         self.folkways$fraction -= extra;
         self.cookingProgress = Math.min(self.cookingTotalTime - 1, self.cookingProgress + extra);
@@ -105,9 +106,11 @@ public abstract class FurnaceTrainingMixin implements FurnaceTraining {
     @Inject(method = "loadAdditional", at = @At("TAIL"))
     private void folkways$load(CompoundTag tag, HolderLookup.Provider registries, CallbackInfo ci) {
         folkways$batches.clear();
+        // Commands, item block_entity_data and templates can supply either top-level field independently.
         for (Tag entry : tag.getList("FolkwaysFurnaceBatches", Tag.TAG_COMPOUND)) {
             CompoundTag part = (CompoundTag) entry;
-            if (part.getInt("count") > 0) { folkways$batches.add(part.copy()); }
+            Required.doubleValue(part, "speed");
+            if (Required.integer(part, "count") > 0) { folkways$batches.add(part.copy()); }
         }
         folkways$fraction = tag.getDouble("FolkwaysFurnaceFraction");
         folkways$input = ((AbstractFurnaceBlockEntity) (Object) this).getItem(0).copy();

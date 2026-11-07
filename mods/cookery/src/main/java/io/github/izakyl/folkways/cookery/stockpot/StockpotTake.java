@@ -3,56 +3,55 @@ package io.github.izakyl.folkways.cookery.stockpot;
 import com.github.ysbbbbbb.kaleidoscopecookery.api.blockentity.IStockpot;
 import com.github.ysbbbbbb.kaleidoscopecookery.blockentity.kitchen.StockpotBlockEntity;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems;
-import io.github.izakyl.folkways.core.api.terms.RefusalKind;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.work.Amount;
-import io.github.izakyl.folkways.core.api.work.Ending;
-import io.github.izakyl.folkways.core.api.work.Hold;
-import io.github.izakyl.folkways.core.api.work.Grown;
-import io.github.izakyl.folkways.core.api.work.Leaves;
-import io.github.izakyl.folkways.core.api.work.Need;
-import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.Worker;
-import io.github.izakyl.folkways.core.api.work.Xp;
 import io.github.izakyl.folkways.cookery.CookeryContent;
 import io.github.izakyl.folkways.cookery.CookeryRefusal;
 import io.github.izakyl.folkways.cookery.KitchenBookings;
 import io.github.izakyl.folkways.cookery.KitchenDelivery;
+import io.github.izakyl.folkways.core.plan.api.Grown;
+import io.github.izakyl.folkways.core.resident.api.RefusalKind;
+import io.github.izakyl.folkways.core.work.api.Amount;
+import io.github.izakyl.folkways.core.work.api.Ending;
+import io.github.izakyl.folkways.core.work.api.Hold;
+import io.github.izakyl.folkways.core.work.api.Need;
+import io.github.izakyl.folkways.core.work.api.Node;
+import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.work.api.Xp;
+import io.github.izakyl.folkways.core.work.support.Leaves;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.plugins.wares.WaresContent;
 import java.util.ArrayList;
-import java.util.function.Predicate;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Predicate;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
 
-final class StockpotTake extends StockpotNode {
+class StockpotTake extends StockpotAction {
 
-    private final UUID colony;
-    private final UUID turn;
-    private final long generation;
+    final UUID colony;
+    final UUID turn;
+    final long generation;
     private final boolean keepLid;
     private final StockpotPlan plan;
-    private final KitchenBookings bookings;
+    final KitchenBookings bookings;
     private final Runnable changed;
-    private final boolean recovery;
-    private final Grown recoveryGoal;
-    private Hold held;
 
     StockpotTake(UUID colony, UUID batch, WorldPos at, Stances stances, StockpotPlan plan,
-                 KitchenBookings bookings, Runnable changed, boolean recovery) {
-        this(colony, batch, at, stances, plan, bookings, changed, recovery, batch, false);
+        KitchenBookings bookings, Runnable changed) {
+        this(colony, batch, at, stances, plan, bookings, changed, batch, false);
     }
 
     StockpotTake(UUID colony, UUID batch, WorldPos at, Stances stances, StockpotPlan plan,
-                 KitchenBookings bookings, Runnable changed, boolean recovery, UUID turn, boolean keepLid) {
-        this(colony, batch, at, stances, plan, bookings, changed, recovery, turn, keepLid, bookings.generation(at));
+        KitchenBookings bookings, Runnable changed,
+        UUID turn, boolean keepLid) {
+        this(colony, batch, at, stances, plan, bookings, changed, turn, keepLid, bookings.generation(at));
     }
 
     StockpotTake(UUID colony, UUID batch, WorldPos at, Stances stances, StockpotPlan plan,
-                 KitchenBookings bookings, Runnable changed, boolean recovery, UUID turn, boolean keepLid,
+        KitchenBookings bookings, Runnable changed, UUID turn, boolean keepLid,
                  long generation) {
         super(spec(batch, at, stances)
             .needs(plan.carrier().map(need -> List.of(
@@ -68,47 +67,12 @@ final class StockpotTake extends StockpotNode {
         this.plan = plan;
         this.bookings = bookings;
         this.changed = changed;
-        this.recovery = recovery;
-        recoveryGoal = recovery ? Grown.of(this) : null;
     }
 
-    @Override
     public List<Amount> planningLeaves(List<Amount> promised) {
         return Leaves.unpromised(spec().leaves(), promised);
     }
 
-    Grown recoveryGoal() { return recoveryGoal; }
-
-    @Override
-    public Optional<RefusalKind> planned(ServerLevel level) {
-        if (!recovery || held != null) {
-            return Optional.empty();
-        }
-        if (bookings.generation(at) != generation) {
-            return Optional.of(CookeryRefusal.STATION_CHANGED);
-        }
-        if (!bookings.free(at)) {
-            return Optional.of(CookeryRefusal.STATION_BUSY);
-        }
-        Hold claim = bookings.hold(at, turn, spec().estimate());
-        Optional<RefusalKind> refused = claim.take();
-        if (refused.isEmpty()) {
-            held = claim;
-            StockpotWorkshops.rememberRecovery(colony, at, this);
-        }
-        return refused;
-    }
-
-    @Override
-    public void ended(ServerLevel level, Ending how) {
-        if (recovery) StockpotWorkshops.endRecovery(colony, at, this);
-        if (held != null) {
-            held.release(how);
-            held = null;
-        }
-    }
-
-    @Override
     public boolean ready(ServerLevel level) {
         if (bookings.cancelled(at, turn, generation)) {
             return true;
@@ -127,11 +91,10 @@ final class StockpotTake extends StockpotNode {
         }).orElse(false);
     }
 
-    @Override
     public Optional<RefusalKind> refusal(ServerLevel level) {
         return bookings.cancelled(at, turn, generation) ? Optional.of(CookeryRefusal.STATION_CHANGED) : super.refusal(level);
     }
-    @Override
+
     public Outcome commit(ServerLevel level, Worker who) {
         if (bookings.cancelled(at, turn, generation)) {
             return Outcome.failed(CookeryRefusal.STATION_CHANGED);
@@ -219,5 +182,72 @@ final class StockpotTake extends StockpotNode {
     private static Outcome rolledBack(ServerLevel level, StockpotBefore before) {
         before.restore(level);
         return Outcome.failed(CookeryRefusal.STATION_CHANGED);
+    }
+
+    static final class Recovery extends StockpotTake implements Node {
+        private final Grown goal;
+        private Hold held;
+        private boolean ended;
+
+        Recovery(
+            UUID colony,
+            UUID batch,
+            WorldPos at,
+            Stances stances,
+            StockpotPlan plan,
+            KitchenBookings bookings,
+            Runnable changed) {
+            super(colony, batch, at, stances, plan, bookings, changed);
+            goal = Grown.of(this);
+        }
+
+        Grown recoveryGoal() {
+            return goal;
+        }
+
+        @Override
+        public Optional<RefusalKind> planned(ServerLevel level) {
+            if (held != null) {
+                return Optional.empty();
+            }
+            if (bookings.generation(at) != generation) {
+                return Optional.of(CookeryRefusal.STATION_CHANGED);
+            }
+            if (!bookings.free(at)) {
+                return Optional.of(CookeryRefusal.STATION_BUSY);
+            }
+            Hold claim = bookings.hold(at, turn, spec().estimate());
+            Optional<RefusalKind> refused = claim.take();
+            if (refused.isEmpty()) {
+                held = claim;
+                StockpotWorkshops.rememberRecovery(colony, at, this);
+            }
+            return refused;
+        }
+
+        @Override
+        public Optional<RefusalKind> refusal(ServerLevel level) {
+            return ended ? Optional.of(CookeryRefusal.STATION_CHANGED) : super.refusal(level);
+        }
+
+        @Override
+        public void released(ServerLevel level, Worker who, Ending how) {
+            if (!(how instanceof Ending.Done)) {
+                ended(level, how);
+            }
+        }
+
+        @Override
+        public void ended(ServerLevel level, Ending how) {
+            if (ended) {
+                return;
+            }
+            ended = true;
+            StockpotWorkshops.endRecovery(colony, at, this);
+            if (held != null) {
+                held.release(how);
+                held = null;
+            }
+        }
     }
 }

@@ -43,10 +43,10 @@ const OBSERVE = defineTask<{ mode: string; player: string; rack: Vec; boards: Ve
     imports: [
       "com.github.ysbbbbbb.kaleidoscopecookery.blockentity.kitchen.ChoppingBoardBlockEntity",
       "com.github.ysbbbbbb.kaleidoscopecookery.init.tag.TagMod",
-      "io.github.izakyl.folkways.core.api.colony.Books",
-      "io.github.izakyl.folkways.core.api.colony.Colony",
-      "io.github.izakyl.folkways.core.api.resident.body.Bodies",
-      "io.github.izakyl.folkways.core.api.terms.WorldPos",
+      "io.github.izakyl.folkways.front.api.Books",
+      "io.github.izakyl.folkways.core.colony.api.Colony",
+      "io.github.izakyl.folkways.core.resident.api.Bodies",
+      "io.github.izakyl.folkways.core.world.api.WorldPos",
       "net.minecraft.core.BlockPos",
       "net.minecraft.core.registries.BuiltInRegistries",
       "net.minecraft.server.level.ServerLevel",
@@ -302,7 +302,7 @@ const ROLES = defineTask<{ player: string }, { residents: string[]; vocations: s
   side: "server",
   timeoutMs: 20000,
   source: javaTask({
-    imports: ["io.github.izakyl.folkways.core.api.colony.Books", "io.github.izakyl.folkways.core.api.vocation.Vocations"],
+    imports: ["io.github.izakyl.folkways.front.api.Books", "io.github.izakyl.folkways.core.vocation.api.Vocations"],
     body: `
 var player = ctx.server().getPlayerList().getPlayerByName(Args.of(ctx).string("player"));
 var colony = Books.acting(player).orElseThrow();

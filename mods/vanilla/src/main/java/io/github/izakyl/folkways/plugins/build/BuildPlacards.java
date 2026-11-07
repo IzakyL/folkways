@@ -1,18 +1,18 @@
 package io.github.izakyl.folkways.plugins.build;
 
+import io.github.izakyl.folkways.core.item.api.Goods;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import io.github.izakyl.folkways.front.api.Placard;
 import io.github.izakyl.folkways.front.api.notice.Line;
 import io.github.izakyl.folkways.front.api.notice.Notice;
 import io.github.izakyl.folkways.front.api.notice.Sentence;
 import io.github.izakyl.folkways.plugins.build.draft.Hint;
-import io.github.izakyl.folkways.core.api.terms.Goods;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.core.HolderLookup;
+import net.minecraft.resources.ResourceLocation;
 
 final class BuildPlacards {
     private static final String NEEDS = "folkways.card.build.needs";

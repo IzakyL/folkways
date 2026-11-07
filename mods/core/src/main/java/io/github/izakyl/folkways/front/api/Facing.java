@@ -1,9 +1,9 @@
 package io.github.izakyl.folkways.front.api;
 
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.colony.ColonyView;
-import io.github.izakyl.folkways.core.api.terms.ItemFilter;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.colony.api.ColonyView;
+import io.github.izakyl.folkways.core.item.api.ItemFilter;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.front.api.notice.Attempt;
 import io.github.izakyl.folkways.front.api.notice.Line;
 import io.github.izakyl.folkways.front.api.notice.Sentence;

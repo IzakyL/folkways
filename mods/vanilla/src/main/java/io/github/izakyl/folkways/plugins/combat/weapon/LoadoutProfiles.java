@@ -1,7 +1,8 @@
 package io.github.izakyl.folkways.plugins.combat.weapon;
 
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
+import io.github.izakyl.folkways.base.persist.Required;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
@@ -40,71 +41,50 @@ public final class LoadoutProfiles {
         this.colony = colony;
         this.changed = changed;
         CompoundTag saved = colony.kept(SAVED);
-        for (Tag value : saved.getList("profiles", Tag.TAG_COMPOUND)) {
+        if (saved.isEmpty()) {
+            return;
+        }
+        for (Tag value : Required.list(saved, "profiles", Tag.TAG_COMPOUND)) {
             CompoundTag row = (CompoundTag) value;
             List<LoadoutProfile.Entry> entries = new ArrayList<>();
-            for (Tag item : row.getList("entries", Tag.TAG_COMPOUND)) {
+            for (Tag item : Required.list(row, "entries", Tag.TAG_COMPOUND)) {
                 CompoundTag entry = (CompoundTag) item;
-                CompoundTag items = entry.getCompound("items");
+                CompoundTag items = Required.compound(entry, "items");
                 Optional<ItemSpec> decoded =
                     ItemSpec.CODEC
                     .parse(registries().createSerializationContext(NbtOps.INSTANCE), items)
                     .result();
                 if (decoded.isEmpty()) {
                     unavailableItems.put(
-                        new EntryKey(row.getUUID("id"), entry.getUUID("id")), items.copy());
+                        new EntryKey(Required.uuid(row, "id"), Required.uuid(entry, "id")), items.copy());
                 }
                 ItemSpec spec = decoded.orElse(UNAVAILABLE);
                 entries.add(
                     new LoadoutProfile.Entry(
-                    entry.getUUID("id"),
-                    LoadoutProfile.Kind.valueOf(entry.getString("kind")),
+                    Required.uuid(entry, "id"),
+                    LoadoutProfile.Kind.valueOf(Required.string(entry, "kind")),
                     spec,
                     entry.contains("slot")
                     ? Optional.of(EquipmentSlot.byName(entry.getString("slot")))
                     : Optional.empty(),
-                    entry.getInt("target"),
-                    entry.getInt("threshold")));
+                    Required.integer(entry, "target"),
+                    Required.integer(entry, "threshold")));
             }
-            LoadoutProfile profile = new LoadoutProfile(row.getUUID("id"), row.getString("name"), entries);
+            LoadoutProfile profile =
+                new LoadoutProfile(
+                Required.uuid(row, "id"),
+                Required.string(row, "name"),
+                entries);
             profiles.put(profile.id(), profile);
         }
-        for (Tag value : saved.getList("assignments", Tag.TAG_COMPOUND)) {
+        for (Tag value : Required.list(saved, "assignments", Tag.TAG_COMPOUND)) {
             CompoundTag row = (CompoundTag) value;
-            if (profiles.containsKey(row.getUUID("profile"))) {
-                assignments.put(row.getUUID("resident"), row.getUUID("profile"));
+            UUID profile = Required.uuid(row, "profile");
+            if (!profiles.containsKey(profile)) {
+                throw new IllegalArgumentException("Persisted loadout assignment names missing profile " + profile);
             }
+            assignments.put(Required.uuid(row, "resident"), profile);
         }
-    }
-
-    /** Strip exact components, enchantments and held gun attachments from requested profile items. */
-    public static CompoundTag withoutPins(CompoundTag saved) {
-        CompoundTag items = saved.copy();
-        ListTag alternatives = items.getList("anyOf", Tag.TAG_COMPOUND);
-        for (int n = 0; n < alternatives.size(); n++) {
-            alternatives.set(n, withoutPins(alternatives.getCompound(n)));
-        }
-        if (items.contains("components", Tag.TAG_COMPOUND)) {
-            CompoundTag components = items.getCompound("components");
-            if (components.getBoolean("exact")) {
-                items.remove("components");
-            } else {
-                CompoundTag values = components.getCompound("values");
-                values.remove("minecraft:enchantments");
-                CompoundTag custom = values.getCompound("minecraft:custom_data");
-                if (custom.contains("GunId")) {
-                    for (String key : List.copyOf(custom.getAllKeys())) {
-                        if (key.startsWith("Attachment")) {
-                            custom.remove(key);
-                        }
-                    }
-                }
-                if (values.isEmpty()) {
-                    items.remove("components");
-                }
-            }
-        }
-        return items;
     }
 
     static HolderLookup.Provider registries() {
@@ -208,7 +188,7 @@ public final class LoadoutProfiles {
             throw new IllegalArgumentException("unknown profile");
         }
         for (UUID id : residents) {
-            if (colony.holdingOf(id).isEmpty()
+            if (colony.claimOf(id).isEmpty()
                 || colony.residents().stream().noneMatch(resident -> resident.id().equals(id))) {
                 throw new IllegalArgumentException("resident outside colony");
             }
@@ -264,7 +244,6 @@ public final class LoadoutProfiles {
 
     void save() {
         CompoundTag saved = new CompoundTag();
-        saved.putInt("version", 4);
         ListTag rows = new ListTag();
         for (LoadoutProfile profile : profiles.values()) {
             CompoundTag row = new CompoundTag();

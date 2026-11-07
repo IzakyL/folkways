@@ -250,7 +250,7 @@ const HANDED_OVER = defineTask<Record<string, any>, Record<string, any>>({
   timeoutMs: 20_000,
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.core.api.colony.Held",
+      "io.github.izakyl.folkways.core.colony.api.Claimed",
       "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
       "io.github.izakyl.folkways.create.dispatch.DispatchContent",
       "io.github.izakyl.folkways.create.dispatch.DispatchPresence",
@@ -265,8 +265,8 @@ var network = UUID.fromString(args.string("network"));
 var posted = new ArrayList<Object>();
 for (var raw : args.list("posts")) {
   var at = pos(raw);
-  posted.add(colony.holdings(DispatchContent.PORT).stream()
-    .anyMatch(h -> h.what() instanceof Held.Block b && b.cell().cell().equals(at)));
+  posted.add(colony.claims(DispatchContent.PORT).stream()
+    .anyMatch(h -> h.what() instanceof Claimed.Block b && b.cell().cell().equals(at)));
 }
 return Map.of("ok", true, "held", dispatch.holds(network), "flaw", dispatch.flawOf(network), "posted", posted);
 `,

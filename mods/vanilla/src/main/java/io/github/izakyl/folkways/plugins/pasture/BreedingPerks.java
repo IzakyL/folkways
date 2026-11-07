@@ -1,6 +1,7 @@
 package io.github.izakyl.folkways.plugins.pasture;
 
-import io.github.izakyl.folkways.core.api.work.Worker;
+import io.github.izakyl.folkways.base.persist.Required;
+import io.github.izakyl.folkways.core.work.api.Worker;
 import java.util.HashSet;
 import java.util.Set;
 import net.minecraft.core.BlockPos;
@@ -43,21 +44,21 @@ final class BreedingPerks {
         tamed(event.getChild(), first);
         Set<Long> footprint = new HashSet<>();
         AABB bounds = null;
-        for (long packed : mark.getLongArray("floor")) {
+        for (long packed : Required.longArray(mark, "floor")) {
             BlockPos pos = BlockPos.of(packed);
             footprint.add(BlockPos.asLong(pos.getX(), 0, pos.getZ()));
             AABB cell = new AABB(pos).inflate(0, 4, 0);
             bounds = bounds == null ? cell : bounds.minmax(cell);
         }
         if (bounds == null) { return; }
-        int minY = mark.getInt("min_y"), maxY = mark.getInt("max_y");
+        int minY = Required.integer(mark, "min_y"), maxY = Required.integer(mark, "max_y");
         long living = level.getEntitiesOfClass(Animal.class, bounds, animal ->
             animal.isAlive() && animal.getType() == first.getType()
                 && animal.getY() >= minY && animal.getY() <= maxY
                 && footprint.contains(BlockPos.asLong(animal.blockPosition().getX(), 0,
                     animal.blockPosition().getZ()))).size();
         // The ordinary child has not entered the level yet and also needs its place.
-        if (living + 1 >= mark.getInt("target") || level.random.nextDouble() >= mark.getDouble("chance")) { return; }
+        if (living + 1 >= Required.integer(mark, "target") || level.random.nextDouble() >= Required.doubleValue(mark, "chance")) { return; }
         var extra = first.getBreedOffspring(level, second);
         if (extra != null) {
             tamed(extra, first);
@@ -77,7 +78,7 @@ final class BreedingPerks {
     }
 
     private static boolean valid(CompoundTag mark, ServerLevel level, Animal mate) {
-        return mark.hasUUID("mate") && mark.getUUID("mate").equals(mate.getUUID())
-            && mark.getLong("expires") >= level.getGameTime();
+        return mark.hasUUID("mate") && Required.uuid(mark, "mate").equals(mate.getUUID())
+            && Required.longValue(mark, "expires") >= level.getGameTime();
     }
 }

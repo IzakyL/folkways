@@ -1,7 +1,7 @@
 package io.github.izakyl.folkways.cookery.oil;
 
 import com.github.ysbbbbbb.kaleidoscopecookery.blockentity.decoration.OilPotBlockEntity;
-import io.github.izakyl.folkways.core.api.terms.Containers;
+import io.github.izakyl.folkways.core.item.api.Containers;
 import java.util.Optional;
 import net.minecraft.world.Container;
 import net.minecraft.world.entity.player.Player;

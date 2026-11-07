@@ -2,9 +2,8 @@ package io.github.izakyl.folkways.create.elevator;
 
 import com.simibubi.create.content.contraptions.elevator.ElevatorPulleyBlock;
 import com.simibubi.create.content.contraptions.elevator.ElevatorPulleyBlockEntity;
-import io.github.izakyl.folkways.core.api.Declaring;
-import io.github.izakyl.folkways.core.api.terms.Keepouts;
-import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
+import io.github.izakyl.folkways.core.extension.api.Declaring;
+import io.github.izakyl.folkways.core.world.api.Keepouts;
 import io.github.izakyl.folkways.front.api.Delegation;
 import io.github.izakyl.folkways.front.api.Enrollment;
 import io.github.izakyl.folkways.front.api.Registering;
@@ -14,6 +13,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.Level;
 import net.neoforged.bus.api.IEventBus;
+import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.server.ServerStoppedEvent;
 

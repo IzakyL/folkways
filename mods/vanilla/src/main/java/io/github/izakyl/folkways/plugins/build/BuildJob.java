@@ -1,14 +1,14 @@
 package io.github.izakyl.folkways.plugins.build;
 
-import io.github.izakyl.folkways.core.api.structure.StructureCompat;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.work.Amount;
-import io.github.izakyl.folkways.core.api.work.Leaves;
-import io.github.izakyl.folkways.core.api.work.Need;
-import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.ToolNeed;
-import io.github.izakyl.folkways.core.api.work.ToolUse;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
+import io.github.izakyl.folkways.core.work.api.Amount;
+import io.github.izakyl.folkways.core.work.api.Need;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.work.api.StructureCompat;
+import io.github.izakyl.folkways.core.work.api.ToolNeed;
+import io.github.izakyl.folkways.core.work.api.ToolUse;
+import io.github.izakyl.folkways.core.work.support.Leaves;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;

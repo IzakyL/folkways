@@ -1,25 +1,25 @@
 package io.github.izakyl.folkways.plugins.combat.weapon;
 
-import io.github.izakyl.folkways.core.api.colony.Closing;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.colony.ColonyView;
-import io.github.izakyl.folkways.core.api.inventory.InventorySnapshot;
-import io.github.izakyl.folkways.core.api.inventory.SlotSnapshot;
-import io.github.izakyl.folkways.core.api.resident.body.Body;
-import io.github.izakyl.folkways.core.api.resident.body.Equipment;
-import io.github.izakyl.folkways.core.api.terms.Containers;
-import io.github.izakyl.folkways.core.api.terms.Goods;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
-import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
-import io.github.izakyl.folkways.core.api.work.Amount;
-import io.github.izakyl.folkways.core.api.work.Delivery;
-import io.github.izakyl.folkways.core.api.work.Grown;
-import io.github.izakyl.folkways.core.api.work.Need;
-import io.github.izakyl.folkways.core.api.work.NodeSpec;
-import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.WorkSite;
-import io.github.izakyl.folkways.core.api.work.Worker;
-import io.github.izakyl.folkways.core.api.work.Workload;
+import io.github.izakyl.folkways.core.colony.api.Closing;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.colony.api.ColonyView;
+import io.github.izakyl.folkways.core.colony.api.Equipment;
+import io.github.izakyl.folkways.core.inventory.api.InventorySnapshot;
+import io.github.izakyl.folkways.core.inventory.api.SlotSnapshot;
+import io.github.izakyl.folkways.core.item.api.Containers;
+import io.github.izakyl.folkways.core.item.api.Goods;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
+import io.github.izakyl.folkways.core.plan.api.Delivery;
+import io.github.izakyl.folkways.core.plan.api.Grown;
+import io.github.izakyl.folkways.core.resident.api.Body;
+import io.github.izakyl.folkways.core.work.api.Amount;
+import io.github.izakyl.folkways.core.work.api.Need;
+import io.github.izakyl.folkways.core.work.api.NodeSpec;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.work.api.WorkSite;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.work.api.Workload;
+import io.github.izakyl.folkways.core.world.api.WorldSpaces;
 import io.github.izakyl.folkways.front.api.Fronts;
 import io.github.izakyl.folkways.plugins.combat.DefenseControl;
 import io.github.izakyl.folkways.plugins.patrol.PatrolContent;
@@ -170,7 +170,7 @@ public final class PatrolSupplies {
             || !body.mob().isAlive()
             || body.mob().isRemoved()
             || body.colonyId().filter(colony.id()::equals).isEmpty()
-            || colony.holdingOf(body.id()).isEmpty()) {
+            || colony.claimOf(body.id()).isEmpty()) {
             throw new IllegalArgumentException(
                 "patrol loadouts require a loaded person held by this colony on its server"
                 + " thread");
@@ -445,7 +445,7 @@ public final class PatrolSupplies {
             || !body.isAlive()
             || body.isRemoved()
             || body.colonyId().filter(colony.id()::equals).isEmpty()
-            || colony.holdingOf(body.id()).isEmpty()
+            || colony.claimOf(body.id()).isEmpty()
             || revisions.getOrDefault(body.id(), 0L) != authority.revision()) {
             return false;
         }

@@ -1,14 +1,14 @@
 package io.github.izakyl.folkways.front.engine.net;
 
+import io.github.izakyl.folkways.front.api.ZoneRing;
 import io.github.izakyl.folkways.front.engine.colony.ColonyZone;
 import io.github.izakyl.folkways.front.engine.colony.Zone;
 import io.netty.buffer.ByteBuf;
-import io.github.izakyl.folkways.front.api.ZoneRing;
 import java.util.List;
-import net.minecraft.network.codec.ByteBufCodecs;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.UUIDUtil;
+import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.resources.ResourceLocation;
 

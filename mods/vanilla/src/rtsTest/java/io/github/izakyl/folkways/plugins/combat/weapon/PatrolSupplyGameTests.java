@@ -1,33 +1,21 @@
 package io.github.izakyl.folkways.plugins.combat.weapon;
 
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.colony.Colonies;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.colony.Held;
-import io.github.izakyl.folkways.core.api.colony.Release;
-import io.github.izakyl.folkways.core.api.resident.body.Body;
-import io.github.izakyl.folkways.core.api.terms.Containers;
-import io.github.izakyl.folkways.core.api.terms.Goods;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
-import io.github.izakyl.folkways.core.api.terms.Reach;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.vocation.KitRules;
-import io.github.izakyl.folkways.core.api.vocation.Vocations;
-import io.github.izakyl.folkways.core.api.work.Ending;
-import io.github.izakyl.folkways.core.api.work.Node;
-import io.github.izakyl.folkways.core.api.work.Worker;
-import io.github.izakyl.folkways.core.engine.inventory.InventoryObservations;
-import io.github.izakyl.folkways.core.engine.labor.Commit;
-import io.github.izakyl.folkways.core.engine.labor.LaborFixture;
-import io.github.izakyl.folkways.core.engine.labor.LaborRefusal;
+import io.github.izakyl.folkways.core.colony.api.ClaimRelease;
+import io.github.izakyl.folkways.core.colony.api.Claimed;
+import io.github.izakyl.folkways.core.colony.api.Colonies;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.inventory.internal.InventoryObservations;
+import io.github.izakyl.folkways.core.item.api.Containers;
+import io.github.izakyl.folkways.core.item.api.Goods;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
+import io.github.izakyl.folkways.core.resident.api.Body;
+import io.github.izakyl.folkways.core.runtime.LaborFixture;
 import io.github.izakyl.folkways.core.testing.Cleanup;
-import io.github.izakyl.folkways.core.testing.Proxies;
 import io.github.izakyl.folkways.core.testing.TestWorker;
-import io.github.izakyl.folkways.effect.Effects;
-import io.github.izakyl.folkways.front.api.CoreSettings;
-import io.github.izakyl.folkways.front.engine.colony.ColonyFront;
-import io.github.izakyl.folkways.front.engine.colony.ColonySettings;
-import io.github.izakyl.folkways.plugins.patrol.PatrolContent;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.world.api.Reach;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import io.github.izakyl.folkways.plugins.person.PersonContent;
 import io.github.izakyl.folkways.plugins.person.ResidentEntity;
@@ -58,6 +46,7 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.common.Tags;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
@@ -311,8 +300,8 @@ public final class PatrolSupplyGameTests {
                     13,
                     "death preserves the pre-existing equipment's durability");
                 scene.colony
-                    .holdingOf(scene.body.id())
-                    .ifPresent(held -> scene.colony.release(held.id(), Release.DIED));
+                    .claimOf(scene.body.id())
+                    .ifPresent(held -> scene.colony.release(held.id(), ClaimRelease.DIED));
                 scene.supplies.tick(scene.level.getServer());
                 helper.assertTrue(
                     scene.supplyState() == PatrolSupplies.State.INACTIVE,
@@ -473,7 +462,7 @@ public final class PatrolSupplyGameTests {
             BlockPos start = anchor.block(level);
             body.moveTo(start.getX() + .5, start.getY(), start.getZ() + .5);
             level.addFreshEntity(body);
-            colony.hold(PersonContent.ID, Held.Entity.of(body)).orElseThrow();
+            colony.hold(PersonContent.ID, Claimed.Entity.of(body)).orElseThrow();
             body.joinColony(colony.id());
             simulation = new LaborFixture(colony, level);
             helper.onEachTick(
@@ -611,6 +600,33 @@ public final class PatrolSupplyGameTests {
             .filter(one -> one.name().equals(name))
             .findFirst()
             .orElseGet(() -> profiles.add(profiles.create(name).id(), LoadoutProfile.Entry.weapon(weapon)));
+        profiles.assign(List.of(body.id()), Optional.of(profile.id()));
+    }
+
+    private static void assignLoadout(
+        PatrolSupplies supplies,
+        Body body, String name) {
+        var profiles = supplies.profiles();
+        var profile = profiles.all().stream().filter(value -> value.name().equals(name)).findFirst()
+            .orElseGet(() -> {
+                var created = profiles.create(name);
+                var weapon = switch (name) {
+                    case "melee" -> ItemSpec.of(
+                        Tags.Items.MELEE_WEAPON_TOOLS);
+                    case "bow" -> ItemSpec.of(Items.BOW);
+                    case "crossbow" -> ItemSpec.of(Items.CROSSBOW);
+                    default -> throw new IllegalArgumentException(name);
+                };
+                var entries = new ArrayList<LoadoutProfile.Entry>();
+                entries.add(LoadoutProfile.Entry.weapon(weapon));
+                if (!name.equals("melee")) {
+                    entries.add(LoadoutProfile.Entry.supply(
+                        ItemSpec.of(ItemTags.ARROWS), 8, 8));
+                }
+                profiles.replace(new LoadoutProfile(
+                    created.id(), created.name(), entries));
+                return profiles.get(created.id()).orElseThrow();
+            });
         profiles.assign(List.of(body.id()), Optional.of(profile.id()));
     }
 }

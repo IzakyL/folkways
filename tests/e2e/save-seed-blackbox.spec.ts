@@ -101,7 +101,7 @@ test("the mod reads back every section of a colony save the test writes", async 
 
     const roster = JSON.stringify(await reflect.invoke(server, {
       target: { kind: "handle", handle: registry },
-      path: "colonies()[0].holdings()", method: "residents",
+      path: "colonies()[0].claims()", method: "residents",
       limits: { maxDepth: 3, maxItems: 8, maxNodes: 1024 },
     }));
     for (const who of RESIDENTS) {

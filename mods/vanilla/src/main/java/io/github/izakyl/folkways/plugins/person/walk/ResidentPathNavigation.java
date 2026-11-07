@@ -1,9 +1,9 @@
 package io.github.izakyl.folkways.plugins.person.walk;
 
-import io.github.izakyl.folkways.core.api.terms.ClimbableBlocks;
-import io.github.izakyl.folkways.core.api.terms.Realm;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
+import io.github.izakyl.folkways.core.world.api.ClimbableBlocks;
+import io.github.izakyl.folkways.core.world.api.Realm;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
+import io.github.izakyl.folkways.core.world.api.WorldSpaces;
 import java.util.List;
 import java.util.Set;
 import net.minecraft.core.BlockPos;
@@ -12,8 +12,8 @@ import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.navigation.GroundPathNavigation;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.pathfinder.PathFinder;
-import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
 public class ResidentPathNavigation extends GroundPathNavigation {

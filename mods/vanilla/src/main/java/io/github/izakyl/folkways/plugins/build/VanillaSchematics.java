@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.plugins.build;
 
-import io.github.izakyl.folkways.core.api.structure.StructureCompat;
+import io.github.izakyl.folkways.core.work.api.StructureCompat;
 import java.util.List;
 import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;

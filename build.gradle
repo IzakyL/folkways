@@ -134,8 +134,10 @@ neoForge {
             programArgument "--nogui"
             // Keep the existing dependency tests with Core, without repeating them in every mod's check.
             systemProperty "neoforge.enabledGameTestNamespaces",
-                createPlacementTests ? "folkways_create_candb"
-                    : !gameTestMod || gameTestMod == "core" ? "folkways,ldlib2" : "folkways"
+                providers.gradleProperty("gameTestNamespaces").getOrElse(
+                    createPlacementTests ? "folkways_create_candb"
+                        : !gameTestMod || gameTestMod == "core"
+                            ? "folkways,folkways_persistence,ldlib2" : "folkways,folkways_persistence")
         }
     }
 }
@@ -233,8 +235,27 @@ tasks.register("lintScaffold") {
     }
 }
 
+tasks.register("checkCorePackages", Exec) {
+    group = "verification"
+    description = "Checks core domain cycles, public API dependencies and plugin access."
+    commandLine "python3", "tests/architecture/core-packages.py", "--check"
+}
+
+tasks.register("testDataUpgradeBoundaries", Exec) {
+    group = "verification"
+    description = "Tests migration boundaries and release freezing in isolated repositories."
+    commandLine "python3", "tests/architecture/data-upgrades-test.py"
+}
+
+tasks.register("checkDataUpgrades", Exec) {
+    dependsOn "testDataUpgradeBoundaries"
+    group = "verification"
+    description = "Checks migration boundaries and immutable released steps."
+    commandLine "python3", "tests/architecture/data-upgrades.py"
+}
+
 tasks.named("check") {
-    dependsOn "lintScaffold"
+    dependsOn "lintScaffold", "checkCorePackages", "checkDataUpgrades"
     modProjects.values().each { dependsOn "${it}:check", "${it}:compileGametestJava" }
     if (warfareTests) { dependsOn ":vanilla:compileWarfareTestJava" }
     if (rtsTests) { dependsOn ":vanilla:compileRtsTestJava" }

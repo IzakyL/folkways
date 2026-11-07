@@ -1,16 +1,16 @@
 package io.github.izakyl.folkways.cookery.testing;
 
-import io.github.izakyl.folkways.core.api.colony.Cadence;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.colony.ColonyView;
-import io.github.izakyl.folkways.core.api.colony.Held;
-import io.github.izakyl.folkways.core.api.colony.Holding;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.work.Ending;
-import io.github.izakyl.folkways.core.api.work.Grown;
-import io.github.izakyl.folkways.core.engine.colony.ColonyData;
-import io.github.izakyl.folkways.core.testing.Proxies;
 import io.github.izakyl.folkways.cookery.CookeryContent;
+import io.github.izakyl.folkways.core.colony.api.Cadence;
+import io.github.izakyl.folkways.core.colony.api.Claim;
+import io.github.izakyl.folkways.core.colony.api.Claimed;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.colony.api.ColonyView;
+import io.github.izakyl.folkways.core.colony.internal.ColonyData;
+import io.github.izakyl.folkways.core.plan.api.Grown;
+import io.github.izakyl.folkways.core.testing.Proxies;
+import io.github.izakyl.folkways.core.work.api.Ending;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.effect.Effects;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -32,7 +32,7 @@ import net.minecraft.server.level.ServerLevel;
  */
 public final class StationColony {
     public final UUID id = UUID.randomUUID();
-    public final Holding holding;
+    public final Claim holding;
     public final ColonyView view;
     public final Colony colony;
     public final List<Grown> submitted = new ArrayList<>();
@@ -45,11 +45,11 @@ public final class StationColony {
     @SuppressWarnings("unchecked")
     public StationColony(GameTestHelper helper, BlockPos cell, String planned) {
         ServerLevel level = helper.getLevel();
-        holding = new Holding(UUID.randomUUID(), CookeryContent.STATION, new Held.Block(WorldPos.of(level, cell)));
+        holding = new Claim(UUID.randomUUID(), CookeryContent.STATION, new Claimed.Block(WorldPos.of(level, cell)));
         view = Proxies.of(ColonyView.class, (proxy, method, args) -> switch (method.getName()) {
             case "level" -> level;
             case "dimension" -> level.dimension();
-            case "holdings" -> List.of(holding);
+            case "claims" -> List.of(holding);
             case "blocks" -> CookeryContent.STATION.equals(args[0]) ? Set.of(cell) : Set.of();
             case "residents" -> List.of();
             case "effectsOf" -> Effects.NONE;
@@ -60,7 +60,7 @@ public final class StationColony {
             case "inventory", "inventoryFeedback" -> inventoryData.inventory();
             case "views" -> List.of(view);
             case "view" -> view;
-            case "holdings" -> args == null || args.length == 0 || CookeryContent.STATION.equals(args[0]) ? List.of(holding) : List.of();
+            case "claims" -> args == null || args.length == 0 || CookeryContent.STATION.equals(args[0]) ? List.of(holding) : List.of();
             case "storesIn", "residents", "reservedInputs" -> List.of();
             case "service", "store" -> Optional.empty();
             case "publish" -> { published++; yield null; }

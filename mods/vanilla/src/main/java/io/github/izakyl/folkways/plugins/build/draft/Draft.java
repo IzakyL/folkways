@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.plugins.build.draft;
 
-import io.github.izakyl.folkways.core.api.structure.StructurePayload;
+import io.github.izakyl.folkways.core.world.api.StructurePayload;
 import java.util.List;
 import java.util.Objects;
 import net.minecraft.core.BlockPos;

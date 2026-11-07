@@ -1,24 +1,25 @@
 package io.github.izakyl.folkways.cookery;
 
-import io.github.izakyl.folkways.core.api.colony.Closing;
-import io.github.izakyl.folkways.core.api.terms.Footing;
-import io.github.izakyl.folkways.core.api.terms.Reach;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
-import io.github.izakyl.folkways.core.api.work.Grown;
-import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.Workshop;
+import com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks;
+import io.github.izakyl.folkways.core.colony.api.Closing;
+import io.github.izakyl.folkways.core.plan.api.Grown;
+import io.github.izakyl.folkways.core.plan.api.Workshop;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.work.support.WorkStances;
+import io.github.izakyl.folkways.core.world.api.Footing;
+import io.github.izakyl.folkways.core.world.api.Reach;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
+import io.github.izakyl.folkways.core.world.api.WorldSpaces;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.world.level.block.state.properties.BlockStateProperties;
-import com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 
 // A kitchen appliance supplies its own work; the shared presence owns its registration and lifecycle.
 public interface KitchenStation {
@@ -66,7 +67,7 @@ public interface KitchenStation {
                 side = side.getClockWise();
             }
         } else { return false; }
-        return operating(level, at, side).filter(current -> Reach.standingIn(body, current)).isPresent();
+        return operating(level, at, side).filter(current -> WorkStances.standingIn(body, current)).isPresent();
     }
 
     // A multi-block appliance may operate above its registered anchor. Publish all candidate

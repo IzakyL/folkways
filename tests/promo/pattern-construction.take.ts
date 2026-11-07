@@ -109,7 +109,7 @@ return Sync.stamp(Map.of("y",y,"members",members));`,
 const CREW = defineTask<Record<string, any>, Record<string, any>>({
   name: "folkways.construction.crew", side: "server", source: javaTask({
     imports: ["io.github.izakyl.folkways.front.engine.colony.ColonyGround",
-      "io.github.izakyl.folkways.core.api.resident.body.Bodies", "io.github.izakyl.folkways.core.api.vocation.Vocations",
+      "io.github.izakyl.folkways.core.resident.api.Bodies", "io.github.izakyl.folkways.core.vocation.api.Vocations",
       "net.minecraft.world.item.*"],
     body: `
 var level=ctx.server().overworld();var args=Args.of(ctx);
@@ -131,8 +131,8 @@ const imports = ["io.github.izakyl.folkways.front.engine.colony.ColonyGround",
   "io.github.izakyl.folkways.plugins.build.*", "net.minecraft.core.BlockPos",
   "net.minecraft.core.registries.BuiltInRegistries", "net.minecraft.resources.ResourceLocation",
   "net.minecraft.world.item.ItemStack", "net.minecraft.world.level.block.Blocks", "net.minecraft.world.Container",
-  "io.github.izakyl.folkways.core.api.resident.body.Bodies", "io.github.izakyl.folkways.front.api.notice.Doings",
-  "io.github.izakyl.folkways.core.api.work.Node"];
+  "io.github.izakyl.folkways.core.resident.api.Bodies", "io.github.izakyl.folkways.front.api.notice.Doings",
+  "io.github.izakyl.folkways.core.work.api.Node"];
 const members = `
 static BlockPos pos(Map<?,?> raw){return new BlockPos(((Number)raw.get("x")).intValue(),((Number)raw.get("y")).intValue(),((Number)raw.get("z")).intValue());}
 static Object field(Object target,String name) throws Exception {var field=target.getClass().getDeclaredField(name);field.setAccessible(true);return field.get(target);}
@@ -152,7 +152,7 @@ const COMMISSION = defineTask<Record<string, any>, Record<string, any>>({
       "io.github.izakyl.folkways.plugins.build.draft.Hint",
       "io.github.izakyl.folkways.plugins.build.draft.Patterns",
       "io.github.izakyl.folkways.front.api.Schema",
-      "io.github.izakyl.folkways.core.api.terms.ItemSpec",
+      "io.github.izakyl.folkways.core.item.api.ItemSpec",
       "net.minecraft.core.registries.Registries",
       "net.minecraft.tags.TagKey",
       "net.minecraft.core.BlockPos",
@@ -296,7 +296,7 @@ static Map<BlockPos,BlockPos> expectedJoints=new LinkedHashMap<>();
 // Cells the build set as the target has them: what the world makes of them afterwards, a gate walked open or a
 // track turned by its neighbour, is the world's, not the build's.
 static Set<BlockPos> placed=new HashSet<>();
-static io.github.izakyl.folkways.core.api.ground.BlockChanges.Heard heard;
+static io.github.izakyl.folkways.core.world.api.BlockChanges.Heard heard;
 static int heardFor=-1;
 static boolean matches(BlockState actual,BlockState wanted){return wanted.isAir()?actual.isAir():wanted.getBlock() instanceof net.minecraft.world.level.block.LiquidBlock?actual.equals(wanted):actual==wanted;}
 `,body:`
@@ -311,7 +311,7 @@ for(var order:orders.values()){
 if(!expected.isEmpty()&&heardFor!=expected.size()){
  if(heard!=null)heard.close();
  var box=net.minecraft.world.level.levelgen.structure.BoundingBox.encapsulatingPositions(expected.keySet()).orElseThrow();
- heard=io.github.izakyl.folkways.core.api.ground.BlockChanges.listen(level,box,pos->{var wanted=expected.get(pos);if(wanted!=null&&matches(level.getBlockState(pos),wanted))placed.add(pos);});
+ heard=io.github.izakyl.folkways.core.world.api.BlockChanges.listen(level,box,pos->{var wanted=expected.get(pos);if(wanted!=null&&matches(level.getBlockState(pos),wanted))placed.add(pos);});
  heardFor=expected.size();
 }
 int correct=0;var mismatch=new ArrayList<Object>();

@@ -1,16 +1,16 @@
 package io.github.izakyl.folkways.plugins.person.living;
 
-import io.github.izakyl.folkways.core.api.inventory.InventorySnapshot;
-import io.github.izakyl.folkways.core.api.terms.Containers;
-import io.github.izakyl.folkways.core.api.terms.ItemDrops;
-import io.github.izakyl.folkways.core.api.work.Node;
-import io.github.izakyl.folkways.core.api.work.NodeSpec;
-import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.WorkSite;
-import io.github.izakyl.folkways.core.api.work.Worker;
-import io.github.izakyl.folkways.core.api.work.Workload;
-import io.github.izakyl.folkways.core.api.work.WorkEffort;
+import io.github.izakyl.folkways.core.inventory.api.InventorySnapshot;
+import io.github.izakyl.folkways.core.item.api.Containers;
+import io.github.izakyl.folkways.core.item.api.ItemDrops;
+import io.github.izakyl.folkways.core.work.api.Node;
+import io.github.izakyl.folkways.core.work.api.NodeSpec;
+import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.work.api.WorkEffort;
+import io.github.izakyl.folkways.core.work.api.WorkSite;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.work.api.Workload;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;

@@ -1,0 +1,59 @@
+package io.github.izakyl.folkways.core.work.support;
+
+import io.github.izakyl.folkways.core.resident.api.Body;
+import io.github.izakyl.folkways.core.resident.api.Pack;
+import io.github.izakyl.folkways.core.resident.api.ResidentKinds;
+import io.github.izakyl.folkways.core.vocation.api.Vocation;
+import io.github.izakyl.folkways.core.work.api.ActionSpec;
+import io.github.izakyl.folkways.core.work.api.ToolUse;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.effect.Stats;
+import java.util.function.Consumer;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.util.RandomSource;
+import net.minecraft.world.item.ItemStack;
+
+public final class Wear {
+
+    private Wear() {
+    }
+
+    public static void from(ServerLevel level, Body body, ActionSpec spec, Worker who,
+            Consumer<String> broke) {
+        if (ResidentKinds.barehanded(body.kind().id(), spec.vocation())) {
+            return;
+        }
+        Pack pack = body.pack();
+        for (ToolUse use : spec.tools()) {
+            int points = points(use.wearFor(who) * who.effects().value(Stats.TOOL_WEAR,
+                spec.vocation().map(Vocation::id)), level.getRandom());
+            if (points <= 0) {
+                continue;
+            }
+            for (int slot = 0; slot < pack.getContainerSize(); slot++) {
+                ItemStack stack = pack.getItem(slot);
+                if (stack.isEmpty() || !stack.isDamageableItem()
+                    || !Tools.answers(stack, use.need())) {
+                    continue;
+                }
+                stack.hurtAndBreak(points, level, body.mob(),
+                    gone -> broke.accept(BuiltInRegistries.ITEM.getKey(gone).toString()));
+                pack.setChanged();
+                break;
+            }
+        }
+    }
+
+    private static int points(double scaled, RandomSource random) {
+        if (scaled <= 0.0) {
+            return 0;
+        }
+        int whole = (int) Math.floor(scaled);
+        double part = scaled - whole;
+        if (part > 0.0 && random.nextDouble() < part) {
+            whole++;
+        }
+        return Math.max(0, whole);
+    }
+}

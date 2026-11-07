@@ -1,10 +1,9 @@
 package io.github.izakyl.folkways.front.api;
 
-import io.github.izakyl.folkways.core.api.terms.ItemFilter;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
-import io.github.izakyl.folkways.core.api.vocation.Vocation;
-import io.github.izakyl.folkways.core.api.vocation.Vocations;
-import io.github.izakyl.folkways.core.api.work.Tools;
+import io.github.izakyl.folkways.core.item.api.ItemFilter;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
+import io.github.izakyl.folkways.core.vocation.api.Vocation;
+import io.github.izakyl.folkways.core.work.support.Tools;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -27,15 +26,6 @@ public final class CoreSettings {
 
     public static Schema schema() {
         return Schema.none();
-    }
-
-    public static Set<ItemFilter> legacyKit() {
-        Set<ItemFilter> kit = new LinkedHashSet<>();
-        for (Vocation vocation : Vocations.all()) {
-            vocation.kit().forEach(tool -> collect(tool, kit));
-        }
-        Tools.sharedGoods().forEach(tool -> collect(tool, kit));
-        return Set.copyOf(kit);
     }
 
     private static List<ItemFilter> declaredKit(Vocation vocation) {

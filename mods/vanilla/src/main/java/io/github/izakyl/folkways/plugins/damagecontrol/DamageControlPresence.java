@@ -2,25 +2,24 @@ package io.github.izakyl.folkways.plugins.damagecontrol;
 
 import io.github.izakyl.folkways.base.persist.Reader;
 import io.github.izakyl.folkways.base.persist.Writer;
-import io.github.izakyl.folkways.core.api.colony.Closing;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.colony.ColonyView;
-import io.github.izakyl.folkways.core.api.colony.Sweep;
-import io.github.izakyl.folkways.core.api.inventory.InventorySnapshot;
-import io.github.izakyl.folkways.core.api.resident.Resident;
-import io.github.izakyl.folkways.core.api.resident.body.Bodies;
-import io.github.izakyl.folkways.core.api.resident.body.Body;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.work.Ending;
-import io.github.izakyl.folkways.core.api.work.Grown;
-import io.github.izakyl.folkways.core.api.work.Node;
-import io.github.izakyl.folkways.core.api.work.Placement;
-import io.github.izakyl.folkways.core.api.work.Stall;
-import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.ToolNeed;
-import io.github.izakyl.folkways.core.api.work.WorkSite;
-import io.github.izakyl.folkways.core.api.work.Worker;
-import io.github.izakyl.folkways.core.shell.structure.StructureSnapshots;
+import io.github.izakyl.folkways.core.colony.api.Closing;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.colony.api.ColonyView;
+import io.github.izakyl.folkways.core.colony.api.Sweep;
+import io.github.izakyl.folkways.core.inventory.api.InventorySnapshot;
+import io.github.izakyl.folkways.core.plan.api.Grown;
+import io.github.izakyl.folkways.core.resident.api.Bodies;
+import io.github.izakyl.folkways.core.resident.api.Body;
+import io.github.izakyl.folkways.core.resident.api.Resident;
+import io.github.izakyl.folkways.core.work.api.Ending;
+import io.github.izakyl.folkways.core.work.api.Node;
+import io.github.izakyl.folkways.core.work.api.Placement;
+import io.github.izakyl.folkways.core.work.api.Stall;
+import io.github.izakyl.folkways.core.work.api.ToolNeed;
+import io.github.izakyl.folkways.core.work.api.WorkSite;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.world.api.StructureSnapshots;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.effect.Effects;
 import io.github.izakyl.folkways.front.api.Facing;
 import io.github.izakyl.folkways.front.api.FrontView;
@@ -94,11 +93,14 @@ final class DamageControlPresence implements Facing {
         this.colony = colony;
         sweep = new Sweep(colony, DamageControlContent.ID, 100);
         Reader saved = Reader.of(colony.kept(DamageControlContent.ID));
-        for (Reader entry : saved.children("baselines")) {
+        if (saved.keys().isEmpty()) {
+            return;
+        }
+        for (Reader entry : saved.requiredChildren("baselines")) {
             entry.uuid("zone").ifPresent(id -> entry.blob("snapshot").flatMap(StructureSnapshots::load)
                 .ifPresent(snapshot -> {
                     baselines.put(id, snapshot);
-                    revisions.put(id, entry.longValue("revision").orElse(1L));
+                    revisions.put(id, entry.longValue("revision").orElseThrow());
                 }));
         }
     }
@@ -193,7 +195,7 @@ final class DamageControlPresence implements Facing {
     }
 
     void refresh(MinecraftServer server) {
-        if (baselines.keySet().removeIf(id -> colony.holding(id).isEmpty())) {
+        if (baselines.keySet().removeIf(id -> colony.claim(id).isEmpty())) {
             revisions.keySet().retainAll(baselines.keySet());
             remember();
         }
@@ -450,7 +452,7 @@ final class DamageControlPresence implements Facing {
     }
 
     private void remember() {
-        colony.keep(DamageControlContent.ID, Writer.of().integer("schemaVersion", 1)
+        colony.keep(DamageControlContent.ID, Writer.of()
             .children("baselines", baselines.keySet(), id -> Writer.of().uuid("zone", id)
                 .longValue("revision", revisions.getOrDefault(id, 1L))
                 .blob("snapshot", baselines.get(id).save())

@@ -24,16 +24,15 @@ const STRANGER = "00000000-0000-4000-8000-00000000f00d";
 type Kept = {
   id: string; name: string; founder: string | null; members: string[]; invited: string[]; team: string | null; razed: boolean;
 };
-type Reading = { ok: true; player: string; current: string | null; book_names_colony: boolean; colonies: Kept[] };
+type Reading = { ok: true; player: string; current: string | null; colonies: Kept[] };
 
 const IMPORTS = [
-  "io.github.izakyl.folkways.core.api.colony.Colonies",
-  "io.github.izakyl.folkways.core.api.colony.Colony",
+  "io.github.izakyl.folkways.core.colony.api.Colonies",
+  "io.github.izakyl.folkways.core.colony.api.Colony",
   "io.github.izakyl.folkways.front.engine.charter.Charter",
   "io.github.izakyl.folkways.front.engine.charter.Charters",
   "io.github.izakyl.folkways.front.engine.charter.CurrentColony",
   "io.github.izakyl.folkways.front.engine.charter.Invitations",
-  "io.github.izakyl.folkways.front.engine.registry.FolkwaysDataComponents",
   "net.minecraft.server.MinecraftServer",
   "net.minecraft.server.level.ServerPlayer",
 ];
@@ -84,7 +83,6 @@ Map<String, Object> out = new LinkedHashMap<String, Object>();
 out.put("ok", Boolean.TRUE);
 out.put("player", player.getUUID().toString());
 out.put("current", CurrentColony.of(player).map(colony -> colony.id().toString()).orElse(null));
-out.put("book_names_colony", Boolean.valueOf(player.getMainHandItem().has(FolkwaysDataComponents.COLONY_ID.get())));
 out.put("colonies", colonies);
 return Sync.stamp(out);
 `,
@@ -105,25 +103,6 @@ Colony colony = Colonies.of(server, UUID.fromString(args.string("colony")))
     .orElseThrow(() -> Fail.notFound("no colony " + args.string("colony")));
 Charters.keep(colony, Charters.of(server, colony).foundedBy(UUID.fromString(args.string("stranger"))));
 return Sync.stamp(Map.of("ok", Boolean.TRUE));
-`,
-  }),
-});
-
-/** A colony nobody keeps, or one the stranger keeps: what a bound book can name. */
-const MINT = defineTask<{ stranger: string }, { ok: true; colony: string }>({
-  name: "folkways.charter.mint",
-  side: "server",
-  timeoutMs: 20_000,
-  source: javaTask({
-    imports: IMPORTS,
-    body: `
-MinecraftServer server = ctx.server();
-String stranger = Args.of(ctx).string("stranger");
-Colony colony = Colonies.mint(server);
-if (!stranger.isEmpty()) {
-    Charters.keep(colony, Charter.founded("", UUID.fromString(stranger)));
-}
-return Sync.stamp(Map.of("ok", Boolean.TRUE, "colony", colony.id().toString()));
 `,
   }),
 });
@@ -159,12 +138,6 @@ function named(reading: Reading, name: string): Kept {
     throw new Error(`no colony named ${name} in ${JSON.stringify(reading.colonies)}`);
   }
   return found;
-}
-
-function snbtUuid(id: string): string {
-  const hex = id.replace(/-/g, "");
-  const ints = [0, 8, 16, 24].map((at) => parseInt(hex.slice(at, at + 8), 16) | 0);
-  return `[I;${ints.join(",")}]`;
 }
 
 async function panelTexts(client: any): Promise<string[]> {
@@ -288,39 +261,6 @@ test("a player founds, names and switches colonies from the panel's title, only 
     expect(state.colonies.filter((colony) => colony.id === beta.id && !colony.razed)).toEqual([]);
     expect(state.current).toBeNull();
     await screen.dismiss(client);
-
-    // Acting for none, a book bound to a colony takes it up once, and only if no one keeps it.
-    const useBook = async () => {
-      await openColonyPanelViaBook(server, client, playerName, stand);
-      await screen.dismiss(client);
-      await tick.sprint(server, 5);
-    };
-    const unclaimed = (await runColonyTask(server, MINT, { stranger: "" })).colony as string;
-    await tryCommand(server, `item replace entity ${playerName} weapon.mainhand with `
-      + `${BOOK_ITEM}[folkways:colony_id=${snbtUuid(unclaimed)}] 1`);
-    await tick.sprint(server, 5);
-    // Held, the book is left as it is: nothing watches the hand. Using it is what takes the colony up.
-    state = await read(server, playerName);
-    evidence.held = state;
-    expect(state.book_names_colony).toBe(true);
-    expect(state.current).toBeNull();
-    await useBook();
-    state = await read(server, playerName);
-    evidence.claimed = state;
-    expect(state.book_names_colony).toBe(false);
-    expect(state.current).toBe(unclaimed);
-    expect(state.colonies.find((colony) => colony.id === unclaimed)!.founder).toBe(state.player);
-
-    const theirs = (await runColonyTask(server, MINT, { stranger: STRANGER })).colony as string;
-    await tryCommand(server, `item replace entity ${playerName} weapon.mainhand with `
-      + `${BOOK_ITEM}[folkways:colony_id=${snbtUuid(theirs)}] 1`);
-    await tick.sprint(server, 5);
-    await useBook();
-    state = await read(server, playerName);
-    evidence.refused = state;
-    expect(state.book_names_colony).toBe(false);
-    expect(state.current).toBe(unclaimed);
-    expect(state.colonies.find((colony) => colony.id === theirs)!.members).toEqual([STRANGER]);
 
     testInfo.attach("charter", { body: JSON.stringify(evidence, null, 2), contentType: "application/json" });
   } catch (error) {

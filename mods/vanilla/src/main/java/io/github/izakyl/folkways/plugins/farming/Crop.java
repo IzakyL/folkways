@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.plugins.farming;
 
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -12,8 +12,8 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.LevelReader;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.LevelReader;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.BonemealableBlock;
@@ -145,7 +145,7 @@ record Crop(ResourceLocation id, Block block, Set<Block> standing, Item seed, It
     }
 
     boolean plant(net.minecraft.server.level.ServerLevel level,
-                  io.github.izakyl.folkways.core.api.work.Worker who, BlockPos base, ItemStack seed) {
+                  io.github.izakyl.folkways.core.work.api.Worker who, BlockPos base, ItemStack seed) {
         if (behavior.isPresent()) {
             return behavior.get().plant(level, who, base, seed);
         }

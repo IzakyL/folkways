@@ -290,8 +290,8 @@ const READ_FARM = defineTask<{ rice: Vec; composter: Vec; min: Vec; max: Vec }, 
   name: "folkways.cookery.farming-observation", side: "server", timeoutMs: 20_000,
   source: javaTask({
     imports: ["net.minecraft.core.BlockPos", "net.minecraft.world.level.block.Blocks", "net.minecraft.world.level.block.ComposterBlock",
-      "net.minecraft.world.entity.EquipmentSlot", "net.minecraft.world.item.Items", "io.github.izakyl.folkways.core.api.colony.Colonies",
-      "io.github.izakyl.folkways.core.api.resident.body.Bodies", "io.github.izakyl.folkways.front.api.Fronts",
+      "net.minecraft.world.entity.EquipmentSlot", "net.minecraft.world.item.Items", "io.github.izakyl.folkways.core.colony.api.Colonies",
+      "io.github.izakyl.folkways.core.resident.api.Bodies", "io.github.izakyl.folkways.front.api.Fronts",
       "io.github.izakyl.folkways.cookery.CookeryContent", "io.github.izakyl.folkways.cookery.seeds.SeedPresence",
       "com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems", "com.github.ysbbbbbb.kaleidoscopecookery.init.tag.TagMod"],
     members: `private static BlockPos pos(Object raw) {
@@ -315,8 +315,8 @@ var wheat=budget.tally(Items.WHEAT_SEEDS); var out=new LinkedHashMap<String,Obje
 out.put("soil",level.getBlockState(root.below()).toString());out.put("root",level.getBlockState(root).toString());out.put("middle",level.getBlockState(root.above()).toString());out.put("top",level.getBlockState(root.above(2)).toString());
 out.put("grass",grass);out.put("compost",compost.is(Blocks.COMPOSTER)?compost.getValue(ComposterBlock.LEVEL):-1);
 long sharedHats=0;for(var at:colony.storesIn(level.dimension())){
-  var store=colony.store(level,at);if(store.isPresent())sharedHats+=io.github.izakyl.folkways.core.api.terms.Goods.countIn(store.get(),
-    io.github.izakyl.folkways.core.api.terms.ItemSpec.of(TagMod.STRAW_HAT));
+  var store=colony.store(level,at);if(store.isPresent())sharedHats+=io.github.izakyl.folkways.core.item.api.Goods.countIn(store.get(),
+    io.github.izakyl.folkways.core.item.api.ItemSpec.of(TagMod.STRAW_HAT));
 }
 out.put("wearHat",settings.flag("wear_hat"));out.put("wearArmor",settings.flag("wear_farmer_armor"));out.put("hatResidents",hats);out.put("hatShared",sharedHats);
 out.put("complete",budget.complete());out.put("wheatPhysical",wheat.physical());out.put("wheatCompostable",wheat.compostable());out.put("rareCompostable",rare);

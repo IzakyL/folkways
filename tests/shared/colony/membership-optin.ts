@@ -22,8 +22,8 @@ const READ_ORDER_DRAFT = defineTask<{ player: string | null; chest: Vec; item: s
 }>({
   name: "folkways.orders.read-draft", side: "server", timeoutMs: 20_000,
   source: javaTask({
-    imports: ["io.github.izakyl.folkways.core.api.colony.Books", "io.github.izakyl.folkways.core.api.terms.Goods",
-      "io.github.izakyl.folkways.core.api.terms.WorldPos", "io.github.izakyl.folkways.core.api.terms.Containers",
+    imports: ["io.github.izakyl.folkways.front.api.Books", "io.github.izakyl.folkways.core.item.api.Goods",
+      "io.github.izakyl.folkways.core.world.api.WorldPos", "io.github.izakyl.folkways.core.item.api.Containers",
       "io.github.izakyl.folkways.plugins.orders.Orders", "net.minecraft.core.BlockPos",
       "io.github.izakyl.folkways.front.api.Fronts", "net.minecraft.core.registries.BuiltInRegistries",
       "net.minecraft.resources.ResourceLocation"],
@@ -51,6 +51,12 @@ return Map.of("count", settings.count("count"), "low", settings.count("low"), "i
 `,
   }),
 });
+
+export async function filedOrdersAt(
+  server: MinecraftServer, playerName: string, chest: Vec, itemId: string, stage: Stage = GROUND,
+) {
+  return (await server.run(READ_ORDER_DRAFT, { player: playerName, chest: stage.at(chest), item: itemId })).filed;
+}
 
 export async function optInContainerViaUI(
   server: MinecraftServer, client: MinecraftClient, playerName: string, chest: Vec, stage: Stage = GROUND,
@@ -184,25 +190,25 @@ async function fileOrderViaSitePanel(
     await tick.sprint(server, 10);
     await safeAction(() => frames(client, 3));
     evidence.rows_after = await ordersRowCount(client);
-    if (evidence.rows_after > before) {
+    evidence.filedAcknowledgement = await server.run(READ_ORDER_DRAFT, observation);
+    // Filing the same item at the same container replaces its target, so the row count can stay unchanged.
+    // Require the exact server target as well as its visible row; a missing order is not an acknowledgement.
+    const filed = evidence.filedAcknowledgement.filed;
+    if (evidence.rows_after > 0 && filed.length === 1
+      && filed[0].high === count && filed[0].standing === (act === ACT_MAINTAIN)) {
       break;
     }
   }
-  evidence.filedAcknowledgement = await server.run(READ_ORDER_DRAFT, observation);
-  if (evidence.filedAcknowledgement.filed.some((filed: { high: number; standing: boolean }) =>
-    filed.high !== count || filed.standing !== (act === ACT_MAINTAIN))) {
-    throw new Error(`order: the filed server target differs from count=${count} standing=${act === ACT_MAINTAIN}: `
-      + JSON.stringify(evidence.filedAcknowledgement));
+  const filed = evidence.filedAcknowledgement.filed;
+  if (evidence.rows_after < 1 || filed.length !== 1
+    || filed[0].high !== count || filed[0].standing !== (act === ACT_MAINTAIN)) {
+    throw new Error(`order: the visible order and server target did not acknowledge count=${count} `
+      + `standing=${act === ACT_MAINTAIN} (evidence: ${JSON.stringify(evidence)})`);
   }
   await beat();
   await screen.dismiss(client);
   await tick.sprint(server, 20);
 
-  if (!(evidence.rows_after > before)) {
-    throw new Error(`order: after pressing ${pressed.id}, the Orders page for the site at ${chest.x},${chest.y},${chest.z}`
-      + ` still has only ${evidence.rows_after} rows (${before} before ordering): the order never reached the colony`
-      + ` (evidence: ${JSON.stringify(evidence)})`);
-  }
   return evidence;
 }
 

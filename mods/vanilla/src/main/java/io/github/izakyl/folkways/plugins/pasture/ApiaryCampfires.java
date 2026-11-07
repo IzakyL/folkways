@@ -1,8 +1,8 @@
 package io.github.izakyl.folkways.plugins.pasture;
 
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.colony.ColonyView;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.colony.api.ColonyView;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.plugins.build.ConstructionNeeds;
 import java.util.LinkedHashMap;
 import java.util.List;

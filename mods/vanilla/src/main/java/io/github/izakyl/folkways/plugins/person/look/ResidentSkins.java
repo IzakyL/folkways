@@ -1,14 +1,11 @@
 package io.github.izakyl.folkways.plugins.person.look;
 
-import com.google.gson.JsonParser;
 import com.mojang.serialization.Codec;
-import com.mojang.serialization.JsonOps;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -79,19 +76,11 @@ final class ResidentSkins {
             if (written == null) {
                 return Optional.empty();
             }
-            try {
-                Optional<Manifest> parsed = Manifest.CODEC.parse(JsonOps.INSTANCE,
-                        JsonParser.parseString(new String(written, StandardCharsets.UTF_8)))
-                    .resultOrPartial(error -> rejected.add(label + ": " + stem + JSON + " - " + error));
-                if (parsed.isEmpty()) {
-                    return Optional.empty();
-                }
-                manifest = parsed.get();
-            } catch (RuntimeException broken) {
-                rejected.add(label + ": " + stem + JSON + " - " + broken.getMessage());
-                return Optional.empty();
-            }
+            ResourceLocation manifestAt = at.withPath(at.getPath().substring(0, at.getPath().length() - PNG.length())
+                + JSON);
+            manifest = ModelLibrary.manifest(written, manifestAt, Manifest.CODEC, Manifest.DEFAULT, rejected);
         }
+
         if (assets.values().stream().mapToInt(bytes -> bytes.length).sum() + pixels.length
                 > ModelLibrary.MAX_LIBRARY_BYTES) {
             rejected.add(label + ": the looks are past " + ModelLibrary.MAX_LIBRARY_BYTES

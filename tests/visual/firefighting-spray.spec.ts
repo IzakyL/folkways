@@ -163,16 +163,16 @@ const IMPORTS = [
   "net.neoforged.neoforge.fluids.FluidStack",
   "net.neoforged.neoforge.fluids.capability.IFluidHandler.FluidAction",
   "net.neoforged.neoforge.common.NeoForge", "net.neoforged.neoforge.event.tick.ServerTickEvent",
-  "io.github.izakyl.folkways.core.api.colony.Colonies", "io.github.izakyl.folkways.core.api.colony.Held",
-  "io.github.izakyl.folkways.core.api.terms.WorldPos", "io.github.izakyl.folkways.core.api.work.Worker",
-  "io.github.izakyl.folkways.core.api.work.Placement", "io.github.izakyl.folkways.core.api.work.Outcome",
+  "io.github.izakyl.folkways.core.colony.api.Colonies", "io.github.izakyl.folkways.core.colony.api.Claimed",
+  "io.github.izakyl.folkways.core.world.api.WorldPos", "io.github.izakyl.folkways.core.work.api.Worker",
+  "io.github.izakyl.folkways.core.work.api.Placement", "io.github.izakyl.folkways.core.work.api.Outcome",
   "io.github.izakyl.folkways.effect.Effects", "io.github.izakyl.folkways.plugins.person.PersonBody",
   "io.github.izakyl.folkways.plugins.person.PersonContent",
   "io.github.izakyl.folkways.plugins.person.ResidentEntity",
   "io.github.izakyl.folkways.plugins.damagecontrol.SuppressionMethods",
   "io.github.izakyl.folkways.plugins.damagecontrol.SuppressionSession",
   "io.github.izakyl.folkways.plugins.damagecontrol.DamageControlContent",
-  "io.github.izakyl.folkways.core.api.vocation.Vocations",
+  "io.github.izakyl.folkways.core.vocation.api.Vocations",
   "io.github.izakyl.folkways.front.engine.colony.ZoneDrafts",
   "io.github.izakyl.folkways.front.engine.colony.ColonySettings",
 ];
@@ -195,7 +195,7 @@ body.setYRot(-90);
 body.yHeadRot = -90;
 body.yBodyRot = -90;
 level.addFreshEntity(body);
-colony.hold(PersonContent.ID, Held.Entity.of(body)).orElseThrow();
+colony.hold(PersonContent.ID, Claimed.Entity.of(body)).orElseThrow();
 var fire = origin.east(3);
 level.setBlockAndUpdate(fire.below(), Blocks.NETHERRACK.defaultBlockState());
 var bottle = new ItemStack(CreateFireFightingAdd.FIRE_EXTINGUISHER_ITEM.get());

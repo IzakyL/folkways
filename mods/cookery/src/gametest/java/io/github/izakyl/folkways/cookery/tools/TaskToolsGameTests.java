@@ -1,82 +1,79 @@
 package io.github.izakyl.folkways.cookery.tools;
 
-import io.github.izakyl.folkways.core.engine.inventory.InventoryObservations;
-import io.github.izakyl.folkways.core.testing.Proxies;
-import io.github.izakyl.folkways.core.testing.TestWorker;
-import io.github.izakyl.folkways.effect.Effects;
-import io.github.izakyl.folkways.effect.Stats;
-import io.github.izakyl.folkways.effect.perk.Perks;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.tag.TagMod;
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.colony.Closing;
-import io.github.izakyl.folkways.core.api.colony.Held;
-import io.github.izakyl.folkways.core.api.resident.Resident;
-import io.github.izakyl.folkways.core.api.resident.body.Body;
-import io.github.izakyl.folkways.core.api.terms.Containers;
-import io.github.izakyl.folkways.core.api.terms.ItemFilter;
+import io.github.izakyl.folkways.cookery.CookeryContent;
+import io.github.izakyl.folkways.cookery.KitchenBookings;
+import io.github.izakyl.folkways.cookery.board.ChoppingBoardWorkshops;
+import io.github.izakyl.folkways.cookery.racks.KitchenRacks;
+import io.github.izakyl.folkways.core.colony.api.Claimed;
+import io.github.izakyl.folkways.core.colony.api.Closing;
+import io.github.izakyl.folkways.core.colony.api.WorkListener;
+import io.github.izakyl.folkways.core.colony.internal.ColonyData;
+import io.github.izakyl.folkways.core.colony.internal.ColonyRegistry;
+import io.github.izakyl.folkways.core.inventory.api.Stash;
+import io.github.izakyl.folkways.core.inventory.api.StoreRule;
+import io.github.izakyl.folkways.core.inventory.internal.InventoryObservations;
+import io.github.izakyl.folkways.core.item.api.Containers;
+import io.github.izakyl.folkways.core.item.api.Goods;
+import io.github.izakyl.folkways.core.item.api.ItemFilter;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
+import io.github.izakyl.folkways.core.plan.api.Delivery;
+import io.github.izakyl.folkways.core.plan.api.Grown;
+import io.github.izakyl.folkways.core.plan.api.Produce;
+import io.github.izakyl.folkways.core.plan.api.Refinement;
+import io.github.izakyl.folkways.core.plan.api.Workshop;
+import io.github.izakyl.folkways.core.plan.internal.Crew;
+import io.github.izakyl.folkways.core.plan.internal.Known;
+import io.github.izakyl.folkways.core.plan.internal.Message;
+import io.github.izakyl.folkways.core.plan.internal.PlanningFixture;
+import io.github.izakyl.folkways.core.plan.internal.Solving;
+import io.github.izakyl.folkways.core.plan.internal.Stock;
+import io.github.izakyl.folkways.core.resident.api.Body;
+import io.github.izakyl.folkways.core.runtime.HoldingFixture;
+import io.github.izakyl.folkways.core.testing.Proxies;
+import io.github.izakyl.folkways.core.testing.TestWorker;
+import io.github.izakyl.folkways.core.vocation.api.Vocations;
+import io.github.izakyl.folkways.core.work.api.Amount;
+import io.github.izakyl.folkways.core.work.api.Ending;
+import io.github.izakyl.folkways.core.work.api.Hold;
+import io.github.izakyl.folkways.core.work.api.Need;
+import io.github.izakyl.folkways.core.work.api.Node;
+import io.github.izakyl.folkways.core.work.api.NodeSpec;
+import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.work.api.ToolNeed;
+import io.github.izakyl.folkways.core.work.api.ToolUse;
+import io.github.izakyl.folkways.core.work.api.WorkAction;
+import io.github.izakyl.folkways.core.work.api.WorkSite;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.work.api.Workload;
+import io.github.izakyl.folkways.core.work.internal.Commit;
+import io.github.izakyl.folkways.core.work.support.Leaves;
+import io.github.izakyl.folkways.core.work.support.Tools;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
+import io.github.izakyl.folkways.effect.Stats;
+import io.github.izakyl.folkways.effect.perk.Perks;
 import io.github.izakyl.folkways.front.api.Facings;
 import io.github.izakyl.folkways.front.engine.colony.ColonyFront;
 import io.github.izakyl.folkways.front.engine.colony.ColonySettings;
 import io.github.izakyl.folkways.plugins.orders.OrderReturns;
 import io.github.izakyl.folkways.plugins.orders.Orders;
 import io.github.izakyl.folkways.plugins.orders.OrdersContent;
-import net.minecraft.core.registries.BuiltInRegistries;
-import io.github.izakyl.folkways.core.api.terms.Goods;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
-import io.github.izakyl.folkways.core.api.terms.Keepouts;
-import io.github.izakyl.folkways.core.api.terms.Stash;
-import io.github.izakyl.folkways.core.api.terms.StoreRule;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.vocation.Vocations;
-import io.github.izakyl.folkways.core.api.work.Amount;
-import io.github.izakyl.folkways.core.api.work.Delivery;
-import io.github.izakyl.folkways.core.api.work.Leaves;
-import io.github.izakyl.folkways.core.api.work.Ending;
-import io.github.izakyl.folkways.core.api.work.Grown;
-import io.github.izakyl.folkways.core.api.work.Hold;
-import io.github.izakyl.folkways.core.api.work.Need;
-import io.github.izakyl.folkways.core.api.work.Node;
-import io.github.izakyl.folkways.core.api.work.NodeSpec;
-import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Placement;
-import io.github.izakyl.folkways.core.api.work.Produce;
-import io.github.izakyl.folkways.core.api.work.Refinement;
-import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.ToolNeed;
-import io.github.izakyl.folkways.core.api.work.ToolUse;
-import io.github.izakyl.folkways.core.api.work.Tools;
-import io.github.izakyl.folkways.core.api.work.WorkSite;
-import io.github.izakyl.folkways.core.api.work.Worker;
-import io.github.izakyl.folkways.core.api.work.Workload;
-import io.github.izakyl.folkways.core.api.work.Workshop;
-import io.github.izakyl.folkways.core.engine.colony.ColonyData;
-import io.github.izakyl.folkways.core.engine.colony.ColonyRegistry;
-import io.github.izakyl.folkways.core.engine.colony.ColonyWorks;
-import io.github.izakyl.folkways.core.engine.labor.Commit;
-import io.github.izakyl.folkways.core.engine.plan.Crew;
-import io.github.izakyl.folkways.core.engine.plan.Known;
-import io.github.izakyl.folkways.core.engine.plan.Message;
-import io.github.izakyl.folkways.core.engine.plan.PlanningFixture;
-import io.github.izakyl.folkways.core.engine.plan.Solving;
-import io.github.izakyl.folkways.core.engine.plan.Stock;
-import io.github.izakyl.folkways.cookery.CookeryContent;
-import io.github.izakyl.folkways.cookery.KitchenBookings;
-import io.github.izakyl.folkways.cookery.board.ChoppingBoardWorkshops;
-import io.github.izakyl.folkways.cookery.racks.KitchenRacks;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import io.github.izakyl.folkways.plugins.wares.WaresContent;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.stream.IntStream;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.IntStream;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.network.chat.Component;
@@ -106,18 +103,155 @@ public final class TaskToolsGameTests {
     }
 
     @GameTest(template = "empty")
+    public static void aMissingClothingSnapshotFailsWithoutChangingItsSavedLoan(GameTestHelper helper) {
+        try (Rig rig = new Rig(helper)) {
+            var head = net.minecraft.world.entity.EquipmentSlot.HEAD;
+            rig.body.mob().setItemSlot(head, new ItemStack(ModItems.STRAW_HAT.get()));
+            var worn = new net.minecraft.nbt.CompoundTag();
+            worn.putUUID(head.getName(), UUID.randomUUID());
+            rig.body.mob().getPersistentData().put("folkways:cookery_clothing", worn);
+            var saved = new net.minecraft.nbt.CompoundTag();
+            rig.body.mob().saveWithoutId(saved);
+            rig.body.mob().discard();
+            ColonyRegistry.get(rig.level.getServer()).raze(rig.level.getServer(), rig.colony.colonyId());
+            Mob loaded = (Mob) rig.body.mob().getType().create(rig.level);
+            loaded.load(saved);
+            boolean rejected = false;
+            try {
+                LoanClothing.joined(new net.neoforged.neoforge.event.entity.EntityJoinLevelEvent(loaded, rig.level));
+            } catch (IllegalArgumentException expected) {
+                rejected = true;
+            }
+            helper.assertTrue(rejected, "a saved loan UUID requires its clothing snapshot");
+            helper.assertTrue(LoanClothing.borrowedSlot(loaded, head),
+                "a failed load cannot erase the saved worn loan UUID");
+            helper.assertTrue(loaded.getItemBySlot(head).is(ModItems.STRAW_HAT.get()),
+                "recovery leaves the physical garment intact");
+            loaded.discard();
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void savedToolRecordsCannotOmitLoanIdentity(GameTestHelper helper) {
+        try (Rig rig = new Rig(helper)) {
+            var record = new net.minecraft.nbt.CompoundTag();
+            record.putUUID("loan", UUID.randomUUID());
+            record.putInt("slot", 0);
+            record.putUUID("epoch", UUID.randomUUID());
+            record.putLong("incarnation", 1);
+            record.putLong("resident", 1);
+            record.put("stack", rig.namedKnife().save(rig.level.registryAccess()));
+            rig.tools.persist();
+            var saved = rig.colony.works().kept(TaskTools.ID).copy();
+            for (String key : List.of("loan", "slot", "epoch", "incarnation", "resident", "stack")) {
+                var broken = record.copy();
+                broken.remove(key);
+                var items = new net.minecraft.nbt.ListTag();
+                items.add(broken);
+                saved.put("items", items);
+                rig.colony.works().keep(TaskTools.ID, saved.copy());
+                boolean rejected = false;
+                try {
+                    new TaskTools(rig.colony.works(), rig.level.getServer());
+                } catch (IllegalArgumentException expected) {
+                    rejected = true;
+                }
+                helper.assertTrue(rejected, "missing " + key + " cannot weaken a saved physical loan");
+            }
+            rig.tools.persist();
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void hardUrgesPreserveTheLoanAcrossNativeBoardWorkAndReturn(
+        GameTestHelper helper) {
+        try (Rig rig = new Rig(helper)) {
+            rig.rack.setItem(0, rig.namedKnife());
+            rig.body.pack().setItem(0, new ItemStack(Items.CHICKEN));
+            Node work = rig.board();
+            HoldingFixture holding = rig.holding(work).prepare().hardUrge();
+            helper.assertFalse(rig.step(work), "the original knife is physically borrowed");
+            holding.hardUrge();
+            helper.assertFalse(rig.step(work), "the original chicken enters the native board holding");
+            holding.hardUrge();
+            helper.assertFalse(rig.step(work), "one real native cut completes with the borrowed knife");
+            holding.hardUrge();
+            boolean finished = false;
+            for (int step = 0; step < 32 && !finished; step++) {
+                holding.prepare().hardUrge();
+                finished = rig.step(work);
+            }
+            helper.assertTrue(finished, "repeated urges during the remaining cuts and physical return finish");
+            helper.assertValueEqual(Goods.countIn(rig.rack, KNIVES), 1L, "the same physical knife returns once");
+            helper.assertValueEqual(Goods.countIn(rig.body.pack(), KNIVES), 0L, "no duplicate loan remains");
+            helper.assertValueEqual(
+                Goods.countIn(rig.body.pack(), ItemSpec.of(Items.CHICKEN)),
+                0L,
+                "the accepted chicken is never refunded");
+            helper.assertValueEqual(
+                Goods.countIn(
+                    rig.body.pack(),
+                    Goods.specOf(ModItems.RAW_CUT_SMALL_MEATS.get().getDefaultInstance())),
+                3L,
+                "the composed native holding produces exactly the original three portions");
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void revokeAndSoftControllerEndReturnEachBorrowedToolExactlyOnce(
+        GameTestHelper helper) {
+        for (boolean controller : List.of(false, true)) {
+            try (Rig rig = new Rig(helper)) {
+                rig.rack.setItem(0, rig.namedKnife());
+                AtomicInteger executions = new AtomicInteger();
+                Node work = rig.simple(executions, false);
+                rig.step(work);
+                HoldingFixture holding = rig.holding(work).prepare();
+                if (controller) {
+                    holding.softEnd();
+                    helper.assertTrue(
+                        holding.tick()
+                        instanceof
+                        io.github.izakyl.folkways.core.work.api.HoldingStep.Yielded,
+                        "controller cleanup yields without starting production");
+                    holding.finish(Ending.DROPPED);
+                    holding.finish(Ending.DROPPED);
+                } else {
+                    holding.end(Ending.REVOKED);
+                    holding.end(Ending.REVOKED);
+                }
+                helper.assertValueEqual(
+                    executions.get(),
+                    0,
+                    "ending an unfinished holding never executes its food work");
+                rig.observe();
+                var returns = rig.tools.goals(rig.colony.works().view(rig.level));
+                helper.assertValueEqual(returns.size(), 1, "one borrowed physical knife creates one return obligation");
+                rig.holding(returns.getFirst().nodes().getFirst()).prepare().hardUrge();
+                rig.finish(returns.getFirst().nodes().getFirst());
+                helper.assertValueEqual(Goods.countIn(rig.rack, KNIVES), 1L, "the original knife is returned once");
+                helper.assertValueEqual(Goods.countIn(rig.body.pack(), KNIVES), 0L, "no duplicate stays in cargo");
+            }
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
     public static void sharedSickleDefaultsAndBorrowingBelongToFarming(GameTestHelper helper) {
         try (Rig rig = new Rig(helper)) {
             var farming = io.github.izakyl.folkways.plugins.farming.FarmingContent.trade();
             var crafting = io.github.izakyl.folkways.plugins.wares.WaresContent.trade();
             var sickle = ModItems.SICKLE.get();
-            helper.assertTrue(io.github.izakyl.folkways.core.api.vocation.KitRules.allows(rig.colony.works(), farming, sickle),
+            helper.assertTrue(io.github.izakyl.folkways.core.colony.api.KitRules.allows(rig.colony.works(), farming, sickle),
                 "the harvesting vocation includes the shared sickle by default");
-            helper.assertFalse(io.github.izakyl.folkways.core.api.vocation.KitRules.allows(rig.colony.works(), crafting, sickle),
+            helper.assertFalse(io.github.izakyl.folkways.core.colony.api.KitRules.allows(rig.colony.works(), crafting, sickle),
                 "crafting does not inherit farming's shared sickle");
-            helper.assertTrue(io.github.izakyl.folkways.core.api.vocation.KitRules.allows(rig.colony.works(), crafting,
+            helper.assertTrue(io.github.izakyl.folkways.core.colony.api.KitRules.allows(rig.colony.works(), crafting,
                 ModItems.IRON_KITCHEN_KNIFE.get()), "kitchen defaults belong to crafting");
-            helper.assertFalse(io.github.izakyl.folkways.core.api.vocation.KitRules.allows(rig.colony.works(), farming,
+            helper.assertFalse(io.github.izakyl.folkways.core.colony.api.KitRules.allows(rig.colony.works(), farming,
                 ModItems.IRON_KITCHEN_KNIFE.get()), "farming does not inherit kitchen knives");
             rig.rack.setItem(0, new ItemStack(sickle));
             var executed = new AtomicInteger();
@@ -160,15 +294,15 @@ public final class TaskToolsGameTests {
             helper.assertTrue(rig.tools.pool.leases(rig.colony.colonyId()).isEmpty(), "refusal creates no physical lease");
             var spec = NodeSpec.of(UUID.randomUUID(), CookeryContent.ID, new WorkSite.AtBlock(rig.boardAt),
                 Stances.WHEREVER, Workload.Once.of(1)).vocation(WaresContent.trade()).tools(new ToolUse(KNIFE, 0))
-                .needs(new io.github.izakyl.folkways.core.api.work.Need(KNIVES, 1, true)).done();
-            var rules = io.github.izakyl.folkways.core.api.vocation.KitRules.snapshot(rig.colony.works());
+                .needs(new io.github.izakyl.folkways.core.work.api.Need(KNIVES, 1, true)).done();
+            var rules = io.github.izakyl.folkways.core.colony.api.KitRules.snapshot(rig.colony.works());
             helper.assertFalse(Tools.canPrepare(rig.body.kind().id(), spec, List.of(), rules),
                 "planning cannot fetch a missing shared tool forbidden for the step's vocation");
             helper.assertTrue(Tools.canPrepare(rig.body.kind().id(), spec, List.of(rig.namedKnife()), rules),
                 "an already held shared tool satisfies planning regardless of the step's acquisition list");
             front.setSetting(crafting, "tool", knife);
             helper.assertTrue(Tools.canPrepare(rig.body.kind().id(), spec, List.of(),
-                io.github.izakyl.folkways.core.api.vocation.KitRules.snapshot(rig.colony.works())),
+                io.github.izakyl.folkways.core.colony.api.KitRules.snapshot(rig.colony.works())),
                 "planning may fetch a missing shared tool allowed for the step's vocation");
             helper.assertTrue(work.planned(rig.level).isEmpty() && rig.ready(work),
                 "crafting's own list permits borrowing");
@@ -190,15 +324,13 @@ public final class TaskToolsGameTests {
             rig.rack.setItem(0, rig.namedKnife());
             Node work = rig.simple(new AtomicInteger(), false);
             helper.assertTrue(rig.ready(work), "the permitted knife can be reserved");
-            var within = (Workload.Within) work.spec().workload();
-            Node borrow = ((Workload.Within.Turn.Piece) within.next(rig.level, rig.worker)).node();
+            HoldingFixture borrow = rig.holding(work).prepare();
             ColonyFront.of(rig.colony.works()).setSetting(io.github.izakyl.folkways.plugins.wares.WaresContent.CRAFTING,
                 "tool", new ColonySettings.Value.Items(List.of()));
-            rig.stand(borrow);
-            helper.assertTrue(Commit.run(rig.level, borrow, rig.worker) instanceof Outcome.Failed,
+
+            helper.assertTrue(
+                borrow.step() instanceof Outcome.Failed,
                 "the transfer rechecks the work vocation after travelling");
-            borrow.ended(rig.level, Ending.REVOKED);
-            within.ended(rig.level, borrow, Ending.REVOKED);
             work.ended(rig.level, Ending.REVOKED);
             helper.assertValueEqual(Goods.countIn(rig.rack, KNIVES), 1L, "the disallowed tool never leaves storage");
             helper.assertValueEqual(Goods.countIn(rig.body.pack(), KNIVES), 0L, "no forbidden borrow enters the pack");
@@ -219,14 +351,13 @@ public final class TaskToolsGameTests {
             var executions = new AtomicInteger();
             Node work = rig.simple(executions, false);
             helper.assertTrue(rig.ready(work), "the original subset permits borrowing");
-            var within = (Workload.Within) work.spec().workload();
-            Node borrow = ((Workload.Within.Turn.Piece) within.next(rig.level, rig.worker)).node();
+            HoldingFixture borrow = rig.holding(work).prepare();
             front.setSetting(WaresContent.CRAFTING, "tool", new ColonySettings.Value.Items(List.of(
                 ItemFilter.item(BuiltInRegistries.ITEM.getKey(other)))));
-            rig.stand(borrow);
-            helper.assertTrue(Commit.run(rig.level, borrow, rig.worker) instanceof Outcome.Failed,
+
+            helper.assertTrue(
+                borrow.step() instanceof Outcome.Failed,
                 "the old knife is forbidden after travelling");
-            within.ended(rig.level, borrow, Ending.REVOKED);
             helper.assertTrue(rig.tools.pool.leases(rig.colony.colonyId()).isEmpty(), "the rejected lease is removed");
             helper.assertFalse(rig.step(work), "the next turn borrows from the new subset without another readiness check");
             helper.assertTrue(rig.rack.getItem(0).getItem() == iron && rig.rack.getItem(1).isEmpty(),
@@ -248,7 +379,7 @@ public final class TaskToolsGameTests {
             var packReads = new AtomicInteger();
             var storeReads = new AtomicInteger();
             try {
-                var field = io.github.izakyl.folkways.core.api.resident.body.Pack.class.getDeclaredField("container");
+                var field = rig.body.pack().getClass().getDeclaredField("container");
                 field.setAccessible(true);
                 field.set(rig.body.pack(), new net.minecraft.world.SimpleContainer(18) {
                     public ItemStack getItem(int slot) {
@@ -259,7 +390,7 @@ public final class TaskToolsGameTests {
             } catch (ReflectiveOperationException broken) {
                 throw new AssertionError(broken);
             }
-            var colony = Proxies.of(io.github.izakyl.folkways.core.api.colony.Colony.class, (proxy, method, args) -> {
+            var colony = Proxies.of(io.github.izakyl.folkways.core.colony.api.Colony.class, (proxy, method, args) -> {
                 if (method.getName().equals("store")) {
                     storeReads.incrementAndGet();
                 }
@@ -383,32 +514,36 @@ public final class TaskToolsGameTests {
     }
 
     @GameTest(template = "empty")
-    public static void legacyLoansAcquireTheirResidentSlotOnlyDuringRecovery(GameTestHelper helper) {
+    public static void clothingReadsNeverReconcileMarkersOrClaimAnIdenticalReplacement(GameTestHelper helper) {
         try (Rig rig = new Rig(helper)) {
-            rig.rack.setItem(0, rig.namedKnife());
-            Node work = rig.simple(new AtomicInteger(), false);
-            rig.step(work);
-            work.ended(rig.level, Ending.REVOKED);
-            rig.tools.closed(Closing.SHUTDOWN);
-            var saved = rig.colony.works().kept(TaskTools.ID);
-            var items = saved.getList("items", net.minecraft.nbt.Tag.TAG_COMPOUND);
-            for (int index = 0; index < items.size(); index++) {
-                for (String field : List.of("slot", "equipment", "incarnation", "resident", "epoch")) {
-                    items.getCompound(index).remove(field);
-                }
-            }
-            rig.colony.works().keep(TaskTools.ID, saved);
-            TaskTools restored = new TaskTools(rig.colony.works(), rig.level.getServer());
-            try {
-                var recovery = restored.goals(rig.colony.works().view(rig.level));
-                helper.assertValueEqual(recovery.size(), 1, "the old persisted loan remains recoverable");
-                rig.finish(recovery.getFirst().nodes().getFirst());
-                helper.assertValueEqual(Goods.countIn(rig.rack, KNIVES), 1L,
-                    "execution migrates and returns the original saved physical loan");
-                helper.assertTrue(rig.body.pack().isEmpty(), "migration never creates another tool");
-            } finally {
-                restored.closed(Closing.SHUTDOWN);
-            }
+            ItemStack hat = new ItemStack(ModItems.STRAW_HAT.get());
+            ItemSpec family = Goods.specOf(hat);
+            rig.chest.setItem(0, hat);
+            rig.observe();
+            var stock = rig.tools.stock.read(rig.level, family);
+            UUID task = UUID.randomUUID();
+            rig.tools.pool.request(rig.colony.colonyId(), task, family, stock.inventory());
+            var lease = rig.tools.pool.reserve(rig.colony.colonyId(), task, family, rig.body.id(),
+                stock.inventory()).orElseThrow();
+            var borrow = new ToolAction.Borrow(rig.tools, lease, stock.sources().get(lease.tool()), Optional.empty());
+            rig.stand(borrow);
+            helper.assertTrue(Commit.run(rig.level, borrow, rig.worker) instanceof Outcome.Done,
+                "the clothing loan physically leaves storage");
+            var head = net.minecraft.world.entity.EquipmentSlot.HEAD;
+            helper.assertTrue(LoanClothing.equip(rig.tools, rig.worker, Map.of(head, lease)),
+                "the exact borrowed hat occupies the native slot");
+            rig.body.mob().setItemSlot(head, rig.body.mob().getItemBySlot(head).copy());
+            var markers = rig.body.mob().getPersistentData().copy();
+            helper.assertTrue(LoanClothing.held(rig.tools, rig.body.mob(), lease).isEmpty(),
+                "an identical replacement cannot inherit native clothing ownership");
+            helper.assertValueEqual(rig.body.mob().getPersistentData(), markers,
+                "reading ownership does not clear or modify markers");
+            rig.observe();
+            helper.assertTrue(LoanClothing.recover(rig.tools, lease, rig.body), "execution reconciles a stale marker");
+            helper.assertFalse(LoanClothing.borrowedSlot(rig.body.mob(), head),
+                "recovery clears the stale ownership marker");
+            helper.assertTrue(rig.body.mob().getItemBySlot(head).is(ModItems.STRAW_HAT.get()),
+                "recovery preserves the player's identical replacement");
         }
         helper.succeed();
     }
@@ -479,17 +614,14 @@ public final class TaskToolsGameTests {
         try (Rig rig = new Rig(helper)) {
             rig.rack.setItem(0, rig.namedKnife());
             Node work = rig.simple(new AtomicInteger(), false);
-            var within = (Workload.Within) work.spec().workload();
-            Node borrow = ((Workload.Within.Turn.Piece) within.next(rig.level, rig.worker)).node();
-            rig.stand(borrow);
+            HoldingFixture borrow = rig.holding(work).prepare();
             rig.colony.works().rule(CookeryContent.ID, rig.level.dimension(), List.of(
                 new StoreRule.Access(rig.rackAt, false, true)));
-            helper.assertTrue(Commit.run(rig.level, borrow, rig.worker) instanceof Outcome.Failed,
+            helper.assertTrue(
+                borrow.step() instanceof Outcome.Failed,
                 "take access disabled during the trip is checked again before removing the tool");
             helper.assertValueEqual(Goods.countIn(rig.rack, KNIVES), 1L, "the player's restricted knife remains on the rack");
             helper.assertValueEqual(Goods.countIn(rig.body.pack(), KNIVES), 0L, "no borrowed copy appears in the resident's pack");
-            within.ended(rig.level, borrow, new Ending.Failed(borrow.id(),
-                io.github.izakyl.folkways.cookery.CookeryRefusal.STATION_CHANGED));
             work.ended(rig.level, Ending.REVOKED);
         }
         helper.succeed();
@@ -503,16 +635,14 @@ public final class TaskToolsGameTests {
             Node work = rig.simple(executions, false);
             helper.assertFalse(rig.step(work), "the real knife is borrowed first");
             helper.assertFalse(rig.step(work), "the actual food action runs once before the return");
-            var within = (Workload.Within) work.spec().workload();
-            Node returning = ((Workload.Within.Turn.Piece) within.next(rig.level, rig.worker)).node();
-            rig.stand(returning);
+            HoldingFixture returning = rig.holding(work).prepare();
             rig.colony.works().rule(CookeryContent.ID, rig.level.dimension(), List.of(
                 new StoreRule.Access(rig.rackAt, true, false), new StoreRule.Access(rig.chestAt, true, false)));
-            helper.assertTrue(Commit.run(rig.level, returning, rig.worker) instanceof Outcome.Failed,
+            helper.assertTrue(
+                returning.step() instanceof Outcome.Failed,
                 "store access disabled during the return trip is checked again before insertion");
-            within.ended(rig.level, returning, new Ending.Failed(returning.id(),
-                io.github.izakyl.folkways.cookery.CookeryRefusal.STATION_CHANGED));
-            helper.assertTrue(within.next(rig.level, rig.worker) instanceof Workload.Within.Turn.Wait,
+            helper.assertTrue(
+                rig.holding(work).running(),
                 "a completed task waits while every destination refuses storage");
             helper.assertValueEqual(Goods.countIn(rig.body.pack(), KNIVES), 1L,
                 "the physical loan stays in the pack while return storage is disabled");
@@ -544,11 +674,12 @@ public final class TaskToolsGameTests {
                 helper.assertFalse(rig.step(work), "the next physical step performs native stove ignition once");
                 helper.assertTrue(rig.level.getBlockState(rig.boardCell).getValue(
                     com.github.ysbbbbbb.kaleidoscopecookery.block.kitchen.StoveBlock.LIT), "the actual stove was lit before the interruption");
-                work.released(rig.level, rig.worker, Ending.REVOKED);
+                rig.holding(work).suspend();
                 rig.level.setBlockAndUpdate(rig.boardCell, rig.level.getBlockState(rig.boardCell).setValue(
                     com.github.ysbbbbbb.kaleidoscopecookery.block.kitchen.StoveBlock.LIT, false));
                 rig.level.setBlockAndUpdate(rig.boardCell.above(), Blocks.WATER.defaultBlockState());
                 helper.assertFalse(ignition.nodes().getFirst().ready(rig.level), "the cold wet native stove cannot be ignited again yet");
+                rig.holding(work).resume();
                 helper.assertTrue(rig.ready(work),
                     "pending completed work may resume returns even when ignition is no longer ready");
                 rig.finish(work);
@@ -574,17 +705,14 @@ public final class TaskToolsGameTests {
     public static void borrowedWorkerKeepsTheRealCraftingPerksGrantedSpeed(GameTestHelper helper) {
         try (Rig rig = new Rig(helper)) {
             var perks = Perks.fixed(Map.of(WaresContent.QUICK_HANDS, 2));
-            Worker skilled = new Worker() {
-                public Resident resident() { return rig.worker.resident(); }
-                public Mob body() { return rig.worker.body(); }
-                public Container pack() { return rig.worker.pack(); }
-                public List<Store> within() { return rig.worker.within(); }
-                public ItemStack held(ToolNeed need) { return rig.worker.held(need); }
-                public void spill(ItemStack stack) { rig.worker.spill(stack); }
-                public Effects effects() { return perks.effects(); }
-                public List<Node> route() { return rig.worker.route(); }
-                public Placement placement() { return rig.worker.placement(); }
-            };
+            Worker skilled = new TestWorker(() -> rig.worker.resident(), () -> rig.worker.body(), () -> rig.worker.pack(),
+                rig.worker.placement(), rig.worker.within())
+                .effects(() -> perks.effects())
+                .held(need -> rig.worker.held(need))
+                .spill(stack -> {
+                    rig.worker.spill(stack);
+                })
+                .route(() -> rig.worker.route());
             Worker borrowing = new LoanWorker(skilled, rig.tools, Map.of());
             var craft = Workload.Once.of(100, Workload.Haste.of(WaresContent.CRAFTING));
             helper.assertTrue(skilled.effects().value(Stats.WORK_SPEED, WaresContent.CRAFTING) > 1.0,
@@ -714,7 +842,7 @@ public final class TaskToolsGameTests {
     public static void missingToolsKeepTheOnlyCraftingWorkerFreeAndMergeOneBootstrapOrder(GameTestHelper helper) {
         try (Rig rig = new Rig(helper)) {
             List<Node> submitted = new ArrayList<>();
-            rig.colony.works().listen(rig.level.dimension(), new ColonyWorks.Listening() {
+            rig.colony.works().listen(rig.level.dimension(), new WorkListener() {
                 public void submitted(ResourceLocation owner, Grown work) { submitted.addAll(work.nodes()); }
                 public void withdrawn(ResourceLocation owner, UUID node) { }
                 public void offered() { }
@@ -748,13 +876,13 @@ public final class TaskToolsGameTests {
             Node work = rig.simple(executions, false);
             rig.step(work);
             helper.assertValueEqual(Goods.countIn(rig.body.pack(), KNIVES), 1L, "the borrow really moved the rack's knife");
-            helper.assertTrue(io.github.izakyl.folkways.core.api.resident.body.TaskTools.holds(rig.body.id(), rig.body.pack().getItem(0)),
+            helper.assertTrue(io.github.izakyl.folkways.core.resident.api.TaskTools.holds(rig.body.id(), rig.body.pack().getItem(0)),
                 "the actual borrowed stack is protected from ordinary cargo unloading");
             work.ended(rig.level, Ending.REVOKED);
             rig.tools.closed(Closing.SHUTDOWN);
             TaskTools loaded = new TaskTools(rig.colony.works(), rig.level.getServer());
             try {
-                helper.assertTrue(io.github.izakyl.folkways.core.api.resident.body.TaskTools.holds(rig.body.id(), rig.body.pack().getItem(0)),
+                helper.assertTrue(io.github.izakyl.folkways.core.resident.api.TaskTools.holds(rig.body.id(), rig.body.pack().getItem(0)),
                     "reload protects the saved physical return before the next inventory survey");
                 List<Grown> recovery = loaded.goals(rig.colony.works().view(rig.level));
                 helper.assertValueEqual(recovery.size(), 1, "one saved loan has one return task");
@@ -796,13 +924,11 @@ public final class TaskToolsGameTests {
         try (Rig rig = new Rig(helper)) {
             rig.rack.setItem(0, rig.namedKnife());
             Node work = rig.simple(new AtomicInteger(), false);
-            var turn = ((Workload.Within) work.spec().workload()).next(rig.level, rig.worker);
-            Node borrow = ((Workload.Within.Turn.Piece) turn).node();
+            HoldingFixture borrow = rig.holding(work).prepare();
             rig.rack.getItem(0).set(DataComponents.CUSTOM_NAME, Component.literal("Player changed this knife"));
-            rig.stand(borrow);
-            Outcome result = Commit.run(rig.level, borrow, rig.worker);
+
+            Outcome result = borrow.step();
             helper.assertTrue(result instanceof Outcome.Failed, "the borrowed source is rechecked including components at commit");
-            ((Workload.Within) work.spec().workload()).ended(rig.level, borrow, Ending.DROPPED);
             helper.assertTrue(rig.body.pack().isEmpty(), "a stale reservation does not inject a knife into the worker");
             helper.assertTrue(rig.rack.getItem(0).getHoverName().getString().equals("Player changed this knife"),
                 "the player's real changed tool stays in its native rack");
@@ -849,10 +975,8 @@ public final class TaskToolsGameTests {
             Node work = rig.tools.decorate(Grown.of(original)).nodes().getFirst();
             helper.assertTrue(work.planned(rig.level).isEmpty(), "the original operation is adopted");
             rig.step(work);
-            Workload.Within within = (Workload.Within) work.spec().workload();
-            Node action = ((Workload.Within.Turn.Piece) within.next(rig.level, rig.worker)).node();
-            action.released(rig.level, rig.worker, Ending.DROPPED);
-            within.ended(rig.level, action, Ending.DROPPED);
+            HoldingFixture action = rig.holding(work).prepare();
+            action.end(Ending.DROPPED);
             work.released(rig.level, rig.worker, Ending.REVOKED);
             work.ended(rig.level, Ending.REVOKED);
             helper.assertValueEqual(released.get(), 1, "the original Once execution has only one cancellation callback");
@@ -1004,7 +1128,7 @@ public final class TaskToolsGameTests {
             other = PersonBody.RESIDENT.get().create(rig.level);
             other.mob().setNoAi(true);
             other.mob().moveTo(rig.boardCell.getCenter()); rig.level.addFreshEntity(other.mob());
-            rig.colony.works().hold(other.kind().id(), Held.Entity.of(other.mob())).orElseThrow();
+            rig.colony.works().hold(other.kind().id(), Claimed.Entity.of(other.mob())).orElseThrow();
             second = TestWorker.of(other).within(rig.worker.within())
                 .held(need -> Tools.from(other.pack().contents(), need).orElse(ItemStack.EMPTY));
         }
@@ -1045,13 +1169,10 @@ public final class TaskToolsGameTests {
         }
         void borrow(Node work, Worker who) {
             rig.helper.assertTrue(rig.ready(work), "an actual additional knife permits the next borrowing turn");
-            var turn = ((Workload.Within)work.spec().workload()).next(rig.level, who);
-            rig.helper.assertTrue(turn instanceof Workload.Within.Turn.Piece piece && piece.node() instanceof ToolAction.Borrow,
-                "the first real preparation is a physical borrow");
-            Node piece = ((Workload.Within.Turn.Piece)turn).node();
-            stand(piece, who.body());
-            rig.helper.assertTrue(Commit.run(rig.level, piece, who) instanceof Outcome.Done, "the real source transfers one knife into this borrower's pack");
-            ((Workload.Within)work.spec().workload()).ended(rig.level, piece, Ending.DONE);
+            HoldingFixture holding = new HoldingFixture(rig.level, work, who).walking();
+            rig.helper.assertTrue(
+                holding.step() instanceof Outcome.Done,
+                "the real holding transfers one knife into this borrower's pack");
             rig.observe();
         }
         void returnOne(TaskTools service, Body borrower) {
@@ -1063,13 +1184,20 @@ public final class TaskToolsGameTests {
             stand(returning, who.body());
             rig.helper.assertTrue(Commit.run(rig.level, returning, who) instanceof Outcome.Done, "the original physical tool is really returned to its promised target");
         }
-        static void stand(Node work, Mob body) {
+        static void stand(WorkAction work, Mob body) {
             var at = work.spec().stances().cells().stream().findFirst().orElseThrow().cell();
             body.moveTo(at.getX() + 0.5, at.getY(), at.getZ() + 0.5);
         }
         public void close() { other.mob().discard(); rig.close(); }
     }
     private static final class Rig implements AutoCloseable {
+        private final java.util.Map<Node, HoldingFixture> claims =
+                new java.util.IdentityHashMap<>();
+
+        HoldingFixture holding(Node node) {
+            return claims.computeIfAbsent(node, next -> new HoldingFixture(level, next, worker).walking());
+        }
+
         final GameTestHelper helper;
         final ServerLevel level;
         final BlockPos boardCell;
@@ -1112,7 +1240,7 @@ public final class TaskToolsGameTests {
             body.mob().moveTo(boardCell.getX() + 0.5, boardCell.getY(), boardCell.getZ() + 1.5);
             level.addFreshEntity(body.mob());
             colony = ColonyRegistry.get(level.getServer()).mint(level.getServer());
-            colony.works().hold(body.kind().id(), Held.Entity.of(body.mob())).orElseThrow();
+            colony.works().hold(body.kind().id(), Claimed.Entity.of(body.mob())).orElseThrow();
             colony.works().stores(CookeryContent.ID, level.dimension(), List.of(chestAt, rackAt));
             tools = new TaskTools(colony.works(), level.getServer());
             worker = TestWorker.of(body).within(new Worker.Store(rackAt, rack), new Worker.Store(chestAt, chest))
@@ -1168,7 +1296,7 @@ public final class TaskToolsGameTests {
         }
 
         Node simple(AtomicInteger executions, boolean breaks,
-                io.github.izakyl.folkways.core.api.vocation.Vocation vocation, ToolNeed need) {
+                io.github.izakyl.folkways.core.vocation.api.Vocation vocation, ToolNeed need) {
             observe();
             NodeSpec spec = NodeSpec.of(UUID.randomUUID(), CookeryContent.ID, new WorkSite.AtBlock(boardAt),
                 Stances.at(level, boardCell.south()), Workload.Once.of(1))
@@ -1191,17 +1319,15 @@ public final class TaskToolsGameTests {
             return wrapped;
         }
 
-        void stand(Node piece) {
+        void stand(WorkAction piece) {
             piece.spec().stances().cells().stream().findFirst().ifPresent(at ->
                 body.mob().moveTo(at.cell().getX() + 0.5, at.cell().getY(), at.cell().getZ() + 0.5));
         }
 
         boolean step(Node work) {
             observe();
-            Workload.Within within = (Workload.Within) work.spec().workload();
-            var turn = within.next(level, worker);
-            if (turn instanceof Workload.Within.Turn.Wait) { return false; }
-            if (turn instanceof Workload.Within.Turn.Leave) {
+            HoldingFixture holding = holding(work);
+            if (holding.finished()) {
                 helper.assertTrue(work.commit(level, worker) instanceof Outcome.Done, "the completed parent settles without replaying its action");
                 work.released(level, worker, Ending.DONE);
                 work.ended(level, Ending.DONE);
@@ -1210,18 +1336,14 @@ public final class TaskToolsGameTests {
                 }
                 return true;
             }
-            helper.assertTrue(turn instanceof Workload.Within.Turn.Piece, "the real shared-tool task does not stall: " + turn);
-            Node piece = ((Workload.Within.Turn.Piece) turn).node();
-            stand(piece);
-            helper.assertTrue(piece.planned(level).isEmpty(), "the real preparation/action piece can start");
-            Outcome outcome = Commit.run(level, piece, worker);
+            Outcome outcome = holding.step();
+            if (outcome == null) {
+                return false;
+            }
             helper.assertTrue(outcome instanceof Outcome.Done, "the actual physical commit succeeds: " + outcome);
             for (ItemStack product : ((Outcome.Done) outcome).made()) {
-                helper.assertTrue(Containers.insert(body.pack(), product).isEmpty(), "all native food products fit in reserved pack space");
+                helper.assertTrue(Containers.insert(body.pack(), product).isEmpty(), "all native food products fit");
             }
-            piece.released(level, worker, Ending.DONE);
-            piece.ended(level, Ending.DONE);
-            within.ended(level, piece, Ending.DONE);
             observe();
             return false;
         }

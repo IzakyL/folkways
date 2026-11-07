@@ -15,9 +15,9 @@ import dev.blockwright.api.Context;
 import java.util.*;
 import java.lang.reflect.*;
 import net.minecraft.core.BlockPos;
-import io.github.izakyl.folkways.core.api.passage.Hop;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.engine.colony.ColonyWays;
+import io.github.izakyl.folkways.core.travel.api.Hop;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
+import io.github.izakyl.folkways.core.travel.internal.ColonyWays;
 public final class Task {
   static Object field(Object owner, String name) throws Exception {
     Field f = owner.getClass().getDeclaredField(name); f.setAccessible(true); return f.get(owner);
@@ -174,7 +174,7 @@ import dev.blockwright.api.Context;
 import java.util.*;
 import java.lang.reflect.*;
 import net.minecraft.server.level.ServerLevel;
-import io.github.izakyl.folkways.core.engine.colony.ColonyWays;
+import io.github.izakyl.folkways.core.travel.internal.ColonyWays;
 public final class Task {
   static Object field(Object owner, String name) throws Exception {
     Field f = owner.getClass().getDeclaredField(name); f.setAccessible(true); return f.get(owner);

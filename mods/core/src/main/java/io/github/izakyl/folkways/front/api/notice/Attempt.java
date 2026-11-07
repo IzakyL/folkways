@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.front.api.notice;
 
-import io.github.izakyl.folkways.core.api.terms.RefusalKind;
+import io.github.izakyl.folkways.core.resident.api.RefusalKind;
 import java.util.Optional;
 
 public sealed interface Attempt {

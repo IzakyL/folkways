@@ -78,7 +78,7 @@ function judgeDriverUtilisation(beats: ColonyBeat[]): Finding[] {
     found.push({
       rule: "utilisation/no-standing-census",
       severity: "caveat",
-      said: "heartbeat has no standing={...} section, can't read on-duty and stalled rates (engine older than the tests?)",
+      said: "heartbeat has no standing={...} section, can't read on-duty and stalled rates (incomplete evidence)",
       evidence: { liveBeats: live.length },
     });
   } else {

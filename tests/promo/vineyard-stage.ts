@@ -22,7 +22,7 @@ const VINEYARD = defineTask<Record<string, any>, any>({
   source: javaTask({ imports: [
     "com.github.ysbbbbbb.kaleidoscopetavern.block.plant.GrapevineTrellisBlock",
     "com.github.ysbbbbbb.kaleidoscopetavern.block.plant.GrapeCropBlock",
-    "io.github.izakyl.folkways.core.api.colony.Colonies",
+    "io.github.izakyl.folkways.core.colony.api.Colonies",
     "io.github.izakyl.folkways.front.engine.colony.ColonyFront",
     "io.github.izakyl.folkways.front.engine.colony.ColonySettings",
     "io.github.izakyl.folkways.plugins.farming.FarmingContent",

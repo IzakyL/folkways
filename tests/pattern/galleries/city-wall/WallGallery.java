@@ -3,7 +3,7 @@ import blockwright.minecraft.core.Sync;
 import dev.blockwright.api.Context;
 import io.github.izakyl.folkways.plugins.build.draft.*;
 import io.github.izakyl.folkways.front.api.Settings;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.ResourceLocation;

@@ -14,13 +14,13 @@ import { twins, type Vec } from "../shared/harness/stage";
 
 const HOLDINGS = defineTask<{ cells: Vec[] }, { held: boolean[] }>({
   name: "folkways.demolished-members.read-ledger", side: "server",
-  source: javaTask({ imports: ["net.minecraft.core.BlockPos", "io.github.izakyl.folkways.core.api.colony.Colonies",
-    "io.github.izakyl.folkways.core.api.terms.WorldPos"], body: `
+  source: javaTask({ imports: ["net.minecraft.core.BlockPos", "io.github.izakyl.folkways.core.colony.api.Colonies",
+    "io.github.izakyl.folkways.core.world.api.WorldPos"], body: `
 var level=ctx.server().overworld();var held=new ArrayList<Boolean>();
 for(var raw:(List<?>)Args.of(ctx).value("cells")){
  var cell=(Map<?,?>)raw;
  var at=WorldPos.of(level,new BlockPos(((Number)cell.get("x")).intValue(),((Number)cell.get("y")).intValue(),((Number)cell.get("z")).intValue()));
- held.add(Colonies.all(ctx.server()).stream().anyMatch(colony->colony.holdingAt(at).isPresent()));
+ held.add(Colonies.all(ctx.server()).stream().anyMatch(colony->colony.claimAt(at).isPresent()));
 }
 return Map.of("held",held);
 ` }),

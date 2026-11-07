@@ -2,7 +2,7 @@ package io.github.izakyl.folkways.create.dispatch;
 
 import io.github.izakyl.folkways.base.persist.Reader;
 import io.github.izakyl.folkways.base.persist.Writer;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -84,6 +84,6 @@ final class ChainNets {
 
     synchronized void load(Reader reader) {
         chains.clear();
-        reader.children(TAG_CHAINS).forEach(one -> WorldPos.load(one).ifPresent(chains::add));
+        reader.requiredChildren(TAG_CHAINS).forEach(one -> WorldPos.load(one).ifPresent(chains::add));
     }
 }

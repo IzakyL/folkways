@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.create.dispatch;
 
-import io.github.izakyl.folkways.core.api.terms.RefusalKind;
+import io.github.izakyl.folkways.core.resident.api.RefusalKind;
 
 public enum DispatchRefusal implements RefusalKind.Named {
 

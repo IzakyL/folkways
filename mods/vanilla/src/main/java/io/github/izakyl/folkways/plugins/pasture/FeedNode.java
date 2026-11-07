@@ -1,12 +1,13 @@
 package io.github.izakyl.folkways.plugins.pasture;
 
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
-import io.github.izakyl.folkways.core.api.terms.Reach;
-import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
-import io.github.izakyl.folkways.core.api.work.Need;
-import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Worker;
-import io.github.izakyl.folkways.core.api.work.Xp;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
+import io.github.izakyl.folkways.core.work.api.Need;
+import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.work.api.Xp;
+import io.github.izakyl.folkways.core.work.support.WorkStances;
+import io.github.izakyl.folkways.core.world.api.Reach;
+import io.github.izakyl.folkways.core.world.api.WorldSpaces;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -52,7 +53,7 @@ final class FeedNode extends PenNode {
     public Outcome commit(ServerLevel level, Worker who) {
         Pen now = current.apply(level).orElse(null);
         Pair pair = now == null ? null : pair(level, now);
-        if (pair == null || !Reach.standingIn(who.body(), spec().stances())
+        if (pair == null || !WorkStances.standingIn(who.body(), spec().stances())
                 || !inReach(level, who, pair.first()) || !inReach(level, who, pair.second())) {
             return refuse(PastureRefusal.NOT_FEEDABLE);
         }

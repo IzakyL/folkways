@@ -1,26 +1,27 @@
 package io.github.izakyl.folkways.cookery.tools;
 
-import io.github.izakyl.folkways.core.api.inventory.InventoryFeedback;
-import io.github.izakyl.folkways.core.api.inventory.InventorySnapshot;
-import io.github.izakyl.folkways.core.api.terms.Containers;
-import io.github.izakyl.folkways.core.api.terms.Stash;
-import io.github.izakyl.folkways.core.api.terms.Reach;
-import io.github.izakyl.folkways.core.api.terms.RefusalKind;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
-import io.github.izakyl.folkways.core.api.vocation.KitRules;
-import io.github.izakyl.folkways.core.api.vocation.Vocation;
-import io.github.izakyl.folkways.core.api.work.Ending;
-import io.github.izakyl.folkways.core.api.work.Leaves;
-import io.github.izakyl.folkways.core.api.work.Node;
-import io.github.izakyl.folkways.core.api.work.NodeSpec;
-import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.WorkSite;
-import io.github.izakyl.folkways.core.api.work.Worker;
-import io.github.izakyl.folkways.core.api.work.Workload;
 import io.github.izakyl.folkways.cookery.CookeryContent;
 import io.github.izakyl.folkways.cookery.CookeryRefusal;
+import io.github.izakyl.folkways.core.colony.api.KitRules;
+import io.github.izakyl.folkways.core.inventory.api.InventoryFeedback;
+import io.github.izakyl.folkways.core.inventory.api.InventorySnapshot;
+import io.github.izakyl.folkways.core.inventory.api.Stash;
+import io.github.izakyl.folkways.core.item.api.Containers;
+import io.github.izakyl.folkways.core.resident.api.RefusalKind;
+import io.github.izakyl.folkways.core.vocation.api.Vocation;
+import io.github.izakyl.folkways.core.work.api.Ending;
+import io.github.izakyl.folkways.core.work.api.NodeSpec;
+import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.work.api.WorkAction;
+import io.github.izakyl.folkways.core.work.api.WorkSite;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.work.api.Workload;
+import io.github.izakyl.folkways.core.work.support.Leaves;
+import io.github.izakyl.folkways.core.work.support.WorkStances;
+import io.github.izakyl.folkways.core.world.api.Reach;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
+import io.github.izakyl.folkways.core.world.api.WorldSpaces;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -29,7 +30,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
 import net.minecraft.world.item.ItemStack;
 
-abstract class ToolAction implements Node {
+abstract class ToolAction implements WorkAction {
 
     final TaskTools service;
     final KitchenTools.Lease lease;
@@ -48,7 +49,6 @@ abstract class ToolAction implements Node {
     @Override
     public NodeSpec spec() { return spec; }
 
-    @Override
     public Optional<RefusalKind> refusal(ServerLevel level) {
         InventorySnapshot observed = service.colony.inventory().snapshot();
         var store = observed.store(at);
@@ -56,7 +56,6 @@ abstract class ToolAction implements Node {
             ? Optional.of(CookeryRefusal.STATION_CHANGED) : Optional.empty();
     }
 
-    @Override
     public boolean ready(ServerLevel level) {
         if (service.stock.waitingForResident(lease)) {
             return false;
@@ -72,7 +71,7 @@ abstract class ToolAction implements Node {
     }
 
     boolean reaches(ServerLevel level, Worker who) {
-        return at.in(level) && level.isLoaded(at.block(level)) && Reach.stanceHolding(who.body(), spec.stances())
+        return at.in(level) && level.isLoaded(at.block(level)) && WorkStances.stanceHolding(who.body(), spec.stances())
             .flatMap(feet -> WorldSpaces.storage(level, new WorldPos(at.realm(), feet)))
             .filter(feet -> Reach.withinReach(feet, at.block(level)) && Reach.inSight(level, feet, at.block(level)))
             .isPresent();

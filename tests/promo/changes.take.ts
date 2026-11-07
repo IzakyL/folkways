@@ -1572,7 +1572,7 @@ const FEED_CREW = defineTask<Record<string, any>, Record<string, any>>({
   timeoutMs: 20_000,
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.core.api.colony.Colony",
+      "io.github.izakyl.folkways.core.colony.api.Colony",
       "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
       "io.github.izakyl.folkways.plugins.person.living.LivingContent",
       "java.lang.reflect.AccessibleObject",
@@ -1615,7 +1615,7 @@ const GIVE_PACK = defineTask<Record<string, any>, Record<string, any>>({
   timeoutMs: 20_000,
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.core.api.resident.body.Bodies",
+      "io.github.izakyl.folkways.core.resident.api.Bodies",
       "net.minecraft.core.registries.BuiltInRegistries",
       "net.minecraft.resources.ResourceLocation",
       "net.minecraft.world.item.ItemStack",
@@ -1661,7 +1661,7 @@ const EMPTY_PACKS = defineTask<Record<string, any>, Record<string, any>>({
   side: "server",
   timeoutMs: 20_000,
   source: javaTask({
-    imports: ["io.github.izakyl.folkways.core.api.resident.body.Bodies", "net.minecraft.core.component.DataComponents"],
+    imports: ["io.github.izakyl.folkways.core.resident.api.Bodies", "net.minecraft.core.component.DataComponents"],
     body: `
 var level = ctx.server().overworld(); var args = Args.of(ctx);
 var held = new LinkedHashMap<String, Object>();
@@ -1688,8 +1688,8 @@ const PLACE_RESIDENT = defineTask<Record<string, any>, Record<string, any>>({
   timeoutMs: 20_000,
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.core.api.resident.body.Bodies",
-      "io.github.izakyl.folkways.core.api.vocation.Vocations",
+      "io.github.izakyl.folkways.core.resident.api.Bodies",
+      "io.github.izakyl.folkways.core.vocation.api.Vocations",
       "net.minecraft.server.MinecraftServer",
     ],
     body: `
@@ -1879,7 +1879,7 @@ const DISPATCH_STATE = defineTask<Record<string, any>, Record<string, any>>({
   timeoutMs: 20_000,
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.core.engine.colony.ColonyWorks",
+      "io.github.izakyl.folkways.core.colony.internal.ColonyWorks",
       "io.github.izakyl.folkways.create.dispatch.DispatchContent",
       "io.github.izakyl.folkways.create.dispatch.DispatchPresence",
       "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
@@ -1912,7 +1912,7 @@ for (var shop : colony.workshopsIn(level.dimension())) {
 var dispatch = (DispatchPresence) colony.service(DispatchContent.ID, Object.class).orElseThrow();
 var written = args.string("network");
 UUID network = written.isEmpty() ? null : UUID.fromString(written);
-var ports = colony.holdings(DispatchContent.PORT).size();
+var ports = colony.claims(DispatchContent.PORT).size();
 return Map.of("workshops", workshops,
   "held", network != null && dispatch.holds(network),
   "flaw", network == null ? "" : dispatch.flawOf(network),
@@ -1927,7 +1927,7 @@ const RESIDENT_STATE = defineTask<Record<string, any>, Record<string, any>>({
   timeoutMs: 20_000,
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.core.api.resident.body.Bodies",
+      "io.github.izakyl.folkways.core.resident.api.Bodies",
       "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
       "io.github.izakyl.folkways.plugins.person.ResidentEntity",
       "net.minecraft.server.MinecraftServer",

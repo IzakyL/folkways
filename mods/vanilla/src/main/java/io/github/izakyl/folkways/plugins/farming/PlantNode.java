@@ -1,12 +1,12 @@
 package io.github.izakyl.folkways.plugins.farming;
 
-import io.github.izakyl.folkways.core.api.terms.Goods;
-import io.github.izakyl.folkways.core.api.work.Need;
-import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.WorkNoise;
-import io.github.izakyl.folkways.core.api.work.Worker;
-import io.github.izakyl.folkways.core.api.work.Workload;
-import io.github.izakyl.folkways.core.api.work.Xp;
+import io.github.izakyl.folkways.core.item.api.Goods;
+import io.github.izakyl.folkways.core.work.api.Need;
+import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.WorkNoise;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.work.api.Workload;
+import io.github.izakyl.folkways.core.work.api.Xp;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;

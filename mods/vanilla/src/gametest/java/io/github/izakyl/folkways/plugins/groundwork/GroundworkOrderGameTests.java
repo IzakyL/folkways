@@ -2,18 +2,17 @@ package io.github.izakyl.folkways.plugins.groundwork;
 
 import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.base.persist.Reader;
-import io.github.izakyl.folkways.base.persist.Writer;
-import io.github.izakyl.folkways.core.api.colony.Colonies;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.colony.Held;
-import io.github.izakyl.folkways.core.api.resident.Resident;
-import io.github.izakyl.folkways.core.api.terms.ItemFilter;
-import io.github.izakyl.folkways.core.api.terms.Realm;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
-import io.github.izakyl.folkways.core.api.work.Worker;
+import io.github.izakyl.folkways.core.colony.api.Claimed;
+import io.github.izakyl.folkways.core.colony.api.Colonies;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.item.api.ItemFilter;
+import io.github.izakyl.folkways.core.resident.api.Resident;
 import io.github.izakyl.folkways.core.testing.Proxies;
 import io.github.izakyl.folkways.core.testing.TestWorker;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.world.api.Realm;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
+import io.github.izakyl.folkways.core.world.api.WorldSpaces;
 import io.github.izakyl.folkways.front.api.ZoneView;
 import io.github.izakyl.folkways.front.api.notice.Line;
 import io.github.izakyl.folkways.front.engine.colony.ColonyFront;
@@ -122,7 +121,7 @@ public final class GroundworkOrderGameTests {
     public static void colonyHoldingsAreIncludedInEveryOrderKind(GameTestHelper helper) {
         for (int kind = 0; kind < 3; kind++) {
             try (Fixture f = new Fixture(helper)) {
-                f.colony.hold(BuildContent.ID, new Held.Block(WorldPos.of(f.level, f.at))).orElseThrow();
+                f.colony.hold(BuildContent.ID, new Claimed.Block(WorldPos.of(f.level, f.at))).orElseThrow();
                 f.zone(Set.of(f.at, f.at.east()), settings(kind != 1, kind != 0));
                 f.sweep();
                 BlockState target = kind == 0 ? Blocks.AIR.defaultBlockState() : Blocks.DIRT.defaultBlockState();
@@ -249,41 +248,6 @@ public final class GroundworkOrderGameTests {
     }
 
     @GameTest(template = "empty_large", timeoutTicks = 100)
-    public static void oldClearAndFillTargetsAreIgnoredOnTheNextSweep(GameTestHelper helper) {
-        try (Fixture f = new Fixture(helper)) {
-            ZoneView zone = f.zone(Set.of(f.at, f.at.east()), settings(true, false));
-            CompoundTag obsolete = new CompoundTag();
-            obsolete.putString("clear", "old malformed targets");
-            obsolete.put("fill", new net.minecraft.nbt.ListTag());
-            f.colony.keep(GroundworkContent.ID, Writer.of().children("sites", List.of(zone.id()), id ->
-                Writer.of().uuid("zone", id).blob("targets", obsolete).tag()).tag());
-            f.ground = new GroundPresence(f.colony);
-            f.sweep();
-            helper.assertValueEqual(f.targets(), Map.of(f.at, Blocks.AIR.defaultBlockState(),
-                f.at.east(), Blocks.AIR.defaultBlockState()), "old targets never constrain the current drawing");
-            helper.assertTrue(f.front.zone(zone.id()).isEmpty(), "the old zone converts on its next sweep");
-        }
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty_large", timeoutTicks = 100)
-    public static void anOldZoneWaitsUntilEveryCellIsLoaded(GameTestHelper helper) {
-        try (Fixture f = new Fixture(helper)) {
-            BlockPos unloaded = f.at.east(1_000_000);
-            helper.assertFalse(f.level.isLoaded(unloaded), "the distant cell is not loaded");
-            ZoneView zone = f.zone(Set.of(f.at, unloaded), settings(true, false));
-            f.colony.keep(GroundworkContent.ID, Writer.of().children("sites", List.of(zone.id()), id ->
-                Writer.of().uuid("zone", id).blob("targets", new CompoundTag()).tag()).tag());
-            f.ground = new GroundPresence(f.colony);
-            f.sweep();
-            helper.assertTrue(f.front.zone(zone.id()).isPresent(), "empty old targets cannot erase an unloaded zone");
-            helper.assertValueEqual(f.orders(), 0, "no partial order is filed");
-            helper.assertValueEqual(f.drawings(), 0, "no partial drawing is kept");
-        }
-        helper.succeed();
-    }
-
-    @GameTest(template = "empty_large", timeoutTicks = 100)
     public static void shipZonesFileOrdersInTheirOwnRealm(GameTestHelper helper) {
         try (Fixture f = new Fixture(helper)) {
             UUID ship = UUID.randomUUID();
@@ -349,7 +313,7 @@ public final class GroundworkOrderGameTests {
                 }
             }
             place(at.south(3), Blocks.CHEST.defaultBlockState());
-            colony.hold(BuildContent.ID, new Held.Block(WorldPos.of(level, at.south(3))))
+            colony.hold(BuildContent.ID, new Claimed.Block(WorldPos.of(level, at.south(3))))
                 .orElseThrow(() -> new AssertionError("the fixture chest is held"));
         }
 

@@ -1,20 +1,20 @@
 package io.github.izakyl.folkways.carts;
 
 import com.jusipat.astikorcartsredux.entity.AbstractCargoCart;
-import io.github.izakyl.folkways.core.api.colony.Asking;
-import io.github.izakyl.folkways.core.api.colony.Closing;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.colony.ColonyView;
-import io.github.izakyl.folkways.core.api.colony.Held;
-import io.github.izakyl.folkways.core.api.colony.Holding;
-import io.github.izakyl.folkways.core.api.colony.Release;
-import io.github.izakyl.folkways.core.api.transport.TransportPublication;
-import io.github.izakyl.folkways.core.api.transport.TransportSnapshot;
-import io.github.izakyl.folkways.core.api.transport.TransportTravel;
-import io.github.izakyl.folkways.core.api.work.Before;
-import io.github.izakyl.folkways.core.api.work.Ending;
-import io.github.izakyl.folkways.core.api.work.Grown;
-import io.github.izakyl.folkways.core.api.work.Node;
+import io.github.izakyl.folkways.base.persist.Required;
+import io.github.izakyl.folkways.core.colony.api.Asking;
+import io.github.izakyl.folkways.core.colony.api.Claim;
+import io.github.izakyl.folkways.core.colony.api.ClaimRelease;
+import io.github.izakyl.folkways.core.colony.api.Closing;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.colony.api.ColonyView;
+import io.github.izakyl.folkways.core.plan.api.Before;
+import io.github.izakyl.folkways.core.plan.api.Grown;
+import io.github.izakyl.folkways.core.transport.api.TransportPublication;
+import io.github.izakyl.folkways.core.transport.api.TransportSnapshot;
+import io.github.izakyl.folkways.core.transport.api.TransportTravel;
+import io.github.izakyl.folkways.core.work.api.Ending;
+import io.github.izakyl.folkways.core.work.api.Node;
 import io.github.izakyl.folkways.front.api.Fronts;
 import io.github.izakyl.folkways.front.api.PathView;
 import io.github.izakyl.folkways.plugins.pasture.PastureHorses;
@@ -117,7 +117,7 @@ final class CartLines {
         if (state.cart.isEmpty()) {
             return;
         }
-        Optional<Holding> held = colony.holdingOf(state.cart.get())
+        Optional<Claim> held = colony.claimOf(state.cart.get())
             .filter(holding -> holding.owner().equals(FolkwaysCartsMod.OWNER));
         if (held.isEmpty()) {
             state.cart = Optional.empty();
@@ -126,7 +126,7 @@ final class CartLines {
         }
         state.cart(level).filter(cart -> !line.kind().is(cart)).ifPresent(cart -> {
             cart.setPulling(null);
-            colony.release(held.get().id(), Release.LET_GO);
+            colony.release(held.get().id(), ClaimRelease.LET_GO);
             state.cart = Optional.empty();
             state.aboard.clear();
         });
@@ -136,7 +136,7 @@ final class CartLines {
     // none.
     private void keepHorse(ServerLevel level, Line line, LineState state) {
         if (state.horse.isPresent()
-                && colony.holdingOf(state.horse.get()).filter(this::ours).isEmpty()) {
+                && colony.claimOf(state.horse.get()).filter(this::ours).isEmpty()) {
             if (state.team != null) {
                 state.team.release();
                 state.team = null;
@@ -163,14 +163,14 @@ final class CartLines {
         });
     }
 
-    private boolean ours(Holding holding) {
+    private boolean ours(Claim holding) {
         return holding.owner().equals(FolkwaysCartsMod.OWNER);
     }
 
     private void letGo(MinecraftServer server, LineState state) {
         server.getAllLevels().forEach(level -> state.cart(level).ifPresent(cart -> cart.setPulling(null)));
-        state.cart.flatMap(colony::holdingOf).filter(this::ours)
-            .ifPresent(holding -> colony.release(holding.id(), Release.LET_GO));
+        state.cart.flatMap(colony::claimOf).filter(this::ours)
+            .ifPresent(holding -> colony.release(holding.id(), ClaimRelease.LET_GO));
         letGoHorse(server, state);
     }
 
@@ -189,8 +189,8 @@ final class CartLines {
                 state.cart(level).filter(cart -> cart.getPulling() == horse).ifPresent(cart -> cart.setPulling(null));
             });
         }
-        state.horse.flatMap(colony::holdingOf).filter(this::ours)
-            .ifPresent(holding -> colony.release(holding.id(), Release.LET_GO));
+        state.horse.flatMap(colony::claimOf).filter(this::ours)
+            .ifPresent(holding -> colony.release(holding.id(), ClaimRelease.LET_GO));
         state.horse = Optional.empty();
     }
 
@@ -335,21 +335,21 @@ final class CartLines {
 
     // What was aboard when the colony was saved is not carried on: it is stray, and set down at the next station.
     private void load(CompoundTag tag) {
-        for (Tag entry : tag.getList(TAG_LINES, Tag.TAG_COMPOUND)) {
+        if (tag.isEmpty()) {
+            return;
+        }
+        for (Tag entry : Required.list(tag, TAG_LINES, Tag.TAG_COMPOUND)) {
             CompoundTag one = (CompoundTag) entry;
-            if (!one.hasUUID("line")) {
-                continue;
-            }
-            LineState state = new LineState(one.getUUID("line"));
+            LineState state = new LineState(Required.uuid(one, "line"));
             if (one.hasUUID("cart")) {
                 state.cart = Optional.of(one.getUUID("cart"));
             }
             if (one.hasUUID("horse")) {
                 state.horse = Optional.of(one.getUUID("horse"));
             }
-            state.lapNumber = one.getInt("lap") - 1;
-            state.nextMark = one.getInt("nextMark");
-            state.direction = one.getInt("direction") == -1 ? -1 : 1;
+            state.lapNumber = Required.integer(one, "lap") - 1;
+            state.nextMark = Required.integer(one, "nextMark");
+            state.direction = Required.integer(one, "direction") == -1 ? -1 : 1;
             states.put(state.line, state);
         }
     }

@@ -1,10 +1,10 @@
 package io.github.izakyl.folkways.plugins.patrol;
 
+import io.github.izakyl.folkways.core.world.api.WorldSpaces;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
-import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
-import java.util.ArrayList;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import net.minecraft.core.BlockPos;

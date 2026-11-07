@@ -1,14 +1,14 @@
 package io.github.izakyl.folkways.rts.combat.command;
 
-import io.github.izakyl.folkways.core.api.Declaring;
-import io.github.izakyl.folkways.core.api.colony.Colonies;
-import io.github.izakyl.folkways.core.api.participation.Participation;
-import io.github.izakyl.folkways.core.api.participation.Participations;
-import io.github.izakyl.folkways.core.api.participation.Stake;
-import io.github.izakyl.folkways.core.api.resident.body.Bodies;
-import io.github.izakyl.folkways.core.api.vocation.KitRules;
-import io.github.izakyl.folkways.rts.FolkwaysRtsMod;
+import io.github.izakyl.folkways.core.colony.api.Colonies;
+import io.github.izakyl.folkways.core.colony.api.KitRules;
+import io.github.izakyl.folkways.core.extension.api.Declaring;
+import io.github.izakyl.folkways.core.resident.api.Bodies;
+import io.github.izakyl.folkways.core.resident.api.Participation;
+import io.github.izakyl.folkways.core.resident.api.Participations;
+import io.github.izakyl.folkways.core.resident.api.Stake;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
+import io.github.izakyl.folkways.rts.FolkwaysRtsMod;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;

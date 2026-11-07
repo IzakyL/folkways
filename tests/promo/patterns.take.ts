@@ -466,8 +466,8 @@ const CREW = defineTask<Record<string, any>, Record<string, any>>({
   source: javaTask({
     imports: [
       "io.github.izakyl.folkways.front.engine.colony.*",
-      "io.github.izakyl.folkways.core.api.resident.body.Bodies",
-      "io.github.izakyl.folkways.core.api.vocation.Vocations",
+      "io.github.izakyl.folkways.core.resident.api.Bodies",
+      "io.github.izakyl.folkways.core.vocation.api.Vocations",
       "net.minecraft.server.MinecraftServer",
       "net.minecraft.core.BlockPos",
       "net.minecraft.resources.ResourceLocation",
@@ -512,7 +512,7 @@ const DOING = defineTask<Record<string, any>, Record<string, any>>({
     imports: [
       "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
       "io.github.izakyl.folkways.front.api.notice.Doings",
-      "io.github.izakyl.folkways.core.api.resident.body.Bodies",
+      "io.github.izakyl.folkways.core.resident.api.Bodies",
       "net.minecraft.server.MinecraftServer",
     ],
     body: `
@@ -536,8 +536,8 @@ const GATHER = defineTask<Record<string, any>, Record<string, any>>({
   source: javaTask({
     imports: [
       "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
-      "io.github.izakyl.folkways.core.engine.labor.ColonyLabor",
-      "io.github.izakyl.folkways.core.engine.labor.Labor",
+      "io.github.izakyl.folkways.core.runtime.ColonyLabor",
+      "io.github.izakyl.folkways.core.runtime.Labor",
       "net.minecraft.resources.ResourceKey",
       "net.minecraft.server.MinecraftServer",
       "net.minecraft.world.level.levelgen.Heightmap",
@@ -615,7 +615,7 @@ const COMMISSION = defineTask<Record<string, any>, Record<string, any>>({
       "io.github.izakyl.folkways.plugins.build.draft.Hint",
       "io.github.izakyl.folkways.plugins.build.draft.Patterns",
       "io.github.izakyl.folkways.front.api.Schema",
-      "io.github.izakyl.folkways.core.api.terms.ItemSpec",
+      "io.github.izakyl.folkways.core.item.api.ItemSpec",
       "net.minecraft.core.registries.Registries",
       "net.minecraft.tags.TagKey",
       "net.minecraft.core.BlockPos",

@@ -1,8 +1,8 @@
 package io.github.izakyl.folkways.plugins.wares;
 
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
-import io.github.izakyl.folkways.core.api.work.Workshop;
-import io.github.izakyl.folkways.core.api.work.Stances;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
+import io.github.izakyl.folkways.core.plan.api.Workshop;
+import io.github.izakyl.folkways.core.work.api.Stances;
 import java.util.Optional;
 import net.minecraft.server.level.ServerLevel;
 

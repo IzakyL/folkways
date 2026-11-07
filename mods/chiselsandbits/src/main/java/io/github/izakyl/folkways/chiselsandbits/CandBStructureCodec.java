@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.chiselsandbits;
 
-import io.github.izakyl.folkways.core.api.structure.StructureCompat;
+import io.github.izakyl.folkways.core.work.api.StructureCompat;
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.io.FilterInputStream;
@@ -126,7 +126,9 @@ public final class CandBStructureCodec {
         private long bytes;
 
         void check() {
-            if (reads == 0) return;
+            if (reads == 0) {
+                return;
+            }
             if (reads > CandBConfig.value(CandBConfig.BLUEPRINT_READS) || bytes > CandBConfig.value(CandBConfig.BLUEPRINT_BYTES)
                 || reads != 0 && System.nanoTime() - started > CandBConfig.value(CandBConfig.BLUEPRINT_MILLIS) * 1_000_000L) {
                 throw new StructureCompat.Failure("folkways.refusal.build.structure_budget");
@@ -155,7 +157,9 @@ public final class CandBStructureCodec {
 
     private static void work() {
         Batch batch = PROCESSING.get();
-        if (batch != null) batch.read();
+        if (batch != null) {
+            batch.read();
+        }
     }
 
     private static void charge(long bytes) {
@@ -177,7 +181,9 @@ public final class CandBStructureCodec {
 
         void check() {
             Batch batch = PROCESSING.get();
-            if (batch != null) batch.check();
+            if (batch != null) {
+                batch.check();
+            }
             if (System.nanoTime() - started > CandBConfig.value(CandBConfig.PROCESSING_MILLIS) * 1_000_000L) {
                 throw new IllegalArgumentException("Voxel processing budget exceeded");
             }
@@ -197,7 +203,9 @@ public final class CandBStructureCodec {
                                 bytes += count;
                                 charge(count);
                             }
-                            if (bytes > maximum) throw new IllegalArgumentException("Cumulative voxel decode limit exceeded");
+                            if (bytes > maximum) {
+                                throw new IllegalArgumentException("Cumulative voxel decode limit exceeded");
+                            }
                             check();
                         }
 
@@ -218,7 +226,9 @@ public final class CandBStructureCodec {
                 Tag read = legacy ? NbtIo.read(input, quota) : NbtIo.readAnyTag(input, quota);
                 heap += quota.getUsage();
                 check();
-                if (read instanceof CompoundTag compound) return compound;
+                if (read instanceof CompoundTag compound) {
+                    return compound;
+                }
                 throw new IllegalArgumentException("Missing voxel storage");
             } catch (IOException failure) {
                 throw new IllegalArgumentException("Invalid voxel storage", failure);
@@ -239,7 +249,9 @@ public final class CandBStructureCodec {
 
     public static Validated validated(CompoundTag tag) {
         Tag data = tag.get("data");
-        if (data == null) throw new IllegalArgumentException("Missing voxel data");
+        if (data == null) {
+            throw new IllegalArgumentException("Missing voxel data");
+        }
         int resolution = tag.contains("folkways:resolution") ? tag.getInt("folkways:resolution") : 16;
         if (resolution < 1 || resolution > 32 || (resolution & resolution - 1) != 0) {
             throw new IllegalArgumentException("Unsupported voxel resolution");
@@ -248,7 +260,9 @@ public final class CandBStructureCodec {
         key.put("data", data);
         key.putInt("resolution", resolution);
         long encodedBytes = data.sizeInBytes();
-        if (encodedBytes > CandBConfig.value(CandBConfig.DECODE_BYTES)) throw new IllegalArgumentException("Voxel input exceeds the decode limit");
+        if (encodedBytes > CandBConfig.value(CandBConfig.DECODE_BYTES)) {
+            throw new IllegalArgumentException("Voxel input exceeds the decode limit");
+        }
         Validated found;
         synchronized (CACHE) { found = CACHE.get(key); }
         if (found != null) {
@@ -340,7 +354,9 @@ public final class CandBStructureCodec {
                 for (int z = 0; z < size; z++) {
                     int index = mod.chiselsandbits.api.util.ByteArrayUtils.getValueAt(indices, width,
                         x * size * size + y * size + z);
-                    if (index >= paletteSize) throw new IllegalArgumentException("Invalid voxel palette index");
+                    if (index >= paletteSize) {
+                        throw new IllegalArgumentException("Invalid voxel palette index");
+                    }
                     BlockInformation material = storage.getBlockInformation(x, y, z);
                     if (!material.isAir()) {
                         counts.merge(material, 1, Integer::sum);
@@ -400,7 +416,9 @@ public final class CandBStructureCodec {
             tag.putInt("folkways:resolution", storage.getSize());
         }
         Batch batch = PROCESSING.get();
-        if (batch != null) batch.check();
+        if (batch != null) {
+            batch.check();
+        }
         return tag;
     }
 

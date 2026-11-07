@@ -2,7 +2,7 @@ package io.github.izakyl.folkways.create.dispatch;
 
 import io.github.izakyl.folkways.base.persist.Reader;
 import io.github.izakyl.folkways.base.persist.Writer;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -45,11 +45,12 @@ final class Mailroom {
             Optional<UUID> network = reader.uuid("network");
             Optional<WorldPos> from = reader.child("from").flatMap(WorldPos::load);
             Optional<WorldPos> to = reader.child("to").flatMap(WorldPos::load);
-            if (id.isEmpty() || order.isEmpty() || network.isEmpty() || from.isEmpty() || to.isEmpty()) {
+            if (id.isEmpty() || order.isEmpty() || network.isEmpty() || from.isEmpty() || to.isEmpty()
+                    || reader.string("station").isEmpty()) {
                 return Optional.empty();
             }
             return Optional.of(new Consignment(id.get(), order.get(), network.get(), from.get(), to.get(),
-                reader.uuid("train"), reader.string("station").orElse("")));
+                reader.uuid("train"), reader.string("station").orElseThrow()));
         }
     }
 
@@ -98,6 +99,6 @@ final class Mailroom {
 
     synchronized void load(Reader reader) {
         held.clear();
-        reader.children(TAG_HELD).forEach(one -> Consignment.load(one).ifPresent(held::add));
+        reader.requiredChildren(TAG_HELD).forEach(one -> Consignment.load(one).ifPresent(held::add));
     }
 }

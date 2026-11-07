@@ -2,7 +2,7 @@ package io.github.izakyl.folkways.front.ui.screen;
 
 import com.mojang.authlib.GameProfile;
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.colony.Colonies;
+import io.github.izakyl.folkways.core.colony.api.Colonies;
 import io.github.izakyl.folkways.front.api.Delegation;
 import io.github.izakyl.folkways.front.api.Enrollment;
 import io.github.izakyl.folkways.front.api.Registering;

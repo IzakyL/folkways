@@ -1,7 +1,9 @@
 package io.github.izakyl.folkways.plugins.supply;
 
-import io.github.izakyl.folkways.core.api.terms.ItemFilter;
-import io.github.izakyl.folkways.core.api.terms.ItemQuery;
+import io.github.izakyl.folkways.base.persist.Reader;
+import io.github.izakyl.folkways.base.persist.Required;
+import io.github.izakyl.folkways.core.item.api.ItemFilter;
+import io.github.izakyl.folkways.core.item.api.ItemQuery;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -87,8 +89,10 @@ public final class SupplyBox extends BlockEntity {
     @Override
     protected void loadAdditional(CompoundTag tag, HolderLookup.Provider lookup) {
         super.loadAdditional(tag, lookup);
-        all = !tag.contains("all") || tag.getBoolean("all");
-        revision = Math.max(0, tag.getLong("revision"));
+        // Chunk/packet sync, commands and item/template copies can also load partial tags here.
+        Reader reader = Reader.of(tag);
+        all = reader.flag("all").orElse(true);
+        revision = Math.max(0, reader.longValue("revision").orElse(0L));
         List<ItemFilter> rules = new ArrayList<>();
         ListTag saved = tag.getList("whitelist", Tag.TAG_STRING);
         for (int i = 0; i < Math.min(saved.size(), MOST_RULES); i++) {
@@ -99,8 +103,8 @@ public final class SupplyBox extends BlockEntity {
         generated.clear();
         CompoundTag counts = tag.getCompound("generated");
         counts.getAllKeys().forEach(id -> {
-            if (net.minecraft.resources.ResourceLocation.tryParse(id) != null && counts.getLong(id) > 0) {
-                generated.put(id, counts.getLong(id));
+            if (net.minecraft.resources.ResourceLocation.tryParse(id) != null && Required.longValue(counts, id) > 0) {
+                generated.put(id, Required.longValue(counts, id));
             }
         });
     }

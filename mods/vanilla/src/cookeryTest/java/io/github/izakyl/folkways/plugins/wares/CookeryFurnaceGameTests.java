@@ -1,19 +1,19 @@
 package io.github.izakyl.folkways.plugins.wares;
 
-import io.github.izakyl.folkways.core.testing.TestWorker;
 import com.google.gson.JsonParser;
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.terms.Containers;
-import io.github.izakyl.folkways.core.api.terms.Goods;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.work.Grown;
-import io.github.izakyl.folkways.core.api.work.Node;
-import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Produce;
-import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.WorkSite;
-import io.github.izakyl.folkways.core.api.work.Worker;
-import io.github.izakyl.folkways.core.engine.labor.Commit;
+import io.github.izakyl.folkways.core.item.api.Containers;
+import io.github.izakyl.folkways.core.item.api.Goods;
+import io.github.izakyl.folkways.core.plan.api.Grown;
+import io.github.izakyl.folkways.core.plan.api.Produce;
+import io.github.izakyl.folkways.core.testing.TestWorker;
+import io.github.izakyl.folkways.core.work.api.Node;
+import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.work.api.WorkSite;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.work.internal.Commit;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import io.github.izakyl.folkways.plugins.person.ResidentEntity;
 import java.io.InputStreamReader;
@@ -23,7 +23,6 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestGenerator;
 import net.minecraft.gametest.framework.GameTestHelper;
@@ -58,14 +57,20 @@ public final class CookeryFurnaceGameTests {
     public static Collection<TestFunction> nativeCookingResources() {
         List<ResourceLocation> ids = new ArrayList<>();
         try (var stream = CookeryFurnaceGameTests.class.getResourceAsStream("/cookery-native-recipes.json")) {
-            if (stream == null) throw new IllegalStateException("missing pinned recipe manifest");
+            if (stream == null) {
+                throw new IllegalStateException("missing pinned recipe manifest");
+            }
             JsonParser.parseReader(new InputStreamReader(stream, StandardCharsets.UTF_8)).getAsJsonObject()
                 .getAsJsonArray("recipes").forEach(value -> {
                     String id = value.getAsString();
-                    if (id.endsWith("_from_smelting") || id.endsWith("_from_smoking")) ids.add(ResourceLocation.parse(id));
+                    if (id.endsWith("_from_smelting") || id.endsWith("_from_smoking")) {
+                        ids.add(ResourceLocation.parse(id));
+                    }
                 });
         } catch (java.io.IOException broken) { throw new IllegalStateException(broken); }
-        if (ids.size() != 13) throw new IllegalStateException("expected seven smelting and six smoking recipes, got " + ids.size());
+        if (ids.size() != 13) {
+            throw new IllegalStateException("expected seven smelting and six smoking recipes, got " + ids.size());
+        }
         return ids.stream().map(id -> new TestFunction("cookery_furnace_matrix", "folkways:matrix_furnace_" + id.getPath(),
             "folkways:empty", 700, 0L, true, helper -> run(helper, id))).toList();
     }

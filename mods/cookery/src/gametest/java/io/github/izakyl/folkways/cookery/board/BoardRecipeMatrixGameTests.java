@@ -1,29 +1,27 @@
 package io.github.izakyl.folkways.cookery.board;
 
-import io.github.izakyl.folkways.core.testing.TestWorker;
 import com.github.ysbbbbbb.kaleidoscopecookery.blockentity.kitchen.ChoppingBoardBlockEntity;
 import com.github.ysbbbbbb.kaleidoscopecookery.crafting.recipe.ChoppingBoardRecipe;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModRecipes;
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.terms.Containers;
-import io.github.izakyl.folkways.core.api.terms.Goods;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.work.Ending;
-import io.github.izakyl.folkways.core.api.work.Grown;
-import io.github.izakyl.folkways.core.api.work.Hold;
-import io.github.izakyl.folkways.core.api.work.Node;
-import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Produce;
-import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.WorkSite;
-import io.github.izakyl.folkways.core.api.work.Worker;
-import io.github.izakyl.folkways.core.api.work.Workload;
-import io.github.izakyl.folkways.core.engine.labor.Commit;
 import io.github.izakyl.folkways.cookery.CookeryContent;
 import io.github.izakyl.folkways.cookery.KitchenBookings;
 import io.github.izakyl.folkways.cookery.testing.NativeCookingMatrix;
+import io.github.izakyl.folkways.core.item.api.Containers;
+import io.github.izakyl.folkways.core.item.api.Goods;
+import io.github.izakyl.folkways.core.plan.api.Grown;
+import io.github.izakyl.folkways.core.plan.api.Produce;
+import io.github.izakyl.folkways.core.runtime.HoldingFixture;
+import io.github.izakyl.folkways.core.testing.TestWorker;
+import io.github.izakyl.folkways.core.work.api.Ending;
+import io.github.izakyl.folkways.core.work.api.Hold;
+import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.work.api.WorkSite;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import io.github.izakyl.folkways.plugins.person.ResidentEntity;
 import java.util.Collection;
@@ -59,31 +57,27 @@ public final class BoardRecipeMatrixGameTests {
     @GameTestGenerator
     public static Collection<TestFunction> nativeRecipes() {
         List<ResourceLocation> ids = NativeCookingMatrix.ids(id -> id.toString().startsWith("kaleidoscope_cookery:chopping_board/"));
-        if (ids.size() != 16) throw new IllegalStateException("expected all 16 native chopping recipes, got " + ids.size());
+        if (ids.size() != 16) {
+            throw new IllegalStateException("expected all 16 native chopping recipes, got " + ids.size());
+        }
         return ids.stream().map(id -> new TestFunction("cookery_board_matrix", "folkways:board_matrix_" + id.getPath().replace('/', '_'),
             "folkways:empty", 200, 0L, true, helper -> run(helper, id))).toList();
     }
 
     private static void run(GameTestHelper helper, ResourceLocation id) {
         try (Rig rig = new Rig(helper, id)) {
-            var work = rig.plan();
-            int steps = 0;
-            boolean completed = false;
+            var work = rig.plan(); int steps = 0; boolean completed = false;
+            HoldingFixture holding = new HoldingFixture(rig.level, work, rig.worker);
             while (++steps <= rig.recipe.value().getCutCount() + 4) {
-                var turn = work.next(rig.level, rig.worker);
-                if (turn instanceof Workload.Within.Turn.Leave) {
+                if (holding.finished()) {
                     helper.assertTrue(work.commit(rig.level, rig.worker) instanceof Outcome.Done, id + ": actual board workload settles after native extraction");
-                    completed = true;
-                    break;
+                    completed = true; break;
                 }
-                helper.assertTrue(turn instanceof Workload.Within.Turn.Piece, id + ": native board action does not stall: " + turn);
-                Node piece = ((Workload.Within.Turn.Piece) turn).node();
-                Outcome outcome = Commit.run(rig.level, piece, rig.worker);
+                Outcome outcome = holding.step();
                 helper.assertTrue(outcome instanceof Outcome.Done, id + ": each physical native put/cut interaction succeeds: " + outcome);
                 if (outcome instanceof Outcome.Done done) {
                     done.made().forEach(stack -> helper.assertTrue(Containers.insert(rig.pack, stack).isEmpty(), id + ": every actual main and secondary product fits"));
                 }
-                work.ended(rig.level, piece, Ending.DONE);
             }
             helper.assertTrue(completed, id + ": finite native cut count completes without reloading an ingredient");
             List<ItemStack> expected = rig.recipe.value().getResults();
@@ -92,7 +86,9 @@ public final class BoardRecipeMatrixGameTests {
                 int actual = 0;
                 for (int slot = 0; slot < rig.pack.getContainerSize(); slot++) {
                     ItemStack stack = rig.pack.getItem(slot);
-                    if (ItemStack.isSameItemSameComponents(stack, output)) actual += stack.getCount();
+                    if (ItemStack.isSameItemSameComponents(stack, output)) {
+                        actual += stack.getCount();
+                    }
                 }
                 helper.assertValueEqual(actual, wanted, id + ": native result components and full counts, including every byproduct, are delivered exactly once");
             }
@@ -126,7 +122,9 @@ public final class BoardRecipeMatrixGameTests {
                 .filter(holder -> holder.id().equals(id)).findFirst().orElseThrow();
             input = recipe.value().getIngredient().getItems()[0].copyWithCount(1);
             for (int x = -1; x <= 1; x++) {
-                for (int z = -1; z <= 1; z++) level.setBlockAndUpdate(cell.offset(x, -1, z), Blocks.STONE.defaultBlockState());
+                for (int z = -1; z <= 1; z++) {
+                    level.setBlockAndUpdate(cell.offset(x, -1, z), Blocks.STONE.defaultBlockState());
+                }
             }
             level.setBlockAndUpdate(cell, ModBlocks.CHOPPING_BOARD.get().defaultBlockState()
                 .setValue(BlockStateProperties.HORIZONTAL_FACING, Direction.SOUTH));
@@ -157,7 +155,9 @@ public final class BoardRecipeMatrixGameTests {
         }
 
         public void close() {
-            if (hold != null) hold.release(Ending.DROPPED);
+            if (hold != null) {
+                hold.release(Ending.DROPPED);
+            }
             actor.discard();
         }
     }

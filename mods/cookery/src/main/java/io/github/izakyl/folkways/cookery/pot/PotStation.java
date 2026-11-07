@@ -5,32 +5,32 @@ import com.github.ysbbbbbb.kaleidoscopecookery.block.kitchen.PotBlock;
 import com.github.ysbbbbbb.kaleidoscopecookery.blockentity.kitchen.PotBlockEntity;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModRecipes;
-import io.github.izakyl.folkways.core.api.colony.Colonies;
-import io.github.izakyl.folkways.core.api.terms.Goods;
-import io.github.izakyl.folkways.core.api.terms.Reach;
-import io.github.izakyl.folkways.core.api.terms.Footing;
-import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
-import net.minecraft.core.BlockPos;
-import net.minecraft.world.entity.Mob;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.work.Grown;
-import io.github.izakyl.folkways.core.api.work.Intent;
-import io.github.izakyl.folkways.core.api.work.Produce;
-import io.github.izakyl.folkways.core.api.work.Refinement;
-import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.WorkSite;
-import io.github.izakyl.folkways.core.api.work.Workshop;
 import io.github.izakyl.folkways.cookery.CookeryContent;
 import io.github.izakyl.folkways.cookery.KitchenBookings;
 import io.github.izakyl.folkways.cookery.KitchenStation;
+import io.github.izakyl.folkways.core.colony.api.Colonies;
+import io.github.izakyl.folkways.core.item.api.Goods;
+import io.github.izakyl.folkways.core.plan.api.Grown;
+import io.github.izakyl.folkways.core.plan.api.Intent;
+import io.github.izakyl.folkways.core.plan.api.Produce;
+import io.github.izakyl.folkways.core.plan.api.Refinement;
+import io.github.izakyl.folkways.core.plan.api.Workshop;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.work.api.WorkSite;
+import io.github.izakyl.folkways.core.work.support.WorkStances;
+import io.github.izakyl.folkways.core.world.api.Footing;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
+import io.github.izakyl.folkways.core.world.api.WorldSpaces;
 import io.github.izakyl.folkways.plugins.wares.WaresContent;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.Mob;
 import net.minecraft.world.level.block.state.BlockState;
 
 public final class PotStation implements KitchenStation {
@@ -48,7 +48,7 @@ public final class PotStation implements KitchenStation {
         RECOVERING.remove(key, active);
         return List.of();
     }
-    public void stop(UUID colony, io.github.izakyl.folkways.core.api.colony.Closing why) {
+    public void stop(UUID colony, io.github.izakyl.folkways.core.colony.api.Closing why) {
         RECOVERING.keySet().removeIf(key -> key.colony().equals(colony));
     }
 
@@ -77,7 +77,7 @@ public final class PotStation implements KitchenStation {
         if (body.level() != level) return Optional.empty();
         // Use the same arrival tolerance as OnFoot and BodyRunner, while recalculating the
         // single current handle stance on every interaction (including after a rotation).
-        return new PotStation().stances(level, at).flatMap(allowed -> Reach.stanceHolding(body, allowed))
+        return new PotStation().stances(level, at).flatMap(allowed -> WorkStances.stanceHolding(body, allowed))
             .flatMap(feet -> WorldSpaces.storage(level, at.at(feet)));
     }
 
@@ -121,7 +121,7 @@ public final class PotStation implements KitchenStation {
     private static CompoundOwner owner(ServerLevel level, WorldPos at, PotBlockEntity pot) {
         var marker = pot.getPersistentData().getCompound(PotBatch.KEY);
         Optional<UUID> owner = marker.hasUUID("colony") ? Optional.of(marker.getUUID("colony")) : Optional.empty();
-        boolean held = owner.flatMap(id -> Colonies.of(level.getServer(), id)).flatMap(colony -> colony.holdingAt(at))
+        boolean held = owner.flatMap(id -> Colonies.of(level.getServer(), id)).flatMap(colony -> colony.claimAt(at))
             .filter(holding -> holding.owner().equals(CookeryContent.STATION)).isPresent();
         return new CompoundOwner(owner, held);
     }

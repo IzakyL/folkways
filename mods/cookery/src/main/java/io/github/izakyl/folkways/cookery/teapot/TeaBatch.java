@@ -6,6 +6,7 @@ import com.github.ysbbbbbb.kaleidoscopecookery.blockentity.kitchen.TeapotBlockEn
 import java.util.Optional;
 import java.util.UUID;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.nbt.NbtUtils;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
@@ -33,9 +34,18 @@ final class TeaBatch {
     }
     static Optional<Batch> read(TeapotBlockEntity pot, ServerLevel level) {
         CompoundTag tag = pot.getPersistentData().getCompound(KEY);
+        if (!tag.hasUUID("batch") || !tag.hasUUID("colony") || !tag.contains("fluid", Tag.TAG_STRING)
+                || !tag.contains("ingredient", Tag.TAG_COMPOUND) || !tag.contains("loaded", Tag.TAG_BYTE)
+                || !tag.contains("mystery", Tag.TAG_BYTE) || !tag.contains("output", Tag.TAG_COMPOUND)
+                || !tag.contains("recipe", Tag.TAG_STRING) || !tag.contains("state", Tag.TAG_COMPOUND)
+                || !tag.contains("time", Tag.TAG_INT)) {
+            return Optional.empty();
+        }
         ResourceLocation recipe = ResourceLocation.tryParse(tag.getString("recipe"));
         ResourceLocation fluid = ResourceLocation.tryParse(tag.getString("fluid"));
         if (!tag.hasUUID("colony") || !tag.hasUUID("batch") || recipe == null || fluid == null || !pot.getTeaFluidId().equals(fluid)
+                || !tag.contains("time", Tag.TAG_INT) || !tag.contains("loaded", Tag.TAG_BYTE)
+                || !tag.contains("mystery", Tag.TAG_BYTE)
                 || !tag.getCompound("state").equals(NbtUtils.writeBlockState(pot.getBlockState().setValue(TeapotBlock.VARIANT, TeapotBlock.COMMON)))) { return Optional.empty(); }
         ItemStack ingredient = ItemStack.parseOptional(level.registryAccess(), tag.getCompound("ingredient"));
         ItemStack output = ItemStack.parseOptional(level.registryAccess(), tag.getCompound("output"));

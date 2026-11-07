@@ -4,7 +4,7 @@ import com.github.ysbbbbbb.kaleidoscopetavern.block.brew.BottleBlock;
 import com.github.ysbbbbbb.kaleidoscopetavern.blockentity.brew.BarCabinetBlockEntity;
 import com.github.ysbbbbbb.kaleidoscopetavern.init.tag.TagMod;
 import com.github.ysbbbbbb.kaleidoscopetavern.item.BottleBlockItem;
-import io.github.izakyl.folkways.core.api.terms.Containers;
+import io.github.izakyl.folkways.core.item.api.Containers;
 import java.util.Optional;
 import net.minecraft.world.Container;
 import net.minecraft.world.entity.player.Player;

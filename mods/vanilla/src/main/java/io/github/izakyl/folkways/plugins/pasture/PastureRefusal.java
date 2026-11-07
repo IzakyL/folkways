@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.plugins.pasture;
 
-import io.github.izakyl.folkways.core.api.terms.RefusalKind;
+import io.github.izakyl.folkways.core.resident.api.RefusalKind;
 
 enum PastureRefusal implements RefusalKind.Named {
 

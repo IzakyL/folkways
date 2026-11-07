@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.front.api;
 
-import io.github.izakyl.folkways.core.api.structure.StructurePayload;
+import io.github.izakyl.folkways.core.world.api.StructurePayload;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;

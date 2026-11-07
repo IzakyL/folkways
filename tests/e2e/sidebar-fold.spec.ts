@@ -36,7 +36,7 @@ const INCIDENT = defineTask<{ count: number; key: string; other: boolean }, bool
   name: "folkways.debug.incident", side: "server",
   source: javaTask({ imports: [
     "io.github.izakyl.folkways.front.api.ui.Pages",
-    "io.github.izakyl.folkways.core.engine.labor.LaborIncident",
+    "io.github.izakyl.folkways.core.work.internal.LaborIncident",
     "net.neoforged.neoforge.common.NeoForge", "net.minecraft.network.chat.Component",
   ], body: `
 var p=ctx.server().getPlayerList().getPlayers().getFirst();
@@ -55,7 +55,7 @@ const CLEAR_QUEUED = defineTask<Record<string, never>, boolean>({
   source: javaTask({ imports: [
     "io.github.izakyl.folkways.front.api.ui.Pages",
     "io.github.izakyl.folkways.front.engine.colony.LaborDebug",
-    "io.github.izakyl.folkways.core.engine.labor.LaborIncident",
+    "io.github.izakyl.folkways.core.work.internal.LaborIncident",
     "net.neoforged.neoforge.common.NeoForge", "net.minecraft.network.chat.Component",
   ], body: `
 var p=ctx.server().getPlayerList().getPlayers().getFirst();
@@ -72,13 +72,14 @@ const SAMPLE = defineTask<Record<string, never>, boolean>({
   name: "folkways.debug.sample", side: "server",
   source: javaTask({ imports: [
     "io.github.izakyl.folkways.front.engine.colony.LaborDebug",
-    "io.github.izakyl.folkways.core.engine.labor.LaborCensus",
-    "io.github.izakyl.folkways.core.engine.labor.LaborSnapshot",
-    "io.github.izakyl.folkways.core.api.work.NodeState", "net.minecraft.server.level.ServerPlayer",
+    "io.github.izakyl.folkways.core.runtime.LaborCensus",
+    "io.github.izakyl.folkways.core.runtime.LaborSnapshot",
+    "io.github.izakyl.folkways.core.work.api.NodeState", "net.minecraft.server.level.ServerPlayer",
   ], body: `
 var p=ctx.server().getPlayerList().getPlayers().getFirst();
 var census=new LaborCensus(100,Map.of(NodeState.READY,5),5,Map.of("PACK_BUSY",3),Map.of("minecraft:wheat",8L),Map.of("idle",2,"working",1));
-var snapshot=new LaborSnapshot(census,0,12,2,Map.of("NO_ROOM",1),List.of("PACK_BUSY/folkways:haul/TransferNode@test"));
+var snapshot=new LaborSnapshot(census,0,12,2,Map.of("NO_ROOM",1),
+ List.of("PACK_BUSY/folkways:haul/TransferNode@test"),List.of());
 var m=LaborDebug.class.getDeclaredMethod("report",ServerPlayer.class,LaborSnapshot.class);m.setAccessible(true);m.invoke(null,p,snapshot);return true;
 ` }),
 });

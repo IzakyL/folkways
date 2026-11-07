@@ -1,13 +1,13 @@
 package io.github.izakyl.folkways.plugins.person.fear;
 
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.colony.Colonies;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.colony.Held;
-import io.github.izakyl.folkways.core.api.resident.body.Body;
-import io.github.izakyl.folkways.core.api.work.Urge;
-import io.github.izakyl.folkways.core.api.work.Worker;
+import io.github.izakyl.folkways.core.colony.api.Claimed;
+import io.github.izakyl.folkways.core.colony.api.Colonies;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.resident.api.Body;
 import io.github.izakyl.folkways.core.testing.TestWorker;
+import io.github.izakyl.folkways.core.work.api.Urge;
+import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.effect.Effects;
 import io.github.izakyl.folkways.front.engine.colony.ColonyFront;
 import io.github.izakyl.folkways.front.engine.colony.ColonySettings;
@@ -125,7 +125,7 @@ public final class FearGameTests {
         body.getRandom().setSeed(42L);
         helper.getLevel().addFreshEntity(body);
         helper.getLevel().addFreshEntity(zombie);
-        colony.hold(PersonContent.ID, Held.Entity.of(body)).orElseThrow();
+        colony.hold(PersonContent.ID, Claimed.Entity.of(body)).orElseThrow();
         body.joinColony(colony.id());
         body.pack().insert(new ItemStack(Items.IRON_SWORD));
         zombie.setTarget(body);

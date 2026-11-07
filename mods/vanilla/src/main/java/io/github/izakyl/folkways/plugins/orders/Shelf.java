@@ -2,26 +2,25 @@ package io.github.izakyl.folkways.plugins.orders;
 
 import io.github.izakyl.folkways.base.persist.Reader;
 import io.github.izakyl.folkways.base.persist.Writer;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
-import io.github.izakyl.folkways.core.api.terms.ItemFilter;
-import io.github.izakyl.folkways.core.api.terms.ItemQuery;
-import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.core.registries.Registries;
-import net.minecraft.tags.TagKey;
-import io.github.izakyl.folkways.core.api.terms.StoreRule;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
+import io.github.izakyl.folkways.core.inventory.api.StoreRule;
+import io.github.izakyl.folkways.core.item.api.ItemFilter;
+import io.github.izakyl.folkways.core.item.api.ItemQuery;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.tags.TagKey;
 
 // Container access and incoming goods filters, independent of delivery orders.
 record Shelf(WorldPos into, Optional<Admitting> admitting, boolean take, boolean store) {
 
     private static final String TAG_INTO = "into";
     private static final String TAG_ONLY = "only";
-    private static final String TAG_GOODS = "goods";
 
     record Admitting(boolean only, List<ItemFilter> filters) {
         Admitting {
@@ -104,16 +103,16 @@ record Shelf(WorldPos into, Optional<Admitting> admitting, boolean take, boolean
 
     static Optional<Shelf> load(Reader reader) {
         Optional<WorldPos> into = reader.child(TAG_INTO).flatMap(WorldPos::load);
-        if (into.isEmpty()) {
+        if (into.isEmpty() || reader.flag("take").isEmpty() || reader.flag("store").isEmpty()
+                || reader.keys().contains("filters") && reader.flag(TAG_ONLY).isEmpty()) {
             return Optional.empty();
         }
         Optional<Admitting> admitting = reader.keys().contains("filters")
-            ? Optional.of(new Admitting(reader.flag(TAG_ONLY).orElse(false), reader.children("filters").stream()
+            ? Optional.of(new Admitting(reader.flag(TAG_ONLY).orElseThrow(), reader.requiredChildren("filters").stream()
                 .flatMap(saved -> saved.string("rule").flatMap(ItemFilter::read).stream()).toList()))
-            : reader.child(TAG_GOODS).flatMap(ItemSpec::load)
-                .map(goods -> new Admitting(reader.flag(TAG_ONLY).orElse(true), goods));
-        Shelf shelf = new Shelf(into.get(), admitting, reader.flag("take").orElse(true),
-            reader.flag("store").orElse(true));
+            : Optional.empty();
+        Shelf shelf = new Shelf(into.get(), admitting, reader.flag("take").orElseThrow(),
+            reader.flag("store").orElseThrow());
         return shelf.bare() ? Optional.empty() : Optional.of(shelf);
     }
 }

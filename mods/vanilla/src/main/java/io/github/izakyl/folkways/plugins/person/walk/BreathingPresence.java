@@ -1,7 +1,7 @@
 package io.github.izakyl.folkways.plugins.person.walk;
 
-import io.github.izakyl.folkways.core.api.Declaring;
-import io.github.izakyl.folkways.core.api.work.Urge;
+import io.github.izakyl.folkways.core.extension.api.Declaring;
+import io.github.izakyl.folkways.core.work.api.Urge;
 import java.util.List;
 import java.util.Map;
 import java.util.WeakHashMap;

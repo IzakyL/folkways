@@ -1,17 +1,17 @@
 package io.github.izakyl.folkways.cookery;
 
-import io.github.izakyl.folkways.core.api.colony.Closing;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.colony.ColonyView;
-import io.github.izakyl.folkways.core.api.colony.Holding;
-import io.github.izakyl.folkways.core.api.colony.Release;
-import io.github.izakyl.folkways.core.api.colony.Sweep;
-import io.github.izakyl.folkways.core.api.inventory.InventorySnapshot;
-import io.github.izakyl.folkways.core.api.terms.Stash;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.work.Grown;
-import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.Workshop;
+import io.github.izakyl.folkways.core.colony.api.Claim;
+import io.github.izakyl.folkways.core.colony.api.ClaimRelease;
+import io.github.izakyl.folkways.core.colony.api.Closing;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.colony.api.ColonyView;
+import io.github.izakyl.folkways.core.colony.api.Sweep;
+import io.github.izakyl.folkways.core.inventory.api.InventorySnapshot;
+import io.github.izakyl.folkways.core.inventory.api.Stash;
+import io.github.izakyl.folkways.core.plan.api.Grown;
+import io.github.izakyl.folkways.core.plan.api.Workshop;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.front.api.Facing;
 import io.github.izakyl.folkways.front.api.notice.Line;
 import io.github.izakyl.folkways.front.api.panel.Board;
@@ -33,7 +33,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 
-public final class CookeryPresence implements Facing, Holding.Watch {
+public final class CookeryPresence implements Facing, Claim.Watch {
     private final Colony colony;
     private final MinecraftServer server;
     private final Sweep sweep;
@@ -53,7 +53,7 @@ public final class CookeryPresence implements Facing, Holding.Watch {
     }
 
     @Override
-    public void held(Holding holding) {
+    public void held(Claim holding) {
         for (WorldPos at : holding.what().cells()) {
             bookings.admit(at);
             at.level(server).ifPresent(level -> stations.putIfAbsent(at,
@@ -63,7 +63,7 @@ public final class CookeryPresence implements Facing, Holding.Watch {
     }
 
     @Override
-    public void released(Holding holding, Release why) {
+    public void released(Claim holding, ClaimRelease why) {
         for (WorldPos at : holding.what().cells()) {
             bookings.withdraw(at);
             Station station = stations.remove(at);
@@ -102,7 +102,7 @@ public final class CookeryPresence implements Facing, Holding.Watch {
             || rackVersion.topology() != inventory.version().topology()
             || rackVersion.coverage() != inventory.version().coverage());
         Set<WorldPos> marked = new LinkedHashSet<>();
-        CookeryContent.stations().forEach(owner -> colony.holdings(owner).forEach(holding -> marked.addAll(holding.what().cells())));
+        CookeryContent.stations().forEach(owner -> colony.claims(owner).forEach(holding -> marked.addAll(holding.what().cells())));
         stations.entrySet().removeIf(entry -> {
             if (!marked.contains(entry.getKey())) {
                 bookings.withdraw(entry.getKey());

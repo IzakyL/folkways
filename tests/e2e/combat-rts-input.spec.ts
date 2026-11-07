@@ -437,7 +437,7 @@ test("RTS real pointer and keyboard inputs select, bind, queue, stop, suspend an
     const repeatedAttack = await routeAck(client, server, context, routeRequest, "MOVE", [b], -1, true);
     expectMode(repeatedAttack.client, true);
     await input.key(client, { keyCode: 74 });
-    const released = await waitFor("Release removes the selected residents from every control reference", client, server, context,
+    const released = await waitFor("ClaimRelease removes the selected residents from every control reference", client, server, context,
       value => value.client.control.request > before && value.client.control.accepted && !value.client.controlPending
         && value.client.selected.length === 0 && value.server.selection.length === 0
         && value.server.groups.every(group => group.length === 0)
@@ -662,7 +662,7 @@ async function routeAck(client: MinecraftClient, server: MinecraftServer, contex
 const GROUP_EXISTS = defineTask<{ colony: string; group: string }, boolean>({
   name: "folkways.combat-rts-input.observe-superseded-squad", side: "server",
   source: javaTask({
-    imports: ["java.util.UUID", "net.minecraft.server.MinecraftServer", "io.github.izakyl.folkways.core.api.colony.Colonies",
+    imports: ["java.util.UUID", "net.minecraft.server.MinecraftServer", "io.github.izakyl.folkways.core.colony.api.Colonies",
       "io.github.izakyl.folkways.rts.combat.group.UnitGroups"],
     body: `var a=Args.of(ctx);var colony=Colonies.of((MinecraftServer)ctx.server(),UUID.fromString(a.string("colony"))).orElseThrow();
 return UnitGroups.of(colony).group(UUID.fromString(a.string("group"))).isPresent();`,
@@ -673,7 +673,7 @@ const READ_SERVER = defineTask<Context, ServerState>({
   name: "folkways.combat-rts-input.observe-server", side: "server",
   source: javaTask({
     imports: ["java.util.UUID", "java.util.List", "java.util.Map", "java.util.LinkedHashMap", "net.minecraft.server.MinecraftServer",
-      "io.github.izakyl.folkways.core.api.colony.Colonies", "io.github.izakyl.folkways.core.api.resident.body.Bodies",
+      "io.github.izakyl.folkways.core.colony.api.Colonies", "io.github.izakyl.folkways.core.resident.api.Bodies",
       "io.github.izakyl.folkways.rts.combat.group.UnitGroups", "io.github.izakyl.folkways.rts.combat.command.ResidentCommands",
       "io.github.izakyl.folkways.rts.combat.control.CombatSelectionOwnership"],
     body: `
@@ -726,7 +726,7 @@ const REJECTED_PACKET = defineTask<Vec & { intent: string }, boolean>({
   name: "folkways.combat-rts-input.probe-failure-only-rejections", side: "client",
   source: javaTask({
     imports: ["java.util.List", "java.util.UUID", "net.minecraft.client.Minecraft", "net.minecraft.core.BlockPos",
-      "io.github.izakyl.folkways.core.api.terms.WorldPos", "io.github.izakyl.folkways.rts.combat.net.CombatPackets",
+      "io.github.izakyl.folkways.core.world.api.WorldPos", "io.github.izakyl.folkways.rts.combat.net.CombatPackets",
       "io.github.izakyl.folkways.rts.combat.net.CombatControlPacket",
       "io.github.izakyl.folkways.rts.combat.net.CombatStopPacket", "net.neoforged.neoforge.network.PacketDistributor"],
     body: `

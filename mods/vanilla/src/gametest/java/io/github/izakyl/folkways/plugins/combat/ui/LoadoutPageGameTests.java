@@ -1,9 +1,9 @@
 package io.github.izakyl.folkways.plugins.combat.ui;
 
 import com.mojang.authlib.GameProfile;
-import io.github.izakyl.folkways.core.api.colony.Colonies;
-import io.github.izakyl.folkways.core.api.colony.Held;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
+import io.github.izakyl.folkways.core.colony.api.Claimed;
+import io.github.izakyl.folkways.core.colony.api.Colonies;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import io.github.izakyl.folkways.front.engine.charter.Charter;
 import io.github.izakyl.folkways.front.engine.charter.Charters;
 import io.github.izakyl.folkways.front.engine.registry.FolkwaysPlayerAttachments;
@@ -103,9 +103,9 @@ public final class LoadoutPageGameTests {
         var outsider = PersonBody.RESIDENT.get().create(helper.getLevel());
         helper.getLevel().addFreshEntity(resident);
         helper.getLevel().addFreshEntity(outsider);
-        colony.hold(PersonContent.ID, Held.Entity.of(resident)).orElseThrow();
+        colony.hold(PersonContent.ID, Claimed.Entity.of(resident)).orElseThrow();
         resident.joinColony(colony.id());
-        foreign.hold(PersonContent.ID, Held.Entity.of(outsider)).orElseThrow();
+        foreign.hold(PersonContent.ID, Claimed.Entity.of(outsider)).orElseThrow();
         outsider.joinColony(foreign.id());
         var page = new LoadoutPage(colony.id());
         try {
@@ -212,9 +212,9 @@ public final class LoadoutPageGameTests {
         var outsider = PersonBody.RESIDENT.get().create(helper.getLevel());
         helper.getLevel().addFreshEntity(resident);
         helper.getLevel().addFreshEntity(outsider);
-        colony.hold(PersonContent.ID, Held.Entity.of(resident)).orElseThrow();
+        colony.hold(PersonContent.ID, Claimed.Entity.of(resident)).orElseThrow();
         resident.joinColony(colony.id());
-        foreign.hold(PersonContent.ID, Held.Entity.of(outsider)).orElseThrow();
+        foreign.hold(PersonContent.ID, Claimed.Entity.of(outsider)).orElseThrow();
         outsider.joinColony(foreign.id());
         try {
             var profiles = LoadoutProfiles.of(colony);

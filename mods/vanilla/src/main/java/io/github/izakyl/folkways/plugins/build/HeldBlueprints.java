@@ -1,10 +1,10 @@
 package io.github.izakyl.folkways.plugins.build;
 
-import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
-import io.github.izakyl.folkways.core.api.colony.Books;
+import io.github.izakyl.folkways.front.api.Books;
 import io.github.izakyl.folkways.front.api.Ghost;
 import io.github.izakyl.folkways.front.client.SelectorWindow;
 import io.github.izakyl.folkways.front.api.ui.Placing;
+import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
 import io.github.izakyl.folkways.plugins.build.draft.Templates;
 import io.github.izakyl.folkways.plugins.build.draft.client.LocalPatterns;
 import java.io.ByteArrayOutputStream;
@@ -93,7 +93,7 @@ public final class HeldBlueprints {
         }
         try {
             blueprint.get().compatible();
-        } catch (io.github.izakyl.folkways.core.api.structure.StructureCompat.Failure failed) {
+        } catch (io.github.izakyl.folkways.core.work.api.StructureCompat.Failure failed) {
             player.displayClientMessage(failed.component(), true);
             return;
         }

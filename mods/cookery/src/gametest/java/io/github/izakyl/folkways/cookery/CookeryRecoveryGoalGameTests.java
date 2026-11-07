@@ -4,24 +4,22 @@ import com.github.ysbbbbbb.kaleidoscopecookery.blockentity.kitchen.ShawarmaSpitB
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems;
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.colony.Closing;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.colony.ColonyView;
-import io.github.izakyl.folkways.core.api.terms.Containers;
-import io.github.izakyl.folkways.core.api.terms.Goods;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.work.Ending;
-import io.github.izakyl.folkways.core.api.work.Grown;
-import io.github.izakyl.folkways.core.api.work.Node;
-import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Produce;
-import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.WorkSite;
-import io.github.izakyl.folkways.core.api.work.Worker;
-import io.github.izakyl.folkways.core.api.work.Workload;
-import io.github.izakyl.folkways.core.engine.labor.Commit;
-import io.github.izakyl.folkways.core.testing.TestWorker;
 import io.github.izakyl.folkways.cookery.testing.StationColony;
+import io.github.izakyl.folkways.core.colony.api.Closing;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.colony.api.ColonyView;
+import io.github.izakyl.folkways.core.item.api.Goods;
+import io.github.izakyl.folkways.core.plan.api.Grown;
+import io.github.izakyl.folkways.core.plan.api.Produce;
+import io.github.izakyl.folkways.core.runtime.HoldingFixture;
+import io.github.izakyl.folkways.core.testing.TestWorker;
+import io.github.izakyl.folkways.core.work.api.Ending;
+import io.github.izakyl.folkways.core.work.api.Node;
+import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.work.api.WorkSite;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import io.github.izakyl.folkways.plugins.person.ResidentEntity;
 import java.util.LinkedHashMap;
@@ -66,9 +64,9 @@ public final class CookeryRecoveryGoalGameTests {
         var production = bench.options(wanted, Grown.of(wanted)).getFirst();
         var hold = production.holds().getFirst(); helper.assertTrue(hold.take().isEmpty(), "the ordinary recipe descendant takes its actual booking");
         Node work = production.replacement().nodes().getFirst();
-        Node load = ((Workload.Within.Turn.Piece) ((Workload.Within) work.spec().workload()).next(rig.level, rig.worker)).node();
-        helper.assertTrue(Commit.run(rig.level, load, rig.worker) instanceof Outcome.Done, "the actual registered native spit accepts both real ingredients");
-        ((Workload.Within) work.spec().workload()).ended(rig.level, load, Ending.DONE);
+        HoldingFixture load = new HoldingFixture(rig.level, work, rig.worker);
+        helper.assertTrue(
+            load.step() instanceof Outcome.Done, "the actual registered native spit accepts both real ingredients");
         helper.assertTrue(rig.presence.goals(rig.view).stream().noneMatch(goal -> goal.completions().contains(work.id())), "an ordinary recipe descendant is never mistaken for a standalone recovery root");
         rig.power(false); hold.release(Ending.DROPPED); work.ended(rig.level, Ending.DROPPED);
         // This is the actual CookeryPresence -> Sweep -> Asking path. Only Colony's publish/submit ports are recorded.
@@ -116,7 +114,9 @@ public final class CookeryRecoveryGoalGameTests {
 
         Fixture(GameTestHelper helper) {
             level = helper.getLevel(); cell = helper.absolutePos(new BlockPos(2, 25, 2)); at = WorldPos.of(level, cell);
-            for (int x = -2; x <= 2; x++) for (int z = -2; z <= 2; z++) set(cell.offset(x, -1, z), Blocks.STONE.defaultBlockState());
+            for (int x = -2; x <= 2; x++) {
+                for (int z = -2; z <= 2; z++) set(cell.offset(x, -1, z), Blocks.STONE.defaultBlockState());
+            }
             before.put(cell.above(), level.getBlockState(cell.above()));
             set(cell, ModBlocks.SHAWARMA_SPIT.get().defaultBlockState().setValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.HORIZONTAL_FACING, net.minecraft.core.Direction.SOUTH));
             level.getBlockState(cell).getBlock().setPlacedBy(level, cell, level.getBlockState(cell), null, new ItemStack(ModItems.SHAWARMA_SPIT.get()));
@@ -138,7 +138,9 @@ public final class CookeryRecoveryGoalGameTests {
             BlockPos safe = cell.east(8); set(safe.below(), Blocks.STONE.defaultBlockState()); set(safe, Blocks.AIR.defaultBlockState()); set(safe.above(), Blocks.AIR.defaultBlockState());
             actor.setPos(Vec3.atBottomCenterOf(safe));
             for (int x = -5; x <= 5; x++) for (int z = -5; z <= 5; z++) for (int y = -2; y <= 7; y++) {
-                if (x == 0 && z == 0 && (y == 0 || y == 1)) continue;
+                if (x == 0 && z == 0 && (y == 0 || y == 1)) {
+                    continue;
+                }
                 set(cell.offset(x, y, z), Blocks.STONE.defaultBlockState());
             }
         }

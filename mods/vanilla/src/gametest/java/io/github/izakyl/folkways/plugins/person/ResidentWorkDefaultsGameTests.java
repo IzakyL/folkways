@@ -2,20 +2,20 @@ package io.github.izakyl.folkways.plugins.person;
 
 import com.mojang.authlib.GameProfile;
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.colony.Colonies;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.colony.Held;
-import io.github.izakyl.folkways.core.api.colony.Release;
-import io.github.izakyl.folkways.core.api.resident.body.Keenness;
-import io.github.izakyl.folkways.core.api.resident.body.WorkPriorities;
-import io.github.izakyl.folkways.core.api.terms.Stash;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.vocation.Vocation;
-import io.github.izakyl.folkways.core.api.vocation.Vocations;
-import io.github.izakyl.folkways.core.engine.colony.ColonyData;
-import io.github.izakyl.folkways.core.engine.colony.WorkDefaults;
-import io.github.izakyl.folkways.front.api.Endorsement;
+import io.github.izakyl.folkways.core.colony.api.ClaimRelease;
+import io.github.izakyl.folkways.core.colony.api.Claimed;
+import io.github.izakyl.folkways.core.colony.api.Colonies;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.colony.api.WorkDefaults;
+import io.github.izakyl.folkways.core.colony.internal.ColonyData;
+import io.github.izakyl.folkways.core.inventory.api.Stash;
+import io.github.izakyl.folkways.core.resident.api.WorkPriorities;
+import io.github.izakyl.folkways.core.vocation.api.Keenness;
+import io.github.izakyl.folkways.core.vocation.api.Vocation;
+import io.github.izakyl.folkways.core.vocation.api.Vocations;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.front.api.Endorsed;
+import io.github.izakyl.folkways.front.api.Endorsement;
 import io.github.izakyl.folkways.front.engine.charter.Charter;
 import io.github.izakyl.folkways.front.engine.charter.Charters;
 import io.github.izakyl.folkways.front.engine.colony.Endorsements;
@@ -71,14 +71,14 @@ public final class ResidentWorkDefaultsGameTests {
             level.setBlock(foot, Blocks.RED_BED.defaultBlockState().setValue(BedBlock.FACING, Direction.EAST), 2);
             level.setBlock(foot.east(), Blocks.RED_BED.defaultBlockState().setValue(BedBlock.FACING, Direction.EAST)
                 .setValue(BedBlock.PART, BedPart.HEAD), 2);
-            colony.hold(LivingContent.BED, new Held.Block(WorldPos.of(level, foot))).orElseThrow();
+            colony.hold(LivingContent.BED, new Claimed.Block(WorldPos.of(level, foot))).orElseThrow();
             BlockPos chest = helper.absolutePos(new BlockPos(4, 1, 1));
             level.setBlockAndUpdate(chest, Blocks.CHEST.defaultBlockState());
             ((ChestBlockEntity) level.getBlockEntity(chest)).setItem(0, new ItemStack(Items.BREAD, 64));
             WorldPos store = WorldPos.of(level, chest);
             colony.stores(PersonContent.ID, level.dimension(), List.of(store));
             ColonyData data = ColonyData.find(level.getServer(), colony.id()).orElseThrow();
-            data.inventory().advance(level, data, Map.of());
+            data.inventory().advance(level, data.works(), Map.of());
             var food = LivingContent.settlerNeeds(colony, level.getServer()).stream()
                 .filter(need -> need.kind() == LivingNeed.FOOD)
                 .findFirst().orElseThrow();
@@ -98,7 +98,7 @@ public final class ResidentWorkDefaultsGameTests {
             var answer = new Immigration().answer(asked).orElseThrow();
             helper.assertTrue(answer instanceof Endorsed.Pending,
                 "last-known sufficient food waits while coverage is incomplete");
-            data.inventory().advance(level, data, Map.of());
+            data.inventory().advance(level, data.works(), Map.of());
             queue.tick(level.getServer());
             helper.assertTrue(queue.waiting() == waiting - 1 && !colony.residents().isEmpty(),
                 "the pending admission retries after the observation is published");
@@ -118,7 +118,7 @@ public final class ResidentWorkDefaultsGameTests {
             level.setBlock(foot, Blocks.RED_BED.defaultBlockState().setValue(BedBlock.FACING, Direction.EAST), 2);
             level.setBlock(foot.east(), Blocks.RED_BED.defaultBlockState().setValue(BedBlock.FACING, Direction.EAST)
                 .setValue(BedBlock.PART, BedPart.HEAD), 2);
-            colony.hold(LivingContent.BED, new Held.Block(WorldPos.of(level, foot))).orElseThrow();
+            colony.hold(LivingContent.BED, new Claimed.Block(WorldPos.of(level, foot))).orElseThrow();
         }
         BlockPos chest = helper.absolutePos(new BlockPos(4, 1, 1));
         level.setBlockAndUpdate(chest, Blocks.CHEST.defaultBlockState());
@@ -174,7 +174,7 @@ public final class ResidentWorkDefaultsGameTests {
             ResourceLocation.fromNamespaceAndPath("touhou_little_maid", "maid/touhou/reimu"));
         person.setLookId(maid);
         try {
-            colony.hold(PersonContent.ID, Held.Entity.of(person)).orElseThrow();
+            colony.hold(PersonContent.ID, Claimed.Entity.of(person)).orElseThrow();
             assertRule(helper, person, trade, false, Keenness.FIRST);
             var known = person.licences().trade(trade).orElseThrow();
             person.licences().allow(known, true);
@@ -190,7 +190,7 @@ public final class ResidentWorkDefaultsGameTests {
                 ResourceLocation.fromNamespaceAndPath("folkways", "alex_slim")));
             colony.entered(loaded);
             assertRule(helper, loaded, trade, true, Keenness.SECOND);
-            helper.assertTrue(colony.holdingOf(loaded.id()).isPresent(), "reload keeps the existing holding");
+            helper.assertTrue(colony.claimOf(loaded.id()).isPresent(), "reload keeps the existing holding");
         } finally {
             person.discard();
             colony.raze();
@@ -205,19 +205,19 @@ public final class ResidentWorkDefaultsGameTests {
         Vocation trade = Vocations.all().getFirst();
         ResidentEntity person = spawn(helper);
         try {
-            first.hold(PersonContent.ID, Held.Entity.of(person)).orElseThrow();
+            first.hold(PersonContent.ID, Claimed.Entity.of(person)).orElseThrow();
             assertRule(helper, person, trade, true, Keenness.DEFAULT);
             WorkDefaults.set(first, PersonBody.ID, trade.id(), false, 1);
             WorkDefaults.set(second, PersonBody.ID, trade.id(), false, 4);
-            helper.assertTrue(first.hold(PersonContent.ID, Held.Entity.of(person)).isEmpty(), "duplicate admission fails");
-            helper.assertTrue(second.hold(PersonContent.ID, Held.Entity.of(person)).isEmpty(), "another colony cannot take them");
+            helper.assertTrue(first.hold(PersonContent.ID, Claimed.Entity.of(person)).isEmpty(), "duplicate admission fails");
+            helper.assertTrue(second.hold(PersonContent.ID, Claimed.Entity.of(person)).isEmpty(), "another colony cannot take them");
             assertRule(helper, person, trade, true, Keenness.DEFAULT);
-            int held = second.holdings().size();
-            helper.assertTrue(second.hold(PersonContent.ID, new Held.Entity(UUID.randomUUID(), PersonBody.ID)).isEmpty(),
+            int held = second.claims().size();
+            helper.assertTrue(second.hold(PersonContent.ID, new Claimed.Entity(UUID.randomUUID(), PersonBody.ID)).isEmpty(),
                 "an offline new human cannot miss template initialization");
-            helper.assertTrue(second.holdings().size() == held, "offline failure adds no holding");
-            first.release(first.holdingOf(person.id()).orElseThrow().id(), Release.LET_GO);
-            second.hold(PersonContent.ID, Held.Entity.of(person)).orElseThrow();
+            helper.assertTrue(second.claims().size() == held, "offline failure adds no holding");
+            first.release(first.claimOf(person.id()).orElseThrow().id(), ClaimRelease.LET_GO);
+            second.hold(PersonContent.ID, Claimed.Entity.of(person)).orElseThrow();
             assertRule(helper, person, trade, false, Keenness.FOURTH);
         } finally {
             person.discard();

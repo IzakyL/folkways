@@ -1,11 +1,11 @@
 package io.github.izakyl.folkways.front.engine.colony;
 
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.colony.Colonies;
-import io.github.izakyl.folkways.core.api.colony.Held;
-import io.github.izakyl.folkways.core.api.terms.Realm;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
+import io.github.izakyl.folkways.core.colony.api.Claimed;
+import io.github.izakyl.folkways.core.colony.api.Colonies;
 import io.github.izakyl.folkways.core.testing.TestFrame;
+import io.github.izakyl.folkways.core.world.api.Realm;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import java.util.Set;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
@@ -62,7 +62,7 @@ public final class ZoneCacheGameTests {
         Runnable remove = frame.install(false);
         try {
             WorldPos at = new WorldPos(new Realm.Frame(frame.id()), BlockPos.ZERO);
-            colony.hold(OWNER, new Held.Area(Set.of(at))).orElseThrow();
+            colony.hold(OWNER, new Claimed.Area(Set.of(at))).orElseThrow();
             var front = ColonyFront.of(colony);
             var first = front.zonesIn(level).getFirst();
             helper.assertTrue(front.zonesIn(level).getFirst() == first, "a stable frame needs no coordinate rebuild");

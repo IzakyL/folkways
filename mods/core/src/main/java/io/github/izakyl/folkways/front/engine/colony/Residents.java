@@ -1,9 +1,9 @@
 package io.github.izakyl.folkways.front.engine.colony;
 
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.resident.Resident;
-import io.github.izakyl.folkways.core.api.resident.body.Bodies;
-import io.github.izakyl.folkways.core.api.resident.body.Body;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.resident.api.Bodies;
+import io.github.izakyl.folkways.core.resident.api.Body;
+import io.github.izakyl.folkways.core.resident.api.Resident;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;

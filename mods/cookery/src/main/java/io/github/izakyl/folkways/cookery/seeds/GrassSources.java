@@ -1,9 +1,9 @@
 package io.github.izakyl.folkways.cookery.seeds;
 
 import com.github.ysbbbbbb.kaleidoscopecookery.init.tag.TagMod;
-import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.WorkNoise;
-import io.github.izakyl.folkways.core.api.work.Worker;
+import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.WorkNoise;
+import io.github.izakyl.folkways.core.work.api.Worker;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;

@@ -1,9 +1,9 @@
 package io.github.izakyl.folkways.plugins.person.name;
 
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.colony.Colonies;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.colony.Held;
+import io.github.izakyl.folkways.core.colony.api.Claimed;
+import io.github.izakyl.folkways.core.colony.api.Colonies;
+import io.github.izakyl.folkways.core.colony.api.Colony;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import io.github.izakyl.folkways.plugins.person.PersonContent;
@@ -20,8 +20,6 @@ import net.minecraft.core.RegistryAccess;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.nbt.ListTag;
-import net.minecraft.nbt.StringTag;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -126,12 +124,6 @@ public final class ResidentPoolGameTests {
             helper.assertTrue(LookPool.of(colony).allows(ALEX_WIDE), "a look added after replacing is in");
             helper.assertFalse(LookPool.of(colony).allows(ALEX_SLIM), "a look struck after replacing is out");
 
-            ListTag excluded = new ListTag();
-            excluded.add(StringTag.valueOf(ALEX_WIDE.toString()));
-            CompoundTag older = new CompoundTag();
-            older.put("excluded", excluded);
-            helper.assertFalse(LookPool.from(older).allows(ALEX_WIDE), "a pool saved before sets still strikes its looks");
-            helper.assertTrue(LookPool.from(older).allows(ALEX_SLIM), "and keeps the rest");
         } finally {
             colony.raze();
         }
@@ -161,7 +153,7 @@ public final class ResidentPoolGameTests {
         BlockPos at = helper.absolutePos(new BlockPos(1, 1, 1));
         person.moveTo(at.getX() + 0.5, at.getY(), at.getZ() + 0.5);
         helper.getLevel().addFreshEntity(person);
-        colony.hold(PersonContent.ID, Held.Entity.of(person));
+        colony.hold(PersonContent.ID, Claimed.Entity.of(person));
         return person;
     }
 

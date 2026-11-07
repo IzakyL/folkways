@@ -40,6 +40,6 @@ final class Roster {
 
     void load(Reader reader) {
         trains.clear();
-        trains.addAll(reader.uuids(TAG_TRAINS));
+        trains.addAll(reader.requiredUuids(TAG_TRAINS));
     }
 }

@@ -1,6 +1,5 @@
 package io.github.izakyl.folkways.create.build;
 
-import io.github.izakyl.folkways.plugins.build.Joints;
 import com.mojang.authlib.GameProfile;
 import com.simibubi.create.content.trains.track.BezierConnection;
 import com.simibubi.create.content.trains.track.TrackBlock;
@@ -9,6 +8,7 @@ import com.simibubi.create.content.trains.track.TrackBlockItem;
 import com.simibubi.create.content.trains.track.TrackPlacement;
 import com.simibubi.create.content.trains.track.TrackPropagator;
 import io.github.izakyl.folkways.create.CreateMod;
+import io.github.izakyl.folkways.plugins.build.Joints;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;

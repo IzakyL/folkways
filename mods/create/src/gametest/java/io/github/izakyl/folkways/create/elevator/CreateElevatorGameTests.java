@@ -3,28 +3,28 @@ package io.github.izakyl.folkways.create.elevator;
 import com.simibubi.create.content.contraptions.elevator.ElevatorPulleyBlockEntity;
 import com.simibubi.create.content.contraptions.glue.SuperGlueEntity;
 import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.resident.api.Going;
+import io.github.izakyl.folkways.core.world.api.Footing;
+import io.github.izakyl.folkways.core.world.api.Keepouts;
+import io.github.izakyl.folkways.core.world.api.Structures;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.create.FolkwaysCreateMod;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
-import io.github.izakyl.folkways.core.api.resident.Going;
-import io.github.izakyl.folkways.core.api.terms.Footing;
-import io.github.izakyl.folkways.core.api.terms.Keepouts;
-import io.github.izakyl.folkways.core.api.terms.Structures;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
-import net.minecraft.world.entity.Mob;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.core.Direction;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.entity.Mob;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.DirectionalBlock;
 import net.minecraft.world.level.block.HorizontalDirectionalBlock;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -51,7 +51,9 @@ public final class CreateElevatorGameTests {
         for (int x = (deck.getX() - 4) >> 4; x <= (deck.getX() + 8) >> 4; x++) {
             for (int z = (deck.getZ() - 5) >> 4; z <= (deck.getZ() + 8) >> 4; z++) {
                 long chunk = ChunkPos.asLong(x, z);
-                if (!had.contains(chunk) && level.setChunkForced(x, z, true)) forced.add(chunk);
+                if (!had.contains(chunk) && level.setChunkForced(x, z, true)) {
+                    forced.add(chunk);
+                }
             }
         }
         for (int x = 0; x < 5; x++) for (int z = 0; z < 5; z++) {
@@ -161,7 +163,9 @@ public final class CreateElevatorGameTests {
             var view = f.adapter.inspect(level.getServer(), f.ref).orElseThrow(() ->
                 new net.minecraft.gametest.framework.GameTestAssertException(assembly(f)));
             helper.assertTrue(view.places().size() >= 2, "real cabin has distinct standing places");
-            if (stage[0] <= 1 && !f.adapter.readyToDepart(level.getServer(), f.ref)) straddled[0] = true;
+            if (stage[0] <= 1 && !f.adapter.readyToDepart(level.getServer(), f.ref)) {
+                straddled[0] = true;
+            }
             helper.assertValueEqual(f.pulley.getAttachedContraption().getContraption().getSeats().size(), 0,
                 "neither ordinary Mob has a seat");
             for (int i = 0; i < bodies.length; i++) {
@@ -171,7 +175,9 @@ public final class CreateElevatorGameTests {
                 previous[i] = bodies[i].position();
             }
             if (stage[0] == 0) {
-                if (capacity[0] < 0) capacity[0] = view.places().size();
+                if (capacity[0] < 0) {
+                    capacity[0] = view.places().size();
+                }
                 helper.assertValueEqual(view.floors().size(), 2, "two real landings");
                 helper.assertTrue(view.stoppedAt().orElse(-999) == f.deck.getY() + 3, "waiting at lower floor");
                 helper.assertTrue(f.adapter.board(level.getServer(), f.ref, 0, f.body),
@@ -210,7 +216,9 @@ public final class CreateElevatorGameTests {
             }
             if (stage[0] == 3 || stage[0] == 6) {
                 for (int i = 0; i < bodies.length; i++) {
-                    if (!out[i]) out[i] = f.adapter.disembark(level.getServer(), f.ref, i, bodies[i]);
+                    if (!out[i]) {
+                        out[i] = f.adapter.disembark(level.getServer(), f.ref, i, bodies[i], Set.of());
+                    }
                 }
                 helper.assertTrue(out[0] && out[1], "both Mobs walk out without blocking each other");
                 helper.assertTrue(carried[0], "native collision carried the ordinary standing Mobs upstairs");

@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.plugins.damagecontrol;
 
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.front.api.ZoneView;
 import java.util.Collections;
 import java.util.Iterator;

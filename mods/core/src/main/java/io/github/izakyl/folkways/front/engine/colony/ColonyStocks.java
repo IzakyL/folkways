@@ -1,11 +1,11 @@
 package io.github.izakyl.folkways.front.engine.colony;
 
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.inventory.InventorySnapshot;
-import io.github.izakyl.folkways.core.api.inventory.ColonyInventory;
-import io.github.izakyl.folkways.core.api.inventory.SlotSnapshot;
-import io.github.izakyl.folkways.core.api.terms.Goods;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.inventory.api.ColonyInventory;
+import io.github.izakyl.folkways.core.inventory.api.InventorySnapshot;
+import io.github.izakyl.folkways.core.inventory.api.SlotSnapshot;
+import io.github.izakyl.folkways.core.item.api.Goods;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;

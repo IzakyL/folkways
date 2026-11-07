@@ -96,6 +96,8 @@ feat(draft): add a dock pattern
 
 ## Conventions
 
+Changing persisted data? Follow [save compatibility](SAVE_COMPATIBILITY.md).
+
 ### Code and test ownership
 
 - Match the surrounding naming, comment density and idiom.

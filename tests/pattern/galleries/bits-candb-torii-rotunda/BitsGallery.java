@@ -1,22 +1,3 @@
-import blockwright.minecraft.core.Sync;
-import dev.blockwright.api.Context;
-import io.github.izakyl.folkways.core.api.structure.StructureCompat;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
-import io.github.izakyl.folkways.front.api.Schema;
-import io.github.izakyl.folkways.plugins.build.draft.Chosen;
-import io.github.izakyl.folkways.plugins.build.draft.Commission;
-import io.github.izakyl.folkways.plugins.build.draft.Draft;
-import io.github.izakyl.folkways.plugins.build.draft.Drafting;
-import io.github.izakyl.folkways.plugins.build.draft.Drawn;
-import io.github.izakyl.folkways.plugins.build.draft.Hint;
-import io.github.izakyl.folkways.plugins.build.draft.Patterns;
-import io.github.izakyl.folkways.plugins.build.draft.World;
-import java.util.ArrayList;
-import java.util.Map;
-import net.minecraft.core.BlockPos;
-import net.minecraft.core.Direction;
-import net.minecraft.nbt.CompoundTag;
-import net.minecraft.resources.ResourceLocation;
 
 public final class Task {
 

@@ -1,9 +1,9 @@
 package io.github.izakyl.folkways.create.transport;
 
-import io.github.izakyl.folkways.core.api.terms.Footing;
-import io.github.izakyl.folkways.core.api.terms.Structures;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.work.Stances;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.world.api.Footing;
+import io.github.izakyl.folkways.core.world.api.Structures;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;

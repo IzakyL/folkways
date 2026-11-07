@@ -2,11 +2,11 @@ package io.github.izakyl.folkways.plugins.build;
 
 import io.github.izakyl.folkways.base.persist.Reader;
 import io.github.izakyl.folkways.base.persist.Writer;
-import io.github.izakyl.folkways.core.api.structure.StructureCompat;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
-import io.github.izakyl.folkways.core.api.work.Amount;
-import io.github.izakyl.folkways.core.api.work.Leaves;
-import io.github.izakyl.folkways.core.api.work.Need;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
+import io.github.izakyl.folkways.core.work.api.Amount;
+import io.github.izakyl.folkways.core.work.api.Need;
+import io.github.izakyl.folkways.core.work.api.StructureCompat;
+import io.github.izakyl.folkways.core.work.support.Leaves;
 import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -58,7 +58,7 @@ final class Carving {
         }
 
         void load(Reader reader) {
-            for (var entry : reader.children("materials")) {
+            for (var entry : reader.requiredChildren("materials")) {
                 entry.child("material").flatMap(ItemSpec::load).ifPresent(material -> balance.put(material,
                     new Fraction(new BigInteger(entry.string("count").orElseThrow()),
                         new BigInteger(entry.string("units").orElseThrow()))));

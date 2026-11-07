@@ -1,9 +1,9 @@
 package io.github.izakyl.folkways.front.engine.colony;
 
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.resident.body.Body;
-import io.github.izakyl.folkways.core.api.terms.Goods;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.item.api.Goods;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
+import io.github.izakyl.folkways.core.resident.api.Body;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -44,7 +44,7 @@ public record ColonyMetrics(
                 idle++;
             }
         }
-        int members = (int) colony.holdings().stream()
+        int members = (int) colony.claims().stream()
             .filter(holding -> holding.what().singleCell().isPresent()).count();
         List<Held> stock = new ArrayList<>();
         boolean complete = colony.inventory().snapshot().coverage().complete();

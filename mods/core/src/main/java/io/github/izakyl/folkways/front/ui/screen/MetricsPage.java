@@ -14,7 +14,7 @@ import com.lowdragmc.lowdraglib2.gui.ui.elements.TextField;
 import dev.vfyjxf.taffy.style.FlexDirection;
 import dev.vfyjxf.taffy.style.FlexWrap;
 import dev.vfyjxf.taffy.style.TaffyPosition;
-import io.github.izakyl.folkways.core.api.colony.Colony;
+import io.github.izakyl.folkways.core.colony.api.Colony;
 import io.github.izakyl.folkways.front.api.ui.Draw;
 import io.github.izakyl.folkways.front.api.ui.Pages;
 import io.github.izakyl.folkways.front.api.ui.Rows;
@@ -25,11 +25,12 @@ import io.github.izakyl.folkways.front.engine.colony.ColonyMetrics;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.BitSet;
-import java.util.Locale;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.function.Predicate;
 import net.minecraft.ChatFormatting;
+import net.minecraft.client.Minecraft;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -39,7 +40,6 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.client.Minecraft;
 
 // What the colony holds in its storage, item by item: a grid of icons, each with its count tucked under it as in a
 // chest, and its name and full count on hover.

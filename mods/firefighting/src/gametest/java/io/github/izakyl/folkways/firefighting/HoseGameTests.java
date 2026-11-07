@@ -9,20 +9,21 @@ import com.mikoalopex.createfirefightingadd.content.equipment.handheld.HandheldN
 import com.mikoalopex.createfirefightingadd.content.equipment.handheld.HandheldNozzleType;
 import com.mikoalopex.createfirefightingadd.content.fluids.nozzle.HandheldNozzleSprayEffects;
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.colony.Colonies;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.colony.Held;
-import io.github.izakyl.folkways.core.api.resident.body.Body;
-import io.github.izakyl.folkways.core.api.terms.Closures;
-import io.github.izakyl.folkways.core.api.terms.Footing;
-import io.github.izakyl.folkways.core.api.terms.Keepouts;
-import io.github.izakyl.folkways.core.api.terms.Reach;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.Worker;
-import io.github.izakyl.folkways.core.engine.labor.LaborFixture;
+import io.github.izakyl.folkways.core.colony.api.Claimed;
+import io.github.izakyl.folkways.core.colony.api.Colonies;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.resident.api.Body;
+import io.github.izakyl.folkways.core.runtime.LaborFixture;
 import io.github.izakyl.folkways.core.testing.TestWorker;
+import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.work.support.WorkStances;
+import io.github.izakyl.folkways.core.world.api.Closures;
+import io.github.izakyl.folkways.core.world.api.Footing;
+import io.github.izakyl.folkways.core.world.api.Keepouts;
+import io.github.izakyl.folkways.core.world.api.Reach;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.effect.Effects;
 import io.github.izakyl.folkways.front.engine.colony.ColonyFront;
 import io.github.izakyl.folkways.front.engine.colony.ColonySettings;
@@ -240,7 +241,7 @@ public final class HoseGameTests {
                 BlockPos stance = feet.iterator().next();
                 HoseSession session = rig.open();
                 rig.body.mob().setPos(Vec3.atBottomCenterOf(stance).add(0, 0, 0.8D));
-                helper.assertTrue(Reach.standingIn(rig.body.mob(), Stances.at(rig.level, stance)),
+                helper.assertTrue(WorkStances.standingIn(rig.body.mob(), Stances.at(rig.level, stance)),
                     "ordinary arrival accepts the 0.8-block offset");
                 int before = rig.cabinet.getFluid().getAmount();
                 helper.assertTrue(session.suppress(rig.level, rig.fire) instanceof Outcome.Done,
@@ -429,10 +430,12 @@ public final class HoseGameTests {
         int offset = 1024;
         BlockPos cabinet = helper.absolutePos(new BlockPos(2, 1 + height, 3 + offset));
         BlockPos fire = cabinet.east(30);
+        Set<Long> chunks = new LinkedHashSet<>();
         Set<Long> forced = new LinkedHashSet<>();
         for (int x = (cabinet.getX() - 8) >> 4; x <= (cabinet.getX() + 70) >> 4; x++) {
             for (int z = (cabinet.getZ() - 4) >> 4; z <= (cabinet.getZ() + 4) >> 4; z++) {
                 long chunk = ChunkPos.asLong(x, z);
+                chunks.add(chunk);
                 if (!helper.getLevel().getForcedChunks().contains(chunk)
                     && helper.getLevel().setChunkForced(x, z, true)) {
                     forced.add(chunk);
@@ -446,7 +449,10 @@ public final class HoseGameTests {
         boolean[] pickedUp = {false};
         helper.onEachTick(() -> {
             if (scene[0] == null) {
-                if (!helper.getLevel().isPositionEntityTicking(cabinet)) {
+                // Loading a chunk does not yet make newly spawned residents visible to colony registration.
+                // The cabinet, spawn and route can cross chunk borders, so wait for the whole prepared area.
+                if (!chunks.stream().allMatch(chunk -> helper.getLevel().isPositionEntityTicking(
+                    new BlockPos(ChunkPos.getX(chunk) << 4, cabinet.getY(), ChunkPos.getZ(chunk) << 4)))) {
                     return;
                 }
                 Rig rig = new Rig(helper, height, offset);
@@ -812,7 +818,7 @@ public final class HoseGameTests {
             body.mob().setOnGround(true);
             body.mob().setPos(Vec3.atBottomCenterOf(pos.east()));
             level.addFreshEntity(body.mob());
-            colony.hold(PersonContent.ID, Held.Entity.of(body.mob())).orElseThrow();
+            colony.hold(PersonContent.ID, Claimed.Entity.of(body.mob())).orElseThrow();
             ItemStack extinguisher = new ItemStack(CreateFireFightingAdd.FIRE_EXTINGUISHER_ITEM.get());
             new FireExtinguisherItemHandler(
                 CreateFireFightingAdd.FIRE_EXTINGUISHER_FLUID, extinguisher)

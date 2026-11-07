@@ -18,8 +18,8 @@ const VARY_VITALS = defineTask<Record<string, any>, Record<string, any>>({
   timeoutMs: 20_000,
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.core.api.colony.Colony",
-      "io.github.izakyl.folkways.core.api.resident.Resident",
+      "io.github.izakyl.folkways.core.colony.api.Colony",
+      "io.github.izakyl.folkways.core.resident.api.Resident",
       "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
       "io.github.izakyl.folkways.plugins.person.living.LivingContent",
       "java.lang.reflect.AccessibleObject",
@@ -122,8 +122,8 @@ const WEAR = defineTask<Record<string, any>, Record<string, any>>({
   timeoutMs: 20_000,
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.core.api.colony.Colony",
-      "io.github.izakyl.folkways.core.api.resident.Resident",
+      "io.github.izakyl.folkways.core.colony.api.Colony",
+      "io.github.izakyl.folkways.core.resident.api.Resident",
       "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
       "io.github.izakyl.folkways.plugins.person.living.LivingContent",
       "java.lang.reflect.AccessibleObject",

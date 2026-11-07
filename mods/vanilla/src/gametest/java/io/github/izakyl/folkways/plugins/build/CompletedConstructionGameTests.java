@@ -1,11 +1,11 @@
 package io.github.izakyl.folkways.plugins.build;
 
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.resident.Resident;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Worker;
+import io.github.izakyl.folkways.core.resident.api.Resident;
 import io.github.izakyl.folkways.core.testing.TestWorker;
+import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
 import java.util.List;
 import java.util.Map;
@@ -54,10 +54,11 @@ public final class CompletedConstructionGameTests {
         level.setBlock(left, leftState, Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE);
         ChestBlockEntity original = (ChestBlockEntity) level.getBlockEntity(left);
         original.setItem(0, new ItemStack(Items.DIAMOND, 7));
-        BuildTarget target = new BuildTarget(WorldPos.of(level, left).realm(), Map.of(left, leftState, right, rightState));
+        BuildTarget target = new BuildTarget(WorldPos.of(level, left).realm(), Map.of(left, leftState, right,
+            rightState));
         SiteRig rig = SiteRig.start(level, target);
         helper.assertTrue(rig.site.metCells().contains(left), "the existing half is completed before work begins");
-        helper.assertValueEqual(rig.node(right).spec().needs().stream().mapToLong(need -> need.count()).sum(), 1L,
+        helper.assertValueEqual(rig.action(right).spec().needs().stream().mapToLong(need -> need.count()).sum(), 1L,
             "only the missing chest is supplied");
         Worker worker = worker(helper, left.south(3), new SimpleContainer(new ItemStack(Items.CHEST)));
         Outcome outcome = rig.work(helper, right, worker);

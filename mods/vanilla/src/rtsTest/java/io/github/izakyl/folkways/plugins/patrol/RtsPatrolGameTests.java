@@ -1,28 +1,34 @@
 package io.github.izakyl.folkways.plugins.patrol;
 
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.colony.Colonies;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.colony.Held;
-import io.github.izakyl.folkways.core.api.resident.body.Body;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.work.Worker;
-import io.github.izakyl.folkways.core.engine.inventory.InventoryObservations;
+import io.github.izakyl.folkways.core.colony.api.Claimed;
+import io.github.izakyl.folkways.core.colony.api.Colonies;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.inventory.internal.InventoryObservations;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
+import io.github.izakyl.folkways.core.resident.api.Body;
 import io.github.izakyl.folkways.core.testing.TestWorker;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
+import io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfile;
 import io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfiles;
+import io.github.izakyl.folkways.plugins.combat.weapon.PatrolSupplies;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import io.github.izakyl.folkways.plugins.person.PersonContent;
 import io.github.izakyl.folkways.rts.FolkwaysRtsMod;
-import io.github.izakyl.folkways.rts.combat.group.UnitGroup;
 import io.github.izakyl.folkways.rts.combat.command.ResidentCommands;
+import io.github.izakyl.folkways.rts.combat.group.UnitGroup;
 import io.github.izakyl.folkways.rts.combat.group.UnitGroups;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.tags.ItemTags;
 import net.minecraft.world.Container;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.entity.EntityType;
@@ -34,13 +40,10 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.common.Tags;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
-import io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfile;
-import java.util.Optional;
-import net.neoforged.neoforge.common.Tags;
 
 @EventBusSubscriber(modid = FolkwaysRtsMod.MOD_ID, bus = EventBusSubscriber.Bus.MOD)
 @GameTestHolder(FolkwaysMod.MOD_ID)
@@ -62,7 +65,7 @@ public final class RtsPatrolGameTests {
         place(helper, zombie, new BlockPos(8, 1, 5));
         zombie.setNoAi(true);
         try {
-            colony.hold(PersonContent.ID, Held.Entity.of(guard.mob())).orElseThrow();
+            colony.hold(PersonContent.ID, Claimed.Entity.of(guard.mob())).orElseThrow();
             guard.joinColony(colony.id());
             arm(colony, guard, "Melee", ItemSpec.of(Tags.Items.MELEE_WEAPON_TOOLS));
             PatrolPresence patrol = new PatrolPresence(colony);
@@ -120,11 +123,11 @@ public final class RtsPatrolGameTests {
         guard.mob().setNoAi(true);
         zombie.setNoAi(true);
         try {
-            colony.hold(PersonContent.ID, Held.Entity.of(guard.mob())).orElseThrow();
+            colony.hold(PersonContent.ID, Claimed.Entity.of(guard.mob())).orElseThrow();
             guard.joinColony(colony.id());
             arm(colony, guard, "Bow", ItemSpec.of(Items.BOW));
             UUID zone = colony.hold(SentryPosts.ZONE,
-                new Held.Area(Set.of(WorldPos.of(level, helper.absolutePos(new BlockPos(5, 0, 5))))))
+                new Claimed.Area(Set.of(WorldPos.of(level, helper.absolutePos(new BlockPos(5, 0, 5))))))
                 .orElseThrow().id();
             SentryPosts posts = SentryPosts.of(colony);
             PatrolStaffing.of(colony).configure(level, zone,
@@ -170,6 +173,33 @@ public final class RtsPatrolGameTests {
             .filter(one -> one.name().equals(name))
             .findFirst()
             .orElseGet(() -> profiles.add(profiles.create(name).id(), LoadoutProfile.Entry.weapon(weapon)));
+        profiles.assign(List.of(body.id()), Optional.of(profile.id()));
+    }
+
+    private static void assignLoadout(
+        PatrolSupplies supplies,
+        Body body, String name) {
+        var profiles = supplies.profiles();
+        var profile = profiles.all().stream().filter(value -> value.name().equals(name)).findFirst()
+            .orElseGet(() -> {
+                var created = profiles.create(name);
+                var weapon = switch (name) {
+                    case "melee" -> ItemSpec.of(
+                        Tags.Items.MELEE_WEAPON_TOOLS);
+                    case "bow" -> ItemSpec.of(Items.BOW);
+                    case "crossbow" -> ItemSpec.of(Items.CROSSBOW);
+                    default -> throw new IllegalArgumentException(name);
+                };
+                var entries = new ArrayList<LoadoutProfile.Entry>();
+                entries.add(LoadoutProfile.Entry.weapon(weapon));
+                if (!name.equals("melee")) {
+                    entries.add(LoadoutProfile.Entry.supply(
+                        ItemSpec.of(ItemTags.ARROWS), 8, 8));
+                }
+                profiles.replace(new LoadoutProfile(
+                    created.id(), created.name(), entries));
+                return profiles.get(created.id()).orElseThrow();
+            });
         profiles.assign(List.of(body.id()), Optional.of(profile.id()));
     }
 }

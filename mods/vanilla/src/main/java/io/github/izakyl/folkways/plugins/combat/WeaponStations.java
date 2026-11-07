@@ -1,11 +1,12 @@
 package io.github.izakyl.folkways.plugins.combat;
 
-import io.github.izakyl.folkways.core.api.terms.Containers;
-import io.github.izakyl.folkways.core.api.terms.Goods;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
-import io.github.izakyl.folkways.core.api.work.Worker;
+import io.github.izakyl.folkways.base.persist.Required;
+import io.github.izakyl.folkways.core.item.api.Containers;
+import io.github.izakyl.folkways.core.item.api.Goods;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
+import io.github.izakyl.folkways.core.world.api.WorldSpaces;
 import io.github.izakyl.folkways.front.api.ZoneView;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -343,10 +344,10 @@ public final class WeaponStations {
             || body instanceof Mob mob && ownsSeat(mob)) {
             return;
         }
-        CompoundTag loan = body.getPersistentData().getCompound(SEAT);
-        if (body.getVehicle() != null
-            && loan.hasUUID("vehicle")
-            && body.getVehicle().getUUID().equals(loan.getUUID("vehicle"))) {
+        CompoundTag loan = Required.compound(body.getPersistentData(), SEAT);
+        Required.uuid(loan, "lease");
+        UUID vehicle = Required.uuid(loan, "vehicle");
+        if (body.getVehicle() != null && body.getVehicle().getUUID().equals(vehicle)) {
             body.stopRiding();
         }
         body.getPersistentData().remove(SEAT);

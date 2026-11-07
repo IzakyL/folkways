@@ -1,9 +1,8 @@
 package io.github.izakyl.folkways.plugins.build;
 
-import io.github.izakyl.folkways.core.api.structure.StructureCompat;
-import io.github.izakyl.folkways.core.api.structure.StructurePayload;
-import io.github.izakyl.folkways.core.api.terms.Goods;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
+import io.github.izakyl.folkways.core.item.api.Goods;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
+import io.github.izakyl.folkways.core.work.api.StructureCompat;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -29,7 +28,9 @@ final class BlueprintMaterials {
             Map<ResourceLocation, Component> integrations = new LinkedHashMap<>();
             for (BlueprintBlock block : blueprint.blocks()) {
                 var handler = StructureCompat.of(block.state());
-                if (handler.isEmpty()) continue;
+                if (handler.isEmpty()) {
+                    continue;
+                }
                 integrations.put(handler.get().id(), handler.get().name());
                 volumes.add(handler.get().voxels(block.data().payload(block.state())));
             }
@@ -38,8 +39,12 @@ final class BlueprintMaterials {
             integrations.values().forEach(name -> lines.add(Component.translatable("folkways.blueprint.requires", name)));
             counted.entrySet().stream().limit(8).forEach(entry -> lines.add(Component.translatable(
                 "folkways.blueprint.micro.material", Goods.display(entry.getKey()).getHoverName(), entry.getValue())));
-            if (counted.size() > 8) lines.add(Component.translatable("folkways.blueprint.micro.more", counted.size() - 8));
-            if (!counted.isEmpty()) lines.add(Component.translatable("folkways.blueprint.micro.same_state"));
+            if (counted.size() > 8) {
+                lines.add(Component.translatable("folkways.blueprint.micro.more", counted.size() - 8));
+            }
+            if (!counted.isEmpty()) {
+                lines.add(Component.translatable("folkways.blueprint.micro.same_state"));
+            }
             return List.copyOf(lines);
         }
     }

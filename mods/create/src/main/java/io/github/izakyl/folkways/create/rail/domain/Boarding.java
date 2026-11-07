@@ -1,11 +1,11 @@
 package io.github.izakyl.folkways.create.rail.domain;
 
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.world.api.Keepouts;
+import io.github.izakyl.folkways.core.world.api.Reach;
+import io.github.izakyl.folkways.core.world.api.Structures;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.create.FolkwaysCreateConfig;
-import io.github.izakyl.folkways.core.api.terms.Keepouts;
-import io.github.izakyl.folkways.core.api.terms.Reach;
-import io.github.izakyl.folkways.core.api.terms.Structures;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.work.Stances;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;

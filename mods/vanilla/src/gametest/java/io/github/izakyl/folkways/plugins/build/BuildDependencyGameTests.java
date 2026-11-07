@@ -1,10 +1,7 @@
 package io.github.izakyl.folkways.plugins.build;
 
-import static io.github.izakyl.folkways.plugins.build.SiteRig.floor;
-import static io.github.izakyl.folkways.plugins.build.SiteRig.target;
-
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.work.Ending;
+import io.github.izakyl.folkways.core.work.api.Ending;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -28,6 +25,8 @@ import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 import net.neoforged.neoforge.registries.RegisterEvent;
+import static io.github.izakyl.folkways.plugins.build.SiteRig.floor;
+import static io.github.izakyl.folkways.plugins.build.SiteRig.target;
 
 @EventBusSubscriber(modid = FolkwaysVanillaMod.ID, bus = EventBusSubscriber.Bus.MOD)
 @GameTestHolder(FolkwaysMod.MOD_ID)
@@ -69,9 +68,9 @@ public final class BuildDependencyGameTests {
         }
         SiteRig rig = SiteRig.start(helper.getLevel(), target(helper.getLevel(), cells));
         BlockPos failed = cells.keySet().iterator().next();
-        var node = rig.node(failed);
+        var node = rig.action(failed);
         for (int attempt = 0; attempt < BuildSite.MOST_TRIES; attempt++) {
-            rig.end(node, new Ending.Failed(node.id(), BuildRefusal.NO_WAY_TO_BUILD));
+            rig.end(node, new Ending.Failed(rig.pieceAt(failed).id(), BuildRefusal.NO_WAY_TO_BUILD));
             rig.site.tick(helper.getLevel());
         }
         helper.assertValueEqual(rig.site.refusals().get(failed), BuildRefusal.NO_WAY_TO_BUILD,
@@ -128,7 +127,8 @@ public final class BuildDependencyGameTests {
         helper.assertTrue(plan.after().getOrDefault(ids.get(sand), Set.of()).contains(ids.get(support)),
             "falling sand waits for its support");
         for (Direction side : Direction.Plane.HORIZONTAL) {
-            helper.assertTrue(plan.after().getOrDefault(ids.get(water), Set.of()).contains(ids.get(water.relative(side))),
+            helper.assertTrue(plan.after().getOrDefault(ids.get(water), Set.of())
+                .contains(ids.get(water.relative(side))),
                 "water waits for its containing wall on " + side);
         }
         helper.succeed();

@@ -28,7 +28,9 @@ public final class NativeCookingMatrix {
                                              BiConsumer<GameTestHelper, ResourceLocation> execute) {
         List<ResourceLocation> recipes = ids(id -> id.getNamespace().equals("kaleidoscope_cookery")
             && id.getPath().startsWith(folder + "/"));
-        if (recipes.size() != expected) throw new IllegalStateException(folder + ": expected " + expected + " pinned native recipes, found " + recipes.size());
+        if (recipes.size() != expected) {
+            throw new IllegalStateException(folder + ": expected " + expected + " pinned native recipes, found " + recipes.size());
+        }
         return recipes.stream().map(id -> new TestFunction("cookery_" + folder + "_matrix",
             "folkways:matrix_" + id.getPath().replace('/', '_'), "folkways:empty", maxTicks, 0L, true,
             helper -> execute.accept(helper, id))).toList();
@@ -41,7 +43,9 @@ public final class NativeCookingMatrix {
             List<ResourceLocation> ids = new ArrayList<>();
             JsonParser.parseReader(reader).getAsJsonObject().getAsJsonArray("recipes").forEach(value -> {
                 ResourceLocation id = ResourceLocation.parse(value.getAsString());
-                if (wanted.test(id)) ids.add(id);
+                if (wanted.test(id)) {
+                    ids.add(id);
+                }
             });
             return ids;
         } catch (java.io.IOException broken) {
@@ -58,25 +62,37 @@ public final class NativeCookingMatrix {
 
     private static boolean choose(List<Ingredient> ingredients, boolean distinct, Predicate<List<ItemStack>> selected,
                                    List<ItemStack> input, int at) {
-        if (at == ingredients.size()) return selected.test(input);
+        if (at == ingredients.size()) {
+            return selected.test(input);
+        }
         Ingredient ingredient = ingredients.get(at);
-        if (ingredient.isEmpty()) return choose(ingredients, distinct, selected, input, at + 1);
+        if (ingredient.isEmpty()) {
+            return choose(ingredients, distinct, selected, input, at + 1);
+        }
         for (ItemStack candidate : ingredient.getItems()) {
-            if (candidate.isEmpty() || distinct && input.stream().anyMatch(stack -> !stack.isEmpty() && stack.is(candidate.getItem()))) continue;
+            if (candidate.isEmpty() || distinct && input.stream().anyMatch(stack -> !stack.isEmpty() && stack.is(candidate.getItem()))) {
+                continue;
+            }
             input.set(at, candidate.copyWithCount(1));
-            if (choose(ingredients, distinct, selected, input, at + 1)) return true;
+            if (choose(ingredients, distinct, selected, input, at + 1)) {
+                return true;
+            }
             input.set(at, ItemStack.EMPTY);
         }
         return false;
     }
 
     public static void count(Map<Item, Long> counts, ItemStack stack) {
-        if (!stack.isEmpty()) counts.merge(stack.getItem(), (long) stack.getCount(), Long::sum);
+        if (!stack.isEmpty()) {
+            counts.merge(stack.getItem(), (long) stack.getCount(), Long::sum);
+        }
     }
 
     public static void inventory(GameTestHelper helper, Container inventory, Map<Item, Long> expected, ResourceLocation recipe) {
         Map<Item, Long> actual = new LinkedHashMap<>();
-        for (int slot = 0; slot < inventory.getContainerSize(); slot++) count(actual, inventory.getItem(slot));
+        for (int slot = 0; slot < inventory.getContainerSize(); slot++) {
+            count(actual, inventory.getItem(slot));
+        }
         helper.assertTrue(actual.equals(expected), "the real recipe conserves products, containers, tools and all spent inputs: "
             + recipe + "; expected=" + expected + "; actual=" + actual);
     }

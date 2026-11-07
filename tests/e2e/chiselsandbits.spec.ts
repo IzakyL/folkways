@@ -13,10 +13,10 @@ const STATE = defineTask<Args, Record<string, any>>({
   name: "folkways.chiselsandbits.build-state", side: "server", timeoutMs: 20_000,
   source: javaTask({ imports: [
     "io.github.izakyl.folkways.chiselsandbits.CandBStructureCodec",
-    "io.github.izakyl.folkways.core.api.colony.Books",
-    "io.github.izakyl.folkways.core.api.resident.body.Body",
-    "io.github.izakyl.folkways.core.api.terms.Goods",
-    "io.github.izakyl.folkways.core.api.terms.ItemSpec",
+    "io.github.izakyl.folkways.front.api.Books",
+    "io.github.izakyl.folkways.core.resident.api.Body",
+    "io.github.izakyl.folkways.core.item.api.Goods",
+    "io.github.izakyl.folkways.core.item.api.ItemSpec",
     "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
     "io.github.izakyl.folkways.plugins.build.Blueprint",
     "io.github.izakyl.folkways.plugins.build.BlueprintCapture",
@@ -93,7 +93,7 @@ return Map.of("stored", file != null, "snbt", file == null ? "" : file.toString(
 
 const CAPTURE = defineTask<{ source: number[] }, boolean>({
   name: "folkways.chiselsandbits.capture", side: "client", timeoutMs: 20_000,
-  source: javaTask({ imports: ["io.github.izakyl.folkways.core.api.colony.Books",
+  source: javaTask({ imports: ["io.github.izakyl.folkways.front.api.Books",
     "io.github.izakyl.folkways.plugins.build.CaptureBlueprintPacket", "net.minecraft.client.Minecraft",
     "net.minecraft.core.BlockPos", "net.neoforged.neoforge.network.PacketDistributor"], body: `
 var mc = Minecraft.getInstance();

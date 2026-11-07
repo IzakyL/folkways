@@ -3,8 +3,9 @@ package io.github.izakyl.folkways.plugins.build.draft.client;
 import io.github.izakyl.folkways.base.persist.Reader;
 import io.github.izakyl.folkways.front.api.Ghost;
 import io.github.izakyl.folkways.front.api.GhostRecipes;
-import io.github.izakyl.folkways.plugins.build.draft.Drawn;
+import io.github.izakyl.folkways.plugins.build.draft.Chosen;
 import io.github.izakyl.folkways.plugins.build.draft.Drafting;
+import io.github.izakyl.folkways.plugins.build.draft.Drawn;
 import io.github.izakyl.folkways.plugins.build.draft.Hint;
 import io.github.izakyl.folkways.plugins.build.draft.Patterns;
 import io.github.izakyl.folkways.plugins.build.draft.RecipeDrawing;
@@ -110,13 +111,15 @@ public final class OrderPreviews implements GhostRecipes.Renderer {
         Reader recipe = Reader.of(entry.recipe);
         var pattern = recipe.id("pattern").flatMap(Patterns::find);
         var hint = recipe.blob("hint").flatMap(Hint::load);
+        var settings = recipe.blob("settings");
         Direction facing = recipe.string("facing").map(Direction::byName).orElse(null);
-        if (pattern.isEmpty() || hint.isEmpty() || facing == null) {
+        if (pattern.isEmpty() || hint.isEmpty() || settings.isEmpty() || facing == null) {
             return;
         }
         try {
             entry.drawing = RecipeDrawing.draw(level, pattern.get(), hint.get(),
-                recipe.blob("settings").orElseGet(CompoundTag::new), facing)
+                // Filed recipes can predate a resource reload that changes the pattern's knobs.
+                Chosen.normalize(pattern.get().knobs(), settings.get()).save(), facing)
                 .thenCompose(drawn -> Drafting.prepare(() -> image(drawn))).exceptionally(failed -> null);
             CompletableFuture<Image> task = entry.drawing;
             pending.add(task);

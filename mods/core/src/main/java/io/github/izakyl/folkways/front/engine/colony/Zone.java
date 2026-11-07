@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.front.engine.colony;
 
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.level.Level;

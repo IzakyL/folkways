@@ -1,7 +1,7 @@
 package io.github.izakyl.folkways.plugins.build.draft;
 
-import io.github.izakyl.folkways.core.api.terms.ItemFilter;
-import io.github.izakyl.folkways.core.api.structure.StructurePayload;
+import io.github.izakyl.folkways.core.item.api.ItemFilter;
+import io.github.izakyl.folkways.core.world.api.StructurePayload;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;

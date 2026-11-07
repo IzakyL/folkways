@@ -4,8 +4,8 @@ import { defineTask, javaTask, type MinecraftServer, type TaskTemplate } from "@
 // (`folkways.colony.*`) and `runColonyTask` runs one, timing the round trip and naming the task on failure.
 
 const IMPORTS = [
-  "io.github.izakyl.folkways.core.api.colony.Colony",
-  "io.github.izakyl.folkways.core.engine.colony.ColonyMembership",
+  "io.github.izakyl.folkways.core.colony.api.Colony",
+  "io.github.izakyl.folkways.core.shell.neoforge.FolkwaysAttachments",
   "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
   "io.github.izakyl.folkways.front.engine.colony.Endorsements",
   "io.github.izakyl.folkways.front.engine.colony.MemberToggle",
@@ -148,7 +148,8 @@ private static boolean ours(ServerLevel level, BlockPos at, String colonyId) {
     if (blockEntity == null) {
         return false;
     }
-    UUID owner = ColonyMembership.owner(blockEntity).orElse(null);
+    Optional<UUID> stored = blockEntity.getExistingDataOrNull(FolkwaysAttachments.COLONY_MEMBER);
+    UUID owner = stored == null ? null : stored.orElse(null);
     return owner != null && colonyId.equals(String.valueOf(owner));
 }
 ` + LOOKUPS,

@@ -4,8 +4,8 @@ import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
 import io.github.izakyl.folkways.plugins.person.look.ResidentLook;
 import io.github.izakyl.folkways.plugins.person.look.ResidentLooks;
-import java.util.Optional;
 import java.util.Map;
+import java.util.Optional;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.ResourceLocation;
@@ -29,7 +29,7 @@ public final class ResidentAnimationGameTests {
     public static void interpolatedWalkingDoesNotRequireClientVelocity(GameTestHelper helper) {
         var resident = PersonBody.RESIDENT.get().create(helper.getLevel());
         var resource = ResourceLocation.fromNamespaceAndPath("folkways", "test");
-        var model = new ResidentLook.Model(resource, resource, resource, "idle", "walk", Optional.empty(),
+        var model = new ResidentLook.Model(resource, resource, resource, "idle", "walk", Optional.empty(), Optional.empty(),
             ResidentLooks.FALLBACK.appearance().skin(), 1.0F);
         resident.setDeltaMovement(0, 0, 0);
         resident.walkAnimation.update(0.4F, 1.0F);
@@ -54,10 +54,10 @@ public final class ResidentAnimationGameTests {
             "vehicle motion must never select walk for the seated passenger");
         helper.assertValueEqual(ResidentAnimation.loop(resident, model, false), "ride",
             "a stationary seat must keep the same rider pose");
-        var old = new ResidentLook.Model(resource, resource, resource, "idle", "walk", Optional.empty(),
+        var unposed = new ResidentLook.Model(resource, resource, resource, "idle", "walk", Optional.empty(), Optional.empty(),
             ResidentLooks.FALLBACK.appearance().skin(), 1.0F);
-        helper.assertValueEqual(ResidentAnimation.loop(resident, old, true), "idle",
-            "old models keep their idle upper body while the renderer applies humanoid seated legs");
+        helper.assertValueEqual(ResidentAnimation.loop(resident, unposed, true), "idle",
+            "models without a seated animation keep their idle upper body while the renderer applies humanoid seated legs");
         var dining = new ResidentLook.Model(resource, resource, resource, "idle", "walk",
             Optional.of("work"), Optional.of("ride"), ResidentLooks.FALLBACK.appearance().skin(), 1.0F,
             Map.of("dining", "table_meal"));

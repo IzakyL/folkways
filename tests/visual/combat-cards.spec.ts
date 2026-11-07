@@ -15,7 +15,7 @@ import { mustCommand } from "../shared/ui/world-ui";
 const FAIL_ROUTE = defineTask<{ colony: string; resident: string }, boolean>({
   name: "folkways.visual.combat-cards.failed-route", side: "server",
   source: javaTask({
-    imports: ["net.minecraft.server.MinecraftServer", "io.github.izakyl.folkways.core.api.colony.Colonies",
+    imports: ["net.minecraft.server.MinecraftServer", "io.github.izakyl.folkways.core.colony.api.Colonies",
       "io.github.izakyl.folkways.rts.combat.group.UnitGroups", "io.github.izakyl.folkways.rts.combat.group.UnitGroup"],
     body: `
 var a = Args.of(ctx);

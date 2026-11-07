@@ -1,26 +1,26 @@
 package io.github.izakyl.folkways.plugins.orders;
 
-import io.github.izakyl.folkways.core.api.colony.Cadence;
-import io.github.izakyl.folkways.core.api.colony.Asking;
-import io.github.izakyl.folkways.core.api.colony.Closing;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.colony.ColonyView;
-import io.github.izakyl.folkways.core.api.inventory.InventorySnapshot;
 import io.github.izakyl.folkways.base.persist.Reader;
 import io.github.izakyl.folkways.base.persist.Writer;
-import io.github.izakyl.folkways.core.api.terms.Containers;
-import io.github.izakyl.folkways.core.api.terms.Goods;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
-import io.github.izakyl.folkways.core.api.terms.ItemFilter;
-import io.github.izakyl.folkways.core.api.terms.Stand;
-import io.github.izakyl.folkways.core.api.terms.Stash;
-import io.github.izakyl.folkways.core.api.terms.StoreRule;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
-import io.github.izakyl.folkways.core.api.work.Delivery;
-import io.github.izakyl.folkways.core.api.work.Grown;
-import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.WorkSite;
+import io.github.izakyl.folkways.core.colony.api.Asking;
+import io.github.izakyl.folkways.core.colony.api.Cadence;
+import io.github.izakyl.folkways.core.colony.api.Closing;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.colony.api.ColonyView;
+import io.github.izakyl.folkways.core.inventory.api.InventorySnapshot;
+import io.github.izakyl.folkways.core.inventory.api.Stash;
+import io.github.izakyl.folkways.core.inventory.api.StoreRule;
+import io.github.izakyl.folkways.core.item.api.Containers;
+import io.github.izakyl.folkways.core.item.api.Goods;
+import io.github.izakyl.folkways.core.item.api.ItemFilter;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
+import io.github.izakyl.folkways.core.plan.api.Delivery;
+import io.github.izakyl.folkways.core.plan.api.Grown;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.work.api.WorkSite;
+import io.github.izakyl.folkways.core.world.api.Stand;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
+import io.github.izakyl.folkways.core.world.api.WorldSpaces;
 import io.github.izakyl.folkways.front.api.Facing;
 import io.github.izakyl.folkways.front.api.Fronts;
 import io.github.izakyl.folkways.front.api.Settings;
@@ -114,14 +114,19 @@ final class OrdersPresence implements Facing {
         this.asking = new Asking(colony, OrdersContent.ID, () -> refreshPending.set(true));
         saved = colony.kept(OrdersContent.ID);
         Reader kept = Reader.of(saved);
-        for (Reader saved : kept.children(TAG_ORDERS)) {
+        if (kept.keys().isEmpty()) {
+            return;
+        }
+        for (Reader saved : kept.requiredChildren(TAG_ORDERS)) {
             Order.load(saved).ifPresent(order -> {
                 orders.put(order.key(), order);
-                saved.longValue("remaining").filter(left -> left > 0)
-                    .ifPresent(left -> pending.put(order.key(), left));
+                long left = saved.longValue("remaining").orElseThrow();
+                if (left > 0) {
+                    pending.put(order.key(), left);
+                }
             });
         }
-        for (Reader saved : kept.children(TAG_SHELVES)) {
+        for (Reader saved : kept.requiredChildren(TAG_SHELVES)) {
             Shelf.load(saved).ifPresent(shelf -> shelves.put(shelf.into(), shelf));
         }
     }

@@ -2,8 +2,8 @@ package io.github.izakyl.folkways.front.engine.charter;
 
 import com.mojang.authlib.GameProfile;
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.colony.Colonies;
-import io.github.izakyl.folkways.core.api.colony.Colony;
+import io.github.izakyl.folkways.core.colony.api.Colonies;
+import io.github.izakyl.folkways.core.colony.api.Colony;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;

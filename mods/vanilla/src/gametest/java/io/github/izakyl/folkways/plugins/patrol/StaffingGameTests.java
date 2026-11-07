@@ -1,29 +1,24 @@
 package io.github.izakyl.folkways.plugins.patrol;
 
+import com.mojang.authlib.GameProfile;
+import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.colony.Colonies;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.colony.Held;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.work.Node;
-import io.github.izakyl.folkways.core.api.work.Tools;
-import io.github.izakyl.folkways.core.api.work.Worker;
-import io.github.izakyl.folkways.core.api.work.WorkSite;
+import io.github.izakyl.folkways.core.colony.api.Claimed;
+import io.github.izakyl.folkways.core.colony.api.Colonies;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
+import io.github.izakyl.folkways.core.runtime.LaborFixture;
 import io.github.izakyl.folkways.core.testing.Cleanup;
 import io.github.izakyl.folkways.core.testing.TestWorker;
-import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
-import java.util.function.BooleanSupplier;
+import io.github.izakyl.folkways.core.work.api.Node;
+import io.github.izakyl.folkways.core.work.api.WorkSite;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.work.support.Tools;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.front.engine.charter.Charter;
 import io.github.izakyl.folkways.front.engine.charter.Charters;
 import io.github.izakyl.folkways.front.engine.registry.FolkwaysPlayerAttachments;
-import com.mojang.authlib.GameProfile;
-import com.mojang.brigadier.exceptions.CommandSyntaxException;
-import net.minecraft.nbt.CompoundTag;
-import net.minecraft.nbt.Tag;
-import net.minecraft.nbt.TagParser;
-import net.neoforged.neoforge.common.util.FakePlayerFactory;
-import io.github.izakyl.folkways.core.engine.labor.LaborFixture;
+import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
 import io.github.izakyl.folkways.plugins.combat.SpottedTargets;
 import io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfile;
@@ -38,9 +33,12 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BooleanSupplier;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.TagParser;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
@@ -52,6 +50,7 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.common.util.FakePlayerFactory;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
@@ -171,7 +170,7 @@ public final class StaffingGameTests {
                 cells.add(fixture.at(x, z));
             }
         }
-        UUID zone = fixture.colony.hold(SentryPosts.ZONE, new Held.Area(cells)).orElseThrow().id();
+        UUID zone = fixture.colony.hold(SentryPosts.ZONE, new Claimed.Area(cells)).orElseThrow().id();
         add(fixture, zone, missing);
         add(fixture, zone, fixture.archer);
         SentryPosts posts = SentryPosts.of(fixture.colony);
@@ -406,7 +405,7 @@ public final class StaffingGameTests {
         helper.assertValueEqual(fixture.staffing.members(station), List.of(first.id()),
             "a station fills before a route from any assigned loadout, including melee");
         helper.assertTrue(fixture.staffing.members(fixture.route).isEmpty(), "one resident never serves twice");
-        fixture.colony.release(station, io.github.izakyl.folkways.core.api.colony.Release.LET_GO);
+        fixture.colony.release(station, io.github.izakyl.folkways.core.colony.api.ClaimRelease.LET_GO);
         fixture.staffing.tick(fixture.level.getServer());
         helper.assertValueEqual(fixture.staffing.members(fixture.route), List.of(first.id()),
             "withdrawing a station releases its incumbent");
@@ -500,7 +499,7 @@ public final class StaffingGameTests {
             profiles.add(archer, LoadoutProfile.Entry.weapon(ItemSpec.of(Items.BOW)));
             staffing = PatrolStaffing.of(colony);
             patrol = colony.service(PatrolContent.ID, PatrolPresence.class).orElseThrow();
-            route = colony.hold(PatrolContent.BEAT, new Held.Line(List.of(at(3, 5), at(23, 5))))
+            route = colony.hold(PatrolContent.BEAT, new Claimed.Line(List.of(at(3, 5), at(23, 5))))
                 .orElseThrow().id();
             Cleanup.on(helper, this::close);
         }
@@ -521,7 +520,7 @@ public final class StaffingGameTests {
             ResidentEntity body = PersonBody.RESIDENT.get().create(level);
             move(body, x, z);
             level.addFreshEntity(body);
-            colony.hold(PersonContent.ID, Held.Entity.of(body)).orElseThrow();
+            colony.hold(PersonContent.ID, Claimed.Entity.of(body)).orElseThrow();
             body.joinColony(colony.id());
             body.pack().insert(new ItemStack(profile.equals(heavy) ? Items.IRON_SWORD : Items.BOW));
             if (profile.equals(archer)) {
@@ -555,7 +554,7 @@ public final class StaffingGameTests {
             level.addFreshEntity(marker);
             entities.add(marker);
             // Station discovery and physical operation are covered separately by integration tests.
-            UUID station = colony.hold(SentryPosts.STATION, Held.Entity.of(marker)).orElseThrow().id();
+            UUID station = colony.hold(SentryPosts.STATION, Claimed.Entity.of(marker)).orElseThrow().id();
             return station;
         }
 
@@ -566,7 +565,7 @@ public final class StaffingGameTests {
                     cells.add(at(x, z).at(at(x, z).cell().below()));
                 }
             }
-            return colony.hold(SentryPosts.ZONE, new Held.Area(cells)).orElseThrow().id();
+            return colony.hold(SentryPosts.ZONE, new Claimed.Area(cells)).orElseThrow().id();
         }
 
         private void simulate(GameTestHelper helper) {

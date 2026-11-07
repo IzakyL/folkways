@@ -2,17 +2,17 @@ package io.github.izakyl.folkways.plugins.build;
 
 import io.github.izakyl.folkways.base.persist.Reader;
 import io.github.izakyl.folkways.base.persist.Writer;
-import io.github.izakyl.folkways.core.api.colony.Cadence;
-import io.github.izakyl.folkways.core.api.colony.Closing;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.colony.ColonyView;
-import io.github.izakyl.folkways.core.api.structure.StructureCompat;
-import io.github.izakyl.folkways.core.api.structure.StructurePayload;
-import io.github.izakyl.folkways.core.api.terms.Goods;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.work.Ending;
-import io.github.izakyl.folkways.core.api.work.Grown;
+import io.github.izakyl.folkways.core.colony.api.Cadence;
+import io.github.izakyl.folkways.core.colony.api.Closing;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.colony.api.ColonyView;
+import io.github.izakyl.folkways.core.item.api.Goods;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
+import io.github.izakyl.folkways.core.plan.api.Grown;
+import io.github.izakyl.folkways.core.work.api.Ending;
+import io.github.izakyl.folkways.core.work.api.StructureCompat;
+import io.github.izakyl.folkways.core.world.api.StructurePayload;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.front.api.Facing;
 import io.github.izakyl.folkways.front.api.Ghost;
 import io.github.izakyl.folkways.front.api.Placard;
@@ -127,50 +127,40 @@ final class BuildPresence implements Facing {
             }
         };
         this.server = server;
+        book.reportChangesTo(this::keep);
         Reader saved = Reader.of(colony.kept(BuildContent.ID));
-        saved.child(TAG_BOOK).ifPresent(bag -> book.loadInto(bag, server.registryAccess()));
-        for (Reader entry : saved.children(TAG_TEMPORARY)) {
-            entry.uuid(TAG_ORDER).ifPresent(order -> {
-                scaffoldsOf(order).load(entry);
-                if (entry.flag(TAG_CANCELLED).orElse(false)) {
-                    cancelled.add(order);
-                }
-            });
+        if (saved.keys().isEmpty()) {
+            return;
         }
-        for (Reader entry : saved.children(TAG_DRAFTED)) {
+        book.loadInto(saved.child(TAG_BOOK).orElseThrow(), server.registryAccess());
+        numbered = Math.max(0, saved.integer(TAG_NUMBERED).orElseThrow());
+        for (Reader entry : saved.requiredChildren(TAG_TEMPORARY)) {
+            UUID order = entry.uuid(TAG_ORDER).orElseThrow();
+            scaffoldsOf(order).load(entry);
+            if (entry.flag(TAG_CANCELLED).orElseThrow()) {
+                cancelled.add(order);
+            }
+        }
+        for (Reader entry : saved.requiredChildren(TAG_DRAFTED)) {
             Drafted.load(entry).ifPresent(one -> drafted.put(one.order(), one));
         }
-        for (Reader entry : saved.children(TAG_MET)) {
-            entry.uuid(TAG_ORDER).ifPresent(order -> {
-                met.put(order, cells(entry.intArray(TAG_CELLS).orElse(new int[0])));
-                Set<Joint> metJoints = new LinkedHashSet<>();
-                for (Reader joint : entry.children("joints")) {
-                    joint.blockPos("from").ifPresent(from -> joint.blockPos("to")
-                        .filter(to -> !from.equals(to)).ifPresent(to -> metJoints.add(new Joint(from, to))));
-                }
-                joined.put(order, metJoints);
-            });
+        for (Reader entry : saved.requiredChildren(TAG_MET)) {
+            UUID order = entry.uuid(TAG_ORDER).orElseThrow();
+            met.put(order, cells(entry.intArray(TAG_CELLS).orElseThrow()));
+            Set<Joint> metJoints = new LinkedHashSet<>();
+            for (Reader joint : entry.requiredChildren("joints")) {
+                metJoints.add(new Joint(joint.blockPos("from").orElseThrow(), joint.blockPos("to").orElseThrow()));
+            }
+            joined.put(order, metJoints);
         }
-        for (Reader entry : saved.children("carvingCaches")) {
-            entry.uuid(TAG_ORDER).ifPresent(order -> cacheOf(order).load(entry));
+        for (Reader entry : saved.requiredChildren("carvingCaches")) {
+            cacheOf(entry.uuid(TAG_ORDER).orElseThrow()).load(entry);
         }
-        numbered = Math.max(0, saved.integer(TAG_NUMBERED).orElse(0));
-        nameUnnamed();
-        book.reportChangesTo(this::keep);
     }
 
     boolean buildingAt(ServerLevel level, WorldPos at) {
         return sites.values().stream().anyMatch(site -> site.target().realm().equals(at.realm())
             && site.target().in(level).cells().containsKey(at.block(level)));
-    }
-
-    // Sites kept from before they were named are numbered now.
-    private void nameUnnamed() {
-        for (BlueprintBuildOrder order : book.allBuildOrders()) {
-            if (order.name().isEmpty()) {
-                book.rename(order.id(), SiteNames.numbered(++numbered));
-            }
-        }
     }
 
     // The name the player typed, or the next number when they typed none; the number is spent once the site is filed.
@@ -374,7 +364,9 @@ final class BuildPresence implements Facing {
     // loaded would stay refused for good. Until then it is tried again each tick.
     @Nullable
     private BuildSite open(ServerLevel level, BlueprintBuildOrder order) {
-        if (!cancelled.contains(order.id()) && level.getGameTime() < payloadRetryAt.getOrDefault(order.id(), 0L)) return null;
+        if (!cancelled.contains(order.id()) && level.getGameTime() < payloadRetryAt.getOrDefault(order.id(), 0L)) {
+            return null;
+        }
         try {
             Blueprint source = book.blueprint(order.blueprintId()).orElse(null);
             if (source != null && !cancelled.contains(order.id())) {
@@ -410,7 +402,9 @@ final class BuildPresence implements Facing {
             }
             preparing.remove(order.blueprintId());
             BuildSite partial = sites.remove(order.id());
-            if (partial != null) partial.close();
+            if (partial != null) {
+                partial.close();
+            }
             untallied.remove(order.id());
             owed.remove(order.id());
             payloadFailures.put(order.id(), failed.component());
@@ -425,7 +419,7 @@ final class BuildPresence implements Facing {
             BuildSite site = opening.get(order.id());
             if (site == null) {
                 Optional<Blueprint> drawing = cancelled.contains(order.id())
-                    ? Optional.empty() : book.target(level, order.blueprintId());
+                    ? Optional.empty() : book.blueprint(order.blueprintId());
                 BuildTarget target = cancelled.contains(order.id()) || drawing.isEmpty()
                     ? new BuildTarget(order.anchor().realm(), Map.of())
                     : BuildTarget.of(order, drawing.get()).in(level);
@@ -482,7 +476,7 @@ final class BuildPresence implements Facing {
     }
 
     private void tallyOne(ServerLevel level, BlueprintBuildOrder order, BuildSite site) {
-        Optional<Blueprint> drawing = book.target(level, order.blueprintId());
+        Optional<Blueprint> drawing = book.blueprint(order.blueprintId());
         site.progress(BuildOrderView.of(order.id(), site.target(), site.metCells(), site.metJoints()));
         if (cancelled.contains(order.id()) || drawing.isEmpty()) {
             owed.remove(order.id());

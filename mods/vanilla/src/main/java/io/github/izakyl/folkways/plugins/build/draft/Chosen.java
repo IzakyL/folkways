@@ -2,7 +2,7 @@ package io.github.izakyl.folkways.plugins.build.draft;
 
 import io.github.izakyl.folkways.base.persist.Reader;
 import io.github.izakyl.folkways.base.persist.Writer;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import io.github.izakyl.folkways.front.api.Schema;
 import io.github.izakyl.folkways.front.api.Settings;
 import java.util.LinkedHashMap;
@@ -28,15 +28,42 @@ public final class Chosen implements Settings {
             switch (setting) {
                 case Schema.Setting.Flag flag -> chosen.flags.put(key, picked.flag(key));
                 case Schema.Setting.Count count ->
-                    chosen.counts.put(key, Math.max(count.min(), Math.min(count.max(), picked.count(key))));
-                case Schema.Setting.Choice choice -> chosen.choices.put(key, within(choice, choiceOf(picked, key)));
+                    chosen.counts.put(key, checked(count, picked.count(key)));
+                case Schema.Setting.Choice choice -> chosen.choices.put(key, checked(choice, picked.choice(key)));
                 case Schema.Setting.Items items -> picked.items(key).ifPresent(spec -> chosen.lists.put(key, spec));
             }
         }
         return chosen;
     }
 
+    /** Reads a complete payload produced against this schema by of/save. */
     public static Chosen load(Schema schema, CompoundTag saved) {
+        Reader reader = Reader.of(saved);
+        Chosen read = new Chosen();
+        for (Schema.Setting setting : schema.settings()) {
+            String key = setting.key();
+            switch (setting) {
+                case Schema.Setting.Flag flag -> read.flags.put(key, reader.flag(key).orElseThrow());
+                case Schema.Setting.Count count ->
+                    read.counts.put(key, checked(count, reader.integer(key).orElseThrow()));
+                case Schema.Setting.Choice choice ->
+                    read.choices.put(key, checked(choice, reader.id(key).orElseThrow()));
+                case Schema.Setting.Items items -> {
+                    if (saved.contains(key)) {
+                        read.lists.put(key, ItemSpec.load(reader.child(key).orElseThrow()).orElseThrow());
+                    }
+                }
+            }
+        }
+        return read;
+    }
+
+    /**
+     * Remembered settings and saved previews can outlive Patterns.reload and its schema. Reconcile those
+     * inputs here: new knobs get defaults, changed ranges are bounded and removed choices get replaced.
+     * Current commissions and freshly saved drafts must use load instead, so malformed payloads fail.
+     */
+    public static Chosen normalize(Schema schema, CompoundTag saved) {
         Reader reader = Reader.of(saved);
         Chosen read = new Chosen();
         for (Schema.Setting setting : schema.settings()) {
@@ -46,8 +73,15 @@ public final class Chosen implements Settings {
                 case Schema.Setting.Count count -> read.counts.put(key,
                     Math.max(count.min(), Math.min(count.max(), reader.integer(key).orElse(count.byDefault()))));
                 case Schema.Setting.Choice choice -> read.choices.put(key, within(choice, reader.id(key).orElse(null)));
-                case Schema.Setting.Items items ->
-                    reader.child(key).flatMap(ItemSpec::load).ifPresent(spec -> read.lists.put(key, spec));
+                case Schema.Setting.Items items -> {
+                    if (saved.contains(key)) {
+                        Reader itemsRead = reader.child(key).orElseThrow();
+                        // KnobValues.save writes an empty compound for an explicitly cleared remembered list.
+                        if (!itemsRead.keys().isEmpty()) {
+                            read.lists.put(key, ItemSpec.load(itemsRead).orElseThrow());
+                        }
+                    }
+                }
             }
         }
         return read;
@@ -62,12 +96,18 @@ public final class Chosen implements Settings {
         return writer.tag();
     }
 
-    private static ResourceLocation choiceOf(Settings picked, String key) {
-        try {
-            return picked.choice(key);
-        } catch (RuntimeException undeclared) {
-            return null;
+    private static int checked(Schema.Setting.Count count, int picked) {
+        if (picked < count.min() || picked > count.max()) {
+            throw new IllegalArgumentException("count outside schema range: " + count.key());
         }
+        return picked;
+    }
+
+    private static ResourceLocation checked(Schema.Setting.Choice choice, ResourceLocation picked) {
+        if (!choice.options().contains(picked)) {
+            throw new IllegalArgumentException("choice outside schema options: " + choice.key());
+        }
+        return picked;
     }
 
     private static ResourceLocation within(Schema.Setting.Choice choice, ResourceLocation picked) {

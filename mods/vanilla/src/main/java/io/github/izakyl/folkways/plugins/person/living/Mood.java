@@ -144,26 +144,29 @@ final class Mood {
         events.clear();
         meals.clear();
         repetitions.clear();
-        for (Reader event : reader.children("events")) {
+        for (Reader event : reader.requiredChildren("events")) {
             if (events.size() >= RECENT) { break; }
             event.string("reason").ifPresent(reason -> events.add(new Event(reason,
-                event.integer("amount").orElse(0), event.longValue("at").orElse(0L))));
+                event.integer("amount").orElseThrow(), event.longValue("at").orElseThrow())));
         }
-        value = Math.clamp(reader.decimal("mood").orElse(60F), 0, 100);
-        leisure = Math.clamp(reader.decimal("leisure").orElse(60F), 0, 100);
-        housing = reader.integer("housing").orElse(0);
-        reader.child("times").ifPresent(times -> {
-            Reader tag = times;
-            attacked = tag.longValue("attacked").orElse(-24000L); chatted = tag.longValue("chatted").orElse(-24000L); rested = tag.longValue("rested").orElse(-24000L);
-            housed = tag.longValue("housed").orElse(-48000L); fineMeal = tag.longValue("fineMeal").orElse(-24000L); nextBreak = tag.longValue("nextBreak").orElse(-24000L);
-            dined = tag.longValue("dined").orElse(-24000L); drank = tag.longValue("drank").orElse(-24000L);
-            activityDay = tag.longValue("activityDay").orElse(-24000L);
-        });
-        for (Reader meal : reader.children("meals")) {
-            meal.string("kind").ifPresent(kind -> meals.put(kind, meal.longValue("at").orElse(0L)));
+        value = Math.clamp(reader.decimal("mood").orElseThrow(), 0, 100);
+        leisure = Math.clamp(reader.decimal("leisure").orElseThrow(), 0, 100);
+        housing = reader.integer("housing").orElseThrow();
+        Reader times = reader.child("times").orElseThrow();
+        attacked = times.longValue("attacked").orElseThrow();
+        chatted = times.longValue("chatted").orElseThrow();
+        rested = times.longValue("rested").orElseThrow();
+        housed = times.longValue("housed").orElseThrow();
+        fineMeal = times.longValue("fineMeal").orElseThrow();
+        nextBreak = times.longValue("nextBreak").orElseThrow();
+        dined = times.longValue("dined").orElseThrow();
+        drank = times.longValue("drank").orElseThrow();
+        activityDay = times.longValue("activityDay").orElseThrow();
+        for (Reader meal : reader.requiredChildren("meals")) {
+            meal.string("kind").ifPresent(kind -> meals.put(kind, meal.longValue("at").orElseThrow()));
         }
-        for (Reader activity : reader.children("activities")) {
-            activity.string("kind").ifPresent(kind -> repetitions.put(kind, Math.clamp(activity.integer("count").orElse(0), 0, 100)));
+        for (Reader activity : reader.requiredChildren("activities")) {
+            activity.string("kind").ifPresent(kind -> repetitions.put(kind, Math.clamp(activity.integer("count").orElseThrow(), 0, 100)));
         }
     }
 }

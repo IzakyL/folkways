@@ -2,9 +2,9 @@ package io.github.izakyl.folkways.plugins.supply;
 
 import com.lowdragmc.lowdraglib2.gui.ui.UIElement;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Button;
+import io.github.izakyl.folkways.core.item.api.ItemFilter;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Toggle;
 import com.lowdragmc.lowdraglib2.gui.ui.event.UIEvents;
-import io.github.izakyl.folkways.core.api.terms.ItemFilter;
 import io.github.izakyl.folkways.front.api.ui.ItemPicker;
 import io.github.izakyl.folkways.front.api.ui.LonePanel;
 import io.github.izakyl.folkways.front.api.ui.Pane;

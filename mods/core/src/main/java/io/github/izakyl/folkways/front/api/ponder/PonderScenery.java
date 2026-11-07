@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.front.api.ponder;
 
-import io.github.izakyl.folkways.core.api.terms.Gait;
+import io.github.izakyl.folkways.core.resident.api.Gait;
 import io.github.izakyl.folkways.front.api.Shape;
 import java.util.Collection;
 import java.util.LinkedHashSet;

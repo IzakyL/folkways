@@ -1,7 +1,7 @@
 package io.github.izakyl.folkways.create.dispatch;
 
-import io.github.izakyl.folkways.core.api.terms.Goods;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
+import io.github.izakyl.folkways.core.item.api.Goods;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;

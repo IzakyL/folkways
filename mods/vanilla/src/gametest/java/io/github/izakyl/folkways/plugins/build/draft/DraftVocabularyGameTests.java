@@ -1,14 +1,5 @@
 package io.github.izakyl.folkways.plugins.build.draft;
 
-import static io.github.izakyl.folkways.plugins.build.draft.DraftKit.count;
-import static io.github.izakyl.folkways.plugins.build.draft.DraftKit.describe;
-import static io.github.izakyl.folkways.plugins.build.draft.DraftKit.draw;
-import static io.github.izakyl.folkways.plugins.build.draft.DraftKit.parse;
-import static io.github.izakyl.folkways.plugins.build.draft.DraftKit.ready;
-import static io.github.izakyl.folkways.plugins.build.draft.DraftKit.refused;
-import static io.github.izakyl.folkways.plugins.build.draft.DraftKit.stateAt;
-import static io.github.izakyl.folkways.plugins.build.draft.DraftKit.zone;
-
 import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
 import java.util.HashSet;
@@ -26,6 +17,14 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
+import static io.github.izakyl.folkways.plugins.build.draft.DraftKit.count;
+import static io.github.izakyl.folkways.plugins.build.draft.DraftKit.describe;
+import static io.github.izakyl.folkways.plugins.build.draft.DraftKit.draw;
+import static io.github.izakyl.folkways.plugins.build.draft.DraftKit.parse;
+import static io.github.izakyl.folkways.plugins.build.draft.DraftKit.ready;
+import static io.github.izakyl.folkways.plugins.build.draft.DraftKit.refused;
+import static io.github.izakyl.folkways.plugins.build.draft.DraftKit.stateAt;
+import static io.github.izakyl.folkways.plugins.build.draft.DraftKit.zone;
 
 @EventBusSubscriber(modid = FolkwaysVanillaMod.ID, bus = EventBusSubscriber.Bus.MOD)
 @GameTestHolder(FolkwaysMod.MOD_ID)

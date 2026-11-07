@@ -4,9 +4,9 @@ import com.google.common.collect.Multimap;
 import com.simibubi.create.Create;
 import com.simibubi.create.content.contraptions.actors.seat.SeatBlock;
 import com.simibubi.create.content.contraptions.actors.seat.SeatEntity;
+import com.simibubi.create.content.kinetics.chainConveyor.ChainConveyorBlockEntity;
 import com.simibubi.create.content.logistics.BigItemStack;
 import com.simibubi.create.content.logistics.box.PackageItem;
-import com.simibubi.create.content.kinetics.chainConveyor.ChainConveyorBlockEntity;
 import com.simibubi.create.content.logistics.packagePort.PackagePortBlockEntity;
 import com.simibubi.create.content.logistics.packagePort.frogport.FrogportBlock;
 import com.simibubi.create.content.logistics.packagePort.frogport.FrogportBlockEntity;
@@ -21,8 +21,8 @@ import com.simibubi.create.content.logistics.stockTicker.PackageOrderWithCrafts;
 import com.simibubi.create.content.logistics.stockTicker.StockTickerBlockEntity;
 import com.simibubi.create.content.trains.station.GlobalStation;
 import com.simibubi.create.foundation.blockEntity.behaviour.BlockEntityBehaviour;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.engine.inventory.InventoryChanges;
+import io.github.izakyl.folkways.core.inventory.api.InventoryFeedback;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -239,7 +239,7 @@ final class CreatePackageNetwork implements PackageNetwork {
                 packager.heldBox = ItemStack.EMPTY;
                 packager.notifyUpdate();
                 port.get().notifyUpdate();
-                InventoryChanges.store(level, WorldPos.of(level, post.getValue()));
+                InventoryFeedback.store(level, WorldPos.of(level, post.getValue()));
             }
         }
     }
@@ -279,7 +279,7 @@ final class CreatePackageNetwork implements PackageNetwork {
                     packager.inventory.insertItem(0, parcel.copy(), false);
                     port.get().inventory.setStackInSlot(slot, ItemStack.EMPTY);
                     port.get().notifyUpdate();
-                    InventoryChanges.store(level, WorldPos.of(level, postbox));
+                    InventoryFeedback.store(level, WorldPos.of(level, postbox));
                     return true;
                 }
             }
@@ -348,7 +348,7 @@ final class CreatePackageNetwork implements PackageNetwork {
             if (found.get().inventory.getStackInSlot(slot).isEmpty()) {
                 found.get().inventory.setStackInSlot(slot, parcel.copy());
                 found.get().notifyUpdate();
-                InventoryChanges.store(level, WorldPos.of(level, port));
+                InventoryFeedback.store(level, WorldPos.of(level, port));
                 return true;
             }
         }
@@ -452,7 +452,7 @@ final class CreatePackageNetwork implements PackageNetwork {
         }
         if (!taken.isEmpty()) {
             port.get().notifyUpdate();
-            InventoryChanges.store(level, WorldPos.of(level, at));
+            InventoryFeedback.store(level, WorldPos.of(level, at));
         }
         return List.copyOf(taken);
     }
@@ -468,7 +468,7 @@ final class CreatePackageNetwork implements PackageNetwork {
             if (PackageItem.isPackage(stack) && stray.test(parcelOf(stack))) {
                 port.get().inventory.setStackInSlot(slot, ItemStack.EMPTY);
                 port.get().notifyUpdate();
-                InventoryChanges.store(level, WorldPos.of(level, at));
+                InventoryFeedback.store(level, WorldPos.of(level, at));
                 return Optional.of(contentsOf(stack));
             }
         }

@@ -31,8 +31,8 @@ const INSTALL = defineTask<{ path: string; colony_id: string }, Record<string, a
       "net.neoforged.neoforge.common.NeoForge",
       "net.neoforged.neoforge.event.tick.ServerTickEvent",
       "net.neoforged.neoforge.server.ServerLifecycleHooks",
-      "io.github.izakyl.folkways.core.api.work.WorkProgress",
-      "io.github.izakyl.folkways.core.api.resident.body.Bodies",
+      "io.github.izakyl.folkways.core.work.api.WorkProgress",
+      "io.github.izakyl.folkways.core.resident.api.Bodies",
       "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
     ],
     body: `

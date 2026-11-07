@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.front.engine.colony;
 
-import io.github.izakyl.folkways.core.api.colony.Colony;
+import io.github.izakyl.folkways.core.colony.api.Colony;
 import io.github.izakyl.folkways.front.api.notice.Attempt;
 import io.github.izakyl.folkways.front.engine.Enrollments;
 import java.util.Optional;

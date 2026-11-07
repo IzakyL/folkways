@@ -1,7 +1,7 @@
 package io.github.izakyl.folkways.front.api.ui;
 
 import com.lowdragmc.lowdraglib2.gui.ui.UIElement;
-import io.github.izakyl.folkways.core.api.resident.body.Body;
+import io.github.izakyl.folkways.core.resident.api.Body;
 
 public interface Inlay {
 

@@ -1,7 +1,7 @@
 package io.github.izakyl.folkways.create.rail.domain;
 
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.colony.Books;
+import io.github.izakyl.folkways.front.api.Books;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;

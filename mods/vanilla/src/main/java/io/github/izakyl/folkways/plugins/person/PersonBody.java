@@ -1,15 +1,15 @@
 package io.github.izakyl.folkways.plugins.person;
 
-import io.github.izakyl.folkways.core.api.Declaring;
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.Relating;
-import io.github.izakyl.folkways.core.api.participation.Participation;
-import io.github.izakyl.folkways.core.api.participation.Stake;
-import io.github.izakyl.folkways.core.api.passage.Passages;
-import io.github.izakyl.folkways.core.api.resident.Locomotions;
-import io.github.izakyl.folkways.core.api.resident.ResidentKind;
-import io.github.izakyl.folkways.core.api.resident.ResidentKinds;
-import io.github.izakyl.folkways.core.api.vocation.Vocations;
+import io.github.izakyl.folkways.core.extension.api.Declaring;
+import io.github.izakyl.folkways.core.extension.api.Relating;
+import io.github.izakyl.folkways.core.resident.api.Locomotions;
+import io.github.izakyl.folkways.core.resident.api.Participation;
+import io.github.izakyl.folkways.core.resident.api.ResidentKind;
+import io.github.izakyl.folkways.core.resident.api.ResidentKinds;
+import io.github.izakyl.folkways.core.resident.api.Stake;
+import io.github.izakyl.folkways.core.travel.api.Passages;
+import io.github.izakyl.folkways.core.vocation.api.Vocations;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import net.minecraft.core.registries.BuiltInRegistries;

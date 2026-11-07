@@ -40,6 +40,6 @@ final class Networks {
 
     void load(Reader reader) {
         recognised.clear();
-        recognised.addAll(reader.uuids(TAG_NETWORKS));
+        recognised.addAll(reader.requiredUuids(TAG_NETWORKS));
     }
 }

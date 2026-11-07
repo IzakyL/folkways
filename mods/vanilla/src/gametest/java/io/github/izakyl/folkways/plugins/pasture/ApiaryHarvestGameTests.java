@@ -1,13 +1,13 @@
 package io.github.izakyl.folkways.plugins.pasture;
 
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Placement;
-import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.Worker;
-import io.github.izakyl.folkways.core.engine.labor.Commit;
 import io.github.izakyl.folkways.core.testing.Proxies;
+import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Placement;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.work.internal.Commit;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.effect.Effects;
 import io.github.izakyl.folkways.front.api.PastDay;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
@@ -107,7 +107,7 @@ public final class ApiaryHarvestGameTests {
             case "at" -> WorldPos.of(level, (BlockPos) args[0]);
             default -> throw new AssertionError(method);
         });
-        var view = proxy(io.github.izakyl.folkways.core.api.colony.ColonyView.class, (method, args) -> switch (method) {
+        var view = proxy(io.github.izakyl.folkways.core.colony.api.ColonyView.class, (method, args) -> switch (method) {
             case "level" -> level;
             case "dimension" -> level.dimension();
             default -> throw new AssertionError(method);

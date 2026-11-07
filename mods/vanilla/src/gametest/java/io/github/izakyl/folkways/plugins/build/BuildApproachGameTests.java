@@ -1,20 +1,16 @@
 package io.github.izakyl.folkways.plugins.build;
 
-import static io.github.izakyl.folkways.plugins.build.SiteRig.floor;
-import static io.github.izakyl.folkways.plugins.build.SiteRig.target;
-import static io.github.izakyl.folkways.plugins.build.SiteRig.worker;
-
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.terms.Footing;
-import io.github.izakyl.folkways.core.api.terms.Reach;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.work.Ending;
-import io.github.izakyl.folkways.core.api.work.Node;
-import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Worker;
-import io.github.izakyl.folkways.core.api.work.Workload;
-import io.github.izakyl.folkways.core.engine.labor.Commit;
-import io.github.izakyl.folkways.core.engine.labor.LaborRefusal;
+import io.github.izakyl.folkways.core.work.api.Ending;
+import io.github.izakyl.folkways.core.work.api.HoldingStep;
+import io.github.izakyl.folkways.core.work.api.LaborRefusal;
+import io.github.izakyl.folkways.core.work.api.Node;
+import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.work.internal.Commit;
+import io.github.izakyl.folkways.core.world.api.Footing;
+import io.github.izakyl.folkways.core.world.api.Reach;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import java.util.LinkedHashMap;
@@ -35,6 +31,9 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
+import static io.github.izakyl.folkways.plugins.build.SiteRig.floor;
+import static io.github.izakyl.folkways.plugins.build.SiteRig.target;
+import static io.github.izakyl.folkways.plugins.build.SiteRig.worker;
 
 @EventBusSubscriber(modid = FolkwaysVanillaMod.ID, bus = EventBusSubscriber.Bus.MOD)
 @GameTestHolder(FolkwaysMod.MOD_ID)
@@ -91,11 +90,13 @@ public final class BuildApproachGameTests {
         }).thenExecuteAfter(21, () -> {
             helper.assertTrue(rig.withdrawn.contains(original.id()), "the vanished working surface withdraws its turn");
             Node replacement = rig.asked.getLast().nodes().getFirst();
-            helper.assertTrue(!replacement.id().equals(original.id()), "the pending work is asked for on the new floor");
+            helper.assertTrue(!replacement.id().equals(original.id()),
+                "the pending work is asked for on the new floor");
             helper.assertTrue(replacement.spec().stances().cells().stream().allMatch(feet ->
                     !originalFeet.contains(feet.cell()) && Footing.withFeetAt(level, feet.cell())),
                 "the replacement uses current usable work positions");
-            helper.assertValueEqual(replacement.spec().needs(), original.spec().needs(), "its material demand is preserved");
+            helper.assertValueEqual(replacement.spec().needs(), original.spec().needs(),
+                "its material demand is preserved");
         }).thenExecuteAfter(21, () -> {
             helper.assertValueEqual(rig.asked.size(), 2, "unchanged geometry preserves the replacement's retry");
             rig.site.close();
@@ -133,19 +134,22 @@ public final class BuildApproachGameTests {
         level.setBlock(raisedFloor, Blocks.STONE.defaultBlockState(), 3);
         helper.onEachTick(() -> rig.site.tick(level));
         helper.startSequence().thenExecuteAfter(21, () -> {
-            helper.assertValueEqual(rig.asked.size(), 1, "an ordinary approach is preserved while old positions remain");
+            helper.assertValueEqual(rig.asked.size(), 1,
+                "an ordinary approach is preserved while old positions remain");
             helper.assertTrue(original.spec().stances().cells().stream().anyMatch(feet ->
                     Footing.withFeetAt(level, feet.block(level))), "some old work positions are still valid floor");
             original.failing(level, LaborRefusal.NO_WAY_THERE);
         }).thenExecuteAfter(21, () -> {
-            helper.assertTrue(rig.withdrawn.contains(original.id()), "actual travel failure can reconsider the old approach");
+            helper.assertTrue(rig.withdrawn.contains(original.id()),
+                "actual travel failure can reconsider the old approach");
             Node replacement = rig.asked.getLast().nodes().getFirst();
             helper.assertTrue(!replacement.spec().stances().equals(original.spec().stances()),
                 "the new turn offers the changed actual work positions");
             int asks = rig.asked.size();
             replacement.failing(level, LaborRefusal.NO_WAY_THERE);
             rig.site.tick(level);
-            helper.assertValueEqual(rig.asked.size(), asks, "a failure with the same destinations keeps ordinary retry");
+            helper.assertValueEqual(rig.asked.size(), asks,
+                "a failure with the same destinations keeps ordinary retry");
         }).thenExecuteAfter(21, () -> {
             helper.assertValueEqual(rig.asked.size(), 2, "unchanged failed destinations are not repeatedly replaced");
             rig.site.close();
@@ -187,7 +191,8 @@ public final class BuildApproachGameTests {
         excavation.put(wall, Blocks.STONE.defaultBlockState());
         SiteRig deep = SiteRig.start(level, target(level, excavation));
         var needs = deep.asked.getFirst().nodes().getFirst().spec().needs();
-        helper.assertTrue(needs.stream().anyMatch(need -> need.spec().item().filter(ResourceLocation.withDefaultNamespace("scaffolding")::equals).isPresent()
+        helper.assertTrue(needs.stream().anyMatch(need -> need.spec().item()
+            .filter(ResourceLocation.withDefaultNamespace("scaffolding")::equals).isPresent()
                 && need.count() == 5 && need.carried()),
             "a four-block descent brings five real scaffolds before leaving the surface");
         deep.site.close();
@@ -195,7 +200,8 @@ public final class BuildApproachGameTests {
         SiteRig clearing = SiteRig.start(level, target(level, excavation));
         helper.assertTrue(clearing.asked.stream().flatMap(grown -> grown.nodes().stream())
                 .flatMap(node -> node.spec().needs().stream())
-                .noneMatch(need -> need.spec().item().filter(ResourceLocation.withDefaultNamespace("scaffolding")::equals).isPresent()),
+                .noneMatch(need -> need.spec().item()
+                    .filter(ResourceLocation.withDefaultNamespace("scaffolding")::equals).isPresent()),
             "ordinary clearing with no enclosing structure does not require scaffolds");
         clearing.site.close();
         SiteRig shallow = SiteRig.start(level, target(level, Map.of(
@@ -203,7 +209,8 @@ public final class BuildApproachGameTests {
             wall, Blocks.STONE.defaultBlockState())));
         helper.assertTrue(shallow.asked.stream().flatMap(grown -> grown.nodes().stream())
                 .flatMap(node -> node.spec().needs().stream())
-                .noneMatch(need -> need.spec().item().filter(ResourceLocation.withDefaultNamespace("scaffolding")::equals).isPresent()),
+                .noneMatch(need -> need.spec().item()
+                    .filter(ResourceLocation.withDefaultNamespace("scaffolding")::equals).isPresent()),
             "a shallow cut beside permanent structure does not require scaffolds");
         shallow.site.close();
         helper.succeed();
@@ -239,16 +246,22 @@ public final class BuildApproachGameTests {
         BlockPos outside = helper.absolutePos(new BlockPos(10, 4, 5));
         var before = body.getNavigation().createPath(outside, 0);
         helper.assertTrue(before == null || !before.canReach(), "the finished excavation wall initially has no exit");
-        shift(rig).next(level, worker);
+        SiteRig.Shift shift = shift(rig);
+        shift.tick(level, worker);
+        helper.assertValueEqual(shift.commits, 0, "the first operation is still winding up");
+        helper.assertTrue(shift.step(level, worker) instanceof Outcome.Done,
+            "ordinary work finishes while access is planned");
+        rig.site.tick(level);
         BuildSite.Piece access = rig.site.pieces().stream().filter(piece -> piece.work().step()
             .filter(step -> step.kind() == BuildJob.Kind.RAISE).isPresent()).findFirst().orElseThrow();
-        var next = shift(rig).next(level, worker);
-        helper.assertTrue(next instanceof Workload.Within.Turn.Piece piece && piece.node() instanceof ScaffoldNode
-                && piece.node().spec().focus().equals(access.node().spec().focus()),
+        SiteRig.Shift next = shift(rig);
+        helper.assertTrue(next.step(level, worker) instanceof Outcome.Done, "temporary access is raised");
+        helper.assertTrue(next.operation instanceof ScaffoldAction
+                && next.operation.spec().focus().equals(access.action().spec().focus()),
             "a supplied access column is built before more ordinary work strands its resident");
-        helper.assertTrue(Commit.run(level, access.node(), worker) instanceof Outcome.Done, "temporary access is raised");
         var after = body.getNavigation().createPath(outside, 0);
-        helper.assertTrue(after != null && after.canReach(), "native navigation can climb the column over the wall top");
+        helper.assertTrue(after != null && after.canReach(),
+            "native navigation can climb the column over the wall top");
         body.discard();
         rig.site.close();
         helper.succeed();
@@ -268,15 +281,15 @@ public final class BuildApproachGameTests {
         BlockPos nearest = ready.getLast().work().focus();
         Mob body = EntityType.PIG.create(helper.getLevel());
         body.setPos(Vec3.atBottomCenterOf(nearest.south()));
-        Workload.Within.Turn turn = shift(rig).next(helper.getLevel(), worker(body));
-        helper.assertTrue(turn instanceof Workload.Within.Turn.Piece piece
-                && piece.node().spec().focus().orElseThrow().equals(nearest),
+        SiteRig.Shift shift = shift(rig);
+        helper.assertTrue(shift.step(helper.getLevel(), worker(body)) instanceof Outcome.Done
+                && shift.operation.spec().focus().orElseThrow().equals(nearest),
             "a worker takes its nearest ready piece even when an earlier piece was inserted first");
         helper.succeed();
     }
 
     @GameTest(template = "empty_large", timeoutTicks = 240)
-    public static void aResidentActuallyClimbsWhileItsWorkClockContinues(GameTestHelper helper) {
+    public static void interruptedNavigationRestartsWithoutDelayingWork(GameTestHelper helper) {
         floor(helper);
         BlockPos goal = helper.absolutePos(new BlockPos(10, 8, 10));
         SiteRig rig = SiteRig.start(helper.getLevel(), target(helper.getLevel(), Map.of(goal, Blocks.STONE.defaultBlockState())));
@@ -285,23 +298,47 @@ public final class BuildApproachGameTests {
         body.setOnGround(true);
         Worker worker = worker(body);
         BlockPos top = raise(helper, rig, worker);
-        helper.getLevel().addFreshEntity(body);
-        Workload.Within shift = shift(rig);
-        Workload.Within.Turn turn = shift.next(helper.getLevel(), worker);
-        helper.assertTrue(turn instanceof Workload.Within.Turn.Piece, "the high operation has no approach wait");
+        SiteRig.Shift shift = shift(rig);
+        helper.assertTrue(shift.tick(helper.getLevel(), worker) instanceof HoldingStep.Running,
+            "construction starts on its work clock while the worker approaches");
         helper.assertTrue(top.equals(body.getNavigation().getTargetPos()),
-            "the presentation path ends at the usable scaffold top");
+            "the approach path ends at the usable scaffold top");
         body.getNavigation().stop();
         shift.tick(helper.getLevel(), worker);
         helper.assertTrue(top.equals(body.getNavigation().getTargetPos()),
-            "presentation resumes while the inner piece is winding up");
-        Node node = ((Workload.Within.Turn.Piece) turn).node();
-        helper.assertTrue(Commit.run(helper.getLevel(), node, worker) instanceof Outcome.Done,
-            "the work can proceed while the worker moves");
-        helper.onEachTick(() -> shift.tick(helper.getLevel(), worker));
+            "business approach resumes while the private action is winding up");
+        helper.assertTrue(shift.step(helper.getLevel(), worker)
+                instanceof Outcome.Done,
+            "the operation is allowed before arrival rather than waiting on navigation");
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty_large", timeoutTicks = 240)
+    public static void aResidentActuallyClimbsWhileItsWorkClockContinues(GameTestHelper helper) {
+        floor(helper);
+        BlockPos goal = helper.absolutePos(new BlockPos(10, 8, 10));
+        SiteRig rig = SiteRig.start(helper.getLevel(), target(helper.getLevel(), Map.of(goal,
+            Blocks.STONE.defaultBlockState())));
+        Mob body = PersonBody.RESIDENT.get().create(helper.getLevel());
+        body.setPos(Vec3.atBottomCenterOf(helper.absolutePos(new BlockPos(10, 1, 8))));
+        body.setOnGround(true);
+        Worker worker = worker(body);
+        BlockPos top = raise(helper, rig, worker);
+        helper.getLevel().addFreshEntity(body);
+        SiteRig.Shift shift = shift(rig);
+        helper.assertTrue(shift.tick(helper.getLevel(), worker) instanceof HoldingStep.Running, "the high operation has no approach wait");
+        helper.assertValueEqual(shift.commits, 0, "the public holding starts its work clock while moving");
+        // Give native locomotion world ticks between public work ticks.
+        helper.onEachTick(() -> {
+            if (helper.getTick() % 20 == 0) {
+                shift.tick(helper.getLevel(), worker);
+            }
+        });
         helper.startSequence().thenWaitUntil(() -> helper.assertTrue(body.getY() >= top.getY() - 1.0D,
-                "the resident physically climbs the scaffold while presentation ticks continue"))
+                "the resident physically climbs the scaffold while approach ticks continue"))
             .thenExecute(() -> {
+                helper.assertTrue(shift.step(helper.getLevel(), worker) instanceof Outcome.Done,
+                    "the target is built after its ordinary work interval");
                 helper.assertTrue(helper.getLevel().getBlockState(goal).is(Blocks.STONE), "the target is built");
                 body.discard();
             }).thenSucceed();
@@ -322,22 +359,17 @@ public final class BuildApproachGameTests {
             body.setPos(Vec3.atBottomCenterOf(helper.absolutePos(new BlockPos(2, 1, 2))));
             body.setOnGround(true);
             Worker worker = worker(body);
-            Workload.Within shift = shift(rig);
-            for (int i = 0; i < cells.size(); i++) {
-                Workload.Within.Turn turn = shift.next(helper.getLevel(), worker);
-                helper.assertTrue(turn instanceof Workload.Within.Turn.Piece,
-                    "a distant target does not introduce waiting between operations");
-                Node piece = ((Workload.Within.Turn.Piece) turn).node();
-                clocks[layout] += ((Workload.Once) piece.spec().workload()).baseTicks();
-                helper.assertTrue(Commit.run(helper.getLevel(), piece, worker) instanceof Outcome.Done,
-                    "each operation completes");
-                shift.ended(helper.getLevel(), piece, Ending.DONE);
+            SiteRig.Shift shift = shift(rig);
+            for (int tick = 0; tick < 512 && shift.commits < cells.size(); tick++) {
+                shift.tick(helper.getLevel(), worker);
+                clocks[layout]++;
                 rig.site.tick(helper.getLevel());
             }
+            helper.assertValueEqual(shift.commits, cells.size(), "each operation completes through tick");
             helper.assertTrue(rig.site.complete(), "the whole layout is built");
         }
         helper.assertValueEqual(clocks[0], clocks[1], "operation time is independent of target spacing");
-        helper.assertValueEqual(clocks[0], 12 * BuildJob.LAY_TICKS, "each cell costs one fixed work interval");
+        helper.assertValueEqual(clocks[0], 12 * (BuildJob.LAY_TICKS + 1), "each cell costs one fixed work interval and dispatch tick");
         helper.succeed();
     }
 
@@ -350,15 +382,15 @@ public final class BuildApproachGameTests {
             .filter(piece -> piece.work().step().orElseThrow().kind() == BuildJob.Kind.RAISE).findFirst().orElseThrow();
         BlockPos top = raise.work().step().orElseThrow().after().keySet().stream()
             .max(java.util.Comparator.comparingInt(BlockPos::getY)).orElseThrow().above();
-        helper.assertTrue(Commit.run(helper.getLevel(), raise.node(), worker) instanceof Outcome.Done,
+        helper.assertTrue(Commit.run(helper.getLevel(), raise.action(), worker) instanceof Outcome.Done,
             "the runtime access scaffold is raised");
-        rig.end(raise.node(), Ending.DONE);
+        rig.end(raise.action(), Ending.DONE);
         rig.site.tick(helper.getLevel());
         return top;
     }
 
-    private static Workload.Within shift(SiteRig rig) {
-        return (Workload.Within) rig.asked.getFirst().nodes().getFirst().spec().workload();
+    private static SiteRig.Shift shift(SiteRig rig) {
+        return rig.shift();
     }
 
 }

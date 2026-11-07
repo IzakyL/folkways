@@ -1,39 +1,39 @@
 package io.github.izakyl.folkways.create.dispatch;
 
-import io.github.izakyl.folkways.core.api.transport.TransportPublication;
-import io.github.izakyl.folkways.core.api.transport.TransportSnapshot;
-import io.github.izakyl.folkways.core.api.transport.TransportTravel;
-import io.github.izakyl.folkways.core.api.colony.Closing;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.inventory.InventoryProviders;
-import io.github.izakyl.folkways.core.api.inventory.InventorySnapshot;
-import io.github.izakyl.folkways.core.api.inventory.SlotSnapshot;
-import io.github.izakyl.folkways.core.api.colony.ColonyView;
-import io.github.izakyl.folkways.core.api.colony.Held;
-import io.github.izakyl.folkways.core.api.colony.Holding;
-import io.github.izakyl.folkways.core.api.colony.Sweep;
 import io.github.izakyl.folkways.base.persist.Reader;
 import io.github.izakyl.folkways.base.persist.Writer;
-import io.github.izakyl.folkways.core.api.resident.Resident;
-import io.github.izakyl.folkways.core.api.terms.Reach;
-import io.github.izakyl.folkways.core.api.terms.Stand;
-import io.github.izakyl.folkways.core.api.terms.Stash;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.work.Grown;
-import io.github.izakyl.folkways.core.api.work.Workshop;
-import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.WorkSite;
-import io.github.izakyl.folkways.core.api.work.Doings;
+import io.github.izakyl.folkways.core.colony.api.Claim;
+import io.github.izakyl.folkways.core.colony.api.Claimed;
+import io.github.izakyl.folkways.core.colony.api.Closing;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.colony.api.ColonyView;
+import io.github.izakyl.folkways.core.colony.api.Sweep;
+import io.github.izakyl.folkways.core.inventory.api.InventoryProviders;
+import io.github.izakyl.folkways.core.inventory.api.InventorySnapshot;
+import io.github.izakyl.folkways.core.inventory.api.SlotSnapshot;
+import io.github.izakyl.folkways.core.inventory.api.Stash;
+import io.github.izakyl.folkways.core.item.api.Goods;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
+import io.github.izakyl.folkways.core.plan.api.Grown;
+import io.github.izakyl.folkways.core.plan.api.Workshop;
+import io.github.izakyl.folkways.core.resident.api.Doings;
+import io.github.izakyl.folkways.core.resident.api.Resident;
+import io.github.izakyl.folkways.core.transport.api.TransportPublication;
+import io.github.izakyl.folkways.core.transport.api.TransportSnapshot;
+import io.github.izakyl.folkways.core.transport.api.TransportTravel;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.work.api.WorkSite;
+import io.github.izakyl.folkways.core.world.api.Reach;
+import io.github.izakyl.folkways.core.world.api.Stand;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
+import io.github.izakyl.folkways.create.rail.domain.RailContent;
+import io.github.izakyl.folkways.create.rail.domain.RailPresence;
 import io.github.izakyl.folkways.front.api.Facing;
 import io.github.izakyl.folkways.front.api.notice.Attempt;
 import io.github.izakyl.folkways.front.api.notice.Line;
 import io.github.izakyl.folkways.front.api.notice.Notice;
 import io.github.izakyl.folkways.front.api.notice.Sentence;
 import io.github.izakyl.folkways.front.api.panel.Board;
-import io.github.izakyl.folkways.create.rail.domain.RailContent;
-import io.github.izakyl.folkways.create.rail.domain.RailPresence;
-import io.github.izakyl.folkways.core.api.terms.Goods;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -128,9 +128,11 @@ public final class DispatchPresence implements Facing {
         this.colony = colony;
         this.sweep = new Sweep(colony, DispatchContent.ID, 20);
         Reader kept = Reader.of(colony.kept(DispatchContent.ID));
-        kept.child(TAG_NETWORKS).ifPresent(networks::load);
-        kept.child(TAG_MAIL).ifPresent(mail::load);
-        kept.child(TAG_CHAINS).ifPresent(chains::load);
+        if (!kept.keys().isEmpty()) {
+            networks.load(kept.child(TAG_NETWORKS).orElseThrow());
+            mail.load(kept.child(TAG_MAIL).orElseThrow());
+            chains.load(kept.child(TAG_CHAINS).orElseThrow());
+        }
     }
 
     public boolean take(UUID network) {
@@ -292,8 +294,8 @@ public final class DispatchPresence implements Facing {
             entry.getValue().values().forEach(physical::addAll);
             physical.addAll(byLevel.getOrDefault(entry.getKey(), Map.of()).keySet());
             physical.addAll(given(entry.getKey(), network));
-            for (Holding holding : colony.holdings(DispatchContent.PORT)) {
-                if (holding.what() instanceof Held.Block block && (block.cell().in(entry.getKey())
+            for (Claim holding : colony.claims(DispatchContent.PORT)) {
+                if (holding.what() instanceof Claimed.Block block && (block.cell().in(entry.getKey())
                     || endpoints(entry.getKey().dimension()).stream()
                         .anyMatch(endpoint -> endpoint.anchor().equals(block.cell())))) {
                     physical.add(block.cell());
@@ -567,8 +569,8 @@ public final class DispatchPresence implements Facing {
     // The postboxes the colony was given in this level.
     private Set<WorldPos> posts(ServerLevel level) {
         Set<WorldPos> found = new LinkedHashSet<>();
-        for (Holding holding : colony.holdings(DispatchContent.PORT)) {
-            if (holding.what() instanceof Held.Block(WorldPos cell) && cell.in(level) && level.isLoaded(cell.block(level))
+        for (Claim holding : colony.claims(DispatchContent.PORT)) {
+            if (holding.what() instanceof Claimed.Block(WorldPos cell) && cell.in(level) && level.isLoaded(cell.block(level))
                     && PackageNetworks.get().isPostbox(level.getBlockState(cell.block(level)))) {
                 found.add(cell);
             }

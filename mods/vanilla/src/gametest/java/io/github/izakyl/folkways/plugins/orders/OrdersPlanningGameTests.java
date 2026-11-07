@@ -2,31 +2,30 @@ package io.github.izakyl.folkways.plugins.orders;
 
 import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.base.persist.Reader;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.colony.Colonies;
-import io.github.izakyl.folkways.core.api.colony.Held;
-import io.github.izakyl.folkways.core.api.terms.Goods;
-import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.engine.plan.haul.Haul;
-import io.github.izakyl.folkways.core.engine.plan.haul.TransferNode;
+import io.github.izakyl.folkways.core.colony.api.Colonies;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.colony.internal.ColonyData;
+import io.github.izakyl.folkways.core.colony.internal.ColonySnapshot;
+import io.github.izakyl.folkways.core.inventory.api.Stash;
+import io.github.izakyl.folkways.core.inventory.api.StoreRule;
+import io.github.izakyl.folkways.core.item.api.Containers;
+import io.github.izakyl.folkways.core.item.api.ItemFilter;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
+import io.github.izakyl.folkways.core.plan.api.Delivery;
+import io.github.izakyl.folkways.core.plan.api.Grown;
+import io.github.izakyl.folkways.core.colony.api.Claimed;
+import io.github.izakyl.folkways.core.item.api.Goods;
+import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.plan.internal.Haul;
+import io.github.izakyl.folkways.core.work.internal.TransferNode;
 import io.github.izakyl.folkways.core.testing.TestWorker;
 import io.github.izakyl.folkways.front.engine.colony.ColonyFront;
 import io.github.izakyl.folkways.front.engine.colony.ColonySettings;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import io.github.izakyl.folkways.plugins.wares.WaresContent;
-import io.github.izakyl.folkways.core.api.terms.Containers;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
-import io.github.izakyl.folkways.core.api.terms.ItemFilter;
-import io.github.izakyl.folkways.core.api.terms.Stash;
 import io.github.izakyl.folkways.core.testing.Proxies;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.front.api.panel.Board;
-import net.minecraft.network.chat.contents.TranslatableContents;
-import io.github.izakyl.folkways.core.api.terms.StoreRule;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.work.Delivery;
-import io.github.izakyl.folkways.core.api.work.Grown;
-import io.github.izakyl.folkways.core.engine.colony.ColonyData;
-import io.github.izakyl.folkways.core.engine.colony.ColonySnapshot;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
 import java.lang.reflect.InvocationHandler;
 import java.util.Collection;
@@ -42,6 +41,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.chat.contents.TranslatableContents;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -79,7 +79,7 @@ public final class OrdersPlanningGameTests {
                     target.clearContent();
                     Colony colony = Colonies.mint(level.getServer());
                     try {
-                        colony.hold(WaresContent.STORE, new Held.Block(at)).orElseThrow();
+                        colony.hold(WaresContent.STORE, new Claimed.Block(at)).orElseThrow();
                         var front = ColonyFront.of(colony);
                         front.setSetting(OrdersContent.ID, OrdersContent.ITEM.key(),
                             new ColonySettings.Value.Items(List.of(breadFilter)));
@@ -167,7 +167,7 @@ public final class OrdersPlanningGameTests {
             helper.assertTrue(orders.containsKey(order.key()) && presence.goals(view).size() == 1,
                 "a dirty target cannot complete the order from an unobserved change");
             ColonyData observed = ColonyData.find(level.getServer(), observations.id()).orElseThrow();
-            observed.inventory().advance(level, observed, Map.of());
+            observed.inventory().advance(level, observed.works(), Map.of());
             presence.refresh(level.getServer());
             helper.assertTrue(orders.isEmpty() && presence.goals(view).isEmpty() && withdrawals.get() == 1,
                 "a filled target retires the once order and withdraws its active batch");
@@ -358,7 +358,7 @@ public final class OrdersPlanningGameTests {
 
         level.setBlockAndUpdate(hall, Blocks.AIR.defaultBlockState());
         ColonyData observed = ColonyData.find(level.getServer(), observations.id()).orElseThrow();
-        observed.inventory().advance(level, observed, Map.of());
+        observed.inventory().advance(level, observed.works(), Map.of());
         presence.refresh(level.getServer());
         helper.assertTrue(ruled.get().equals(List.of(
                 new StoreRule.Reserve(kitchenAt, bread),
@@ -406,12 +406,6 @@ public final class OrdersPlanningGameTests {
             "mode changes and reload preserve selected raw rules, including queries with no matching items");
         helper.assertTrue(restored.admitting().orElseThrow().only(), "the whitelist mode survives reload");
         helper.assertTrue(Shelf.none(at).admits(iron), "another container keeps its own default filter");
-        CompoundTag legacy = Shelf.none(at).save();
-        legacy.putBoolean("only", true);
-        legacy.put("goods", iron.save());
-        Shelf migrated = Shelf.load(Reader.of(legacy)).orElseThrow();
-        helper.assertTrue(migrated.admitting().orElseThrow().filters().equals(List.of(selected.getFirst())),
-            "legacy goods filters migrate into editable raw selections");
         helper.succeed();
     }
 

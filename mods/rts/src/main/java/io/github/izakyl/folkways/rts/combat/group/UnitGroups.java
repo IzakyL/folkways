@@ -2,12 +2,12 @@ package io.github.izakyl.folkways.rts.combat.group;
 
 import io.github.izakyl.folkways.base.persist.Reader;
 import io.github.izakyl.folkways.base.persist.Writer;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.resident.body.Bodies;
-import io.github.izakyl.folkways.core.api.resident.body.Body;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.rts.combat.command.ResidentCommands;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.resident.api.Bodies;
+import io.github.izakyl.folkways.core.resident.api.Body;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
+import io.github.izakyl.folkways.rts.combat.command.ResidentCommands;
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -34,13 +34,17 @@ public final class UnitGroups {
         this.server = server;
         commands = ResidentCommands.of(colony);
         Set<UUID> roster = roster();
-        for (Reader saved : Reader.of(colony.kept(GroupContent.ID)).children("groups")) {
+        Reader kept = Reader.of(colony.kept(GroupContent.ID));
+        if (kept.keys().isEmpty()) {
+            return;
+        }
+        for (Reader saved : kept.requiredChildren("groups")) {
             saved.uuid("id")
                 .filter(id -> !groups.containsKey(id))
                 .ifPresent(
                 id -> {
                     UnitGroup group = new UnitGroup(this, id);
-                    saved.uuids("members").stream()
+                    saved.requiredUuids("members").stream()
                         .filter(roster::contains)
                         .filter(member -> !membership.containsKey(member))
                         .forEach(
@@ -123,10 +127,6 @@ public final class UnitGroups {
     }
 
     /** Point intent: the click is the logical captain, with an optional prefix followed by a cycle. */
-    public boolean commandSelectionPoints(List<Body> residents, List<WorldPos> points, int cycleStart) {
-        return commandSelectionPoints(residents, points, cycleStart, false);
-    }
-
     public boolean commandSelectionPoints(
         List<Body> residents, List<WorldPos> points, int cycleStart, boolean attackMove) {
         requireServerThread();
@@ -137,10 +137,6 @@ public final class UnitGroups {
     }
 
     /** Each Ctrl click is committed immediately; only the exact actual squad can extend its queue. */
-    public boolean appendSelectionPoint(List<Body> residents, WorldPos point) {
-        return appendSelectionPoint(residents, point, false);
-    }
-
     public boolean appendSelectionPoint(List<Body> residents, WorldPos point, boolean attackMove) {
         requireServerThread();
         List<Body> people = residents.stream().distinct().toList();
@@ -362,7 +358,7 @@ public final class UnitGroups {
     private void validate(Body body) {
         if (!body.kind().id().equals(PersonBody.ID)
             || loaded(body.id()).filter(found -> found.mob() == body.mob()).isEmpty()
-            || colony.holdingOf(body.id()).isEmpty()) {
+            || colony.claimOf(body.id()).isEmpty()) {
             throw new IllegalArgumentException("groups require loaded people held by this colony");
         }
     }

@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.cookery.testing;
 
-import io.github.izakyl.folkways.core.api.work.Grown;
+import io.github.izakyl.folkways.core.plan.api.Grown;
 import java.util.List;
 import java.util.function.Supplier;
 import net.minecraft.gametest.framework.GameTestHelper;

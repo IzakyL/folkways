@@ -2,22 +2,21 @@ package io.github.izakyl.folkways.front.engine.colony;
 
 import io.github.izakyl.folkways.base.persist.Reader;
 import io.github.izakyl.folkways.base.persist.Writer;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.colony.Held;
-import io.github.izakyl.folkways.core.api.colony.Holding;
-import io.github.izakyl.folkways.core.api.colony.Release;
-import io.github.izakyl.folkways.core.api.terms.Goods;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
-import io.github.izakyl.folkways.core.api.terms.Realm;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
-import io.github.izakyl.folkways.core.api.vocation.KitRules;
-import io.github.izakyl.folkways.core.api.vocation.Vocations;
+import io.github.izakyl.folkways.core.colony.api.Claim;
+import io.github.izakyl.folkways.core.colony.api.ClaimRelease;
+import io.github.izakyl.folkways.core.colony.api.Claimed;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.item.api.Goods;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
+import io.github.izakyl.folkways.core.vocation.api.Vocations;
+import io.github.izakyl.folkways.core.work.api.ToolPolicy;
+import io.github.izakyl.folkways.core.world.api.Realm;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
+import io.github.izakyl.folkways.core.world.api.WorldSpaces;
 import io.github.izakyl.folkways.front.api.CoreSettings;
 import io.github.izakyl.folkways.front.api.FrontView;
 import io.github.izakyl.folkways.front.api.Fronts;
 import io.github.izakyl.folkways.front.api.Schema;
-import io.github.izakyl.folkways.front.engine.Enrollments;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -49,24 +48,21 @@ public final class ColonyFront implements FrontView {
 
     private static final Map<UUID, ColonyFront> HELD = new ConcurrentHashMap<>();
 
-    private static final String TAG_TOOL_VERSION = "toolVersion";
-
-    private int toolVersion = 1;
-    private volatile KitRules.Snapshot toolRules;
+    private volatile ToolPolicy toolRules;
 
     private record ZoneKey(UUID id, ResourceKey<Level> dimension) {
     }
 
-    private record CachedZone(Holding holding, ColonySettings settings,
+    private record CachedZone(Claim holding, ColonySettings settings,
         Map<Realm, Optional<BlockPos>> origins, Optional<ColonyZone> zone) {
-        static CachedZone of(Holding holding, ColonySettings settings, ServerLevel level) {
+        static CachedZone of(Claim holding, ColonySettings settings, ServerLevel level) {
             Map<Realm, Optional<BlockPos>> origins = new LinkedHashMap<>();
-            ((Held.Area) holding.what()).covered().forEach(at -> origins.computeIfAbsent(at.realm(),
+            ((Claimed.Area) holding.what()).covered().forEach(at -> origins.computeIfAbsent(at.realm(),
                 realm -> WorldSpaces.storage(level, new WorldPos(realm, BlockPos.ZERO))));
             return new CachedZone(holding, settings, Map.copyOf(origins), ColonyZone.in(holding, level, settings));
         }
 
-        boolean matches(Holding current, ColonySettings chosen, ServerLevel level) {
+        boolean matches(Claim current, ColonySettings chosen, ServerLevel level) {
             return holding == current && settings.equals(chosen)
                 && origins.entrySet().stream()
                 .allMatch(entry -> entry.getValue().equals(
@@ -108,9 +104,9 @@ public final class ColonyFront implements FrontView {
 
     public List<ColonyZone> zonesIn(ServerLevel level) {
         List<ColonyZone> found = new ArrayList<>();
-        zoneCache.keySet().removeIf(key -> colony.holding(key.id()).isEmpty());
-        for (Holding holding : colony.holdings()) {
-            if (holding.what() instanceof Held.Area) {
+        zoneCache.keySet().removeIf(key -> colony.claim(key.id()).isEmpty());
+        for (Claim holding : colony.claims()) {
+            if (holding.what() instanceof Claimed.Area) {
                 zoneIn(holding, level).ifPresent(found::add);
             }
         }
@@ -120,27 +116,27 @@ public final class ColonyFront implements FrontView {
     // Every zone, each in the level its first cell lies in.
     public List<ColonyZone> zones() {
         List<ColonyZone> found = new ArrayList<>();
-        for (Holding holding : colony.holdings()) {
+        for (Claim holding : colony.claims()) {
             resolved(holding).ifPresent(found::add);
         }
         return List.copyOf(found);
     }
 
     public Optional<ColonyZone> zone(UUID zone) {
-        return colony.holding(zone).flatMap(this::resolved);
+        return colony.claim(zone).flatMap(this::resolved);
     }
 
-    private Optional<ColonyZone> resolved(Holding holding) {
+    private Optional<ColonyZone> resolved(Claim holding) {
         MinecraftServer server = ServerLifecycleHooks.getCurrentServer();
-        if (server == null || !(holding.what() instanceof Held.Area)) {
+        if (server == null || !(holding.what() instanceof Claimed.Area)) {
             return Optional.empty();
         }
-        return ((Held.Area) holding.what()).covered().iterator().next().level(server)
+        return ((Claimed.Area) holding.what()).covered().iterator().next().level(server)
             .flatMap(level -> zoneIn(holding, level));
     }
 
     // Storage coordinates change when the holding or its frame changes, not on every colony tick.
-    private Optional<ColonyZone> zoneIn(Holding holding, ServerLevel level) {
+    private Optional<ColonyZone> zoneIn(Claim holding, ServerLevel level) {
         ColonySettings chosen = settingsOf(holding);
         ZoneKey key = new ZoneKey(holding.id(), level.dimension());
         CachedZone cached = zoneCache.get(key);
@@ -155,10 +151,8 @@ public final class ColonyFront implements FrontView {
             ColonySettings chosen) {
         Set<WorldPos> covered = new LinkedHashSet<>(cells.size());
         cells.forEach(cell -> covered.add(WorldPos.of(level, cell)));
-        // A caller may name only some settings; the rest take the delegation's declared defaults, as a load does.
-        ColonySettings settled = Enrollments.delegation(delegation).isPresent()
-            ? chosen.conformedTo(ColonySchemas.ofDelegation(delegation)) : chosen;
-        return colony.hold(delegation, new Held.Area(covered)).flatMap(holding -> {
+        ColonySettings settled = ColonySchemas.conformDelegation(delegation, chosen);
+        return colony.hold(delegation, new Claimed.Area(covered)).flatMap(holding -> {
             drawn.put(holding.id(), settled);
             write();
             return ColonyZone.in(holding, level, settled);
@@ -171,8 +165,8 @@ public final class ColonyFront implements FrontView {
             return List.of();
         }
         List<ColonyPath> found = new ArrayList<>();
-        for (Holding holding : colony.holdings()) {
-            if (holding.what() instanceof Held.Line) {
+        for (Claim holding : colony.claims()) {
+            if (holding.what() instanceof Claimed.Line) {
                 ColonyPath.of(holding, server, settingsOf(holding)).ifPresent(found::add);
             }
         }
@@ -181,45 +175,50 @@ public final class ColonyFront implements FrontView {
 
     public Optional<ColonyPath> path(UUID id) {
         MinecraftServer server = ServerLifecycleHooks.getCurrentServer();
-        return colony.holding(id).flatMap(holding -> ColonyPath.of(holding, server, settingsOf(holding)));
+        return colony.claim(id).flatMap(holding -> ColonyPath.of(holding, server, settingsOf(holding)));
     }
 
     public Optional<ColonyPath> addPath(ServerLevel level, ResourceLocation delegation, List<BlockPos> points,
             ColonySettings chosen) {
         List<WorldPos> line = new ArrayList<>(points.size());
         points.forEach(point -> line.add(WorldPos.of(level, point)));
-        return colony.hold(delegation, new Held.Line(line)).flatMap(holding -> {
-            drawn.put(holding.id(), chosen);
+        ColonySettings settled = ColonySchemas.conformDelegation(delegation, chosen);
+        return colony.hold(delegation, new Claimed.Line(line)).flatMap(holding -> {
+            drawn.put(holding.id(), settled);
             write();
-            return ColonyPath.of(holding, level.getServer(), chosen);
+            return ColonyPath.of(holding, level.getServer(), settled);
         });
     }
 
     // Replaces the settings drawn on a zone or a path.
     public boolean setDrawn(UUID id, ColonySettings chosen) {
-        Optional<Holding> holding = colony.holding(id);
-        if (holding.isEmpty() || chosen.equals(settingsOf(holding.get()))) {
+        Optional<Claim> holding = colony.claim(id);
+        if (holding.isEmpty()) {
             return false;
         }
-        drawn.put(id, chosen);
+        ColonySettings settled = ColonySchemas.conformDelegation(holding.get().owner(), chosen);
+        if (settled.equals(settingsOf(holding.get()))) {
+            return false;
+        }
+        drawn.put(id, settled);
         write();
         return true;
     }
 
     // Lets go a zone or a path the book drew.
     public boolean erase(UUID id) {
-        Optional<Holding> holding = colony.holding(id)
-            .filter(held -> held.what() instanceof Held.Area || held.what() instanceof Held.Line);
+        Optional<Claim> holding = colony.claim(id)
+            .filter(held -> held.what() instanceof Claimed.Area || held.what() instanceof Claimed.Line);
         if (holding.isEmpty()) {
             return false;
         }
-        colony.release(id, Release.LET_GO);
+        colony.release(id, ClaimRelease.LET_GO);
         drawn.remove(id);
         write();
         return true;
     }
 
-    private ColonySettings settingsOf(Holding holding) {
+    private ColonySettings settingsOf(Claim holding) {
         ColonySettings chosen = drawn.get(holding.id());
         return chosen != null ? chosen : ColonySettings.byDefault(ColonySchemas.ofDelegation(holding.owner()));
     }
@@ -252,7 +251,7 @@ public final class ColonyFront implements FrontView {
         HELD.values().forEach(front -> front.toolRules = null);
     }
 
-    public KitRules.Snapshot toolRules() {
+    public ToolPolicy toolRules() {
         if (toolRules == null) {
             Map<ResourceLocation, Set<Item>> allowed = new LinkedHashMap<>();
             for (var vocation : Vocations.all()) {
@@ -261,18 +260,18 @@ public final class ColonyFront implements FrontView {
                 allowed.put(vocation.id(), effective.items("tool")
                     .map(Goods::members).orElse(Set.of()));
             }
-            toolRules = new KitRules.Snapshot(allowed);
+            toolRules = new ToolPolicy(allowed);
         }
         return toolRules;
     }
 
     private void write() {
-        drawn.keySet().removeIf(id -> colony.holding(id).isEmpty());
+        drawn.keySet().removeIf(id -> colony.claim(id).isEmpty());
         colony.keep(OWNER, save());
     }
 
     private CompoundTag save() {
-        Writer writer = Writer.of().integer(TAG_TOOL_VERSION, toolVersion);
+        Writer writer = Writer.of();
         Writer byHolding = writer.child(TAG_DRAWN);
         drawn.forEach((id, held) -> byHolding.blob(id.toString(), held.save()));
         Writer scopes = writer.child(TAG_SETTINGS);
@@ -283,51 +282,28 @@ public final class ColonyFront implements FrontView {
     private static ColonyFront read(Colony colony) {
         ColonyFront front = new ColonyFront(colony);
         Reader reader = Reader.of(colony.kept(OWNER));
-        reader.child(TAG_DRAWN).ifPresent(byHolding -> {
-            for (String key : byHolding.keys()) {
-                UUID id;
-                try {
-                    id = UUID.fromString(key);
-                } catch (IllegalArgumentException notAnId) {
-                    continue;
-                }
-                Optional<Holding> holding = colony.holding(id);
-                if (holding.isEmpty()) {
-                    continue;
-                }
-                ResourceLocation delegation = holding.get().owner();
-                byHolding.child(key).map(ColonySettings::load).ifPresent(loaded -> front.drawn.put(id,
-                    Enrollments.delegation(delegation).isPresent()
-                        ? loaded.conformedTo(ColonySchemas.ofDelegation(delegation)) : loaded));
+        if (reader.keys().isEmpty()) {
+            return front;
+        }
+        Reader byHolding = reader.child(TAG_DRAWN).orElseThrow();
+        for (String key : byHolding.keys()) {
+            UUID id = UUID.fromString(key);
+            Optional<Claim> holding = colony.claim(id);
+            if (holding.isEmpty()) {
+                // Claims can be released outside the front while its last saved drawing still names them.
+                continue;
             }
-        });
+            ResourceLocation delegation = holding.get().owner();
+            ColonySettings loaded = ColonySettings.load(byHolding.child(key).orElseThrow());
+            front.drawn.put(id, ColonySchemas.conformDelegation(delegation, loaded));
+        }
         Map<ResourceLocation, ColonySettings> loaded = new LinkedHashMap<>();
-        reader.child(TAG_SETTINGS).ifPresent(scopes -> {
-            for (String key : scopes.keys()) {
-                ResourceLocation scope = ResourceLocation.tryParse(key);
-                if (scope != null) {
-                    scopes.child(key).map(ColonySettings::load).ifPresent(value -> loaded.put(scope, value));
-                }
-            }
-        });
-        front.toolVersion = reader.integer(TAG_TOOL_VERSION).orElse(0);
-        if (front.toolVersion < 1) {
-            var legacy = loaded.getOrDefault(CoreSettings.CORE,
-                ColonySettings.empty()).valueOf("tool");
-            if (legacy.orElse(null) instanceof ColonySettings.Value.Items tools
-                    && !Set.copyOf(tools.value()).equals(CoreSettings.legacyKit())) {
-                for (var vocation : Vocations.all()) {
-                    ColonySettings held = loaded.getOrDefault(vocation.id(), ColonySettings.empty());
-                    if (held.valueOf("tool").isEmpty()) {
-                        loaded.put(vocation.id(), held.with("tool", tools));
-                    }
-                }
-            }
-            front.toolVersion = 1;
+        Reader scopes = reader.child(TAG_SETTINGS).orElseThrow();
+        for (String key : scopes.keys()) {
+            ResourceLocation scope = ResourceLocation.parse(key);
+            loaded.put(scope, ColonySettings.load(scopes.child(key).orElseThrow()));
         }
         loaded.forEach((scope, held) -> front.settings.put(scope, ColonySchemas.conform(scope, held)));
-        // Keep the migration marker and unknown plugin scopes before another save can reload them.
-        front.write();
         return front;
     }
 }

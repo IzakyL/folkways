@@ -1,8 +1,8 @@
 package io.github.izakyl.folkways.firefighting;
 
-import io.github.izakyl.folkways.core.api.Declaring;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
-import io.github.izakyl.folkways.core.api.vocation.Vocations;
+import io.github.izakyl.folkways.core.extension.api.Declaring;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
+import io.github.izakyl.folkways.core.vocation.api.Vocations;
 import io.github.izakyl.folkways.plugins.damagecontrol.DamageControlContent;
 import io.github.izakyl.folkways.plugins.damagecontrol.SuppressionMethods;
 import net.minecraft.resources.ResourceLocation;

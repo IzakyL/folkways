@@ -1,7 +1,7 @@
 package io.github.izakyl.folkways.plugins.person.mixin;
 
-import io.github.izakyl.folkways.core.api.resident.Searches;
-import io.github.izakyl.folkways.core.api.terms.Structures;
+import io.github.izakyl.folkways.core.resident.api.Searches;
+import io.github.izakyl.folkways.core.world.api.Structures;
 import io.github.izakyl.folkways.plugins.person.walk.ResidentPathNavigation;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;

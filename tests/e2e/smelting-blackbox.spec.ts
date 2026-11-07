@@ -176,7 +176,7 @@ const FUEL_RULES = defineTask<{ colony_id: string }, Record<string, any>>({
   timeoutMs: 20_000,
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.core.api.terms.ItemFilter",
+      "io.github.izakyl.folkways.core.item.api.ItemFilter",
       "io.github.izakyl.folkways.front.engine.colony.ColonyFront",
       "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
       "io.github.izakyl.folkways.plugins.wares.WaresContent",

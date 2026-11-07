@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.plugins.person.ride;
 
-import io.github.izakyl.folkways.core.api.terms.Reach;
+import io.github.izakyl.folkways.core.world.api.Reach;
 import java.util.Comparator;
 import java.util.Map;
 import java.util.Set;

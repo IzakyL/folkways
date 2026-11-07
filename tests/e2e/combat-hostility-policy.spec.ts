@@ -30,9 +30,9 @@ const IMPORTS = [
   "net.minecraft.world.item.Items",
   "net.minecraft.tags.DamageTypeTags",
   "net.minecraft.world.entity.monster.Creeper",
-  "io.github.izakyl.folkways.core.api.colony.Colonies",
-  "io.github.izakyl.folkways.core.api.colony.Held",
-  "io.github.izakyl.folkways.core.api.resident.body.Body",
+  "io.github.izakyl.folkways.core.colony.api.Colonies",
+  "io.github.izakyl.folkways.core.colony.api.Claimed",
+  "io.github.izakyl.folkways.core.resident.api.Body",
   "io.github.izakyl.folkways.plugins.person.PersonBody",
   "io.github.izakyl.folkways.plugins.person.PersonContent",
 ];
@@ -278,7 +278,7 @@ var resident = PersonBody.RESIDENT.get().create(level);
 resident.setNoAi(!kind.equals("flee"));
 resident.moveTo(x + (byDefault ? 12.5 : 10.5), y, z + .5);
 level.addFreshEntity(resident);
-colony.hold(PersonContent.ID, Held.Entity.of(resident)).orElseThrow();
+colony.hold(PersonContent.ID, Claimed.Entity.of(resident)).orElseThrow();
 Mob monster = switch (kind) {
   case "zombie", "flee" -> EntityType.ZOMBIE.create(level);
   case "skeleton" -> EntityType.SKELETON.create(level);

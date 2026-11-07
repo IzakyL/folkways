@@ -2,9 +2,11 @@ package io.github.izakyl.folkways.plugins.build;
 
 import com.google.gson.JsonParser;
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.resident.body.Body;
-import io.github.izakyl.folkways.core.api.work.*;
+import io.github.izakyl.folkways.core.resident.api.Body;
 import io.github.izakyl.folkways.core.testing.TestWorker;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.work.api.Workload;
 import io.github.izakyl.folkways.effect.Effects;
 import io.github.izakyl.folkways.effect.Modifier;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
@@ -32,7 +34,10 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 @GameTestHolder(FolkwaysMod.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class BuildingPerkGameTests {
-    @SubscribeEvent public static void register(RegisterGameTestsEvent event) { event.register(BuildingPerkGameTests.class); }
+    @SubscribeEvent
+    public static void register(RegisterGameTestsEvent event) {
+        event.register(BuildingPerkGameTests.class);
+    }
 
     @GameTest(template = "empty")
     public static void triangularOreHeightHasExactWeightsAndZeroOutsideItsRange(GameTestHelper helper) {
@@ -41,20 +46,27 @@ public final class BuildingPerkGameTests {
             {"type":"minecraft:trapezoid", "min_inclusive":{"absolute":0}, "max_inclusive":{"absolute":4}}
             """), context);
         helper.assertTrue(Math.abs(distribution.get(2) - 1.0 / 3) < 1e-10, "triangle peak must be three times an edge");
-        helper.assertTrue(Math.abs(distribution.get(0) - 1.0 / 9) < 1e-10, "inclusive endpoints have nonzero probability");
+        helper.assertTrue(Math.abs(distribution.get(0) - 1.0 / 9) < 1e-10,
+            "inclusive endpoints have nonzero probability");
         helper.assertTrue(!distribution.containsKey(5), "out-of-range mineral cannot be selected");
-        helper.assertTrue(Math.abs(distribution.values().stream().mapToDouble(Double::doubleValue).sum() - 1) < 1e-10, "distribution sums to one");
+        helper.assertTrue(Math.abs(distribution.values().stream().mapToDouble(Double::doubleValue)
+            .sum() - 1) < 1e-10, "distribution sums to one");
         helper.succeed();
     }
 
     @GameTest(template = "empty")
     public static void biomeOreFeaturesRespectHeightAndDoNotYieldStonePatches(GameTestHelper helper) {
         var level = helper.getLevel();
-        var below = LocalMinerals.candidates(level, helper.absolutePos(BlockPos.ZERO).atY(-59), Blocks.DEEPSLATE.defaultBlockState());
-        var above = LocalMinerals.candidates(level, helper.absolutePos(BlockPos.ZERO).atY(180), Blocks.STONE.defaultBlockState());
-        helper.assertTrue(below.stream().anyMatch(c -> c.ore().is(Blocks.DEEPSLATE_DIAMOND_ORE)), "deep stone has locally configured diamonds");
-        helper.assertTrue(above.stream().noneMatch(c -> c.ore().is(Blocks.DIAMOND_ORE) || c.ore().is(Blocks.DEEPSLATE_DIAMOND_ORE)), "diamonds cannot be found above their configured height");
-        helper.assertTrue(above.stream().noneMatch(c -> c.ore().is(Blocks.DIRT) || c.ore().is(Blocks.GRAVEL)), "non-mineral patch features are excluded");
+        var below = LocalMinerals.candidates(level, helper.absolutePos(BlockPos.ZERO).atY(-59),
+            Blocks.DEEPSLATE.defaultBlockState());
+        var above = LocalMinerals.candidates(level, helper.absolutePos(BlockPos.ZERO).atY(180),
+            Blocks.STONE.defaultBlockState());
+        helper.assertTrue(below.stream().anyMatch(c -> c.ore().is(Blocks.DEEPSLATE_DIAMOND_ORE)),
+            "deep stone has locally configured diamonds");
+        helper.assertTrue(above.stream().noneMatch(c -> c.ore().is(Blocks.DIAMOND_ORE) || c.ore()
+            .is(Blocks.DEEPSLATE_DIAMOND_ORE)), "diamonds cannot be found above their configured height");
+        helper.assertTrue(above.stream().noneMatch(c -> c.ore().is(Blocks.DIRT) || c.ore().is(Blocks.GRAVEL)),
+            "non-mineral patch features are excluded");
         helper.succeed();
     }
 
@@ -87,21 +99,26 @@ public final class BuildingPerkGameTests {
         var level = helper.getLevel();
         Worker worker = worker(PersonBody.RESIDENT.get().create(level), Effects.of(List.of(
             new Effects.Part("test", Modifier.add(BuildingPerks.FORTUNE, 2)))));
-        var fortune = level.registryAccess().registryOrThrow(Registries.ENCHANTMENT).getHolderOrThrow(Enchantments.FORTUNE);
+        var fortune = level.registryAccess().registryOrThrow(Registries.ENCHANTMENT)
+            .getHolderOrThrow(Enchantments.FORTUNE);
         ItemStack pickaxe = new ItemStack(Items.IRON_PICKAXE);
         ItemStack lucky = BuildingPerks.fortunate(level, worker, pickaxe);
         helper.assertValueEqual(lucky.getEnchantmentLevel(fortune), 2, "the loot sees the perk's fortune");
         helper.assertValueEqual(pickaxe.getEnchantmentLevel(fortune), 0, "the resident's own tool is never enchanted");
         ItemStack better = new ItemStack(Items.IRON_PICKAXE);
         better.enchant(fortune, 3);
-        helper.assertTrue(BuildingPerks.fortunate(level, worker, better) == better, "a tool with more fortune keeps its own");
-        helper.assertTrue(BuildingPerks.fortunate(level, worker, ItemStack.EMPTY).isEmpty(), "bare hands gain no fortune");
+        helper.assertTrue(BuildingPerks.fortunate(level, worker, better) == better,
+            "a tool with more fortune keeps its own");
+        helper.assertTrue(BuildingPerks.fortunate(level, worker, ItemStack.EMPTY).isEmpty(),
+            "bare hands gain no fortune");
         var ore = Blocks.DIAMOND_ORE.defaultBlockState();
         var pos = helper.absolutePos(BlockPos.ZERO);
         int plain = 0, perked = 0;
         for (int i = 0; i < 200; i++) {
-            plain += Block.getDrops(ore, level, pos, null, worker.body(), pickaxe).stream().mapToInt(ItemStack::getCount).sum();
-            perked += Block.getDrops(ore, level, pos, null, worker.body(), lucky).stream().mapToInt(ItemStack::getCount).sum();
+            plain += Block.getDrops(ore, level, pos, null, worker.body(), pickaxe).stream()
+                .mapToInt(ItemStack::getCount).sum();
+            perked += Block.getDrops(ore, level, pos, null, worker.body(), lucky).stream()
+                .mapToInt(ItemStack::getCount).sum();
         }
         helper.assertValueEqual(plain, 200, "an ordinary pickaxe yields one diamond each time");
         helper.assertTrue(perked > plain, "fortune II yields more diamonds than an ordinary pickaxe");
@@ -112,7 +129,9 @@ public final class BuildingPerkGameTests {
     public static void quarryMomentumBuildsThenResetsWhenTheMaterialChanges(GameTestHelper helper) {
         Worker worker = worker(PersonBody.RESIDENT.get().create(helper.getLevel()), Effects.of(List.of(
             new Effects.Part("test", Modifier.add(BuildingPerks.QUARRY_MOMENTUM, 1)))));
-        for (int i = 0; i < 8; i++) BuildingPerks.mined(worker, Blocks.STONE.defaultBlockState());
+        for (int i = 0; i < 8; i++) {
+            BuildingPerks.mined(worker, Blocks.STONE.defaultBlockState());
+        }
         helper.assertTrue(BuildingPerks.momentum(worker) == 2, "eight matching stone blocks reach full momentum");
         BuildingPerks.mined(worker, Blocks.DEEPSLATE.defaultBlockState());
         helper.assertTrue(BuildingPerks.momentum(worker) == 1.125, "a different material starts a fresh streak");
@@ -127,29 +146,37 @@ public final class BuildingPerkGameTests {
         Worker worker = worker(PersonBody.RESIDENT.get().create(level), Effects.of(List.of(
             new Effects.Part("test", Modifier.add(BuildingPerks.QUARRY_MOMENTUM, 1)))));
         var pos = helper.absolutePos(new BlockPos(1, 1, 1));
-        var worldPos = io.github.izakyl.folkways.core.api.terms.WorldPos.of(level, pos);
+        var worldPos = io.github.izakyl.folkways.core.world.api.WorldPos.of(level, pos);
         var stone = Blocks.STONE.defaultBlockState();
         var air = Blocks.AIR.defaultBlockState();
-        var strip = new StripNode(new BuildJob(BuildJob.Kind.STRIP, worldPos, Stances.WHEREVER,
-            java.util.Map.of(worldPos, stone), java.util.Map.of(worldPos, air)), (node, how) -> { });
+        var strip = new StripAction(new BuildJob(BuildJob.Kind.STRIP, worldPos, Stances.WHEREVER,
+            java.util.Map.of(worldPos, stone), java.util.Map.of(worldPos, air)));
         var digging = (Workload.Once) strip.spec().workload();
         level.setBlockAndUpdate(pos, stone);
-        for (int i = 0; i < 8; i++) BuildingPerks.mined(worker, stone);
+        for (int i = 0; i < 8; i++) {
+            BuildingPerks.mined(worker, stone);
+        }
         helper.assertValueEqual(digging.ticksFor(worker), digging.baseTicks() / 2,
             "full quarry momentum halves actual excavation wind-up");
         level.setBlockAndUpdate(pos, Blocks.DEEPSLATE.defaultBlockState());
         helper.assertValueEqual(digging.ticksFor(worker), digging.baseTicks(),
             "the first block of a different material gets no previous streak bonus");
-        helper.assertTrue(BuildingPerks.momentum(worker) == 1, "switching targets clears the old streak before any block is mined");
-        for (int i = 0; i < 8; i++) BuildingPerks.mined(worker, stone);
+        helper.assertTrue(BuildingPerks.momentum(worker) == 1,
+            "switching targets clears the old streak before any block is mined");
+        for (int i = 0; i < 8; i++) {
+            BuildingPerks.mined(worker, stone);
+        }
         level.setBlockAndUpdate(pos, Blocks.DIRT.defaultBlockState());
         helper.assertValueEqual(digging.ticksFor(worker), digging.baseTicks(),
             "a non-stone target also gets no quarry bonus");
-        for (int i = 0; i < 8; i++) BuildingPerks.mined(worker, stone);
-        var lay = new LayNode(new BuildJob(BuildJob.Kind.LAY, worldPos, Stances.WHEREVER,
-            java.util.Map.of(worldPos, air), java.util.Map.of(worldPos, stone)), (node, how) -> { });
+        for (int i = 0; i < 8; i++) {
+            BuildingPerks.mined(worker, stone);
+        }
+        var lay = new LayAction(new BuildJob(BuildJob.Kind.LAY, worldPos, Stances.WHEREVER,
+            java.util.Map.of(worldPos, air), java.util.Map.of(worldPos, stone)));
         ((Workload.Once) lay.spec().workload()).ticksFor(worker);
-        helper.assertTrue(BuildingPerks.momentum(worker) == 1, "construction clears the streak at wind-up, before its commit");
+        helper.assertTrue(BuildingPerks.momentum(worker) == 1,
+            "construction clears the streak at wind-up, before its commit");
         level.setBlockAndUpdate(pos, stone);
         helper.assertValueEqual(digging.ticksFor(worker), digging.baseTicks(),
             "returning immediately to the original stone after starting construction requires a new streak");

@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.plugins.build.draft;
 
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;

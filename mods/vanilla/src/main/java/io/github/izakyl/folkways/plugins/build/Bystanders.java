@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.plugins.build;
 
-import io.github.izakyl.folkways.core.api.terms.ClimbableBlocks;
+import io.github.izakyl.folkways.core.world.api.ClimbableBlocks;
 import io.github.izakyl.folkways.plugins.person.walk.Breathing;
 import java.util.ArrayList;
 import java.util.Collection;

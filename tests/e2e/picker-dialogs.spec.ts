@@ -15,7 +15,7 @@ import { boardActs } from "../shared/ui/site-panel";
 const POOL = defineTask<void, string>({
   name: "folkways.picker-dialogs.pool", side: "server",
   source: javaTask({ imports: [
-    "io.github.izakyl.folkways.core.api.colony.Colonies",
+    "io.github.izakyl.folkways.core.colony.api.Colonies",
     "io.github.izakyl.folkways.plugins.person.look.LookPool",
   ], body: `return LookPool.of(Colonies.all(ctx.server()).getFirst()).save().toString();` }),
 });
@@ -34,7 +34,7 @@ return ResidentLooks.pool(Minecraft.getInstance().level.registryAccess()).keySet
 const DROP = defineTask<{ action: string }, string>({
   name: "folkways.picker-dialogs.drop", side: "client",
   source: javaTask({ imports: [
-    "io.github.izakyl.folkways.core.api.terms.ItemFilter",
+    "io.github.izakyl.folkways.core.item.api.ItemFilter",
     "io.github.izakyl.folkways.front.api.ui.FilterStacks",
     "io.github.izakyl.folkways.front.api.ui.ItemDrops",
     "io.github.izakyl.folkways.front.client.SelectorWindow",

@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.plugins.combat.weapon;
 
-import io.github.izakyl.folkways.core.api.colony.Colonies;
+import io.github.izakyl.folkways.core.colony.api.Colonies;
 import io.github.izakyl.folkways.plugins.person.ResidentEntity;
 import java.util.List;
 import net.minecraft.core.registries.BuiltInRegistries;

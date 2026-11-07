@@ -4,19 +4,18 @@ import com.github.ysbbbbbb.kaleidoscopecookery.api.blockentity.IPot;
 import com.github.ysbbbbbb.kaleidoscopecookery.block.kitchen.PotBlock;
 import com.github.ysbbbbbb.kaleidoscopecookery.blockentity.kitchen.PotBlockEntity;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.registry.FoodBiteRegistry;
-import io.github.izakyl.folkways.core.api.work.Need;
+import io.github.izakyl.folkways.core.work.api.Need;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import net.minecraft.nbt.CompoundTag;
 import net.minecraft.core.NonNullList;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtOps;
 import net.minecraft.nbt.Tag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.ContainerHelper;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
 
 record PotBatch(UUID colony, UUID id, PotPlan plan, CompoundTag inputs, ItemStack result) {
@@ -52,8 +51,16 @@ record PotBatch(UUID colony, UUID id, PotPlan plan, CompoundTag inputs, ItemStac
     static Optional<PotBatch> load(PotBlockEntity pot, ServerLevel level, UUID colony) {
         if (!ours(pot, colony)) return Optional.empty();
         CompoundTag saved = pot.getPersistentData().getCompound(KEY);
+        if (!saved.hasUUID("batch") || !saved.contains("definition")
+                || !saved.contains("flexible", Tag.TAG_BYTE) || !saved.contains("inputs", Tag.TAG_COMPOUND)
+                || !saved.contains("recipe", Tag.TAG_STRING) || !saved.contains("result", Tag.TAG_COMPOUND)) {
+            return Optional.empty();
+        }
         ResourceLocation id = ResourceLocation.tryParse(saved.getString("recipe"));
-        if (id == null || !saved.hasUUID("batch")) return Optional.empty();
+        if (id == null || !saved.hasUUID("batch") || !saved.contains("flexible", Tag.TAG_BYTE)
+                || !saved.contains("inputs", Tag.TAG_COMPOUND) || !saved.contains("result", Tag.TAG_COMPOUND)) {
+            return Optional.empty();
+        }
         return PotPlan.saved(level, id).filter(plan -> plan.flexible() == saved.getBoolean("flexible")
             && plan.definition().equals(saved.get("definition"))).map(plan -> new PotBatch(colony, saved.getUUID("batch"),
                 plan, saved.getCompound("inputs"), ItemStack.parseOptional(level.registryAccess(), saved.getCompound("result"))));

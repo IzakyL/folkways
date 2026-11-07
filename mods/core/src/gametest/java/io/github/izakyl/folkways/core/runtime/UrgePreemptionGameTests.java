@@ -1,0 +1,462 @@
+package io.github.izakyl.folkways.core.runtime;
+
+import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.colony.api.Colonies;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.colony.api.ColonyView;
+import io.github.izakyl.folkways.core.colony.internal.ColonyData;
+import io.github.izakyl.folkways.core.colony.internal.ColonySnapshot;
+import io.github.izakyl.folkways.core.extension.api.Declaring;
+import io.github.izakyl.folkways.core.plan.internal.PlanningFixture;
+import io.github.izakyl.folkways.core.plan.internal.Shown;
+import io.github.izakyl.folkways.core.resident.api.Body;
+import io.github.izakyl.folkways.core.resident.api.Participation;
+import io.github.izakyl.folkways.core.resident.api.Participations;
+import io.github.izakyl.folkways.core.resident.api.RefusalKind;
+import io.github.izakyl.folkways.core.resident.api.Stake;
+import io.github.izakyl.folkways.core.work.api.Ending;
+import io.github.izakyl.folkways.core.work.api.HoldingContext;
+import io.github.izakyl.folkways.core.work.api.LaborRefusal;
+import io.github.izakyl.folkways.core.work.api.Node;
+import io.github.izakyl.folkways.core.work.api.NodeSpec;
+import io.github.izakyl.folkways.core.work.api.NodeState;
+import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.work.api.Urge;
+import io.github.izakyl.folkways.core.work.api.WorkSite;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.work.api.Workload;
+import io.github.izakyl.folkways.core.work.internal.BodyRunner;
+import io.github.izakyl.folkways.core.work.internal.LaborIncident;
+import io.github.izakyl.folkways.plugins.person.PersonBody;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
+import net.minecraft.core.BlockPos;
+import net.minecraft.gametest.framework.GameTest;
+import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerLevel;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.event.RegisterGameTestsEvent;
+import net.neoforged.neoforge.gametest.GameTestHolder;
+import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
+
+@EventBusSubscriber(modid = FolkwaysMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
+@GameTestHolder(FolkwaysMod.MOD_ID)
+@PrefixGameTestTemplate(false)
+public final class UrgePreemptionGameTests {
+    private static final ResourceLocation OWNER = id("preemption");
+    private static final Map<UUID, List<Urge>> OFFERS = new HashMap<>();
+
+    @SubscribeEvent
+    public static void declare(Declaring event) {
+        event.urges(OWNER, (colony, who, view) -> OFFERS.getOrDefault(colony.id(), List.of()));
+        Participations.register(PersonBody.ID, Stake.urge(OWNER), Participation.ALWAYS);
+    }
+
+    @SubscribeEvent
+    public static void register(RegisterGameTestsEvent event) {
+        event.register(UrgePreemptionGameTests.class);
+    }
+
+    @GameTest(template = "empty")
+    public static void idleChoiceUsesWeightWithoutPreferringPreemption(GameTestHelper helper) throws Exception {
+        try (Harness h = new Harness(helper)) {
+            Urge light = h.urge("light", 0.01, true);
+            Urge heavy = h.urge("heavy", 100, false);
+            h.offers(light, heavy);
+            h.interrupt();
+            helper.assertTrue(h.runner.ownUrge().orElseThrow().equals(heavy.id()),
+                "weight chooses idle work, regardless of the preemption flag");
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void onlyExplicitPreemptionCanReplaceFiniteOrContinuousWork(GameTestHelper helper) throws Exception {
+        for (Workload load : List.of(Workload.Once.of(1000),
+                (Workload.Continuous) (level, who) -> true)) {
+            try (Harness h = new Harness(helper)) {
+                AtomicInteger released = new AtomicInteger();
+                Node work = h.node(load, true, released);
+                h.start(work);
+                Urge heavy = h.urge("heavy", 100, false);
+                h.offers(heavy);
+                h.interrupt();
+                helper.assertTrue(h.runner.holding().orElseThrow().equals(work.id()) && released.get() == 0,
+                    "a high weight cannot interrupt either type of running node without permission");
+                Urge light = h.urge("light", 0.01, true);
+                h.offers(heavy, light);
+                h.interrupt();
+                h.labor.tick(h.runner, h.level, h.body);
+                helper.assertTrue(h.runner.ownUrge().orElseThrow().equals(light.id()) && released.get() == 0,
+                    "filter ineligible choices before ranking; a low-weight permitted urge can preempt");
+                helper.assertTrue(h.labor.state(work.id()).orElseThrow() == NodeState.WORKING,
+                    "suspended colony work keeps its phase");
+            }
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void personalWorkCanBePreemptedWithoutOscillating(GameTestHelper helper) throws Exception {
+        try (Harness h = new Harness(helper)) {
+            Urge first = h.urge("first", 0.1, false);
+            h.offers(first);
+            h.interrupt();
+            Urge forbidden = h.urge("higher", 100, false);
+            h.offers(first, forbidden);
+            h.interrupt();
+            helper.assertTrue(h.runner.ownUrge().orElseThrow().equals(first.id()),
+                "weight alone cannot interrupt personal work either");
+            Urge next = h.urge("next", 0.2, true);
+            h.offers(first, next);
+            h.interrupt();
+            h.labor.tick(h.runner, h.level, h.body);
+            helper.assertTrue(h.runner.ownUrge().orElseThrow().equals(next.id()),
+                "a permitted higher-weight choice must interrupt personal work, even below the old threshold");
+            h.offers(h.urge("lower", 0.1, true), h.urge("equal", 0.2, true), next);
+            h.interrupt();
+            helper.assertTrue(h.runner.ownUrge().orElseThrow().equals(next.id()),
+                "lower or tied weights cannot cause personal tasks to alternate");
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void withdrawnPersonalWorkYieldsToQueuedWork(GameTestHelper helper) throws Exception {
+        try (Harness h = new Harness(helper)) {
+            h.offers(h.urge("wander", 100, false));
+            h.interrupt();
+            Node job = h.node(Workload.Once.of(1000), true, new AtomicInteger());
+            h.queue(job);
+            h.offers();
+            h.interrupt();
+            h.labor.tick(h.runner, h.level, h.body);
+            helper.assertTrue(h.runner.holding().orElseThrow().equals(job.id()),
+                "withdrawn idle work yields without relying on a magic weight threshold");
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void unreadyPreemptorDoesNotReleaseCurrentWork(GameTestHelper helper) throws Exception {
+        try (Harness h = new Harness(helper)) {
+            AtomicInteger released = new AtomicInteger();
+            Node job = h.node(Workload.Once.of(1000), true, released);
+            h.start(job);
+            Node unready = h.node(Workload.Once.of(1000), false, new AtomicInteger());
+            h.offers(new Urge(id("unready"), 100, true, () -> unready));
+            h.interrupt();
+            helper.assertTrue(h.runner.holding().orElseThrow().equals(job.id()) && released.get() == 0,
+                "preemption commits only after the replacement is ready");
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void passiveReservationReleasesPlannedWorkButAllowsPersonalUrges(GameTestHelper helper)
+            throws Exception {
+        for (Workload load : List.of(Workload.Once.of(1000), (Workload.Continuous) (level, who) -> true)) {
+            try (Harness h = new Harness(helper)) {
+                AtomicInteger released = new AtomicInteger();
+                Node job = h.node(load, true, released);
+                h.start(job);
+                Urge reserve = Urge.reserve(id("reserved"));
+                h.offers(reserve);
+                helper.assertTrue(h.interrupt(), "reservation is reported to the runner's claim gate");
+                helper.assertTrue(h.runner.preempting(), "reservation requests cleanup before returning control");
+                helper.assertValueEqual(released.get(), 0, "requesting cleanup does not release the node early");
+                h.labor.tick(h.runner, h.level, h.body);
+                helper.assertTrue(!h.runner.executing() && h.runner.ownUrge().isEmpty(),
+                    "the passive marker does not become an idle node that could compete with combat");
+                helper.assertValueEqual(released.get(), 1, "planned work uses its normal release lifecycle once");
+                helper.assertTrue(h.labor.state(job.id()).orElseThrow() == NodeState.PENDING,
+                    "interrupted work remains retryable");
+                h.interrupt();
+                helper.assertValueEqual(released.get(), 1, "a continuing reservation never repeats release");
+                Urge need = h.urge("fear_or_combat", .001, true);
+                h.offers(reserve, need);
+                helper.assertTrue(h.interrupt(), "personal work does not remove the labour reservation");
+                helper.assertValueEqual(h.runner.ownUrge().orElseThrow(), need.id(),
+                    "even a low-weight ordinary personal urge executes while labour is reserved");
+                h.interrupt();
+                helper.assertValueEqual(h.runner.ownUrge().orElseThrow(), need.id(),
+                    "the reservation does not interrupt a personal combat, fear or physiological urge");
+            }
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void deliberateControlPreemptsAnArbitrarilyHeavyNeedAndKeepsOwnership(GameTestHelper helper)
+            throws Exception {
+        try (Harness h = new Harness(helper)) {
+            Urge need = h.urge("heavy_need", Double.MAX_VALUE, true);
+            h.offers(need);
+            h.interrupt();
+            Urge control = h.control("control");
+            h.offers(need, control);
+            h.interrupt();
+            helper.assertValueEqual(h.runner.pendingUrge().orElseThrow(), control,
+                "the control tier wins independently of need weights and waits for cleanup");
+            h.labor.tick(h.runner, h.level, h.body);
+            helper.assertTrue(h.runner.ownUrge().orElseThrow().equals(control.id()),
+                "the control tier takes the same runner when its previous holding yields");
+            h.offers(need, control, h.urge("other_need", Double.POSITIVE_INFINITY, true));
+            h.interrupt();
+            helper.assertTrue(h.runner.ownUrge().orElseThrow().equals(control.id()),
+                "an ordinary preemptive need cannot regain the body while deliberate control is active");
+            Urge replacement = h.control("replacement_control");
+            h.offers(need, replacement);
+            h.interrupt();
+            helper.assertTrue(h.runner.ownUrge().orElseThrow().equals(replacement.id()),
+                "a new order identity replaces the cancelled order without a larger numeric weight");
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void urgesSettleWithoutDuplicatingTheResidentRequest(GameTestHelper helper) throws Exception {
+        try (Harness h = new Harness(helper)) {
+            AtomicBoolean settled = new AtomicBoolean();
+            AtomicInteger takes = new AtomicInteger();
+            AtomicInteger ends = new AtomicInteger();
+            h.offers(new Urge(id("settling"), 2.0, true, () -> {
+                takes.incrementAndGet();
+                NodeSpec spec = NodeSpec.of(UUID.randomUUID(), OWNER, WorkSite.at(h.level, h.at), Stances.WHEREVER,
+                    Workload.Once.of(0)).done();
+                return new Node() {
+                    public NodeSpec spec() { return spec; }
+                    public Outcome commit(ServerLevel at, Worker who) { return Outcome.done(); }
+                    public boolean settled(ServerLevel at) { return settled.get(); }
+                    public void ended(ServerLevel at, Ending why) { ends.incrementAndGet(); }
+                };
+            }));
+            h.interrupt();
+            h.labor.tick(h.runner, h.level, h.body);
+            helper.assertTrue(!h.runner.ownBusiness(), "urge releases resident while result is pending");
+            h.interrupt();
+            h.settle();
+            helper.assertTrue(takes.get() == 1 && ends.get() == 0,
+                "pending result must neither succeed early nor duplicate the same request");
+            settled.set(true);
+            h.settle();
+            helper.assertTrue(ends.get() == 1, "urge succeeds after settlement without a worker");
+            h.interrupt();
+            helper.assertTrue(takes.get() == 2, "a completed urge permits a new request");
+            h.runner.letGo(h.level, h.body);
+            helper.assertTrue(ends.get() == 2, "interrupted personal work must receive cancellation");
+        }
+        helper.succeed();
+    }
+
+    private static ResourceLocation id(String path) {
+        return ResourceLocation.fromNamespaceAndPath("folkways_test", path);
+    }
+
+    @GameTest(template = "empty")
+    public static void outerRevocationReleasesInnerBeforeAnotherStep(GameTestHelper helper) throws Exception {
+        for (boolean continuous : List.of(false, true)) {
+            try (Harness h = new Harness(helper)) {
+                AtomicInteger innerSteps = new AtomicInteger();
+                AtomicInteger innerReleases = new AtomicInteger();
+                AtomicInteger outerReleases = new AtomicInteger();
+                AtomicInteger selections = new AtomicInteger();
+                Workload load = continuous ? (Workload.Continuous) (level, who) -> {
+                    innerSteps.incrementAndGet();
+                    return true;
+                } : Workload.Once.of(1000);
+                Node piece = h.node(load, true, innerReleases);
+                NodeSpec spec = NodeSpec.of(UUID.randomUUID(), OWNER,
+                    WorkSite.at(h.level, h.at), Stances.WHEREVER,
+                    new Workload.Custom()).done();
+                Node outer = new Node() {
+                    public NodeSpec spec() {
+                        return spec;
+                            }
+
+                            public io.github.izakyl.folkways.core.work.api.WorkHolding acquire(
+                                io.github.izakyl.folkways.core.work.api.HoldingContext
+                                context) {
+                                selections.incrementAndGet();
+                                return new SequentialHolding(context, List.of(piece), innerReleases::incrementAndGet);
+                    }
+
+                    public Outcome commit(ServerLevel level, Worker who) {
+                        return Outcome.done();
+                    }
+
+                    public void released(ServerLevel level, Worker who, Ending how) {
+                        outerReleases.incrementAndGet();
+                    }
+                };
+                h.start(outer);
+                h.labor.tick(h.runner, h.level, h.body);
+                h.labor.tick(h.runner, h.level, h.body);
+                int steps = innerSteps.get();
+                int selected = selections.get();
+                h.labor.execution().phases().cancelled(outer.id());
+                h.labor.tick(h.runner, h.level, h.body);
+                h.labor.tick(h.runner, h.level, h.body);
+                helper.assertValueEqual(innerSteps.get(), steps, "a revoked outer node stops its inner work first");
+                helper.assertValueEqual(selections.get(), selected, "a revoked outer node issues no new piece");
+                helper.assertValueEqual(innerReleases.get(), 1, "the inner execution is released once");
+                helper.assertValueEqual(outerReleases.get(), 1, "the outer execution is released once");
+            }
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void interruptionAndPathFailureReportBeforeTheNextHeartbeat(GameTestHelper helper) throws Exception {
+        try (Harness h = new Harness(helper)) {
+            List<LaborIncident> events = new ArrayList<>();
+            Consumer<LaborIncident> listener = event -> {
+                if (event.colony().equals(h.colony.id())) {
+                    events.add(event);
+                }
+            };
+            NeoForge.EVENT_BUS.addListener(listener);
+            LaborIncident.subscriptions(Set.of(h.colony.id()));
+            try {
+                h.body.mob().setCustomName(Component.literal("Pickup witness"));
+                Node job = h.node(Workload.Once.of(1000), true, new AtomicInteger());
+                h.start(job);
+                Urge flee = h.urge("flee", 2, true);
+                h.offers(flee);
+                h.interrupt();
+                helper.assertValueEqual(events.size(), 1, "preemption reports on the same server call");
+                helper.assertTrue(events.getFirst().key().contains("urge-preempts/" + flee.id())
+                        && events.getFirst().message().getString().contains("Pickup witness")
+                        && events.getFirst().message().getString().contains(job.id().toString().substring(0, 8)),
+                    "the report identifies the worker, interrupted node and actual preempting urge");
+                var failed = BodyRunner.class.getDeclaredMethod("failed", ServerLevel.class,
+                    Body.class, Node.class, RefusalKind.class);
+                failed.setAccessible(true);
+                failed.invoke(h.runner, h.level, h.body, h.runner.interruptedWork().orElseThrow(),
+                    LaborRefusal.NO_WAY_THERE);
+                helper.assertTrue(events.size() == 2
+                        && events.getLast().key().contains(LaborRefusal.NO_WAY_THERE.translationKey()),
+                    "a real runner refusal reports immediately without polling a heartbeat");
+            } finally {
+                LaborIncident.subscriptions(Set.of());
+                NeoForge.EVENT_BUS.unregister(listener);
+            }
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void expiredOneShotUrgeBackoffsDoNotAccumulate(GameTestHelper helper) throws Exception {
+        Urges urges = new Urges();
+        for (int n = 0; n < 128; n++) {
+            urges.refused(id("temporary_" + n), LaborRefusal.WORK_BROKE, 0);
+        }
+        urges.keenest(List.of(), 100, urge -> true);
+        var field = Urges.class.getDeclaredField("cooling");
+        field.setAccessible(true);
+        helper.assertTrue(((Map<?, ?>) field.get(urges)).isEmpty(),
+            "expired refusals must be removed even when a temporary controller never offers its identity again");
+        helper.succeed();
+    }
+
+    private static final class Harness implements AutoCloseable {
+        final ServerLevel level;
+        final Colony colony;
+        final ColonyLabor labor;
+        final ColonyView view;
+        final Body body;
+        final BodyRunner runner;
+        final BlockPos at;
+
+        Harness(GameTestHelper helper) {
+            level = helper.getLevel();
+            at = helper.absolutePos(BlockPos.ZERO);
+            colony = Colonies.mint(level.getServer());
+            ColonyData data = ColonyData.find(level.getServer(), colony.id()).orElseThrow();
+            labor = new ColonyLabor(data, level.dimension());
+            view = ColonySnapshot.of(data, level);
+            body = PersonBody.RESIDENT.get().create(level);
+            runner = new BodyRunner(body.resident().id(), labor.execution());
+            labor.run(level, new Lanes(task -> { }, task -> { }));
+        }
+
+        Urge control(String name) {
+            return new Urge(id(name), 1, true, () -> node(Workload.Once.of(1000), true, new AtomicInteger()),
+                Urge.Priority.CONTROL);
+        }
+
+        Urge urge(String name, double weight, boolean preempts) {
+            return new Urge(id(name), weight, preempts,
+                () -> node(Workload.Once.of(1000), true, new AtomicInteger()));
+        }
+
+        Node node(Workload load, boolean ready, AtomicInteger releases) {
+            NodeSpec spec = NodeSpec.of(UUID.randomUUID(), OWNER,
+                WorkSite.at(level, at), Stances.WHEREVER, load).done();
+            return new Node() {
+                public NodeSpec spec() {
+                    return spec;
+                }
+
+                public boolean ready(ServerLevel level) {
+                    return ready;
+                }
+
+                public Outcome commit(ServerLevel level, Worker who) {
+                    return Outcome.done();
+                }
+
+                public void released(ServerLevel level, Worker who, Ending why) {
+                    releases.incrementAndGet();
+                }
+            };
+        }
+
+        void offers(Urge... offered) {
+            OFFERS.put(colony.id(), List.of(offered));
+        }
+
+        void queue(Node node) {
+            PlanningFixture.apply(labor, level, List.of(), Shown.delta(node));
+            runner.follow(List.of(node.id()));
+        }
+
+        void start(Node node) {
+            queue(node);
+            labor.tick(runner, level, body);
+        }
+
+        boolean interrupt() throws ReflectiveOperationException {
+            var method = ColonyLabor.class.getDeclaredMethod("interrupt", ServerLevel.class, ColonyView.class,
+                Body.class, BodyRunner.class);
+            method.setAccessible(true);
+            return (boolean) method.invoke(labor, level, view, body, runner);
+        }
+
+        void settle() throws ReflectiveOperationException {
+            var method = ColonyLabor.class.getDeclaredMethod("settle", ServerLevel.class);
+            method.setAccessible(true);
+            method.invoke(labor, level);
+        }
+
+        public void close() {
+            OFFERS.remove(colony.id());
+            runner.letGo(level, body);
+            labor.close();
+            body.mob().discard();
+            colony.raze();
+        }
+    }
+}

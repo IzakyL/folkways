@@ -8,22 +8,22 @@ import com.lowdragmc.lowdraglib2.gui.ui.elements.TextField;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Toggle;
 import com.lowdragmc.lowdraglib2.gui.ui.event.UIEvents;
 import dev.vfyjxf.taffy.style.FlexDirection;
-import io.github.izakyl.folkways.core.api.terms.ItemFilter;
+import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.item.api.ItemFilter;
 import io.github.izakyl.folkways.front.api.Ghost;
 import io.github.izakyl.folkways.front.api.Schema;
-import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.front.api.ui.FilterStacks;
 import io.github.izakyl.folkways.front.api.ui.Picker;
 import io.github.izakyl.folkways.front.api.ui.Rows;
 import io.github.izakyl.folkways.front.api.ui.Taking;
 import io.github.izakyl.folkways.front.api.ui.Tokens;
+import io.github.izakyl.folkways.front.ui.screen.RememberedSettings;
 import io.github.izakyl.folkways.library.Shelves;
 import io.github.izakyl.folkways.plugins.build.SiteNameField;
 import io.github.izakyl.folkways.plugins.build.draft.Chosen;
-import io.github.izakyl.folkways.front.ui.screen.RememberedSettings;
 import io.github.izakyl.folkways.plugins.build.draft.Commission;
-import io.github.izakyl.folkways.plugins.build.draft.Drafting;
 import io.github.izakyl.folkways.plugins.build.draft.DraftTemplate;
+import io.github.izakyl.folkways.plugins.build.draft.Drafting;
 import io.github.izakyl.folkways.plugins.build.draft.Drawn;
 import io.github.izakyl.folkways.plugins.build.draft.Face;
 import io.github.izakyl.folkways.plugins.build.draft.Hint;
@@ -76,7 +76,7 @@ public final class DraftPanel {
      * What the page held when its last preview went out: the pattern, its knobs and the name, and the way it
      * faced, so the page opens on them again and builds what was looked at.
      */
-    private record Kept(Hint hint, ResourceLocation pattern, KnobValues values, String name, Direction front) {
+    private record Kept(Hint hint, ResourceLocation pattern, CompoundTag values, String name, Direction front) {
     }
 
     private static Kept kept;
@@ -175,7 +175,8 @@ public final class DraftPanel {
         Optional<Pattern> previewed = resumed.flatMap(held -> patterns.stream()
             .filter(pattern -> pattern.id().equals(held.pattern())).findFirst());
         if (previewed.isPresent()) {
-            choose(previewed.get(), resumed.get().values());
+            // The preview can stay open across a pattern-library reload.
+            choose(previewed.get(), KnobValues.restore(previewed.get().knobs(), resumed.get().values()));
             name.retype(resumed.get().name());
         } else {
             // Nothing is chosen to begin with: the knobs come once a pattern has been picked.
@@ -223,7 +224,7 @@ public final class DraftPanel {
         KnobValues restored = KnobValues.of(pattern.knobs());
         try {
             restored = RememberedSettings.load("pattern/" + pattern.id())
-                .map(saved -> KnobValues.load(pattern.knobs(), saved)).orElse(restored);
+                .map(saved -> KnobValues.restore(pattern.knobs(), saved)).orElse(restored);
         } catch (RuntimeException ignored) { }
         choose(pattern, restored);
     }
@@ -266,7 +267,7 @@ public final class DraftPanel {
 
     private void preview() {
         draw(preview, ready -> {
-            kept = new Kept(hint, chosen.id(), values, name.typed(), front);
+            kept = new Kept(hint, chosen.id(), values.save(chosen.knobs()), name.typed(), front);
             taking.preview(ghostsOf(ready));
         });
     }
@@ -288,14 +289,7 @@ public final class DraftPanel {
             } else {
                 DraftOffer.commission(chosen, hint, settings, front, typed, now);
             }
-            CompoundTag saved = settings.save();
-            // An explicitly empty material selection must not restore the pattern's defaults.
-            for (Schema.Setting setting : chosen.knobs().settings()) {
-                if (setting instanceof Schema.Setting.Items && !saved.contains(setting.key())) {
-                    saved.put(setting.key(), new CompoundTag());
-                }
-            }
-            RememberedSettings.save("pattern/" + chosen.id(), saved);
+            RememberedSettings.save("pattern/" + chosen.id(), values.save(chosen.knobs()));
             kept = null;
             taking.done();
         });

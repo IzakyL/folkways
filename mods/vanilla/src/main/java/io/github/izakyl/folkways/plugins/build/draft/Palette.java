@@ -1,7 +1,7 @@
 package io.github.izakyl.folkways.plugins.build.draft;
 
-import io.github.izakyl.folkways.core.api.terms.ItemFilter;
-import io.github.izakyl.folkways.core.api.terms.ItemQuery;
+import io.github.izakyl.folkways.core.item.api.ItemFilter;
+import io.github.izakyl.folkways.core.item.api.ItemQuery;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashSet;

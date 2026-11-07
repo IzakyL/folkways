@@ -2,9 +2,9 @@ package io.github.izakyl.folkways.plugins.person.living;
 
 import io.github.izakyl.folkways.base.persist.Reader;
 import io.github.izakyl.folkways.base.persist.Writer;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.colony.ColonyView;
-import io.github.izakyl.folkways.core.api.terms.Footing;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.colony.api.ColonyView;
+import io.github.izakyl.folkways.core.world.api.Footing;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -139,8 +139,8 @@ final class ColonyPets {
 
     void load(Reader reader) {
         pets.clear();
-        pets.addAll(reader.uuids("pets"));
-        nextAttempt = reader.longValue("next_attempt").orElse(-1L);
+        pets.addAll(reader.requiredUuids("pets"));
+        nextAttempt = reader.longValue("next_attempt").orElseThrow();
     }
 
     boolean removed(UUID id) { return pets.remove(id); }

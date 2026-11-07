@@ -141,7 +141,7 @@ const STATUS = defineTask<Record<string, any>, Record<string, any>>({
   source: javaTask({
     imports: ["io.github.izakyl.folkways.create.elevator.CreateElevatorNetwork",
       "io.github.izakyl.folkways.create.elevator.ElevatorRef", "io.github.izakyl.folkways.create.elevator.ElevatorDispatch",
-      "io.github.izakyl.folkways.core.api.colony.Colonies", "io.github.izakyl.folkways.core.api.resident.body.Bodies",
+      "io.github.izakyl.folkways.core.colony.api.Colonies", "io.github.izakyl.folkways.core.resident.api.Bodies",
       "com.simibubi.create.content.contraptions.elevator.ElevatorPulleyBlockEntity", "net.minecraft.core.BlockPos"],
     body: `
 var args=Args.of(ctx);var o=args.requireObject("origin").raw();var level=ctx.server().overworld();

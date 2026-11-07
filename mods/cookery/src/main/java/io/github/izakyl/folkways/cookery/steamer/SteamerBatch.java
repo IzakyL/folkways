@@ -2,7 +2,7 @@ package io.github.izakyl.folkways.cookery.steamer;
 
 import com.github.ysbbbbbb.kaleidoscopecookery.block.kitchen.SteamerBlock;
 import com.github.ysbbbbbb.kaleidoscopecookery.blockentity.kitchen.SteamerBlockEntity;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import java.util.Optional;
 import java.util.UUID;
 import net.minecraft.nbt.CompoundTag;
@@ -50,8 +50,22 @@ final class SteamerBatch {
 
     static Optional<Batch> read(SteamerBlockEntity steamer, ServerLevel level) {
         CompoundTag tag = steamer.getPersistentData().getCompound(KEY);
+        if (!tag.contains("baseOffset", Tag.TAG_INT) || !tag.hasUUID("batch") || !tag.hasUUID("colony")
+                || !tag.contains("inputs", Tag.TAG_LIST) || !tag.contains("outputs", Tag.TAG_LIST)
+                || !tag.contains("recipe", Tag.TAG_STRING) || !tag.contains("shape", Tag.TAG_LIST)
+                || !tag.contains("time", Tag.TAG_INT)) {
+            return Optional.empty();
+        }
         ResourceLocation recipe = ResourceLocation.tryParse(tag.getString("recipe"));
-        if (!tag.hasUUID("colony") || !tag.hasUUID("batch") || recipe == null) { return Optional.empty(); }
+        if (!tag.hasUUID("colony") || !tag.hasUUID("batch") || recipe == null
+                || !tag.contains("baseOffset", Tag.TAG_INT) || !tag.contains("time", Tag.TAG_INT)
+                || !tag.contains("capOffset", Tag.TAG_INT) || !tag.contains("capOriginal", Tag.TAG_COMPOUND)
+                || !tag.contains("capExpected", Tag.TAG_COMPOUND)) {
+            return Optional.empty();
+        }
+        if (originalLid(tag).isEmpty()) {
+            return Optional.empty();
+        }
         var anchor = steamer.getBlockPos().above(tag.getInt("baseOffset"));
         ListTag shape = tag.getList("shape", Tag.TAG_COMPOUND);
         if (shape.isEmpty()) { return Optional.empty(); }
@@ -86,15 +100,42 @@ final class SteamerBatch {
     static boolean marked(SteamerBlockEntity steamer) { return steamer.getPersistentData().contains(KEY); }
     static void restoreLid(SteamerBlockEntity steamer, ServerLevel level) {
         CompoundTag tag = steamer.getPersistentData().getCompound(KEY);
+        if (!tag.contains("capOffset", Tag.TAG_INT) || !tag.contains("capOriginal", Tag.TAG_COMPOUND)
+                || !tag.contains("capExpected", Tag.TAG_COMPOUND)) {
+            return;
+        }
         var at = steamer.getBlockPos().above(tag.getInt("capOffset"));
         var actual = level.getBlockState(at);
         if (actual.is(steamer.getBlockState().getBlock())
                 && tag.getCompound("capExpected").equals(structure(actual))
                 && !level.getBlockState(at.above()).is(actual.getBlock())) {
-            boolean originallyClosed = tag.getCompound("capOriginal").getCompound("Properties").getString("has_lid").equals("true");
-            SteamerLids.set(level, at, originallyClosed);
+            Optional<Boolean> originallyClosed = originalLid(tag);
+            if (originallyClosed.isEmpty()) {
+                return;
+            }
+            SteamerLids.set(level, at, originallyClosed.get());
         }
     }
+    private static Optional<Boolean> originalLid(CompoundTag tag) {
+        if (!tag.contains("capOriginal", Tag.TAG_COMPOUND)) {
+            return Optional.empty();
+        }
+        CompoundTag original = tag.getCompound("capOriginal");
+        if (!original.contains("Name", Tag.TAG_STRING)
+                || !original.contains("Properties", Tag.TAG_COMPOUND)) {
+            return Optional.empty();
+        }
+        CompoundTag properties = original.getCompound("Properties");
+        if (!properties.contains("has_lid", Tag.TAG_STRING)) {
+            return Optional.empty();
+        }
+        return switch (properties.getString("has_lid")) {
+            case "true" -> Optional.of(true);
+            case "false" -> Optional.of(false);
+            default -> Optional.empty();
+        };
+    }
+
     // Native support updates change the cosmetic base when heat sources are replaced.
     // They do not change capacity, lid ownership or any food slot.
     private static CompoundTag structure(BlockState state) {

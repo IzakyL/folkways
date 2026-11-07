@@ -241,8 +241,8 @@ const CREW = defineTask<Record<string, any>, Record<string, any>>({
   source: javaTask({
     imports: [
       "io.github.izakyl.folkways.front.engine.colony.*",
-      "io.github.izakyl.folkways.core.api.resident.body.Bodies",
-      "io.github.izakyl.folkways.core.api.vocation.Vocations",
+      "io.github.izakyl.folkways.core.resident.api.Bodies",
+      "io.github.izakyl.folkways.core.vocation.api.Vocations",
       "net.minecraft.core.BlockPos",
       "net.minecraft.resources.ResourceLocation",
       "net.minecraft.world.item.*",

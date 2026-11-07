@@ -2,31 +2,22 @@ package io.github.izakyl.folkways.carts;
 
 import com.jusipat.astikorcartsredux.entity.AbstractCargoCart;
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.colony.Colonies;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.colony.Held;
-import io.github.izakyl.folkways.core.api.colony.Release;
-import io.github.izakyl.folkways.core.api.resident.Going;
-import io.github.izakyl.folkways.core.api.resident.Locomotions;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.work.Ending;
-import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Recourse;
-import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.Workload;
-import io.github.izakyl.folkways.core.engine.travel.Faring;
-import io.github.izakyl.folkways.core.engine.travel.Trip;
-import io.github.izakyl.folkways.core.engine.travel.graph.Roamer;
-import io.github.izakyl.folkways.core.engine.travel.graph.Roaming;
-import io.github.izakyl.folkways.core.testing.TestWorker;
+import io.github.izakyl.folkways.core.colony.api.ClaimRelease;
+import io.github.izakyl.folkways.core.colony.api.Claimed;
+import io.github.izakyl.folkways.core.colony.api.Colonies;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.resident.api.Going;
+import io.github.izakyl.folkways.core.resident.api.Locomotions;
+import io.github.izakyl.folkways.core.travel.internal.Faring;
+import io.github.izakyl.folkways.core.travel.internal.Trip;
+import io.github.izakyl.folkways.core.travel.internal.graph.Roamer;
+import io.github.izakyl.folkways.core.travel.internal.graph.Roaming;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import io.github.izakyl.folkways.plugins.person.PersonContent;
 import io.github.izakyl.folkways.plugins.person.ResidentEntity;
 import java.util.List;
-import java.util.Optional;
 import java.util.Set;
-import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -34,8 +25,6 @@ import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.animal.horse.AbstractHorse;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.DoorBlock;
 import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
@@ -76,7 +65,7 @@ public final class CartNavigationGameTests {
             bare.discard();
             var old = Trip.afoot(rig.body.locomotion(), goals, 1, () -> "folkways.test.lost").orElseThrow();
             old.setOut(helper.getLevel(), rig.body, goals);
-            rig.colony.holdingOf(rig.cart.getUUID()).ifPresent(held -> rig.colony.release(held.id(), Release.LET_GO));
+            rig.colony.claimOf(rig.cart.getUUID()).ifPresent(held -> rig.colony.release(held.id(), ClaimRelease.LET_GO));
             helper.assertTrue(rig.cart.getPulling() == null && rig.body.locomotion().id().equals(Locomotions.WALKING),
                 "withdrawing detaches immediately and fits ordinary walking");
             helper.assertTrue(old.step(helper.getLevel(), rig.body, goals) instanceof Going.Failed,
@@ -179,7 +168,7 @@ public final class CartNavigationGameTests {
             cart.moveTo(start.west(2).getBottomCenter());
             cart.setYRot(-90);
             helper.getLevel().addFreshEntity(cart);
-            colony.hold(FolkwaysCartsMod.OWNER, Held.Entity.of(cart)).orElseThrow();
+            colony.hold(FolkwaysCartsMod.OWNER, Claimed.Entity.of(cart)).orElseThrow();
             if (kind.equals("supply_cart")) {
                 horse = net.minecraft.world.entity.EntityType.HORSE.create(helper.getLevel());
                 horse.moveTo(start.west(2).getBottomCenter());
@@ -198,7 +187,7 @@ public final class CartNavigationGameTests {
             resident.moveTo(at.getBottomCenter());
             resident.setOnGround(true);
             helper.getLevel().addFreshEntity(resident);
-            colony.hold(PersonContent.ID, Held.Entity.of(resident)).orElseThrow();
+            colony.hold(PersonContent.ID, Claimed.Entity.of(resident)).orElseThrow();
             return resident;
         }
 

@@ -1,7 +1,7 @@
 package io.github.izakyl.folkways.create.elevator;
 
 import com.simibubi.create.content.contraptions.AbstractContraptionEntity;
-import io.github.izakyl.folkways.core.api.terms.Footing;
+import io.github.izakyl.folkways.core.world.api.Footing;
 import java.util.ArrayDeque;
 import java.util.Comparator;
 import java.util.HashSet;

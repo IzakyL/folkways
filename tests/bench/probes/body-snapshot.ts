@@ -8,7 +8,7 @@ export const BODY_SNAPSHOT = defineTask<{ colony_id: string; uuids: string[] }, 
   timeoutMs: 20_000,
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.core.api.resident.body.Bodies",
+      "io.github.izakyl.folkways.core.resident.api.Bodies",
       "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
     ],
     body: `

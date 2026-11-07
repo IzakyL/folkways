@@ -1,30 +1,40 @@
 package io.github.izakyl.folkways.cookery.millstone;
 
 import com.github.ysbbbbbb.kaleidoscopecookery.crafting.container.SimpleInput;
-import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
-import io.github.izakyl.folkways.core.api.terms.Goods;
-import io.github.izakyl.folkways.core.api.terms.Reach;
-import io.github.izakyl.folkways.core.api.terms.RefusalKind;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
-import io.github.izakyl.folkways.core.api.work.Amount;
-import io.github.izakyl.folkways.core.api.work.Ending;
-import io.github.izakyl.folkways.core.api.work.Grown;
-import io.github.izakyl.folkways.core.api.work.Hold;
-import io.github.izakyl.folkways.core.api.work.Leaves;
-import io.github.izakyl.folkways.core.api.work.Need;
-import io.github.izakyl.folkways.core.api.work.Node;
-import io.github.izakyl.folkways.core.api.work.NodeSpec;
-import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.WorkEffort;
-import io.github.izakyl.folkways.core.api.work.WorkGesture;
-import io.github.izakyl.folkways.core.api.work.WorkSite;
-import io.github.izakyl.folkways.core.api.work.Worker;
-import io.github.izakyl.folkways.core.api.work.Workload;
 import io.github.izakyl.folkways.cookery.CookeryContent;
 import io.github.izakyl.folkways.cookery.CookeryRefusal;
 import io.github.izakyl.folkways.cookery.KitchenBookings;
+import io.github.izakyl.folkways.cookery.KitchenClosure;
+import io.github.izakyl.folkways.cookery.KitchenHolding;
+import io.github.izakyl.folkways.cookery.KitchenWork;
+import io.github.izakyl.folkways.core.item.api.Goods;
+import io.github.izakyl.folkways.core.plan.api.Grown;
+import io.github.izakyl.folkways.core.resident.api.RefusalKind;
+import io.github.izakyl.folkways.core.work.api.Amount;
+import io.github.izakyl.folkways.core.work.api.Disposition;
+import io.github.izakyl.folkways.core.work.api.Ending;
+import io.github.izakyl.folkways.core.work.api.Hold;
+import io.github.izakyl.folkways.core.work.api.HoldingContext;
+import io.github.izakyl.folkways.core.work.api.HoldingStep;
+import io.github.izakyl.folkways.core.work.api.Need;
+import io.github.izakyl.folkways.core.work.api.NodeSpec;
+import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.PreemptReason;
+import io.github.izakyl.folkways.core.work.api.SoftPreempt;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.work.api.WorkAction;
+import io.github.izakyl.folkways.core.work.api.WorkEffort;
+import io.github.izakyl.folkways.core.work.api.WorkGesture;
+import io.github.izakyl.folkways.core.work.api.WorkHolding;
+import io.github.izakyl.folkways.core.work.api.WorkSite;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.work.api.Workload;
+import io.github.izakyl.folkways.core.work.support.Leaves;
+import io.github.izakyl.folkways.core.work.support.WorkStances;
+import io.github.izakyl.folkways.core.world.api.Reach;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
+import io.github.izakyl.folkways.core.world.api.WorldSpaces;
+import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
 import io.github.izakyl.folkways.plugins.wares.WaresContent;
 import java.util.ArrayList;
 import java.util.List;
@@ -33,7 +43,7 @@ import java.util.UUID;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
 
-final class MillstoneWork implements Node, Workload.Within {
+final class MillstoneWork implements KitchenWork {
     private enum Phase { LOAD, DRIVE, TAKE, DONE }
     private final UUID colony;
     private final UUID batch;
@@ -51,6 +61,7 @@ final class MillstoneWork implements Node, Workload.Within {
     private Phase phase;
     private boolean loaded;
     private RefusalKind failed;
+    private final KitchenClosure closure;
 
     MillstoneWork(UUID colony, WorldPos at, Stances stances, MillstoneStation.Job job, int count,
                   KitchenBookings bookings, Runnable changed, MillstoneBatch.Batch previous) {
@@ -60,14 +71,28 @@ final class MillstoneWork implements Node, Workload.Within {
         this.recovering = previous != null;
         this.loaded = recovering;
         this.phase = previous == null ? Phase.LOAD : Phase.DRIVE;
-        this.spec = NodeSpec.of(batch, CookeryContent.ID, new WorkSite.AtBlock(at), stances, this)
+        this.spec = NodeSpec.of(batch, CookeryContent.ID, new WorkSite.AtBlock(at), stances, new Workload.Custom())
             .needs(recovering ? List.of() : List.of(new Need(job.input(), count, true)))
             .gives(job.amounts(count, false)).leaves(job.amounts(count, true)).effort(WorkEffort.NONE)
             .vocation(WaresContent.trade()).gesture(WorkGesture.SWING).focus(at.cell()).estimate(560)
             .doing(CookeryContent.PREPARING).done();
         recoveryGoal = recovering ? Grown.of(this) : null;
+        closure = new KitchenClosure(how -> {
+            if (recovering) {
+                MillstoneStation.ended(colony, at, this);
+            }
+            if (recoveryHold != null) {
+                recoveryHold.release(how);
+                recoveryHold = null;
+            }
+        }, changed);
     }
-    Grown recoveryGoal() { return recoveryGoal; }
+    Grown recoveryGoal() { return recoveryGoal;
+    }
+
+    @Override
+    public boolean producesBeforeSettlement() {
+        return true; }
     public NodeSpec spec() { return spec; }
     @Override
     public List<Amount> planningLeaves(List<Amount> promised) {
@@ -87,6 +112,9 @@ final class MillstoneWork implements Node, Workload.Within {
         return bookings.cancelled(at, id(), generation) || bookings.first(at, id()) && MillstoneStation.mill(level, at).isPresent();
     }
     public Optional<RefusalKind> refusal(ServerLevel level) {
+        if (closure.closed()) {
+            return Optional.of(CookeryRefusal.STATION_CHANGED);
+        }
         if (bookings.cancelled(at, id(), generation)) { return Optional.of(CookeryRefusal.STATION_CHANGED); }
         var mill = MillstoneStation.mill(level, at);
         if (mill.isEmpty()) { return Optional.of(CookeryRefusal.NOT_A_STATION); }
@@ -100,13 +128,47 @@ final class MillstoneWork implements Node, Workload.Within {
         }
         return Optional.empty();
     }
-    public Turn next(ServerLevel level, Worker who) {
-        refusal(level).ifPresent(why -> failed = why);
-        if (failed != null || phase == Phase.DONE) { return LEAVE; }
-        if (!bookings.first(at, id())) { return WAIT; }
-        return new Turn.Piece(phase == Phase.DRIVE ? new Drive() : new Action(level, phase));
+
+    @Override
+    public WorkHolding acquire(HoldingContext context) {
+        return new MillstoneHolding();
     }
-    public void ended(ServerLevel level, Node piece, Ending how) {
+
+    private final class MillstoneHolding extends KitchenHolding {
+
+        @Override
+        public void requestSoftPreempt(HoldingContext context, SoftPreempt request) {
+            MillstoneDrive.interrupt(context.worker().body());
+            super.requestSoftPreempt(context, request);
+        }
+
+        @Override
+        public void hardRelease(HoldingContext context, Disposition result, PreemptReason reason) {
+            MillstoneDrive.interrupt(context.worker().body());
+            super.hardRelease(context, result, reason);
+        }
+
+        MillstoneHolding() {
+            super(MillstoneWork.this::operation, () -> phase == Phase.DONE || failed != null,
+                MillstoneWork.this::commit, why -> failed = why);
+        }
+
+        @Override
+        protected HoldingStep stepCompleted(HoldingContext context, WorkAction operation, HoldingStep step) {
+            MillstoneWork.this.completed(context.level(), operation, step instanceof HoldingStep.Failed failure
+                ? new Ending.Failed(id(), failure.why()) : Ending.DONE);
+            return new HoldingStep.Running();
+        }
+    }
+
+    private WorkAction operation(ServerLevel level, Worker who) {
+        refusal(level).ifPresent(why -> failed = why);
+        if (failed != null || phase == Phase.DONE) { return null; }
+        if (!bookings.first(at, id())) { return null; }
+        return phase == Phase.DRIVE ? new Drive() : new Action(level, phase);
+    }
+
+    private void completed(ServerLevel level, WorkAction piece, Ending how) {
         if (how instanceof Ending.Failed failure) { failed = failure.why(); }
         if (how instanceof Ending.Done) {
             phase = switch (phase) { case LOAD -> Phase.DRIVE; case DRIVE -> Phase.TAKE; default -> Phase.DONE; };
@@ -116,13 +178,14 @@ final class MillstoneWork implements Node, Workload.Within {
         return phase == Phase.DONE && !bookings.cancelled(at, id(), generation) ? Outcome.done()
             : Outcome.failed(failed == null ? CookeryRefusal.STATION_CHANGED : failed);
     }
-    public void ended(ServerLevel level, Ending how) {
-        if (recovering) { MillstoneStation.ended(colony, at, this); }
-        if (recoveryHold != null) { recoveryHold.release(how); recoveryHold = null; }
-        changed.run();
+
+    @Override
+    public KitchenClosure closure() {
+        return closure;
     }
+
     private boolean reachable(ServerLevel level, Worker who, Stances working) {
-        var local = working instanceof Stances.Cells ? Reach.stanceHolding(who.body(), working)
+        var local = working instanceof Stances.Cells ? WorkStances.stanceHolding(who.body(), working)
             : WorldSpaces.relative(level, at.realm(), who.body().position()).map(net.minecraft.core.BlockPos::containing);
         return local
             .flatMap(feet -> WorldSpaces.storage(level, new WorldPos(at.realm(), feet)))
@@ -136,7 +199,7 @@ final class MillstoneWork implements Node, Workload.Within {
             .vocation(WaresContent.trade()).gesture(WorkGesture.SWING).focus(at.cell())
             .doing(CookeryContent.PREPARING).done();
     }
-    private class Action implements Node {
+    private class Action implements WorkAction {
         final Phase kind;
         private final NodeSpec spec;
         Action(ServerLevel level, Phase kind) {
@@ -208,11 +271,8 @@ final class MillstoneWork implements Node, Workload.Within {
             changed.run();
             return new Outcome.Done(List.of(), made, Optional.empty());
         }
-        public void released(ServerLevel level, Worker who, Ending how) {
-            if (!(how instanceof Ending.Done)) { MillstoneDrive.interrupt(who.body()); }
-        }
     }
-    private final class Drive implements Node, Workload.Continuous {
+    private final class Drive implements WorkAction, Workload.Continuous {
         private final NodeSpec spec = NodeSpec.of(UUID.randomUUID(), CookeryContent.ID, new WorkSite.AtBlock(at),
             Stances.WHEREVER, this).vocation(WaresContent.trade()).doing(CookeryContent.PREPARING).done();
         public NodeSpec spec() { return spec; }
@@ -240,9 +300,6 @@ final class MillstoneWork implements Node, Workload.Within {
                     .flatMap(mill -> MillstoneBatch.read(mill, level)).filter(MillstoneBatch.Batch::ready).isPresent()
                     && !MillstoneDrive.exiting(who.body()) ? Outcome.done()
                 : Outcome.failed(failed == null ? CookeryRefusal.STATION_CHANGED : failed);
-        }
-        public void released(ServerLevel level, Worker who, Ending how) {
-            if (!(how instanceof Ending.Done)) { MillstoneDrive.interrupt(who.body()); }
         }
     }
 }

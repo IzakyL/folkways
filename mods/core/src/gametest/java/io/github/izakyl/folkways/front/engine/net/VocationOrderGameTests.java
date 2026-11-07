@@ -1,8 +1,8 @@
 package io.github.izakyl.folkways.front.engine.net;
 
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.vocation.Vocations;
 import io.github.izakyl.folkways.core.testing.Proxies;
+import io.github.izakyl.folkways.core.vocation.api.Vocations;
 import io.netty.buffer.Unpooled;
 import java.util.ArrayList;
 import java.util.List;

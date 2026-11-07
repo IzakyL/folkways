@@ -5,7 +5,7 @@ import { randomUUID } from "node:crypto";
 
 export const DATA_VERSION = 3955;
 
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 type Nbt =
   | { k: "byte"; v: number }
@@ -181,10 +181,10 @@ export type OrderSpec = {
 export type BlueprintBlockSpec = { offset: Vec3; block: string; properties?: Record<string, string> };
 export type BlueprintSpec = { id: string; name: string; blocks: BlueprintBlockSpec[]; createdGameTime?: number };
 export type BuildOrderSpec = {
+  name?: string;
   id?: string;
   blueprintId: string;
   anchor: Vec3;
-  clears?: Vec3[];
   playerId?: string;
   playerName?: string;
   createdGameTime?: number;
@@ -279,7 +279,7 @@ function blueprintBlockNbt(b: BlueprintBlockSpec): Nbt {
   if (b.properties && Object.keys(b.properties).length) {
     state.Properties = C(Object.fromEntries(Object.entries(b.properties).map(([k, v]) => [k, S(v)])));
   }
-  return C({ offset: posIA(b.offset), state: C(state) });
+  return C({ offset: posIA(b.offset), state: C(state), blockEntity: C({ nbt: C({}), turns: LIST(TAG.compound, []) }) });
 }
 
 function blueprintNbt(bp: BlueprintSpec): Nbt {
@@ -292,6 +292,9 @@ function blueprintNbt(bp: BlueprintSpec): Nbt {
     [0, 0, 0],
   );
   return C({
+    printed: B(1),
+    singleUse: B(0),
+    joints: LIST(TAG.compound, []),
     id: uuidIA(bp.id),
     name: S(bp.name),
     createdGameTime: L(bp.createdGameTime ?? 0),
@@ -304,13 +307,11 @@ function buildOrderNbt(o: BuildOrderSpec): Nbt {
   const fields: Record<string, Nbt> = {
     id: uuidIA(o.id ?? randomUUID()),
     blueprintId: uuidIA(o.blueprintId),
+    name: S(o.name ?? "Construction site"),
     anchor: worldPos(o.anchor),
     playerName: S(o.playerName ?? "BlockwrightBot"),
     createdGameTime: L(o.createdGameTime ?? 0),
   };
-  if (o.clears?.length) {
-    fields.clears = IA(o.clears.flatMap((c) => [Math.trunc(c.x), Math.trunc(c.y), Math.trunc(c.z)]));
-  }
   if (o.playerId) fields.playerId = uuidIA(o.playerId);
   return C(fields);
 }
@@ -322,11 +323,13 @@ function orderNbt(o: OrderSpec): Nbt {
     low: I(o.low ?? o.count),
     count: I(o.count),
     standing: B(o.standing ? 1 : 0),
+    remaining: L(0),
   });
 }
 
 function frontKeepNbt(spec: ColonySpec, zoneIds: string[]): Nbt | null {
   const fields: Record<string, Nbt> = {
+    settings: C({}),
     drawn: C(Object.fromEntries(spec.zones.map((z, i) => [zoneIds[i], settingsNbt(zoneSettings(z))]))),
   };
   if (spec.settings && Object.keys(spec.settings).length) {
@@ -334,7 +337,7 @@ function frontKeepNbt(spec: ColonySpec, zoneIds: string[]): Nbt | null {
       Object.entries(spec.settings).map(([scope, store]) => [scope, settingsNbt(store)]),
     ));
   }
-  return spec.zones.length || fields.settings ? C(fields) : null;
+  return spec.zones.length || spec.settings && Object.keys(spec.settings).length ? C(fields) : null;
 }
 
 function keepsNbt(spec: ColonySpec, zoneIds: string[]): Nbt {
@@ -342,10 +345,15 @@ function keepsNbt(spec: ColonySpec, zoneIds: string[]): Nbt {
   const front = frontKeepNbt(spec, zoneIds);
   if (front) bags[KEEP.front] = front;
   if (spec.orders.length) {
-    bags[KEEP.orders] = C({ orders: LIST(TAG.compound, spec.orders.map(orderNbt)) });
+    bags[KEEP.orders] = C({ orders: LIST(TAG.compound, spec.orders.map(orderNbt)), shelves: LIST(TAG.compound, []) });
   }
   if (spec.blueprints?.length || spec.buildOrders?.length) {
     bags[KEEP.build] = C({
+      numbered: I(0),
+      carvingCaches: LIST(TAG.compound, []),
+      temporary: LIST(TAG.compound, []),
+      drafted: LIST(TAG.compound, []),
+      met: LIST(TAG.compound, []),
       book: C({
         blueprints: LIST(TAG.compound, (spec.blueprints ?? []).map(blueprintNbt)),
         buildOrders: LIST(TAG.compound, (spec.buildOrders ?? []).map(buildOrderNbt)),
@@ -354,6 +362,12 @@ function keepsNbt(spec: ColonySpec, zoneIds: string[]): Nbt {
   }
   if (spec.bedClaims?.length) {
     bags[KEEP.living] = C({
+      pets: C({ next_attempt: L(-1), pets: LIST(TAG.intArray, []) }),
+      nameplates: LIST(TAG.compound, []),
+      edited_signs: LIST(TAG.compound, []),
+      hunger: LIST(TAG.compound, []),
+      rest: LIST(TAG.compound, []),
+      moods: LIST(TAG.compound, []),
       claims: LIST(
         TAG.compound,
         spec.bedClaims.map((claim) => C({ resident: uuidIA(claim.resident), bed: worldPos(claim.bed) })),
@@ -367,7 +381,7 @@ export function buildColonyDatRoot(spec: ColonySpec): Record<string, Nbt> {
   const zoneIds = spec.zones.map(() => randomUUID());
   const colony: Record<string, Nbt> = {
     colonyId: uuidIA(spec.colonyId),
-    holdings: C({
+    claims: C({
       held: LIST(TAG.compound, [
         ...spec.residents.map(residentHoldingNbt),
         ...spec.members.map(memberHoldingNbt),

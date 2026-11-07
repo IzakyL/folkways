@@ -1,90 +1,92 @@
 package io.github.izakyl.folkways.cookery.stockpot;
 
-import io.github.izakyl.folkways.core.testing.TestWorker;
 import com.github.ysbbbbbb.kaleidoscopecookery.api.blockentity.IStockpot;
-import com.github.ysbbbbbb.kaleidoscopecookery.crafting.container.StockpotInput;
-import com.github.ysbbbbbb.kaleidoscopecookery.crafting.soupbase.SoupBaseManager;
-import com.github.ysbbbbbb.kaleidoscopecookery.util.ItemUtils;
 import com.github.ysbbbbbb.kaleidoscopecookery.blockentity.kitchen.StockpotBlockEntity;
+import com.github.ysbbbbbb.kaleidoscopecookery.crafting.container.StockpotInput;
 import com.github.ysbbbbbb.kaleidoscopecookery.crafting.recipe.StockpotRecipe;
 import com.github.ysbbbbbb.kaleidoscopecookery.crafting.recipe.StockpotVisuals;
+import com.github.ysbbbbbb.kaleidoscopecookery.crafting.soupbase.SoupBaseManager;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModSoupBases;
 import com.github.ysbbbbbb.kaleidoscopecookery.item.quality.Quality;
 import com.github.ysbbbbbb.kaleidoscopecookery.item.quality.QualityUtils;
-import io.github.izakyl.folkways.core.api.terms.Containers;
-import io.github.izakyl.folkways.core.api.terms.Goods;
-import io.github.izakyl.folkways.core.api.terms.Realm;
-import io.github.izakyl.folkways.core.api.terms.Stash;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
-import io.github.izakyl.folkways.core.api.vocation.Vocations;
-import io.github.izakyl.folkways.core.api.work.Amount;
-import io.github.izakyl.folkways.core.api.work.Leaves;
-import io.github.izakyl.folkways.core.api.work.Ending;
-import io.github.izakyl.folkways.core.api.work.Grown;
-import io.github.izakyl.folkways.core.api.work.Hold;
-import io.github.izakyl.folkways.core.api.work.Need;
-import io.github.izakyl.folkways.core.api.work.Node;
-import io.github.izakyl.folkways.core.api.work.NodeSpec;
-import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Produce;
-import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.Worker;
-import io.github.izakyl.folkways.core.api.work.Workload;
-import io.github.izakyl.folkways.core.api.work.Workshop;
-import io.github.izakyl.folkways.core.api.work.WorkSite;
-import io.github.izakyl.folkways.core.engine.labor.Commit;
-import io.github.izakyl.folkways.core.engine.plan.Crew;
-import io.github.izakyl.folkways.core.engine.plan.Known;
-import io.github.izakyl.folkways.core.engine.plan.Message;
-import io.github.izakyl.folkways.core.engine.plan.Planned;
-import io.github.izakyl.folkways.core.engine.plan.PlanningFixture;
-import io.github.izakyl.folkways.core.engine.plan.Solving;
-import io.github.izakyl.folkways.core.engine.plan.Stock;
-import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
+import com.github.ysbbbbbb.kaleidoscopecookery.util.ItemUtils;
 import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.base.persist.upgrade.RawUpgrades;
 import io.github.izakyl.folkways.cookery.CookeryContent;
-import io.github.izakyl.folkways.cookery.testing.KitchenRecoveryWanted;
 import io.github.izakyl.folkways.cookery.CookeryRefusal;
 import io.github.izakyl.folkways.cookery.KitchenBookings;
-import io.github.izakyl.folkways.plugins.person.PersonBody;
+import io.github.izakyl.folkways.cookery.testing.KitchenRecoveryWanted;
 import io.github.izakyl.folkways.cookery.testing.NativeCookingMatrix;
+import io.github.izakyl.folkways.core.inventory.api.Stash;
+import io.github.izakyl.folkways.core.item.api.Containers;
+import io.github.izakyl.folkways.core.item.api.Goods;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
+import io.github.izakyl.folkways.core.plan.api.Grown;
+import io.github.izakyl.folkways.core.plan.api.Produce;
+import io.github.izakyl.folkways.core.plan.api.Workshop;
+import io.github.izakyl.folkways.core.plan.internal.Crew;
+import io.github.izakyl.folkways.core.plan.internal.Known;
+import io.github.izakyl.folkways.core.plan.internal.Message;
+import io.github.izakyl.folkways.core.plan.internal.Planned;
+import io.github.izakyl.folkways.core.plan.internal.PlanningFixture;
+import io.github.izakyl.folkways.core.plan.internal.Solving;
+import io.github.izakyl.folkways.core.plan.internal.Stock;
+import io.github.izakyl.folkways.core.runtime.HoldingFixture;
+import io.github.izakyl.folkways.core.testing.TestWorker;
+import io.github.izakyl.folkways.core.vocation.api.Vocations;
+import io.github.izakyl.folkways.core.work.api.Amount;
+import io.github.izakyl.folkways.core.work.api.Ending;
+import io.github.izakyl.folkways.core.work.api.Hold;
+import io.github.izakyl.folkways.core.work.api.Need;
+import io.github.izakyl.folkways.core.work.api.Node;
+import io.github.izakyl.folkways.core.work.api.NodeSpec;
+import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.work.api.WorkSite;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.work.api.Workload;
+import io.github.izakyl.folkways.core.work.internal.Commit;
+import io.github.izakyl.folkways.core.work.support.Leaves;
+import io.github.izakyl.folkways.core.world.api.Realm;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
+import io.github.izakyl.folkways.core.world.api.WorldSpaces;
+import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
+import io.github.izakyl.folkways.plugins.person.PersonBody;
 import io.github.izakyl.folkways.plugins.person.ResidentEntity;
 import io.github.izakyl.folkways.plugins.wares.WaresContent;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import java.util.ArrayList;
-import java.util.function.Consumer;
-import java.util.function.Function;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.LinkedHashMap;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Consumer;
+import java.util.function.Function;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestGenerator;
-import net.minecraft.gametest.framework.TestFunction;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.gametest.framework.TestFunction;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
+import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.item.crafting.RecipeHolder;
-import net.minecraft.world.item.Item;
-import net.minecraft.world.item.Items;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.Vec3;
-import net.minecraft.world.SimpleContainer;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.common.ModConfigSpec;
@@ -102,6 +104,50 @@ public final class StockpotGameTests {
         event.register(StockpotGameTests.class);
     }
 
+    @GameTest(template = "empty", timeoutTicks = 1100)
+    public static void hardUrgesPreserveTheLoadedSoupAndItsSingleServing(GameTestHelper helper) {
+        Rig rig = new Rig(helper, "rice_1", false);
+        rig.stockRice(1, 1);
+        rig.claim.release(Ending.DROPPED);
+        StockpotWork work =
+                new StockpotWork(
+                    rig.colony,
+                    rig.at,
+                    rig.stances,
+                    rig.plan,
+                    1,
+                    false,
+                    rig.bookings,
+                    () -> {});
+        rig.claim = rig.bookings.hold(rig.at, work.id());
+        helper.assertTrue(rig.claim.take().isEmpty(), "the holding owns the native station turn");
+        HoldingFixture holding = rig.holding(work).prepare().hardUrge();
+        Outcome loaded = holding.step();
+        helper.assertTrue(loaded instanceof Outcome.Done, "one original soup batch is accepted");
+        ((Outcome.Done) loaded).made().forEach(rig::put);
+        holding.hardUrge();
+        helper.runAfterDelay(20, holding::hardUrge);
+        afterCooking(
+            rig,
+            ready -> {
+            holding.prepare().hardUrge();
+            ready.drive(work);
+            holding.hardUrge();
+            helper.assertValueEqual(
+                ready.count(ModItems.COOKED_RICE.get()),
+                1L,
+                "one original rice portion survives");
+            helper.assertValueEqual(
+                ready.count(ModItems.RICE_SEED.get()),
+                0L,
+                "accepted rice is never refunded");
+            helper.assertValueEqual(
+                ready.count(ModItems.STOCKPOT_LID.get()),
+                1L,
+                "the reusable lid returns once");
+            });
+    }
+
     @GameTest(template = "empty")
     public static void stockpotBudgetKeepsItsRealBucketAndLidWithoutDuplicatingTheMeal(GameTestHelper helper) {
         try (Rig rig = new Rig(helper, "rice_3", false)) {
@@ -113,8 +159,9 @@ public final class StockpotGameTests {
                 .mapToLong(Amount::count).sum(), 1L, "the soup's emptied real bucket keeps its slot");
             helper.assertValueEqual(extras.stream().filter(amount -> amount.spec().equals(StockpotLoad.lid())).mapToLong(Amount::count).sum(),
                 1L, "the actual reusable lid is still returned once");
-            StockpotTake recovery = new StockpotTake(rig.colony, UUID.randomUUID(), rig.at, rig.stances, rig.plan,
-                rig.bookings, () -> {}, true);
+            StockpotTake.Recovery recovery = new StockpotTake.Recovery(rig.colony, UUID.randomUUID(), rig.at,
+                rig.stances, rig.plan,
+                rig.bookings, () -> {});
             helper.assertTrue(recovery.planningLeaves(List.of()).equals(Leaves.merged(recovery.spec().leaves())),
                 "an autonomous recovered batch reserves all physical portions and its lid before it has any consumer");
         }
@@ -265,17 +312,20 @@ public final class StockpotGameTests {
             List<Grown> recovery = StockpotWorkshops.recovery(rig.colony, rig.level, rig.at, rig.stances,
                 rig.bookings, () -> { });
             helper.assertValueEqual(recovery.size(), 1, "the saved batch offers one recovery task");
-            rig.take = recovery.getFirst().nodes().getFirst();
+            rig.take = (StockpotTake) recovery.getFirst().nodes().getFirst();
             helper.assertTrue(rig.take.id().equals(rig.batch), "recovery preserves the old batch identity");
-            helper.assertTrue(rig.take.planned(rig.level).isEmpty(), "recovery acquires the shared kitchen booking");
+            helper.assertTrue(
+                ((Node) rig.take).planned(rig.level).isEmpty(), "recovery acquires the shared kitchen booking");
             KitchenRecoveryWanted.assertKept(helper, recovery.getFirst(), () -> StockpotWorkshops.recovery(rig.colony, rig.level, rig.at, rig.stances, rig.bookings, () -> {}));
         });
         afterCooking(rig, ready -> {
             ready.take();
             helper.assertValueEqual(ready.count(ModItems.COOKED_RICE.get()), 3L, "the saved batch is served once");
             helper.assertValueEqual(ready.count(ModItems.RICE_SEED.get()), 0L, "ingredients were spent only once");
-            KitchenRecoveryWanted.assertKept(helper, ((StockpotTake)ready.take).recoveryGoal(), () -> StockpotWorkshops.recovery(ready.colony, ready.level, ready.at, ready.stances, ready.bookings, () -> {}));
-            ready.take.ended(ready.level, Ending.DONE);
+            KitchenRecoveryWanted.assertKept(helper, ((StockpotTake.Recovery)ready.take).recoveryGoal(),
+                () -> StockpotWorkshops.recovery(ready.colony, ready.level, ready.at, ready.stances, ready.bookings,
+                () -> {}));
+            ((Node) ready.take).ended(ready.level, Ending.DONE);
             helper.assertTrue(StockpotWorkshops.activeRecovery(ready.colony, ready.level, ready.at, ready.bookings).isEmpty(), "ended stockpot recovery is removed from wanted");
             helper.assertTrue(ready.bookings.free(ready.at), "finished recovery releases its booking");
         });
@@ -292,12 +342,15 @@ public final class StockpotGameTests {
             ready.body.discard();
             ready.body = ready.newBody();
             ready.worker = ready.worker();
-            ready.take = StockpotWorkshops.recovery(ready.colony, ready.level, ready.at, ready.stances,
+            ready.take =
+            (StockpotTake)
+            StockpotWorkshops.recovery(ready.colony, ready.level, ready.at, ready.stances,
                 ready.bookings, () -> { }).getFirst().nodes().getFirst();
-            helper.assertTrue(ready.take.planned(ready.level).isEmpty(), "a different resident can recover the pot");
+            helper.assertTrue(
+                ((Node) ready.take).planned(ready.level).isEmpty(), "a different resident can recover the pot");
             ready.take();
             helper.assertValueEqual(ready.count(ModItems.COOKED_RICE.get()), 3L, "a finished saved batch is not lost");
-            ready.take.ended(ready.level, Ending.DONE);
+            ((Node) ready.take).ended(ready.level, Ending.DONE);
         });
     }
 
@@ -363,6 +416,8 @@ public final class StockpotGameTests {
                 rig.bookings, () -> { }).isEmpty(), "changed inputs are not silently cooked as the old order");
             CompoundTag after = rig.pot.saveCustomOnly(rig.level.registryAccess());
             before.getCompound("NeoForgeData").remove(StockpotBatch.KEY);
+            // With no Folkways data left the pot is saved without our data version as well.
+            before.getCompound("NeoForgeData").remove(RawUpgrades.VERSION);
             helper.assertTrue(before.equals(after), "only our ownership metadata is relinquished");
             rig.claim = rig.bookings.hold(rig.at, rig.batch);
             helper.assertTrue(rig.claim.take().isEmpty(), "the old graph still owns its kitchen turn");
@@ -463,6 +518,8 @@ public final class StockpotGameTests {
                 "unmarking another colony cannot change this kitchen");
             StockpotWorkshops.release(rig.colony, rig.level, rig.at);
             before.getCompound("NeoForgeData").remove(StockpotBatch.KEY);
+            // With no Folkways data left the pot is saved without our data version as well.
+            before.getCompound("NeoForgeData").remove(RawUpgrades.VERSION);
             helper.assertTrue(before.equals(rig.pot.saveCustomOnly(rig.level.registryAccess())),
                 "unmarking removes ownership alone, preserving soup, ingredients and the exact lid");
         }
@@ -531,7 +588,7 @@ public final class StockpotGameTests {
             helper.assertTrue(turn.take().isEmpty(), "the frame kitchen has its own booking");
             try {
                 rig.body.setPos(WorldSpaces.world(rig.level, footing).orElseThrow());
-                Node loading = new StockpotLoad(rig.colony, rig.batch, at, Stances.at(footing), rig.plan, false,
+                var loading = new StockpotLoad(rig.colony, rig.batch, at, Stances.at(footing), rig.plan, false,
                     rig.bookings, () -> { });
                 Outcome outcome = Commit.run(rig.level, loading, rig.worker);
                 helper.assertTrue(outcome instanceof Outcome.Done,
@@ -539,8 +596,8 @@ public final class StockpotGameTests {
                 ((Outcome.Done) outcome).made().forEach(rig::put);
                 CompoundTag before = rig.pot.saveWithFullMetadata(rig.level.registryAccess());
                 origin[0] = origin[0].add(5, 0, 3);
-                Node taking = new StockpotTake(rig.colony, rig.batch, at, Stances.at(footing), rig.plan,
-                    rig.bookings, () -> { }, false);
+                Node taking = new StockpotTake.Recovery(rig.colony, rig.batch, at, Stances.at(footing), rig.plan,
+                    rig.bookings, () -> { });
                 helper.assertTrue(Commit.run(rig.level, taking, rig.worker) instanceof Outcome.Failed,
                     "a frame moving away invalidates the old stance before any interaction");
                 helper.assertTrue(before.equals(rig.pot.saveWithFullMetadata(rig.level.registryAccess())),
@@ -559,12 +616,14 @@ public final class StockpotGameTests {
         rig.load();
         afterCooking(rig, ready -> {
             ready.claim.release(Ending.DROPPED);
-            ready.take = StockpotWorkshops.recovery(ready.colony, ready.level, ready.at, ready.stances,
+            ready.take =
+            (StockpotTake)
+            StockpotWorkshops.recovery(ready.colony, ready.level, ready.at, ready.stances,
                 ready.bookings, () -> { }).getFirst().nodes().getFirst();
-            helper.assertTrue(ready.take.planned(ready.level).isEmpty(), "recovery obtains its kitchen turn");
-            helper.assertTrue(!assignedWithRoom(ready, ready.take, 1),
+            helper.assertTrue(((Node) ready.take).planned(ready.level).isEmpty(), "recovery obtains its kitchen turn");
+            helper.assertTrue(!assignedWithRoom(ready, (Node) ready.take, 1),
                 "one empty pack cell cannot recover both a meal and a lid after fetching its bowl");
-            helper.assertTrue(assignedWithRoom(ready, ready.take, 2),
+            helper.assertTrue(assignedWithRoom(ready, (Node) ready.take, 2),
                 "two empty cells are enough for the actual recovery outputs");
             SimpleContainer small = new SimpleContainer(new ItemStack(Items.STONE, 64),
                 Containers.extract(ready.pack, stack -> stack.is(Items.BOWL), 1), ItemStack.EMPTY);
@@ -575,7 +634,7 @@ public final class StockpotGameTests {
             }
             helper.assertValueEqual(Goods.countIn(small, ready.plan.produces()), 1L, "the real meal is retained");
             helper.assertValueEqual(Goods.countIn(small, StockpotLoad.lid()), 1L, "the real lid is retained");
-            ready.take.ended(ready.level, Ending.DONE);
+            ((Node) ready.take).ended(ready.level, Ending.DONE);
         });
     }
 
@@ -588,8 +647,8 @@ public final class StockpotGameTests {
             StockpotPlan plan = StockpotPlan.of(rig.level, new RecipeHolder<>(
                 ResourceLocation.fromNamespaceAndPath("folkways_test", "three_non_stackable_servings"), recipe))
                 .orElseThrow();
-            Node taking = new StockpotTake(rig.colony, rig.batch, rig.at, rig.stances, plan,
-                rig.bookings, () -> { }, false);
+            Node taking = new StockpotTake.Recovery(rig.colony, rig.batch, rig.at, rig.stances, plan,
+                rig.bookings, () -> { });
             helper.assertTrue(!assignedWithRoom(rig, taking, 3),
                 "three empty cells cannot hold three non-stackable meals and a lid");
             helper.assertTrue(assignedWithRoom(rig, taking, 4),
@@ -609,20 +668,23 @@ public final class StockpotGameTests {
         rig.claim.release(Ending.DROPPED);
         rig.claim = rig.bookings.hold(rig.at, work.id());
         helper.assertTrue(rig.claim.take().isEmpty(), "the multi-batch work owns the station");
-        var interrupted = (Workload.Within.Turn.Piece) work.next(rig.level, rig.worker);
-        work.ended(rig.level, interrupted.node(), Ending.DROPPED);
-        var resumed = (Workload.Within.Turn.Piece) work.next(rig.level, rig.worker);
-        helper.assertTrue(!interrupted.node().id().equals(resumed.node().id()),
-            "an urge resumes the same batch under a fresh action id");
-        rig.apply(resumed.node());
-        work.ended(rig.level, resumed.node(), Ending.DONE);
+        HoldingFixture holding = rig.holding(work).prepare();
+        holding.suspend();
+        holding.resume();
+        Outcome loaded = holding.step();
+        helper.assertTrue(
+            loaded instanceof Outcome.Done,
+            "the same holding loads the retained batch after urge suspension");
+        ((Outcome.Done) loaded).made().forEach(rig::put);
         work.ended(rig.level, Ending.DROPPED);
         rig.claim.release(Ending.DROPPED);
         helper.assertValueEqual(rig.count(ModItems.RICE_SEED.get()), 2L, "unstarted batches retain their rice");
         helper.assertValueEqual(rig.count(Items.WATER_BUCKET), 2L, "unstarted batches retain their full buckets");
-        rig.take = StockpotWorkshops.recovery(rig.colony, rig.level, rig.at, rig.stances,
+        rig.take =
+                (StockpotTake)
+                        StockpotWorkshops.recovery(rig.colony, rig.level, rig.at, rig.stances,
             rig.bookings, () -> { }).getFirst().nodes().getFirst();
-        helper.assertTrue(rig.take.planned(rig.level).isEmpty(), "the invested batch alone is recoverable");
+        helper.assertTrue(((Node) rig.take).planned(rig.level).isEmpty(), "the invested batch alone is recoverable");
         afterCooking(rig, ready -> {
             ready.take();
             helper.assertValueEqual(ready.count(ModItems.COOKED_RICE.get()), 1L, "only the invested batch makes a meal");
@@ -630,7 +692,7 @@ public final class StockpotGameTests {
             helper.assertValueEqual(ready.count(Items.WATER_BUCKET), 2L, "recovery does not replay soup bases");
             helper.assertValueEqual(ready.count(Items.BOWL), 2L, "only one carrier is spent");
             helper.assertValueEqual(ready.count(ModItems.STOCKPOT_LID.get()), 1L, "the reusable lid survives cancellation");
-            ready.take.ended(ready.level, Ending.DONE);
+            ((Node) ready.take).ended(ready.level, Ending.DONE);
         });
     }
 
@@ -645,7 +707,7 @@ public final class StockpotGameTests {
             Hold laterTurn = rig.bookings.hold(rig.at, later.id());
             helper.assertTrue(laterTurn.take().isEmpty(), "a stale empty-pot snapshot reaches the queue head");
             helper.assertTrue(later.refusal(rig.level).isPresent()
-                && later.next(rig.level, rig.worker) instanceof Workload.Within.Turn.Leave,
+                && rig.holding(later).finished(),
                 "the old invested batch causes an explicit failure instead of an endless wait");
             laterTurn.release(new Ending.Failed(later.id(),
                 CookeryRefusal.STATION_CHANGED));
@@ -669,7 +731,7 @@ public final class StockpotGameTests {
             Hold newTurn = rig.bookings.hold(rig.at, old.id());
             helper.assertTrue(newTurn.take().isEmpty(), "a newly marked kitchen can issue a fresh ticket");
             helper.assertTrue(old.refusal(rig.level).isPresent()
-                && old.next(rig.level, rig.worker) instanceof Workload.Within.Turn.Leave,
+                && rig.holding(old).finished(),
                 "the old object cannot borrow a new ticket with the same UUID");
             helper.assertValueEqual(rig.count(ModItems.RICE_SEED.get()), 1L, "withdrawn work does not spend ingredients");
             helper.assertTrue(rig.pot.getStatus() == IStockpot.PUT_SOUP_BASE, "withdrawn work does not load the pot");
@@ -768,13 +830,14 @@ public final class StockpotGameTests {
                 rig.reload();
                 var recovery = StockpotWorkshops.recovery(rig.colony, rig.level, rig.at, rig.stances, rig.bookings, () -> { });
                 helper.assertValueEqual(recovery.size(), 1, "the persisted flexible batch produces one recovery task");
-                rig.take = recovery.getFirst().nodes().getFirst();
-                helper.assertTrue(rig.take.planned(rig.level).isEmpty(), "the recovery owns a real exclusive kitchen turn");
+                rig.take = (StockpotTake) recovery.getFirst().nodes().getFirst();
+                helper.assertTrue(
+                    ((Node) rig.take).planned(rig.level).isEmpty(), "the recovery owns a real exclusive kitchen turn");
             }).thenWaitUntil(rig::finished).thenExecute(() -> {
                 try {
                     ItemStack result = rig.pot.getResult().copyWithCount(1);
                     rig.take();
-                    rig.take.ended(rig.level, Ending.DONE);
+                ((Node) rig.take).ended(rig.level, Ending.DONE);
                     helper.assertTrue(java.util.stream.IntStream.range(0, rig.pack.getContainerSize()).mapToObj(rig.pack::getItem).anyMatch(stack -> ItemStack.matches(stack, result)),
                         "reload keeps the native flexible quality and delivers the same real serving");
                     helper.assertValueEqual(rig.count(ModItems.UDON_NOODLE.get()), 1L, "recovery never creates a second meal");
@@ -844,10 +907,14 @@ public final class StockpotGameTests {
         NativeCookingMatrix.count(expected, ModItems.STOCKPOT_LID.get().getDefaultInstance());
         rig.put(soup);
         for (ItemStack input : inputs) {
-            if (input.isEmpty()) continue;
+            if (input.isEmpty()) {
+                continue;
+            }
             rig.put(input);
             Item container = ItemUtils.getContainerItem(input);
-            if (container != Items.AIR) NativeCookingMatrix.count(expected, container.getDefaultInstance());
+            if (container != Items.AIR) {
+                NativeCookingMatrix.count(expected, container.getDefaultInstance());
+            }
         }
         if (rig.plan.carrier().isPresent()) {
             ItemStack carrier = java.util.Arrays.stream(rig.plan.recipe().carrier().getItems()).filter(stack -> !stack.isEmpty())
@@ -883,6 +950,13 @@ public final class StockpotGameTests {
     }
 
     private static final class Rig implements AutoCloseable {
+        private final java.util.Map<Node, HoldingFixture> claims =
+                new java.util.IdentityHashMap<>();
+
+        HoldingFixture holding(Node node) {
+            return claims.computeIfAbsent(node, next -> new HoldingFixture(level, next, worker));
+        }
+
         final GameTestHelper helper;
         final ServerLevel level;
         final BlockPos cell;
@@ -898,8 +972,8 @@ public final class StockpotGameTests {
         Worker worker;
         UUID batch;
         Hold claim;
-        Node load;
-        Node take;
+        StockpotLoad load;
+        StockpotTake take;
 
         Rig(GameTestHelper helper, String recipe, boolean originalLid) {
             this(helper, ResourceLocation.fromNamespaceAndPath("kaleidoscope_cookery", "stockpot/" + recipe), originalLid);
@@ -944,7 +1018,7 @@ public final class StockpotGameTests {
             claim = bookings.hold(at, batch);
             helper.assertTrue(claim.take().isEmpty(), "the fixture obtains a real kitchen booking");
             load = new StockpotLoad(colony, batch, at, stances, plan, originalLid, bookings, () -> { });
-            take = new StockpotTake(colony, batch, at, stances, plan, bookings, () -> { }, false);
+            take = new StockpotTake(colony, batch, at, stances, plan, bookings, () -> { });
         }
 
         Workshop workshop() {
@@ -987,7 +1061,7 @@ public final class StockpotGameTests {
             apply(take);
         }
 
-        void apply(Node node) {
+        void apply(io.github.izakyl.folkways.core.work.api.WorkAction node) {
             Outcome outcome = Commit.run(level, node, worker);
             helper.assertTrue(outcome instanceof Outcome.Done, "the production node commits: " + outcome);
             ((Outcome.Done) outcome).made().forEach(this::put);
@@ -995,19 +1069,15 @@ public final class StockpotGameTests {
 
         void drive(StockpotWork work) {
             for (int steps = 0; steps < 4; steps++) {
-                Workload.Within.Turn turn = work.next(level, worker);
-                if (turn instanceof Workload.Within.Turn.Piece action) {
-                    Outcome outcome = Commit.run(level, action.node(), worker);
-                    helper.assertTrue(outcome instanceof Outcome.Done, "the real inner stockpot action commits: " + outcome);
-                    ((Outcome.Done) outcome).made().forEach(this::put);
-                    work.ended(level, action.node(), Ending.DONE);
-                } else if (turn instanceof Workload.Within.Turn.Leave) {
-                    helper.assertTrue(work.commit(level, worker) instanceof Outcome.Done,
-                        "the outer production offer completes only after every serving");
+                if (holding(work).finished()) {
+                    helper.assertTrue(
+                        work.commit(level, worker) instanceof Outcome.Done,
+                        "the production offer completes only after every serving");
                     return;
-                } else {
-                    helper.assertTrue(false, "waiting for the real stockpot: " + pot.saveCustomOnly(level.registryAccess()));
                 }
+                Outcome outcome = holding(work).step();
+                helper.assertTrue(outcome instanceof Outcome.Done, "the private stockpot action commits: " + outcome);
+                ((Outcome.Done) outcome).made().forEach(this::put);
             }
             helper.assertTrue(false, "more real work remains for the next server tick");
         }
@@ -1048,7 +1118,9 @@ public final class StockpotGameTests {
         @Override
         public void close() {
             claim.release(Ending.DROPPED);
-            take.ended(level, Ending.DROPPED);
+            if (take instanceof Node node) {
+                node.ended(level, Ending.DROPPED);
+            }
             body.discard();
         }
     }

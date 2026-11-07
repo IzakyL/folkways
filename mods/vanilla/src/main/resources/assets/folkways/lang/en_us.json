@@ -1,9 +1,6 @@
 {
   "folkways.doing.folkways.breathing": "Seeking air",
   "folkways.combat.loadout.auto": "Carried weapon",
-  "folkways.combat.loadout.melee": "Melee",
-  "folkways.combat.loadout.bow": "Bow",
-  "folkways.combat.loadout.crossbow": "Crossbow",
   "folkways.combat.loadout.mixed": "Mixed",
   "folkways.combat.stock.inactive": "No supply request",
   "folkways.combat.stock.ready": "Stock ready",
@@ -110,7 +107,6 @@
   "folkways.staffing.unsupported_kind": "Unsupported sentry resident kind",
   "folkways.sentry.profile_mismatch": "Assigned profile no longer matches the staffing slot",
   "folkways.sentry.trade_required": "Patrolling trade permission required",
-  "folkways.combat.loadout.tacz": "Firearms",
   "folkways.tacz.gun": "Firearm: %s",
   "folkways.tacz.ammo": "Ammunition",
   "folkways.tacz.ammo_count": "Loaded %s · carried %s",

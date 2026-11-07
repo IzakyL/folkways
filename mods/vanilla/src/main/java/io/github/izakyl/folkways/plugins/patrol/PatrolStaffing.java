@@ -1,8 +1,9 @@
 package io.github.izakyl.folkways.plugins.patrol;
 
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.resident.body.Bodies;
-import io.github.izakyl.folkways.core.api.resident.body.Body;
+import io.github.izakyl.folkways.base.persist.Required;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.resident.api.Bodies;
+import io.github.izakyl.folkways.core.resident.api.Body;
 import io.github.izakyl.folkways.front.api.Fronts;
 import io.github.izakyl.folkways.front.api.ZoneView;
 import io.github.izakyl.folkways.front.api.notice.Line;
@@ -53,35 +54,39 @@ public final class PatrolStaffing {
 
     public PatrolStaffing(Colony colony) {
         this.colony = colony;
-        for (Tag value : colony.kept(ID).getList("targets", Tag.TAG_COMPOUND)) {
+        CompoundTag saved = colony.kept(ID);
+        if (saved.isEmpty()) {
+            save();
+            return;
+        }
+        for (Tag value : Required.list(saved, "targets", Tag.TAG_COMPOUND)) {
             CompoundTag row = (CompoundTag) value;
-            if (!row.hasUUID("target")) {
+            if (station(Required.uuid(row, "target"))) {
                 continue;
             }
             Composition composition = new Composition();
-            for (Tag entry : row.getList("allowed", Tag.TAG_COMPOUND)) {
+            for (Tag entry : Required.list(row, "allowed", Tag.TAG_COMPOUND)) {
                 CompoundTag profile = (CompoundTag) entry;
-                if (profile.hasUUID("id")) {
-                    composition.allowed.add(profile.getUUID("id"));
-                }
+                composition.allowed.add(Required.uuid(profile, "id"));
             }
-            resize(composition, Math.clamp(row.getInt("count"), 0, MAX_COUNT));
-            ListTag members = row.getList("positions", Tag.TAG_COMPOUND);
-            for (int index = 0; index < Math.min(members.size(), composition.positions.size()); index++) {
+            resize(composition, Math.clamp(Required.integer(row, "count"), 0, MAX_COUNT));
+            ListTag members = Required.list(row, "positions", Tag.TAG_COMPOUND);
+            if (members.size() != composition.positions.size()) {
+                throw new IllegalArgumentException("Patrol position count does not match saved count");
+            }
+            for (int index = 0; index < members.size(); index++) {
                 CompoundTag member = members.getCompound(index);
-                if (member.hasUUID("id")) {
-                    composition.positions.set(index, new Position(member.getUUID("id"),
-                        uuid(member, "member"), "unfilled"));
-                }
+                composition.positions.set(index, new Position(Required.uuid(member, "id"),
+                    uuid(member, "member"), "unfilled"));
             }
-            compositions.put(row.getUUID("target"), composition);
+            compositions.put(Required.uuid(row, "target"), composition);
         }
-        for (Tag value : colony.kept(ID).getList("operators", Tag.TAG_COMPOUND)) {
+        for (Tag value : Required.list(saved, "operators", Tag.TAG_COMPOUND)) {
             CompoundTag row = (CompoundTag) value;
-            if (row.hasUUID("target") && station(row.getUUID("target"))) {
+            if (station(Required.uuid(row, "target"))) {
                 Composition composition = new Composition();
                 composition.positions.add(new Position(UUID.randomUUID(), uuid(row, "member"), "unfilled"));
-                compositions.put(row.getUUID("target"), composition);
+                compositions.put(Required.uuid(row, "target"), composition);
             }
         }
         save();
@@ -96,11 +101,11 @@ public final class PatrolStaffing {
     }
 
     private boolean station(UUID target) {
-        return colony.holding(target).filter(holding -> holding.owner().equals(SentryPosts.STATION)).isPresent();
+        return colony.claim(target).filter(holding -> holding.owner().equals(SentryPosts.STATION)).isPresent();
     }
 
     public boolean configured(UUID target) {
-        return colony.holding(target).filter(holding -> SentryPosts.post(holding.owner())
+        return colony.claim(target).filter(holding -> SentryPosts.post(holding.owner())
             || holding.owner().equals(PatrolContent.BEAT)).isPresent();
     }
 

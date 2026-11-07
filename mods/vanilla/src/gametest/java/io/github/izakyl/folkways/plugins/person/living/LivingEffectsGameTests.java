@@ -1,15 +1,16 @@
 package io.github.izakyl.folkways.plugins.person.living;
 
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
 import io.github.izakyl.folkways.base.persist.Reader;
-import io.github.izakyl.folkways.core.api.colony.Colonies;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.colony.Held;
-import io.github.izakyl.folkways.core.api.colony.Release;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
+import io.github.izakyl.folkways.base.persist.Writer;
+import io.github.izakyl.folkways.core.colony.api.ClaimRelease;
+import io.github.izakyl.folkways.core.colony.api.Claimed;
+import io.github.izakyl.folkways.core.colony.api.Colonies;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.front.engine.colony.ColonyFront;
 import io.github.izakyl.folkways.front.engine.colony.ColonySettings;
+import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import io.github.izakyl.folkways.plugins.person.PersonContent;
 import io.github.izakyl.folkways.plugins.person.ResidentEntity;
@@ -23,13 +24,13 @@ import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.block.BedBlock;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.level.block.BedBlock;
 import net.minecraft.world.level.block.DoorBlock;
 import net.minecraft.world.level.block.LanternBlock;
-import net.minecraft.world.level.block.WallSignBlock;
 import net.minecraft.world.level.block.WallHangingSignBlock;
+import net.minecraft.world.level.block.WallSignBlock;
 import net.minecraft.world.level.block.WallTorchBlock;
 import net.minecraft.world.level.block.entity.SignBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
@@ -115,10 +116,23 @@ public final class LivingEffectsGameTests {
         helper.assertValueEqual(restored.events, mood.events, "history round trip retains reason, signed amount, time and order");
         restored.step(10020, 20, 1200, 6, false, false);
         helper.assertValueEqual(restored.events, mood.events, "first step after reload adds no phantom changes");
-        restored.load(Reader.of(new net.minecraft.nbt.CompoundTag()));
-        helper.assertTrue(restored.events.isEmpty(), "old saves without history load empty");
+        Mood fresh = new Mood();
+        var emptyHistory = fresh.save();
+        helper.assertTrue(emptyHistory.contains("events", net.minecraft.nbt.Tag.TAG_LIST),
+            "the current writer includes even an empty history");
+        restored.load(Reader.of(emptyHistory));
+        helper.assertTrue(restored.events.isEmpty(), "a fresh mood round trip clears previous history");
+        var missingHistory = fresh.save();
+        missingHistory.remove("events");
+        boolean rejected = false;
+        try {
+            new Mood().load(Reader.of(missingHistory));
+        } catch (IllegalArgumentException invalid) {
+            rejected = true;
+        }
+        helper.assertTrue(rejected, "a present mood record must contain the history written by the current writer");
         restored.step(10030, 20, 1200, 6, false, false);
-        helper.assertValueEqual(restored.reasons.get("dining"), 0, "old saves have no invented dining experience");
+        helper.assertValueEqual(restored.reasons.get("dining"), 0, "a fresh mood has no invented dining experience");
         helper.succeed();
     }
 
@@ -285,7 +299,7 @@ public final class LivingEffectsGameTests {
             fixture.level.setBlockAndUpdate(sign, Blocks.OAK_WALL_SIGN.defaultBlockState()
                 .setValue(WallSignBlock.FACING, Direction.EAST));
             fixture.add("Ada");
-            fixture.colony.hold(LivingContent.BED, new Held.Block(WorldPos.of(fixture.level, otherBed))).orElseThrow();
+            fixture.colony.hold(LivingContent.BED, new Claimed.Block(WorldPos.of(fixture.level, otherBed))).orElseThrow();
             fixture.add("Bea", otherBed);
             fixture.claim();
             fixture.inspect();
@@ -318,7 +332,7 @@ public final class LivingEffectsGameTests {
             SignBlockEntity plate = (SignBlockEntity) fixture.level.getBlockEntity(sign);
             helper.assertValueEqual(plate.getText(true).getMessage(0, false).getString(), "Ada",
                 "a sign attached to the only surveyed bedroom belongs to it");
-            fixture.colony.hold(LivingContent.BED, new Held.Block(WorldPos.of(fixture.level, otherBed))).orElseThrow();
+            fixture.colony.hold(LivingContent.BED, new Claimed.Block(WorldPos.of(fixture.level, otherBed))).orElseThrow();
             fixture.add("Bea", otherBed);
             fixture.claim();
             fixture.inspect();
@@ -481,7 +495,7 @@ public final class LivingEffectsGameTests {
             colony = Colonies.mint(level.getServer());
             ColonyFront.of(colony).setSetting(LivingContent.ID, LivingContent.FOOD.key(),
                 new ColonySettings.Value.Items(List.of()));
-            colony.hold(LivingContent.BED, new Held.Block(WorldPos.of(level, bed))).orElseThrow();
+            colony.hold(LivingContent.BED, new Claimed.Block(WorldPos.of(level, bed))).orElseThrow();
             living = new LivingPresence(colony);
         }
 
@@ -489,7 +503,7 @@ public final class LivingEffectsGameTests {
             if (!residents.isEmpty()) {
                 int index = residents.size();
                 BlockPos foot = bed(level, origin.offset(1 + index % 4, 0, 1 + index / 4 * 2));
-                colony.hold(LivingContent.BED, new Held.Block(WorldPos.of(level, foot))).orElseThrow();
+                colony.hold(LivingContent.BED, new Claimed.Block(WorldPos.of(level, foot))).orElseThrow();
                 living.changed(level, foot);
             }
             add(name, bed);
@@ -501,7 +515,7 @@ public final class LivingEffectsGameTests {
             person.setCustomName(Component.literal(name));
             person.moveTo(foot.getX() + 0.5, foot.getY(), foot.getZ() + 0.5);
             level.addFreshEntity(person);
-            colony.hold(PersonContent.ID, Held.Entity.of(person)).orElseThrow();
+            colony.hold(PersonContent.ID, Claimed.Entity.of(person)).orElseThrow();
             person.joinColony(colony.id());
             colony.entered(person);
             residents.add(person);
@@ -521,7 +535,8 @@ public final class LivingEffectsGameTests {
             for (ResidentEntity person : residents) {
                 claimed.claim(person.getUUID(), WorldPos.of(level, person.blockPosition()));
             }
-            colony.keep(LivingContent.ID, colony.kept(LivingContent.ID).merge(claimed.save()));
+            colony.keep(LivingContent.ID, Writer.of(new LivingPresence(colony).save().merge(claimed.save()))
+                .blob("pets", Writer.of().longValue("next_attempt", -1L).uuids("pets", List.of()).tag()).tag());
             living = new LivingPresence(colony);
         }
 
@@ -533,7 +548,7 @@ public final class LivingEffectsGameTests {
 
         void leave() {
             for (ResidentEntity person : residents) {
-                colony.release(colony.holdingOf(person.getUUID()).orElseThrow().id(), Release.LET_GO);
+                colony.release(colony.claimOf(person.getUUID()).orElseThrow().id(), ClaimRelease.LET_GO);
                 person.discard();
             }
             residents.clear();

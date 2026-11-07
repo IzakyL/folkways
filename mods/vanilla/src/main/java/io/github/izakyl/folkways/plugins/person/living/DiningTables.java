@@ -1,7 +1,7 @@
 package io.github.izakyl.folkways.plugins.person.living;
 
-import io.github.izakyl.folkways.core.api.ground.BlockChanges;
-import io.github.izakyl.folkways.core.api.terms.Keepouts;
+import io.github.izakyl.folkways.core.world.api.BlockChanges;
+import io.github.izakyl.folkways.core.world.api.Keepouts;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -16,12 +16,12 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.Container;
 import net.minecraft.world.entity.Mob;
-import net.minecraft.world.level.chunk.LevelChunk;
-import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.StairBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.Half;
+import net.minecraft.world.level.chunk.LevelChunk;
+import net.minecraft.world.level.levelgen.structure.BoundingBox;
 
 /** Dining furniture integrations, separate from colony ingredient storage. */
 public final class DiningTables {
@@ -171,7 +171,7 @@ public final class DiningTables {
         data.remove(SEAT_MARKER);
         if (vehicle != null && body.getVehicle() != null && vehicle.equals(body.getVehicle().getUUID())) {
             // Leave the resident on reachable footing beside the chair, ready for the next work route.
-            io.github.izakyl.folkways.core.api.work.WorkGesture.SIT.release(body);
+            io.github.izakyl.folkways.core.work.api.WorkGesture.SIT.release(body);
         }
     }
     private static TagKey<Block> tag(String path) {

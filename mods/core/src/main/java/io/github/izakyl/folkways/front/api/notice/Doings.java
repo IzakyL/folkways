@@ -1,12 +1,11 @@
 package io.github.izakyl.folkways.front.api.notice;
 
-import static io.github.izakyl.folkways.core.api.work.Doings.WALKING;
-
-import io.github.izakyl.folkways.core.api.work.Doing;
+import io.github.izakyl.folkways.core.resident.api.Doing;
 import java.util.List;
 import java.util.Optional;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
+import static io.github.izakyl.folkways.core.resident.api.Doings.WALKING;
 
 public final class Doings {
 

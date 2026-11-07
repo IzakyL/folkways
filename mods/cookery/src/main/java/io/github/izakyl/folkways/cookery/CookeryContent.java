@@ -2,19 +2,18 @@ package io.github.izakyl.folkways.cookery;
 
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.tag.TagMod;
-import io.github.izakyl.folkways.core.api.Declaring;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.cookery.seeds.SeedPresence;
-import io.github.izakyl.folkways.plugins.compost.SeedSupport;
+import io.github.izakyl.folkways.core.extension.api.Declaring;
+import io.github.izakyl.folkways.core.item.api.Goods;
+import io.github.izakyl.folkways.core.item.api.ItemFilter;
 import io.github.izakyl.folkways.front.api.Delegation;
 import io.github.izakyl.folkways.front.api.Enrollment;
 import io.github.izakyl.folkways.front.api.Fronts;
-import io.github.izakyl.folkways.core.api.terms.Goods;
-import io.github.izakyl.folkways.core.api.terms.ItemFilter;
 import io.github.izakyl.folkways.front.api.Registering;
 import io.github.izakyl.folkways.front.api.Schema;
 import io.github.izakyl.folkways.front.api.Shape;
 import io.github.izakyl.folkways.front.api.panel.PageKind;
+import io.github.izakyl.folkways.plugins.compost.SeedSupport;
 import io.github.izakyl.folkways.plugins.wares.WaresContent;
 import java.util.List;
 import net.minecraft.resources.ResourceLocation;
@@ -62,7 +61,7 @@ public final class CookeryContent {
                 .filter(items -> Goods.matches(item.getDefaultInstance(), items)).isPresent());
         event.urges(ID, io.github.izakyl.folkways.cookery.millstone.MillstoneDrive::urges);
         io.github.izakyl.folkways.cookery.tools.TaskTools.register();
-        io.github.izakyl.folkways.core.api.work.WorkDecorators.register(ID, (colony, work) ->
+        io.github.izakyl.folkways.core.colony.api.WorkDecorators.register(ID, (colony, work) ->
             colony.service(ID, CookeryPresence.class).map(state -> state.tools().decorate(work)).orElse(work));
         event.colony(SeedPresence.ID, scope -> {
             var support = new SeedSupport(scope.colony(), scope.server());
@@ -70,7 +69,7 @@ public final class CookeryContent {
                 scope.colony().residents().stream().anyMatch(resident -> {
                     for (var level : scope.server().getAllLevels()) {
                         var entity = level.getEntity(resident.id());
-                        if (entity != null && io.github.izakyl.folkways.core.api.resident.body.Bodies.of(entity)
+                        if (entity != null && io.github.izakyl.folkways.core.resident.api.Bodies.of(entity)
                                 .filter(body -> io.github.izakyl.folkways.cookery.gear.CookeryGear.permitsSeeds(scope.colony(), body)).isPresent()) return true;
                     }
                     return false;

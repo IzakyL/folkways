@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.core.testing;
 
-import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
+import io.github.izakyl.folkways.core.world.api.WorldSpaces;
 import java.util.Optional;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;

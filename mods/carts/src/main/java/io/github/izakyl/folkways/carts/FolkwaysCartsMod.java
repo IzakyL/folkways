@@ -1,6 +1,7 @@
 package io.github.izakyl.folkways.carts;
 
-import io.github.izakyl.folkways.core.api.Declaring;
+import io.github.izakyl.folkways.carts.upgrade.CartsUpgrades;
+import io.github.izakyl.folkways.core.extension.api.Declaring;
 import io.github.izakyl.folkways.front.api.Delegation;
 import io.github.izakyl.folkways.front.api.Enrollment;
 import io.github.izakyl.folkways.front.api.Registering;
@@ -33,6 +34,7 @@ public final class FolkwaysCartsMod {
     private static final int MOST_STATIONS = 16;
 
     public FolkwaysCartsMod(IEventBus bus) {
+        CartsUpgrades.register();
         if (FMLEnvironment.dist.isClient()) {
             bus.addListener(CartsScene::declare);
         }

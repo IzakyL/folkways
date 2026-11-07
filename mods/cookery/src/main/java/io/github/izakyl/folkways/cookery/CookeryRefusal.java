@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.cookery;
 
-import io.github.izakyl.folkways.core.api.terms.RefusalKind;
+import io.github.izakyl.folkways.core.resident.api.RefusalKind;
 
 public enum CookeryRefusal implements RefusalKind.Named {
     NOT_A_STATION,

@@ -20,7 +20,7 @@ export const PREPARE_RESIDENTS = defineTask<{ colony: string } & Vec & { count: 
   name: "folkways.combat-rts-input.prepare-flat-fixture", side: "server",
   source: javaTask({
     imports: ["java.util.UUID", "net.minecraft.server.MinecraftServer", "net.minecraft.world.entity.Mob",
-      "io.github.izakyl.folkways.core.api.colony.Colonies"],
+      "io.github.izakyl.folkways.core.colony.api.Colonies"],
     body: `
 var a=Args.of(ctx);var server=(MinecraftServer)ctx.server();
 var colony=Colonies.of(server,UUID.fromString(a.string("colony"))).orElseThrow();

@@ -1,8 +1,8 @@
 package io.github.izakyl.folkways.create.dispatch;
 
 import com.simibubi.create.content.logistics.box.PackageItem;
-import io.github.izakyl.folkways.core.api.colony.Colonies;
-import io.github.izakyl.folkways.core.api.colony.Colony;
+import io.github.izakyl.folkways.core.colony.api.Colonies;
+import io.github.izakyl.folkways.core.colony.api.Colony;
 import java.util.Optional;
 import java.util.UUID;
 import net.minecraft.server.MinecraftServer;

@@ -1,9 +1,6 @@
 {
   "folkways.doing.folkways.breathing": "尋找空氣",
   "folkways.combat.loadout.auto": "既有武器",
-  "folkways.combat.loadout.melee": "近戰",
-  "folkways.combat.loadout.bow": "弓",
-  "folkways.combat.loadout.crossbow": "弩",
   "folkways.combat.loadout.mixed": "各人不同",
   "folkways.combat.stock.inactive": "無需補給",
   "folkways.combat.stock.ready": "補給就緒",
@@ -110,7 +107,6 @@
   "folkways.staffing.unsupported_kind": "此居民類型不支援哨位",
   "folkways.sentry.profile_mismatch": "目前裝備配置不符合編制欄位要求",
   "folkways.sentry.trade_required": "需要巡邏職業許可",
-  "folkways.combat.loadout.tacz": "槍械",
   "folkways.tacz.gun": "槍械：%s",
   "folkways.tacz.ammo": "彈藥",
   "folkways.tacz.ammo_count": "已裝 %s · 攜帶 %s",

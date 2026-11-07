@@ -184,7 +184,7 @@ export async function shoot<S>(run: any, scene: Scene, name: string, subject: st
 const STAGE_DINING = defineTask<Record<string, any>, any>({
   name: "folkways.promo.scene-dining", side: "server", timeoutMs: 20_000,
   source: javaTask({ imports: [
-    "io.github.izakyl.folkways.core.api.colony.Colonies", "io.github.izakyl.folkways.core.api.terms.ItemFilter",
+    "io.github.izakyl.folkways.core.colony.api.Colonies", "io.github.izakyl.folkways.core.item.api.ItemFilter",
     "io.github.izakyl.folkways.front.engine.colony.ColonyFront", "io.github.izakyl.folkways.front.engine.colony.ColonySettings",
     "io.github.izakyl.folkways.plugins.person.living.LivingContent", "net.minecraft.core.BlockPos", "net.minecraft.resources.ResourceLocation",
     "io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig", "net.neoforged.neoforge.common.ModConfigSpec",
@@ -220,7 +220,7 @@ const SET_VITALS = defineTask<Record<string, any>, Record<string, any>>({
   name: "folkways.promo.scene-vitals", side: "server", timeoutMs: 20_000,
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.core.api.colony.Colony",
+      "io.github.izakyl.folkways.core.colony.api.Colony",
       "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
       "io.github.izakyl.folkways.plugins.person.living.LivingContent",
       "java.lang.reflect.AccessibleObject",
@@ -270,8 +270,8 @@ private static <T extends AccessibleObject> T open(T member) {
 const PREFER_CRAFTING = defineTask<Record<string, any>, any>({
   name: "folkways.promo.scene-prefer-crafting", side: "server", timeoutMs: 20_000,
   source: javaTask({ imports: [
-    "io.github.izakyl.folkways.core.api.resident.body.Bodies", "io.github.izakyl.folkways.core.api.resident.body.Keenness",
-    "io.github.izakyl.folkways.core.api.vocation.Vocations", "io.github.izakyl.folkways.plugins.wares.WaresContent",
+    "io.github.izakyl.folkways.core.resident.api.Bodies", "io.github.izakyl.folkways.core.vocation.api.Keenness",
+    "io.github.izakyl.folkways.core.vocation.api.Vocations", "io.github.izakyl.folkways.plugins.wares.WaresContent",
     "net.minecraft.core.registries.BuiltInRegistries", "net.minecraft.resources.ResourceLocation", "net.minecraft.world.item.ItemStack",
   ], body: `
 var args = Args.of(ctx);
@@ -293,9 +293,9 @@ return Sync.stamp(Map.of("priority", "crafting-before-hauling"));
 const READ_SCENE = defineTask<Record<string, any>, any>({
   name: "folkways.promo.scene-read", side: "server", timeoutMs: 20_000,
   source: javaTask({ imports: [
-    "io.github.izakyl.folkways.core.api.resident.body.Bodies", "io.github.izakyl.folkways.plugins.person.living.DiningTables",
-    "io.github.izakyl.folkways.core.api.terms.Containers",
-    "io.github.izakyl.folkways.core.api.colony.Colonies",
+    "io.github.izakyl.folkways.core.resident.api.Bodies", "io.github.izakyl.folkways.plugins.person.living.DiningTables",
+    "io.github.izakyl.folkways.core.item.api.Containers",
+    "io.github.izakyl.folkways.core.colony.api.Colonies",
     "io.github.izakyl.folkways.plugins.person.living.LivingContent",
     "net.minecraft.core.BlockPos", "net.minecraft.core.registries.BuiltInRegistries",
   ], body: `

@@ -2,8 +2,9 @@ package io.github.izakyl.folkways.plugins.build;
 
 import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.base.persist.Reader;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
-import io.github.izakyl.folkways.core.api.work.Need;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
+import io.github.izakyl.folkways.core.work.api.Need;
+import io.github.izakyl.folkways.core.work.api.Placement;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -15,7 +16,6 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
-import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
@@ -59,7 +59,8 @@ public final class SchematicannonParityGameTests {
                 new BlueprintBlock(new BlockPos(1, 0, 0), fence.setValue(BlockStateProperties.NORTH, true)),
                 new BlueprintBlock(new BlockPos(0, 0, 2), Blocks.FARMLAND.defaultBlockState()),
                 new BlueprintBlock(new BlockPos(0, 1, 2), Blocks.WHEAT.defaultBlockState().setValue(CropBlock.AGE, 7)),
-                new BlueprintBlock(new BlockPos(2, 0, 2), Blocks.FURNACE.defaultBlockState().setValue(FurnaceBlock.LIT, true)),
+                new BlueprintBlock(new BlockPos(2, 0, 2), Blocks.FURNACE.defaultBlockState()
+                    .setValue(FurnaceBlock.LIT, true)),
                 new BlueprintBlock(new BlockPos(2, 1, 0), Blocks.WALL_TORCH.defaultBlockState()
                     .setValue(WallTorchBlock.FACING, Direction.NORTH)),
                 new BlueprintBlock(new BlockPos(2, 0, 0), Blocks.PISTON_HEAD.defaultBlockState())),
@@ -112,7 +113,8 @@ public final class SchematicannonParityGameTests {
             helper.assertValueEqual(rules.requirement(Blocks.STONE_SLAB.defaultBlockState()
                     .setValue(BlockStateProperties.SLAB_TYPE, SlabType.DOUBLE), null).needs().orElseThrow(),
                 List.of(need("stone_slab", 2)), name + ": a double slab is two slabs");
-            helper.assertValueEqual(rules.requirement(Blocks.TALL_GRASS.defaultBlockState(), null).needs().orElseThrow(),
+            helper.assertValueEqual(rules.requirement(Blocks.TALL_GRASS.defaultBlockState(), null).needs()
+                .orElseThrow(),
                 List.of(need("short_grass", 2)), name + ": tall grass is two short grass");
             helper.assertTrue(rules.requirement(Blocks.FIRE.defaultBlockState(), null).invalid(),
                 name + ": a block with no item is skipped");
@@ -135,16 +137,10 @@ public final class SchematicannonParityGameTests {
         book.add(level, draft);
         Blueprint filed = book.blueprint(draft.id()).orElseThrow();
         helper.assertTrue(filed.confirmed(), "filing resolves the target");
-        BlueprintBook reloaded = BlueprintBook.load(Reader.of(book.save(level.registryAccess())), level.registryAccess());
+        BlueprintBook reloaded = BlueprintBook.load(Reader.of(book.save(level.registryAccess())),
+            level.registryAccess());
         helper.assertValueEqual(reloaded.blueprint(draft.id()).orElseThrow(), filed, "reloading keeps it as resolved");
 
-        CompoundTag saved = book.save(level.registryAccess());
-        saved.getList("blueprints", CompoundTag.TAG_COMPOUND).set(0, draft.save(level.registryAccess()));
-        BlueprintBook old = BlueprintBook.load(Reader.of(saved), level.registryAccess());
-        helper.assertTrue(!old.blueprint(draft.id()).orElseThrow().confirmed(), "an old blueprint loads unresolved");
-        Blueprint resolved = old.target(level, draft.id()).orElseThrow();
-        helper.assertTrue(resolved.confirmed() && resolved.blocks().getFirst().state()
-            .getValue(BlockStateProperties.EAST), "and is resolved when first built");
         helper.succeed();
     }
 

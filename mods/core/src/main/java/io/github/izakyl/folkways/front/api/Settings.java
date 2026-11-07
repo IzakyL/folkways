@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.front.api;
 
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import java.util.Optional;
 import net.minecraft.resources.ResourceLocation;
 

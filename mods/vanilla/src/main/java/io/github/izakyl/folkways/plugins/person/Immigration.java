@@ -1,10 +1,10 @@
 package io.github.izakyl.folkways.plugins.person;
 
-import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
 import io.github.izakyl.folkways.front.api.Admission;
 import io.github.izakyl.folkways.front.api.Endorsed;
 import io.github.izakyl.folkways.front.api.Endorsement;
 import io.github.izakyl.folkways.front.api.notice.Notice;
+import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
 import io.github.izakyl.folkways.plugins.person.living.LivingContent;
 import io.github.izakyl.folkways.plugins.person.living.SettlerNeed;
 import java.util.Optional;

@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.create.elevator;
 
-import io.github.izakyl.folkways.core.api.terms.ObstructedPathRegion;
+import io.github.izakyl.folkways.core.world.api.ObstructedPathRegion;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;

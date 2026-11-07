@@ -1,9 +1,9 @@
 package io.github.izakyl.folkways.plugins.farming;
 
-import io.github.izakyl.folkways.core.api.work.Amount;
-import io.github.izakyl.folkways.core.api.work.Leaves;
-import io.github.izakyl.folkways.core.api.work.WorkNoise;
-import io.github.izakyl.folkways.core.api.work.Worker;
+import io.github.izakyl.folkways.core.work.api.Amount;
+import io.github.izakyl.folkways.core.work.api.WorkNoise;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.work.support.Leaves;
 import java.util.List;
 import java.util.Optional;
 import net.minecraft.core.BlockPos;
@@ -15,8 +15,8 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.item.context.UseOnContext;
-import net.minecraft.world.level.LevelReader;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.LevelReader;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
@@ -31,7 +31,7 @@ public interface CropBehavior {
 
     boolean needsFarmland();
 
-    default List<io.github.izakyl.folkways.core.api.work.Need> plantingMaterials(int plants) {
+    default List<io.github.izakyl.folkways.core.work.api.Need> plantingMaterials(int plants) {
         return List.of();
     }
 
@@ -46,7 +46,7 @@ public interface CropBehavior {
 
     // What the plot is framed with before it is sown, such as a pergola's posts and roof. The frame goes up a cell
     // at a time, each cell its own piece of work done from where a body can reach it.
-    default Optional<io.github.izakyl.folkways.core.api.terms.ItemSpec> frame() {
+    default Optional<io.github.izakyl.folkways.core.item.api.ItemSpec> frame() {
         return Optional.empty();
     }
 

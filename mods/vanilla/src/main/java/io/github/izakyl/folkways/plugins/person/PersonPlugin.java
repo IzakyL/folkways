@@ -1,8 +1,8 @@
 package io.github.izakyl.folkways.plugins.person;
 
-import io.github.izakyl.folkways.core.api.Declaring;
-import io.github.izakyl.folkways.core.api.Relating;
-import io.github.izakyl.folkways.core.api.resident.body.PackKeeps;
+import io.github.izakyl.folkways.core.colony.api.PackKeeps;
+import io.github.izakyl.folkways.core.extension.api.Declaring;
+import io.github.izakyl.folkways.core.extension.api.Relating;
 import io.github.izakyl.folkways.front.api.Registering;
 import io.github.izakyl.folkways.front.api.ui.Bay;
 import io.github.izakyl.folkways.front.api.ui.RegisteringUi;

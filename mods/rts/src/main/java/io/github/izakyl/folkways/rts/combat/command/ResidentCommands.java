@@ -1,20 +1,20 @@
 package io.github.izakyl.folkways.rts.combat.command;
 
-import io.github.izakyl.folkways.plugins.combat.WeaponStations;
-import io.github.izakyl.folkways.plugins.combat.weapon.ResidentMounts;
-import io.github.izakyl.folkways.plugins.combat.weapon.PatrolSupplies;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.resident.body.Body;
-import io.github.izakyl.folkways.core.api.terms.Reach;
-import io.github.izakyl.folkways.core.api.terms.RefusalKind;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
-import io.github.izakyl.folkways.core.api.work.Ending;
-import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.Urge;
-import io.github.izakyl.folkways.core.api.work.Worker;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.resident.api.Body;
+import io.github.izakyl.folkways.core.resident.api.RefusalKind;
+import io.github.izakyl.folkways.core.work.api.Ending;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.work.api.Urge;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.work.support.WorkStances;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
+import io.github.izakyl.folkways.core.world.api.WorldSpaces;
 import io.github.izakyl.folkways.plugins.combat.DefenseControl;
 import io.github.izakyl.folkways.plugins.combat.Threats;
+import io.github.izakyl.folkways.plugins.combat.WeaponStations;
+import io.github.izakyl.folkways.plugins.combat.weapon.PatrolSupplies;
+import io.github.izakyl.folkways.plugins.combat.weapon.ResidentMounts;
 import io.github.izakyl.folkways.plugins.combat.weapon.Weapons;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import io.github.izakyl.folkways.plugins.person.ResidentEntity;
@@ -251,6 +251,7 @@ public final class ResidentCommands {
             })
             .toList();
         for (Order order : next) {
+            colony.controllerOrder(order.body);
             if (order.body.mob() instanceof ResidentEntity person) {
                 WeaponStations.release(order.resident());
                 person.stopWeaponSession();
@@ -329,6 +330,7 @@ public final class ResidentCommands {
             })
             .toList();
         for (Order order : next) {
+            colony.controllerOrder(order.body);
             if (order.body.mob() instanceof ResidentEntity person) {
                 WeaponStations.release(order.resident());
                 person.stopWeaponSession();
@@ -481,7 +483,7 @@ public final class ResidentCommands {
             && (order.mode != Mode.ATTACK || attackTarget(order).isPresent());
         if (activeNow
             && order.status == Status.HOLDING
-            && !Reach.standingIn(order.body.mob(), Stances.at(order.destination))) {
+            && !WorkStances.standingIn(order.body.mob(), Stances.at(order.destination))) {
             order.status = Status.MOVING;
             order.movingSince = server.overworld().getGameTime();
         }
@@ -557,7 +559,7 @@ public final class ResidentCommands {
                     order.retargetAt = now + 10;
                 }
             } else if ((order.mode == Mode.GUARD || order.defensiveOnly())
-                && (order.engaged() || order.yielded || order.yieldingToDanger())
+                && (order.engaged() || order.yielded || order.yieldingToDanger() || colony.isSuspended(order.id()))
                 && order.status == Status.MOVING) {
                 // Combat and fear borrow this same runner. Only time owned by the command is travel
                 // time.
@@ -592,7 +594,7 @@ public final class ResidentCommands {
             && (!body.mob().isPassenger() || WeaponStations.ownsSeat(body.mob())
                 || ResidentMounts.riding(body.mob()))
             && body.colonyId().filter(colony.id()::equals).isPresent()
-            && colony.holdingOf(body.id()).isPresent();
+            && colony.claimOf(body.id()).isPresent();
     }
 
     Optional<Mob> attackTarget(Order order) {

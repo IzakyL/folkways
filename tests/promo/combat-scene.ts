@@ -101,10 +101,10 @@ export async function recordCombat(
 }
 
 const IMPORTS = [
-  "io.github.izakyl.folkways.core.api.colony.Colonies",
-  "io.github.izakyl.folkways.core.api.colony.Held",
-  "io.github.izakyl.folkways.core.api.resident.body.Bodies",
-  "io.github.izakyl.folkways.core.api.terms.ItemSpec",
+  "io.github.izakyl.folkways.core.colony.api.Colonies",
+  "io.github.izakyl.folkways.core.colony.api.Claimed",
+  "io.github.izakyl.folkways.core.resident.api.Bodies",
+  "io.github.izakyl.folkways.core.item.api.ItemSpec",
   "io.github.izakyl.folkways.plugins.person.PersonBody",
   "io.github.izakyl.folkways.plugins.person.PersonContent",
   "io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfiles",
@@ -148,7 +148,7 @@ for (int i = 0; i < (mode.equals("rts") ? 3 : 2); i++) {
         net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, at.getX(), at.getZ()), at.getZ());
     body.moveTo(at.getX() + .5, at.getY(), at.getZ() + .5, 0, 0);
     level.addFreshEntity(body);
-    colony.hold(PersonContent.ID, Held.Entity.of(body)).orElseThrow();
+    colony.hold(PersonContent.ID, Claimed.Entity.of(body)).orElseThrow();
     body.joinColony(colony.id());
     body.addTag("combat_crew");
     body.getAttribute(Attributes.MAX_HEALTH).setBaseValue(200);

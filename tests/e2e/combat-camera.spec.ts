@@ -603,7 +603,7 @@ const RESIDENT_IDS = defineTask<{ colony: string }, string[]>({
   name: "folkways.combat-camera.read-residents",
   side: "server",
   source: javaTask({
-    imports: ["java.util.UUID", "net.minecraft.server.MinecraftServer", "io.github.izakyl.folkways.core.api.colony.Colonies", "io.github.izakyl.folkways.plugins.person.PersonBody"],
+    imports: ["java.util.UUID", "net.minecraft.server.MinecraftServer", "io.github.izakyl.folkways.core.colony.api.Colonies", "io.github.izakyl.folkways.plugins.person.PersonBody"],
     body: `
 var server=(MinecraftServer)ctx.server();var colony=Colonies.of(server,UUID.fromString(Args.of(ctx).string("colony"))).orElseThrow();
 return colony.residents().stream().filter(r->r.kind().equals(PersonBody.ID)).map(r->r.id().toString()).sorted().toList();`,

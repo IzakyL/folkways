@@ -1,28 +1,28 @@
 package io.github.izakyl.folkways.plugins.person.living;
 
-import io.github.izakyl.folkways.core.engine.inventory.InventoryObservations;
-import io.github.izakyl.folkways.core.testing.TestWorker;
-import io.github.izakyl.folkways.core.api.colony.Colonies;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.colony.Held;
 import io.github.izakyl.folkways.base.persist.Writer;
-import io.github.izakyl.folkways.core.api.resident.body.Body;
-import io.github.izakyl.folkways.core.api.terms.ItemFilter;
-import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Worker;
-import io.github.izakyl.folkways.plugins.person.PersonBody;
-import io.github.izakyl.folkways.plugins.person.PersonContent;
+import io.github.izakyl.folkways.core.colony.api.Claimed;
+import io.github.izakyl.folkways.core.colony.api.Colonies;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.inventory.internal.InventoryObservations;
+import io.github.izakyl.folkways.core.item.api.ItemFilter;
+import io.github.izakyl.folkways.core.resident.api.Body;
+import io.github.izakyl.folkways.core.testing.TestWorker;
+import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.front.api.Fronts;
 import io.github.izakyl.folkways.front.engine.colony.ColonyFront;
 import io.github.izakyl.folkways.front.engine.colony.ColonySettings;
+import io.github.izakyl.folkways.plugins.person.PersonBody;
+import io.github.izakyl.folkways.plugins.person.PersonContent;
 import java.util.Arrays;
 import java.util.List;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.world.Container;
-import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
 
 final class EatingFixture implements AutoCloseable {
     final GameTestHelper helper;
@@ -49,8 +49,11 @@ final class EatingFixture implements AutoCloseable {
             pack.getItem(slot).setCount(count);
         }
         menu(Arrays.stream(food).map(ItemStack::getItem).toArray(Item[]::new));
-        colony.keep(LivingContent.ID, Writer.of().children("hunger", List.of(body.id()),
-            id -> Writer.of().uuid("resident", id).integer("FoodLevel", fullness).tag()).tag());
+        colony.keep(LivingContent.ID, Writer.of(new LivingPresence(colony).save())
+            .blob("pets", Writer.of().longValue("next_attempt", -1L).uuids("pets", List.of()).tag())
+            .children("hunger", List.of(body.id()),
+            id -> Writer.of().uuid("resident", id).integer("FoodLevel", fullness)
+                .decimal("Saturation", 0).decimal("Exhaustion", 0).tag()).tag());
         living = new LivingPresence(colony);
         worker = TestWorker.of(body).pack(pack);
         InventoryObservations.publish(colony, helper.getLevel(), java.util.Map.of(body.id(), body));
@@ -86,7 +89,7 @@ final class EatingFixture implements AutoCloseable {
 
     void settle() {
         helper.getLevel().addFreshEntity(body.mob());
-        colony.hold(PersonContent.ID, Held.Entity.of(body.mob())).orElseThrow();
+        colony.hold(PersonContent.ID, Claimed.Entity.of(body.mob())).orElseThrow();
         body.joinColony(colony.id());
         colony.entered(body);
     }

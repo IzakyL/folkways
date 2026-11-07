@@ -42,6 +42,28 @@ public final class BlueprintShelfGameTests {
         event.register(BlueprintShelfGameTests.class);
     }
 
+    @GameTest(template = TEMPLATE)
+    public static void savedWrappersAndStatesRequireTheirOwnFields(GameTestHelper helper) {
+        boolean rejected = false;
+        try {
+            BlockData.load(new CompoundTag());
+        } catch (IllegalArgumentException expected) {
+            rejected = true;
+        }
+        helper.assertTrue(rejected, "external block entity payload still requires its mod-owned nbt wrapper");
+        var blocks = helper.getLevel().registryAccess()
+            .lookupOrThrow(net.minecraft.core.registries.Registries.BLOCK);
+        CompoundTag state = net.minecraft.nbt.NbtUtils.writeBlockState(
+            net.minecraft.world.level.block.Blocks.OAK_STAIRS.defaultBlockState());
+        helper.assertTrue(BlueprintBlock.read(blocks, state).isPresent(), "complete saved state reads");
+        state.remove("Properties");
+        helper.assertTrue(BlueprintBlock.read(blocks, state).isEmpty(), "saved properties cannot become defaults");
+        helper.assertTrue(BlueprintBlock.readImported(blocks, state).isPresent(), "external templates keep native defaults");
+        state.remove("Name");
+        helper.assertTrue(BlueprintBlock.read(blocks, state).isEmpty(), "missing saved Name is rejected");
+        helper.succeed();
+    }
+
     @GameTest(template = TEMPLATE, timeoutTicks = 40)
     public static void aBlueprintOnTheShelfIsNoPattern(GameTestHelper helper) {
         helper.assertTrue(Templates.blueprints().contains(HUT), "the blueprint is read off its shelf");

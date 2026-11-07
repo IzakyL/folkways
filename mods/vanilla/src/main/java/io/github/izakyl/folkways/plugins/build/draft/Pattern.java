@@ -1,9 +1,9 @@
 package io.github.izakyl.folkways.plugins.build.draft;
 
-import io.github.izakyl.folkways.core.api.structure.StructureCompat;
-import io.github.izakyl.folkways.core.api.structure.Voxelizer;
-import io.github.izakyl.folkways.core.api.terms.ItemFilter;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
+import io.github.izakyl.folkways.core.item.api.ItemFilter;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
+import io.github.izakyl.folkways.core.work.api.StructureCompat;
+import io.github.izakyl.folkways.core.work.api.Voxelizer;
 import io.github.izakyl.folkways.front.api.Schema;
 import io.github.izakyl.folkways.front.api.Settings;
 import io.github.izakyl.folkways.front.api.notice.Notice;
@@ -291,7 +291,7 @@ public record Pattern(ResourceLocation id, Schema knobs, Face face, Set<String> 
                 }
             }
             return ready.counting(drawing.reports());
-        } catch (io.github.izakyl.folkways.core.api.structure.StructureCompat.Failure failed) {
+        } catch (io.github.izakyl.folkways.core.work.api.StructureCompat.Failure failed) {
             return Drawn.refused(DraftRefusal.UNSUPPORTED_PAYLOAD);
         } catch (EvalException stopped) {
             DraftRefusal why = drawing.stoppedFor();

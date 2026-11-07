@@ -6,22 +6,22 @@ import com.github.ysbbbbbb.kaleidoscopecookery.crafting.recipe.TeapotRecipe;
 import com.github.ysbbbbbb.kaleidoscopecookery.crafting.serializer.TeapotRecipeSerializer;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks;
 import com.github.ysbbbbbb.kaleidoscopecookery.item.TeacupItem;
-import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
-import io.github.izakyl.folkways.core.api.terms.Goods;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.work.Grown;
-import io.github.izakyl.folkways.core.api.work.Intent;
-import io.github.izakyl.folkways.core.api.work.Refinement;
-import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.WorkSite;
-import io.github.izakyl.folkways.core.api.work.Workshop;
 import io.github.izakyl.folkways.cookery.CookeryContent;
 import io.github.izakyl.folkways.cookery.KitchenBookings;
 import io.github.izakyl.folkways.cookery.KitchenStation;
+import io.github.izakyl.folkways.core.item.api.Goods;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
+import io.github.izakyl.folkways.core.plan.api.Grown;
+import io.github.izakyl.folkways.core.plan.api.Intent;
+import io.github.izakyl.folkways.core.plan.api.Refinement;
+import io.github.izakyl.folkways.core.plan.api.Workshop;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.work.api.WorkSite;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
+import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
 import java.util.ArrayList;
-import java.util.List;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -47,7 +47,7 @@ public final class TeapotStation implements KitchenStation {
         RECOVERING.remove(key, active);
         return List.of();
     }
-    public void stop(UUID colony, io.github.izakyl.folkways.core.api.colony.Closing why) {
+    public void stop(UUID colony, io.github.izakyl.folkways.core.colony.api.Closing why) {
         RECOVERING.keySet().removeIf(key -> key.colony().equals(colony));
     }
 
@@ -155,7 +155,7 @@ public final class TeapotStation implements KitchenStation {
         public ResourceLocation id() { return CookeryContent.ID; }
         public WorkSite site() { return new WorkSite.AtBlock(at); }
         public List<Refinement.Change> options(Intent intent, Grown graph) {
-            if (!(intent instanceof io.github.izakyl.folkways.core.api.work.Produce produce)) { return List.of(); }
+            if (!(intent instanceof io.github.izakyl.folkways.core.plan.api.Produce produce)) { return List.of(); }
             List<Refinement.Change> options = new ArrayList<>();
             for (Job job : jobs) {
                 if (!Goods.matches(job.output(), produce.wanted())

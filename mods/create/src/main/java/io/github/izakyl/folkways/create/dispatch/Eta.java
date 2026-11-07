@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.create.dispatch;
 
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.OptionalInt;

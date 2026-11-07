@@ -7,25 +7,24 @@ import com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModRecipes;
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.testing.TestWorker;
-import io.github.izakyl.folkways.effect.Effects;
-import io.github.izakyl.folkways.core.api.terms.Containers;
-import io.github.izakyl.folkways.core.api.terms.Goods;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.work.Ending;
-import io.github.izakyl.folkways.core.api.work.Grown;
-import io.github.izakyl.folkways.core.api.work.Hold;
-import io.github.izakyl.folkways.core.api.work.Node;
-import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Produce;
-import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.WorkSite;
-import io.github.izakyl.folkways.core.api.work.Worker;
-import io.github.izakyl.folkways.core.api.work.Workload;
-import io.github.izakyl.folkways.core.engine.labor.Commit;
 import io.github.izakyl.folkways.cookery.CookeryContent;
 import io.github.izakyl.folkways.cookery.KitchenBookings;
 import io.github.izakyl.folkways.cookery.testing.NativeCookingMatrix;
+import io.github.izakyl.folkways.core.item.api.Containers;
+import io.github.izakyl.folkways.core.item.api.Goods;
+import io.github.izakyl.folkways.core.plan.api.Grown;
+import io.github.izakyl.folkways.core.plan.api.Produce;
+import io.github.izakyl.folkways.core.runtime.HoldingFixture;
+import io.github.izakyl.folkways.core.testing.TestWorker;
+import io.github.izakyl.folkways.core.work.api.Ending;
+import io.github.izakyl.folkways.core.work.api.Hold;
+import io.github.izakyl.folkways.core.work.api.Node;
+import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.work.api.WorkSite;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
+import io.github.izakyl.folkways.effect.Effects;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import io.github.izakyl.folkways.plugins.person.ResidentEntity;
 import java.util.ArrayList;
@@ -71,8 +70,7 @@ public final class MillstoneRecipeMatrixGameTests {
         int nativeTime = rig.mill().saveWithoutMetadata(rig.level.registryAccess()).getInt("Progress");
         helper.assertTrue(nativeTime > 0, id + ": processing starts with the actual native countdown");
         long started = rig.level.getGameTime();
-        var turn = work.next(rig.level, rig.worker); helper.assertTrue(turn instanceof Workload.Within.Turn.Piece, id + ": actual driving piece exists");
-        Node drive = ((Workload.Within.Turn.Piece) turn).node(); List<ItemStack> actual = new ArrayList<>();
+        HoldingFixture drive = rig.holding(work).prepare(); List<ItemStack> actual = new ArrayList<>();
         float walked = rig.actor.walkDist;
         helper.startSequence().thenWaitUntil(() -> helper.assertTrue(rig.mill().getInput().isEmpty(), id + ": the unmodified native ticker finishes grinding"))
             .thenExecute(() -> {
@@ -85,12 +83,12 @@ public final class MillstoneRecipeMatrixGameTests {
                     int total = actual.stream().filter(stack -> ItemStack.isSameItemSameComponents(stack, promised.stack())).mapToInt(ItemStack::getCount).sum();
                     helper.assertTrue(total >= promised.stack().getCount(), id + ": every guaranteed native result is present in the actual output slots");
                 }
-            }).thenWaitUntil(() -> helper.assertTrue(!((Workload.Continuous) drive.spec().workload()).holds(rig.level, rig.worker), id + ": resident actually walks outside the capture region"))
+            }).thenWaitUntil(() -> helper.assertTrue(!drive.running(), id + ": resident actually walks outside the capture region"))
             .thenExecute(() -> {
                 try {
                     helper.assertTrue(rig.actor.walkDist > walked + 0.05F, id + ": exit required real locomotion");
-                    helper.assertTrue(Commit.run(rig.level, drive, rig.worker) instanceof Outcome.Done, id + ": driving settles only after the physical exit");
-                    work.ended(rig.level, drive, Ending.DONE);
+                    helper.assertTrue(drive.step() instanceof Outcome.Done, id + ": driving settles only after the physical exit");
+
                     helper.assertTrue(rig.step(work) instanceof Outcome.Done, id + ": native output slots are actually extracted");
                     for (ItemStack output : actual) {
                         int expected = actual.stream().filter(stack -> ItemStack.isSameItemSameComponents(stack, output)).mapToInt(ItemStack::getCount).sum();
@@ -106,6 +104,13 @@ public final class MillstoneRecipeMatrixGameTests {
     }
     private static final class Rig implements AutoCloseable {
         final Worker worker;
+        private final java.util.Map<Node, HoldingFixture> claims =
+                new java.util.IdentityHashMap<>();
+
+        HoldingFixture holding(Node node) {
+            return claims.computeIfAbsent(node, next -> new HoldingFixture(level, next, worker));
+        }
+
         final GameTestHelper helper; final ServerLevel level; final UUID colony = UUID.randomUUID(); final BlockPos cell; final WorldPos at;
         final ResidentEntity actor; final Stances stances; final KitchenBookings bookings = new KitchenBookings(); final SimpleContainer pack = new SimpleContainer(12);
         final RecipeHolder<MillstoneRecipe> recipe; final ItemStack input; Hold hold;
@@ -135,10 +140,11 @@ public final class MillstoneRecipeMatrixGameTests {
             hold = option.holds().getFirst(); helper.assertTrue(hold.take().isEmpty(), recipe.id() + ": actual station is booked"); return (MillstoneWork) option.replacement().nodes().getFirst();
         }
         Outcome step(MillstoneWork work) {
-            var turn = work.next(level, worker); helper.assertTrue(turn instanceof Workload.Within.Turn.Piece, recipe.id() + ": expected real action, got " + turn + ", refusal=" + work.refusal(level));
-            Node piece = ((Workload.Within.Turn.Piece) turn).node(); Outcome done = Commit.run(level, piece, worker);
-            if (done instanceof Outcome.Done result) { result.made().forEach(stack -> helper.assertTrue(Containers.insert(pack, stack).isEmpty(), "actual native outputs fit")); work.ended(level, piece, Ending.DONE); }
-            return done;
+            Outcome outcome = holding(work).step();
+            if (outcome instanceof Outcome.Done done) {
+                done.made().forEach(stack -> helper.assertTrue(Containers.insert(pack, stack).isEmpty(),
+                    "actual native products fit")); }
+            return outcome;
         }
         public void close() { MillstoneDrive.stop(colony); if (hold != null) { hold.release(Ending.DROPPED); } actor.discard(); }
     }

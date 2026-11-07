@@ -2,7 +2,7 @@ package io.github.izakyl.folkways.front.api;
 
 import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.base.persist.Reader;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import java.util.List;
 import java.util.Map;
 import net.minecraft.core.BlockPos;

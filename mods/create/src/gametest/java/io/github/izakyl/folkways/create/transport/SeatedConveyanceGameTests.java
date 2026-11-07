@@ -1,10 +1,10 @@
 package io.github.izakyl.folkways.create.transport;
 
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.resident.Going;
-import io.github.izakyl.folkways.core.api.terms.RefusalKind;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.work.Stances;
+import io.github.izakyl.folkways.core.resident.api.Going;
+import io.github.izakyl.folkways.core.resident.api.RefusalKind;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.create.FolkwaysCreateMod;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import java.util.Optional;

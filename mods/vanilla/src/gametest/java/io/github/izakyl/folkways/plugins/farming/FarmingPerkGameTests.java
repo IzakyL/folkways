@@ -1,9 +1,9 @@
 package io.github.izakyl.folkways.plugins.farming;
 
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.work.Stances;
 import io.github.izakyl.folkways.core.testing.Proxies;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.front.api.PastDay;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
 import java.util.List;
@@ -77,14 +77,14 @@ public final class FarmingPerkGameTests {
             new io.github.izakyl.folkways.effect.Effects.Part("bonus", io.github.izakyl.folkways.effect.Modifier.add(FarmingContent.HARVEST_BONUS, 1)),
             new io.github.izakyl.folkways.effect.Effects.Part("seed", io.github.izakyl.folkways.effect.Modifier.add(FarmingContent.SEED_SAVING, 1)),
             new io.github.izakyl.folkways.effect.Effects.Part("replant", io.github.izakyl.folkways.effect.Modifier.grant(FarmingContent.REPLANTS))));
-        var worker = Proxies.of(io.github.izakyl.folkways.core.api.work.Worker.class, (proxy, method, args) -> switch(method.getName()) {
+        var worker = Proxies.of(io.github.izakyl.folkways.core.work.api.Worker.class, (proxy, method, args) -> switch(method.getName()) {
             case "body" -> body.mob();
             case "effects" -> effects;
             default -> throw new AssertionError(method.getName());
         });
         var outcome = node.work(level, worker, first);
-        helper.assertTrue(outcome instanceof io.github.izakyl.folkways.core.api.work.Outcome.Done, "harvest succeeds");
-        var done = (io.github.izakyl.folkways.core.api.work.Outcome.Done) outcome;
+        helper.assertTrue(outcome instanceof io.github.izakyl.folkways.core.work.api.Outcome.Done, "harvest succeeds");
+        var done = (io.github.izakyl.folkways.core.work.api.Outcome.Done) outcome;
         int wheat = done.made().stream().filter(stack -> stack.is(net.minecraft.world.item.Items.WHEAT))
             .mapToInt(net.minecraft.world.item.ItemStack::getCount).sum();
         helper.assertValueEqual(wheat, 4, "both wheat crops yield double their primary food product");

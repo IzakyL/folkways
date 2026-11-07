@@ -1,7 +1,7 @@
 package io.github.izakyl.folkways.front.engine.net;
 
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.vocation.Vocations;
+import io.github.izakyl.folkways.core.vocation.api.Vocations;
 import java.util.List;
 import java.util.function.Consumer;
 import net.minecraft.network.FriendlyByteBuf;

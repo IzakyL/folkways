@@ -1,8 +1,8 @@
 package io.github.izakyl.folkways.plugins.combat.weapon;
 
-import io.github.izakyl.folkways.core.api.terms.Goods;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
-import io.github.izakyl.folkways.core.api.work.Worker;
+import io.github.izakyl.folkways.core.item.api.Goods;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
+import io.github.izakyl.folkways.core.work.api.Worker;
 import java.util.List;
 import java.util.Optional;
 import net.minecraft.network.chat.Component;
@@ -79,7 +79,4 @@ public interface LoadoutProvider {
         return Math.clamp((long) magazineSize(weapon) * Math.max(1, 160 / Math.max(1, cycleTicks(weapon))), 1, 4096);
     }
 
-    default Component label() {
-        return Component.empty();
-    }
 }

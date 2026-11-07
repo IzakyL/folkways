@@ -1,16 +1,16 @@
 package io.github.izakyl.folkways.plugins.patrol;
 
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.colony.Colonies;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.colony.Held;
-import io.github.izakyl.folkways.core.api.resident.body.Body;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
-import io.github.izakyl.folkways.core.api.terms.Reach;
-import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
-import io.github.izakyl.folkways.core.api.work.WorkProgress;
-import io.github.izakyl.folkways.core.engine.labor.LaborFixture;
+import io.github.izakyl.folkways.core.colony.api.Claimed;
+import io.github.izakyl.folkways.core.colony.api.Colonies;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
+import io.github.izakyl.folkways.core.resident.api.Body;
+import io.github.izakyl.folkways.core.runtime.LaborFixture;
 import io.github.izakyl.folkways.core.testing.Cleanup;
+import io.github.izakyl.folkways.core.work.api.WorkProgress;
+import io.github.izakyl.folkways.core.world.api.Reach;
+import io.github.izakyl.folkways.core.world.api.WorldSpaces;
 import io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfile;
 import io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfiles;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
@@ -71,7 +71,7 @@ public final class MeleeReachGameTests {
         enemy.setHealth(60);
         guard.pack().insert(new ItemStack(Items.IRON_SWORD));
         level.addFreshEntity(guard);
-        colony.hold(PersonContent.ID, Held.Entity.of(guard)).orElseThrow();
+        colony.hold(PersonContent.ID, Claimed.Entity.of(guard)).orElseThrow();
         guard.joinColony(colony.id());
         arm(colony, guard, "Melee", ItemSpec.of(Tags.Items.MELEE_WEAPON_TOOLS));
         level.addFreshEntity(enemy);

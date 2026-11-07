@@ -168,4 +168,3 @@ for (const shot of SHOTS) {
     }
   });
 }
-

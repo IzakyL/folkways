@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.front.engine.colony;
 
-import io.github.izakyl.folkways.core.api.colony.Colony;
+import io.github.izakyl.folkways.core.colony.api.Colony;
 import io.github.izakyl.folkways.front.api.Delegation;
 import io.github.izakyl.folkways.front.api.Shape;
 import io.github.izakyl.folkways.front.engine.Enrollments;

@@ -1,12 +1,13 @@
 package io.github.izakyl.folkways.plugins.wares;
 
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
-import io.github.izakyl.folkways.core.api.work.Placement;
-import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.testing.Proxies;
+import io.github.izakyl.folkways.core.work.api.Placement;
+import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.effect.Effects;
 import io.github.izakyl.folkways.effect.Modifier;
+import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
+import io.github.izakyl.folkways.plugins.wares.mixin.FurnaceAccessor;
 import java.util.List;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
@@ -19,7 +20,6 @@ import net.minecraft.world.item.crafting.CraftingRecipe;
 import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity;
-import io.github.izakyl.folkways.plugins.wares.mixin.FurnaceAccessor;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
@@ -32,6 +32,45 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 public final class CraftPerkGameTests {
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) { event.register(CraftPerkGameTests.class); }
+
+    @GameTest(template = "empty")
+    public static void vanillaFurnaceTemplatesMayOmitTheWholeTrainingPayload(GameTestHelper helper) {
+        var at = helper.absolutePos(new BlockPos(1, 1, 1));
+        var state = Blocks.FURNACE.defaultBlockState();
+        var tag = new net.minecraft.nbt.CompoundTag();
+        tag.putString("id", "minecraft:furnace");
+        var loaded = net.minecraft.world.level.block.entity.BlockEntity.loadStatic(
+            at, state, tag, helper.getLevel().registryAccess());
+        helper.assertTrue(loaded instanceof AbstractFurnaceBlockEntity,
+            "native template NBT must still create a furnace without Folkways training data");
+        var saved = loaded.saveWithoutMetadata(helper.getLevel().registryAccess());
+        helper.assertTrue(saved.contains("FolkwaysFurnaceBatches", net.minecraft.nbt.Tag.TAG_LIST)
+            && saved.contains("FolkwaysFurnaceFraction", net.minecraft.nbt.Tag.TAG_DOUBLE),
+            "the current save writer always writes both training fields");
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void furnaceCommandNbtMayOmitEitherTrainingField(GameTestHelper helper) {
+        for (boolean batches : List.of(false, true)) {
+            var at = helper.absolutePos(new BlockPos(batches ? 2 : 1, 1, 1));
+            var tag = new net.minecraft.nbt.CompoundTag();
+            if (batches) {
+                tag.put("FolkwaysFurnaceBatches", new net.minecraft.nbt.ListTag());
+            } else {
+                tag.putDouble("FolkwaysFurnaceFraction", 0.25);
+            }
+            var input = new net.minecraft.commands.arguments.blocks.BlockInput(
+                Blocks.FURNACE.defaultBlockState(), java.util.Set.of(), tag);
+            helper.assertTrue(input.place(helper.getLevel(), at, 3), "partial command placement succeeds");
+            var saved = helper.getLevel().getBlockEntity(at).saveWithoutMetadata(helper.getLevel().registryAccess());
+            helper.assertTrue(saved.getList("FolkwaysFurnaceBatches", net.minecraft.nbt.Tag.TAG_COMPOUND).isEmpty(),
+                "missing batches default empty");
+            helper.assertValueEqual(saved.getDouble("FolkwaysFurnaceFraction"), batches ? 0.0 : 0.25,
+                "missing fraction defaults to zero; a supplied value survives");
+        }
+        helper.succeed();
+    }
 
     @SuppressWarnings("unchecked")
     @GameTest(template = "empty")

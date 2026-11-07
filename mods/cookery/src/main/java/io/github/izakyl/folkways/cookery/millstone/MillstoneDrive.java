@@ -1,28 +1,29 @@
 package io.github.izakyl.folkways.cookery.millstone;
 
 import com.github.ysbbbbbb.kaleidoscopecookery.blockentity.kitchen.MillstoneBlockEntity;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.colony.ColonyView;
 import io.github.izakyl.folkways.base.persist.Reader;
-import io.github.izakyl.folkways.core.api.resident.Conveyance;
-import io.github.izakyl.folkways.core.api.resident.Going;
-import io.github.izakyl.folkways.core.api.resident.body.Bodies;
-import io.github.izakyl.folkways.core.api.terms.Footing;
-import io.github.izakyl.folkways.core.api.terms.Reach;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
-import io.github.izakyl.folkways.core.api.work.Ending;
-import io.github.izakyl.folkways.core.api.work.Node;
-import io.github.izakyl.folkways.core.api.work.NodeSpec;
-import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.Urge;
-import io.github.izakyl.folkways.core.api.work.WorkSite;
-import io.github.izakyl.folkways.core.api.work.Worker;
-import io.github.izakyl.folkways.core.api.work.Workload;
+import io.github.izakyl.folkways.base.persist.Required;
 import io.github.izakyl.folkways.cookery.CookeryContent;
 import io.github.izakyl.folkways.cookery.CookeryRefusal;
 import io.github.izakyl.folkways.cookery.KitchenBookings;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.colony.api.ColonyView;
+import io.github.izakyl.folkways.core.resident.api.Bodies;
+import io.github.izakyl.folkways.core.resident.api.Conveyance;
+import io.github.izakyl.folkways.core.resident.api.Going;
+import io.github.izakyl.folkways.core.work.api.Ending;
+import io.github.izakyl.folkways.core.work.api.Node;
+import io.github.izakyl.folkways.core.work.api.NodeSpec;
+import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.work.api.Urge;
+import io.github.izakyl.folkways.core.work.api.WorkSite;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.work.api.Workload;
+import io.github.izakyl.folkways.core.world.api.Footing;
+import io.github.izakyl.folkways.core.world.api.Reach;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
+import io.github.izakyl.folkways.core.world.api.WorldSpaces;
 import io.github.izakyl.folkways.plugins.wares.WaresContent;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -41,8 +42,8 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.goal.Goal;
 import net.minecraft.world.level.block.Block;
-import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
 import net.minecraft.world.phys.Vec3;
+import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
 
 /** Runtime permission never survives a save; the real ingredients and the obligation to leave do. */
 public final class MillstoneDrive {
@@ -214,7 +215,7 @@ public final class MillstoneDrive {
         CompoundTag owned = mill.getPersistentData().getCompound(MillstoneBatch.KEY);
         if (before != null && owned.hasUUID("colony") && owned.getUUID("colony").equals(before.colony())
                 && owned.hasUUID("batch") && owned.getUUID("batch").equals(before.batch())
-                && before.recipe().toString().equals(owned.getString("recipe"))) {
+                && Reader.of(owned).string("recipe").filter(before.recipe().toString()::equals).isPresent()) {
             MillstoneBatch.remember(mill, level, new MillstoneBatch.Batch(before.colony(), before.batch(),
                 before.recipe(), mill.getInput().isEmpty()));
         }
@@ -263,7 +264,6 @@ public final class MillstoneDrive {
         CompoundTag data = new CompoundTag();
         data.put("station", at.save());
         data.putUUID("colony", colony);
-        if (target != null) { data.put("target", target.save()); }
         actor.getPersistentData().put(EXIT, data);
     }
 
@@ -274,7 +274,7 @@ public final class MillstoneDrive {
         Exit exit = EXITS.get(actor.getUUID());
         if (exit == null) {
             CompoundTag data = actor.getPersistentData().getCompound(EXIT);
-            Optional<WorldPos> at = WorldPos.load(Reader.of(data.getCompound("station")));
+            Optional<WorldPos> at = Reader.of(data).child("station").flatMap(WorldPos::load);
             if (at.isEmpty() || !data.hasUUID("colony")) { return false; }
             exit = new Exit(at.get(), data.getUUID("colony"), actor, null, false);
             EXITS.put(actor.getUUID(), exit);
@@ -351,8 +351,10 @@ public final class MillstoneDrive {
             return List.of();
         }
         CompoundTag saved = actor.getPersistentData().getCompound(EXIT);
-        if (saved.hasUUID("colony") && !saved.getUUID("colony").equals(new UUID(0, 0))
-                && !saved.getUUID("colony").equals(colony.id())) { return List.of(); }
+        UUID savedColony = Required.uuid(saved, "colony");
+        if (!savedColony.equals(new UUID(0, 0)) && !savedColony.equals(colony.id())) {
+            return List.of();
+        }
         return List.of(new Urge(LEAVING, Urge.DIRE + 0.1, true, () -> new Leaving(actor)));
     }
     private static final class Leaving implements Node, Workload.Continuous {

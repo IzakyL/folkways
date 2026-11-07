@@ -5,7 +5,7 @@ import com.lowdragmc.lowdraglib2.gui.ui.UIElement;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Button;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Label;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.TextField;
-import io.github.izakyl.folkways.core.api.resident.body.Body;
+import io.github.izakyl.folkways.core.resident.api.Body;
 import io.github.izakyl.folkways.front.api.ui.Inlay;
 import io.github.izakyl.folkways.front.api.ui.Nook;
 import io.github.izakyl.folkways.front.api.ui.Rows;

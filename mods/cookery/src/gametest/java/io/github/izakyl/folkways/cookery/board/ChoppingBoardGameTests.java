@@ -1,33 +1,33 @@
 package io.github.izakyl.folkways.cookery.board;
 
-import io.github.izakyl.folkways.core.testing.TestWorker;
 import com.github.ysbbbbbb.kaleidoscopecookery.blockentity.kitchen.ChoppingBoardBlockEntity;
+import com.github.ysbbbbbb.kaleidoscopecookery.crafting.recipe.ChoppingBoardRecipe;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems;
-import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.resident.body.Body;
-import io.github.izakyl.folkways.core.api.terms.Containers;
-import io.github.izakyl.folkways.core.api.terms.Goods;
-import io.github.izakyl.folkways.core.api.terms.Realm;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
-import io.github.izakyl.folkways.core.api.work.Amount;
-import io.github.izakyl.folkways.core.api.work.Leaves;
-import io.github.izakyl.folkways.core.api.work.Ending;
-import io.github.izakyl.folkways.core.api.work.Grown;
-import io.github.izakyl.folkways.core.api.work.Hold;
-import io.github.izakyl.folkways.core.api.work.Node;
-import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Produce;
-import io.github.izakyl.folkways.core.api.work.Refinement;
-import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.WorkSite;
-import io.github.izakyl.folkways.core.api.work.Worker;
-import io.github.izakyl.folkways.core.api.work.Workload;
-import io.github.izakyl.folkways.core.engine.labor.Commit;
 import io.github.izakyl.folkways.cookery.CookeryContent;
 import io.github.izakyl.folkways.cookery.KitchenBookings;
+import io.github.izakyl.folkways.core.item.api.Containers;
+import io.github.izakyl.folkways.core.item.api.Goods;
+import io.github.izakyl.folkways.core.plan.api.Grown;
+import io.github.izakyl.folkways.core.plan.api.Produce;
+import io.github.izakyl.folkways.core.plan.api.Refinement;
+import io.github.izakyl.folkways.core.resident.api.Body;
+import io.github.izakyl.folkways.core.runtime.HoldingFixture;
+import io.github.izakyl.folkways.core.testing.TestWorker;
+import io.github.izakyl.folkways.core.work.api.Amount;
+import io.github.izakyl.folkways.core.work.api.Ending;
+import io.github.izakyl.folkways.core.work.api.Hold;
+import io.github.izakyl.folkways.core.work.api.Node;
+import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.work.api.WorkSite;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.work.support.Leaves;
+import io.github.izakyl.folkways.core.world.api.Realm;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
+import io.github.izakyl.folkways.core.world.api.WorldSpaces;
+import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import java.util.List;
 import java.util.Optional;
@@ -38,6 +38,7 @@ import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.entity.Entity;
@@ -45,6 +46,10 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.alchemy.PotionContents;
+import net.minecraft.world.item.alchemy.Potions;
+import net.minecraft.world.item.crafting.RecipeHolder;
+import net.minecraft.world.item.crafting.SingleRecipeInput;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.AABB;
@@ -52,16 +57,10 @@ import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.common.ModConfigSpec;
+import net.neoforged.neoforge.common.crafting.DataComponentIngredient;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
-import com.github.ysbbbbbb.kaleidoscopecookery.crafting.recipe.ChoppingBoardRecipe;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.item.alchemy.PotionContents;
-import net.minecraft.world.item.alchemy.Potions;
-import net.minecraft.world.item.crafting.RecipeHolder;
-import net.minecraft.world.item.crafting.SingleRecipeInput;
-import net.neoforged.neoforge.common.crafting.DataComponentIngredient;
 
 @EventBusSubscriber(modid = "folkways_cookery", bus = EventBusSubscriber.Bus.MOD)
 @GameTestHolder(FolkwaysMod.MOD_ID)
@@ -71,6 +70,23 @@ public final class ChoppingBoardGameTests {
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) {
         event.register(ChoppingBoardGameTests.class);
+    }
+
+    @GameTest(template = "empty")
+    public static void hardUrgesPreserveLoadingCutsAndExtraction(GameTestHelper helper) {
+        try (Fixture fixture = new Fixture(helper)) {
+            BoardWork work = fixture.plan(new ItemStack(ModItems.RAW_CUT_SMALL_MEATS.get()));
+            HoldingFixture holding = fixture.holding(work).prepare().hardUrge();
+            helper.assertTrue(fixture.step(work) instanceof Outcome.Done, "one ingredient enters the board");
+            holding.hardUrge();
+            helper.assertTrue(fixture.step(work) instanceof Outcome.Done, "a real cut completes");
+            holding.hardUrge();
+            fixture.finish(work);
+            holding.hardUrge();
+            fixture.finish(work);
+            fixture.assertProducts(3, 1);
+        }
+        helper.succeed();
     }
 
     @GameTest(template = "empty")
@@ -460,19 +476,36 @@ public final class ChoppingBoardGameTests {
     @GameTest(template = "empty")
     public static void withdrawingAPlannedBoardStopsItsPreparedPutEvenAfterTheSameIdIsReadmitted(GameTestHelper helper) {
         try (Fixture fixture = new Fixture(helper)) {
-            BoardWork old = fixture.plan(new ItemStack(ModItems.RAW_CUT_SMALL_MEATS.get()));
-            Node put = ((Workload.Within.Turn.Piece) old.next(fixture.level, fixture.worker)).node();
+            BoardWork work = fixture.plan(new ItemStack(ModItems.RAW_CUT_SMALL_MEATS.get()));
+            HoldingFixture put = fixture.holding(work).prepare();
             fixture.bookings.withdraw(fixture.at);
-            helper.assertTrue(old.refusal(fixture.level).isPresent() && put.refusal(fixture.level).isPresent(),
+            helper.assertTrue(work.refusal(fixture.level).isPresent(),
                 "both the outer plan and its already prepared operation report cancellation");
-            helper.assertTrue(old.next(fixture.level, fixture.worker) instanceof Workload.Within.Turn.Leave,
+            helper.assertTrue(
+                fixture.holding(work).finished(),
                 "canceled work leaves instead of waiting forever for a missing first turn");
+            helper.assertTrue(
+                put.step() instanceof Outcome.Failed,
+                "even a put already in its wind-up cannot operate an unmarked kitchen");
+            helper.assertValueEqual(Goods.countIn(fixture.pack, Goods.specOf(new ItemStack(Items.CHICKEN))), 1L,
+                "the core returns the old operation's ingredient exactly once");
+            helper.assertTrue(fixture.board().getCurrentCutStack().isEmpty(), "the unmarked board remains empty");
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void readmittingTheSameBoardAndTurnIdCannotReviveAnOldPut(GameTestHelper helper) {
+        try (Fixture fixture = new Fixture(helper)) {
+            BoardWork old = fixture.plan(new ItemStack(ModItems.RAW_CUT_SMALL_MEATS.get()));
+            HoldingFixture put = fixture.holding(old).prepare();
+            fixture.bookings.withdraw(fixture.at);
             fixture.bookings.admit(fixture.at);
             Hold replacement = fixture.bookings.hold(fixture.at, old.id());
             helper.assertTrue(replacement.take().isEmpty(), "a new generation can book the same stable id");
             fixture.holds.add(replacement);
             helper.assertTrue(old.refusal(fixture.level).isPresent(), "the old node cannot borrow the new same-id booking");
-            helper.assertTrue(Commit.run(fixture.level, put, fixture.worker) instanceof Outcome.Failed,
+            helper.assertTrue(put.step() instanceof Outcome.Failed,
                 "a put already in its wind-up retains its original generation and cannot operate the re-marked kitchen");
             helper.assertValueEqual(Goods.countIn(fixture.pack, Goods.specOf(new ItemStack(Items.CHICKEN))), 1L,
                 "the core returns the old operation's ingredient exactly once");
@@ -555,13 +588,20 @@ public final class ChoppingBoardGameTests {
             random.nextDouble();
             random.nextDouble();
             random.nextFloat();
-            if ((random.nextDouble() < 0.25) == wears) return seed;
+            if ((random.nextDouble() < 0.25) == wears) {
+                return seed;
+            }
         }
         throw new AssertionError("a deterministic native knife roll exists");
     }
     private static final class Fixture implements AutoCloseable {
-
         final Worker worker;
+        private final java.util.Map<Node, HoldingFixture> claims =
+                new java.util.IdentityHashMap<>();
+
+        HoldingFixture holding(Node node) {
+            return claims.computeIfAbsent(node, next -> new HoldingFixture(level, next, worker));
+        }
 
         final GameTestHelper helper;
         final ServerLevel level;
@@ -627,24 +667,17 @@ public final class ChoppingBoardGameTests {
         }
 
         Outcome step(BoardWork work) {
-            Workload.Within.Turn turn = work.next(level, worker);
-            if (!(turn instanceof Workload.Within.Turn.Piece piece)) {
-                throw new IllegalStateException("expected another board operation, got " + turn);
-            }
-            Outcome outcome = Commit.run(level, piece.node(), worker);
+            Outcome outcome = holding(work).step();
             if (outcome instanceof Outcome.Done done) {
                 done.made().forEach(stack -> helper.assertTrue(Containers.insert(pack, stack).isEmpty(),
-                    "every real product fits in the test pack"));
-                work.ended(level, piece.node(), Ending.DONE);
-            } else if (outcome instanceof Outcome.Failed failed) {
-                work.ended(level, piece.node(), new Ending.Failed(piece.node().id(), failed.why()));
+                    "actual native products fit"));
             }
             return outcome;
         }
 
         void finish(BoardWork work) {
             for (int turn = 0; turn < 20; turn++) {
-                if (work.next(level, worker) instanceof Workload.Within.Turn.Leave) {
+                if (holding(work).finished()) {
                     helper.assertTrue(work.commit(level, worker) instanceof Outcome.Done, "the whole batch completes");
                     return;
                 }

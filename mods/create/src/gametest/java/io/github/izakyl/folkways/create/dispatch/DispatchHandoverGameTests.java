@@ -1,11 +1,11 @@
 package io.github.izakyl.folkways.create.dispatch;
 
+import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.colony.internal.ColonyData;
+import io.github.izakyl.folkways.core.colony.internal.ColonySnapshot;
 import io.github.izakyl.folkways.core.testing.Proxies;
 import io.github.izakyl.folkways.create.FolkwaysCreateMod;
-import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.engine.colony.ColonyData;
-import io.github.izakyl.folkways.core.engine.colony.ColonySnapshot;
 import io.github.izakyl.folkways.front.api.notice.Attempt;
 import java.util.Optional;
 import java.util.Set;

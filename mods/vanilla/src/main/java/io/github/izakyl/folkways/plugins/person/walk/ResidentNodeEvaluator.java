@@ -1,9 +1,9 @@
 package io.github.izakyl.folkways.plugins.person.walk;
 
-import io.github.izakyl.folkways.core.api.resident.Searches;
-import io.github.izakyl.folkways.core.api.terms.ClimbableBlocks;
-import io.github.izakyl.folkways.core.api.terms.Footing;
-import io.github.izakyl.folkways.core.api.terms.Keepouts;
+import io.github.izakyl.folkways.core.resident.api.Searches;
+import io.github.izakyl.folkways.core.world.api.ClimbableBlocks;
+import io.github.izakyl.folkways.core.world.api.Footing;
+import io.github.izakyl.folkways.core.world.api.Keepouts;
 import java.util.List;
 import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
@@ -212,7 +212,9 @@ public class ResidentNodeEvaluator extends WalkNodeEvaluator {
             int kept = 0;
             for (int i = 0; i < count; i++) {
                 Node next = neighbors[i];
-                if (forbidden(next)) continue;
+                if (forbidden(next)) {
+                    continue;
+                }
                 if (node.x != next.x && node.z != next.z
                         && (Keepouts.forbidden(mob.level(), currentContext.level(), next.x, node.y, node.z)
                             || Keepouts.forbidden(mob.level(), currentContext.level(), node.x, node.y, next.z))) continue;

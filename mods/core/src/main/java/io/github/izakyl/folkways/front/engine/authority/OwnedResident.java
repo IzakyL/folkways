@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.front.engine.authority;
 
-import io.github.izakyl.folkways.core.api.resident.body.Body;
+import io.github.izakyl.folkways.core.resident.api.Body;
 
 public final class OwnedResident {
     private final Body entity;

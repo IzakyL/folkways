@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.plugins.patrol;
 
-import io.github.izakyl.folkways.core.api.resident.body.Bodies;
+import io.github.izakyl.folkways.core.resident.api.Bodies;
 import net.minecraft.world.entity.monster.Enemy;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.event.entity.living.LivingIncomingDamageEvent;

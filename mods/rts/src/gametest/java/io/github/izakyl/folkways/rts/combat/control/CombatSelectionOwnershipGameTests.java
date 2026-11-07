@@ -2,20 +2,29 @@ package io.github.izakyl.folkways.rts.combat.control;
 
 import com.mojang.authlib.GameProfile;
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.colony.Colonies;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.colony.Held;
-import io.github.izakyl.folkways.core.api.resident.body.Body;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.engine.labor.LaborFixture;
+import io.github.izakyl.folkways.core.colony.api.Claimed;
+import io.github.izakyl.folkways.core.colony.api.Colonies;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
+import io.github.izakyl.folkways.core.plan.api.Grown;
+import io.github.izakyl.folkways.core.resident.api.Body;
+import io.github.izakyl.folkways.core.runtime.LaborFixture;
 import io.github.izakyl.folkways.core.testing.Cleanup;
+import io.github.izakyl.folkways.core.work.api.Node;
+import io.github.izakyl.folkways.core.work.api.NodeSpec;
+import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.work.api.WorkSite;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.work.api.Workload;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.front.engine.charter.Charter;
 import io.github.izakyl.folkways.front.engine.charter.Charters;
 import io.github.izakyl.folkways.front.engine.registry.FolkwaysItems;
 import io.github.izakyl.folkways.front.engine.registry.FolkwaysPlayerAttachments;
 import io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfile;
 import io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfiles;
+import io.github.izakyl.folkways.plugins.combat.weapon.PatrolSupplies;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import io.github.izakyl.folkways.plugins.person.PersonContent;
 import io.github.izakyl.folkways.rts.FolkwaysRtsMod;
@@ -37,6 +46,7 @@ import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.tags.ItemTags;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EquipmentSlot;
@@ -56,6 +66,111 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 @GameTestHolder(FolkwaysMod.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class CombatSelectionOwnershipGameTests {
+    @GameTest(template = "empty_large", timeoutTicks = 600)
+    public static void completedRtsPointHoldReplansWorkOnlyAfterSelectionAndShortcutRelease(GameTestHelper helper) {
+        Fixture f = new Fixture(helper);
+        Body body = f.resident(2);
+        body.pack().insert(new ItemStack(Items.IRON_AXE));
+        CommandJob job = new CommandJob(f.at(2), body);
+        f.colony.submit(CommandJob.WORK, f.level.dimension(), Grown.of(job), (id, how) -> {});
+        AtomicReference<UnitGroup> group = new AtomicReference<>();
+        helper.startSequence()
+            .thenWaitUntil(() -> helper.assertTrue(job.working.get(), "ordinary work actually began before RTS takeover"))
+            .thenExecute(
+            () -> {
+                f.ownership.select(f.first, List.of(body.id()));
+                f.ownership.bindGroup(f.first, 0);
+                UnitGroups.of(f.colony).appendSelectionPoint(List.of(body), f.at(8), false);
+                group.set(UnitGroups.of(f.colony).ofResident(body.id()).orElseThrow());
+                f.ownership.trackGroup(f.first, group.get());
+            })
+            .thenWaitUntil(
+            () ->
+                helper.assertTrue(
+                    group.get().phase() == UnitGroup.Phase.HOLDING
+                    && group.get().captain().filter(f.at(8)::equals).isPresent(),
+                    "the real RTS open queue reaches and holds its endpoint"))
+            .thenExecute(() -> f.ownership.select(f.first, List.of()))
+            .thenIdle(15)
+            .thenExecute(
+            () -> {
+                helper.assertTrue(
+                    ResidentCommands.of(f.colony).current(body.id()).isPresent() && !job.working.get(),
+                    "the shortcut retains both labour reservation and its tracked endpoint hold");
+                f.ownership.recallGroup(f.first, 0);
+                f.ownership.bindGroup(f.first, 0);
+                f.ownership.select(f.first, List.of());
+                helper.assertTrue(
+                    ResidentCommands.of(f.colony).current(body.id()).isEmpty()
+                    && UnitGroups.of(f.colony).ofResident(body.id()).isEmpty(),
+                    "full release removes the RTS membership and actual hold handle");
+            })
+            .thenWaitUntil(
+            () ->
+                helper.assertTrue(
+                    job.working.get(),
+                    "normal planning assigns ordinary work after the RTS hold is released"))
+            .thenSucceed();
+    }
+
+    @GameTest(template = "empty_large", timeoutTicks = 500)
+    public static void controllerTakeoverLetsAnotherResidentPickUpTheAbandonedNode(GameTestHelper helper) {
+        Fixture f = new Fixture(helper);
+        Body first = f.resident(2);
+        Body second = f.resident(4);
+        ResidentCommands commands = ResidentCommands.of(f.colony);
+        ResidentCommands.Order firstReady = commands.hold(first, f.at(2));
+        ResidentCommands.Order secondReady = commands.hold(second, f.at(4));
+        AtomicReference<Body> controlled = new AtomicReference<>();
+        NodeSpec spec = NodeSpec.of(UUID.randomUUID(), CommandJob.WORK, new WorkSite.AtBlock(f.at(6)), Stances.at(f.at(6)),
+            (Workload.Continuous) (level, who) -> true).done();
+        Node job = new Node() {
+            public NodeSpec spec() {
+                return spec;
+            }
+
+            public Outcome commit(ServerLevel level, Worker who) {
+                return Outcome.done();
+            }
+        };
+        f.colony.submit(CommandJob.WORK, f.level.dimension(), Grown.of(job), (id, how) -> {});
+        helper.startSequence()
+            .thenWaitUntil(() -> helper.assertTrue(
+                f.labour.route(first).contains(job) || f.labour.route(second).contains(job),
+                "the shared job is assigned before either resident leaves its preparatory hold"))
+            .thenExecute(() -> {
+                boolean assignedFirst = f.labour.route(first).contains(job);
+                controlled.set(assignedFirst ? first : second);
+                (assignedFirst ? firstReady : secondReady).close();
+            })
+            .thenWaitUntil(() -> helper.assertTrue(f.colony.isHeld(job.id()),
+                "a resident starts the shared job; stalls=" + f.colony.stallsIn(f.level.dimension())
+                    + "; first=" + first.doing() + "; second=" + second.doing()))
+            .thenExecute(() -> {
+                UUID holder = f.colony.holder(job.id()).orElseThrow();
+                helper.assertValueEqual(holder, controlled.get().id(), "the assigned resident starts the job");
+                f.ownership.select(f.first, List.of(holder));
+            })
+            .thenWaitUntil(() -> helper.assertTrue(
+                f.labour.route(controlled.get() == first ? second : first).contains(job),
+                "controller END reassigns the abandoned node before its replacement leaves the preparatory hold"))
+            .thenExecute(() -> (controlled.get() == first ? secondReady : firstReady).close())
+            .thenWaitUntil(() -> helper.assertTrue(
+                f.colony.holder(job.id()).filter(holder -> !holder.equals(controlled.get().id())).isPresent(),
+                "the planner assigns the same abandoned node to the other resident during takeover"))
+            .thenExecute(() -> {
+                helper.assertFalse(f.colony.isSuspended(job.id()), "the node has no retained old holding");
+                helper.assertTrue(f.ownership.reserved(controlled.get().id()),
+                    "the original resident stays controlled");
+                f.ownership.select(f.first, List.of());
+            })
+            .thenIdle(15)
+            .thenExecute(() -> helper.assertTrue(
+                f.colony.holder(job.id()).filter(holder -> !holder.equals(controlled.get().id())).isPresent(),
+                "releasing control does not reclaim the other resident's job"))
+            .thenSucceed();
+    }
+
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) {
         event.register(CombatSelectionOwnershipGameTests.class);
@@ -99,18 +214,18 @@ public final class CombatSelectionOwnershipGameTests {
         Body a = f.resident(2), b = f.resident(4);
         List<UUID> members = List.of(a.id(), b.id());
         helper.assertFalse(
-            SelectionOrders.submit(f.first, f.colony.id(), members, List.of(f.at(12)), -1),
+            SelectionOrders.submit(f.first, f.colony.id(), members, List.of(f.at(12)), -1, false),
             "a loaded resident is not commandable until this player has selected it");
         f.ownership.select(f.first, members);
         helper.assertTrue(
-            SelectionOrders.submit(f.first, f.colony.id(), members, List.of(f.at(12)), -1),
+            SelectionOrders.submit(f.first, f.colony.id(), members, List.of(f.at(12)), -1, false),
             "the authorized selected squad accepts an actual move through the network service");
         UnitGroup group = UnitGroups.of(f.colony).ofResident(a.id()).orElseThrow();
         helper.assertFalse(
             CombatDesk.of(f.colony).act(f.second, "group", group.id().toString()),
             "another keeper cannot use the book page to release a leased RTS squad");
         helper.assertFalse(
-            SelectionOrders.submit(f.second, f.colony.id(), members, List.of(f.at(14)), -1),
+            SelectionOrders.submit(f.second, f.colony.id(), members, List.of(f.at(14)), -1, false),
             "another keeper cannot forge the first keeper's selection in a move packet");
         f.ownership.bindGroup(f.first, 0);
         f.ownership.select(f.first, List.of());
@@ -218,7 +333,7 @@ public final class CombatSelectionOwnershipGameTests {
         Body body = f.resident(2), temporary = f.resident(4);
         f.ownership.select(f.first, List.of(body.id(), temporary.id()));
         helper.assertTrue(
-            SelectionOrders.submit(f.first, f.colony.id(), List.of(body.id()), List.of(f.at(8)), -1),
+            SelectionOrders.submit(f.first, f.colony.id(), List.of(body.id()), List.of(f.at(8)), -1, false),
             "the real selection command creates and tracks an actual squad without requiring a numeric shortcut");
         UnitGroup group = UnitGroups.of(f.colony).ofResident(body.id()).orElseThrow();
         UUID generation = group.commandId().orElseThrow();
@@ -268,7 +383,7 @@ public final class CombatSelectionOwnershipGameTests {
         Body body = f.resident(2), temporary = f.resident(4);
         f.ownership.select(f.first, List.of(body.id(), temporary.id()));
         helper.assertTrue(
-            SelectionOrders.submit(f.first, f.colony.id(), List.of(body.id()), List.of(f.at(8)), -1),
+            SelectionOrders.submit(f.first, f.colony.id(), List.of(body.id()), List.of(f.at(8)), -1, false),
             "one selected resident receives an actual tracked task");
         UnitGroup group = UnitGroups.of(f.colony).ofResident(body.id()).orElseThrow();
         UUID generation = group.commandId().orElseThrow();
@@ -329,7 +444,7 @@ public final class CombatSelectionOwnershipGameTests {
         List<UUID> abc = List.of(a.id(), b.id(), c.id());
         f.ownership.select(f.first, abc);
         helper.assertTrue(
-            SelectionOrders.submit(f.first, f.colony.id(), abc, List.of(f.at(12)), -1),
+            SelectionOrders.submit(f.first, f.colony.id(), abc, List.of(f.at(12)), -1, false),
             "ABC accepts a tracked task");
         UnitGroup group = UnitGroups.of(f.colony).ofResident(a.id()).orElseThrow();
         UUID generation = group.commandId().orElseThrow();
@@ -396,7 +511,7 @@ public final class CombatSelectionOwnershipGameTests {
         var commands = ResidentCommands.of(f.colony);
         var groups = UnitGroups.of(f.colony);
         f.ownership.select(f.first, List.of(body.id()));
-        groups.commandSelectionPoints(List.of(body), List.of(f.at(8)), -1);
+        groups.commandSelectionPoints(List.of(body), List.of(f.at(8)), -1, false);
         UnitGroup original = groups.ofResident(body.id()).orElseThrow();
         f.ownership.trackGroup(f.first, original);
         var replacement = commands.hold(body, f.at(12));
@@ -406,11 +521,11 @@ public final class CombatSelectionOwnershipGameTests {
             "stale group tracking closes only its original handle and preserves a newer individual order");
 
         f.ownership.select(f.first, List.of(body.id()));
-        groups.commandSelectionPoints(List.of(body), List.of(f.at(8)), -1);
+        groups.commandSelectionPoints(List.of(body), List.of(f.at(8)), -1, false);
         UnitGroup reused = groups.ofResident(body.id()).orElseThrow();
         UUID generation = reused.pointCommandId().orElseThrow();
         f.ownership.trackGroup(f.first, reused);
-        groups.appendSelectionPoint(List.of(body), f.at(10));
+        groups.appendSelectionPoint(List.of(body), f.at(10), false);
         helper.assertValueEqual(
             reused.pointCommandId().orElseThrow(), generation, "append preserves the authored RTS generation");
         reused.guard(new Deployment(f.at(12), f.at(12), new Vec3(1, 0, 0), new Deployment.Formation(2)));
@@ -465,7 +580,7 @@ public final class CombatSelectionOwnershipGameTests {
                     "an explicit command executes through the same runner while selection is reserved"))
             .thenExecute(
             () -> {
-                UnitGroups.of(f.colony).appendSelectionPoint(List.of(body), f.at(12));
+                UnitGroups.of(f.colony).appendSelectionPoint(List.of(body), f.at(12), false);
                 group.set(UnitGroups.of(f.colony).ofResident(body.id()).orElseThrow());
                 f.ownership.trackGroup(f.first, group.get());
             })
@@ -561,7 +676,7 @@ public final class CombatSelectionOwnershipGameTests {
             BlockPos feet = at(x).block(level);
             body.mob().moveTo(feet.getX() + .5, feet.getY(), feet.getZ() + .5);
             level.addFreshEntity(body.mob());
-            colony.hold(PersonContent.ID, Held.Entity.of(body.mob())).orElseThrow();
+            colony.hold(PersonContent.ID, Claimed.Entity.of(body.mob())).orElseThrow();
             body.joinColony(colony.id());
             arm(colony, body, "Melee", ItemSpec.of(Tags.Items.MELEE_WEAPON_TOOLS));
             people.add(body);
@@ -585,6 +700,33 @@ public final class CombatSelectionOwnershipGameTests {
             .filter(one -> one.name().equals(name))
             .findFirst()
             .orElseGet(() -> profiles.add(profiles.create(name).id(), LoadoutProfile.Entry.weapon(weapon)));
+        profiles.assign(List.of(body.id()), Optional.of(profile.id()));
+    }
+
+    private static void assignLoadout(
+        PatrolSupplies supplies,
+        Body body, String name) {
+        var profiles = supplies.profiles();
+        var profile = profiles.all().stream().filter(value -> value.name().equals(name)).findFirst()
+            .orElseGet(() -> {
+                var created = profiles.create(name);
+                var weapon = switch (name) {
+                    case "melee" -> ItemSpec.of(
+                        Tags.Items.MELEE_WEAPON_TOOLS);
+                    case "bow" -> ItemSpec.of(Items.BOW);
+                    case "crossbow" -> ItemSpec.of(Items.CROSSBOW);
+                    default -> throw new IllegalArgumentException(name);
+                };
+                var entries = new ArrayList<LoadoutProfile.Entry>();
+                entries.add(LoadoutProfile.Entry.weapon(weapon));
+                if (!name.equals("melee")) {
+                    entries.add(LoadoutProfile.Entry.supply(
+                        ItemSpec.of(ItemTags.ARROWS), 8, 8));
+                }
+                profiles.replace(new LoadoutProfile(
+                    created.id(), created.name(), entries));
+                return profiles.get(created.id()).orElseThrow();
+            });
         profiles.assign(List.of(body.id()), Optional.of(profile.id()));
     }
 }

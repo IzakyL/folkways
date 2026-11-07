@@ -1,7 +1,7 @@
 package io.github.izakyl.folkways.create.elevator;
 
 import com.simibubi.create.content.contraptions.AbstractContraptionEntity;
-import io.github.izakyl.folkways.core.api.terms.Structures;
+import io.github.izakyl.folkways.core.world.api.Structures;
 import io.github.izakyl.folkways.plugins.person.walk.ResidentNodeEvaluator;
 import java.util.HashMap;
 import java.util.Map;

@@ -34,10 +34,10 @@ const DUMP = defineTask<{ player: string; ox: number; oy: number; oz: number }, 
   timeoutMs: 20_000,
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.core.api.colony.Colony",
-      "io.github.izakyl.folkways.core.api.colony.Contributions",
-      "io.github.izakyl.folkways.core.api.colony.Held",
-      "io.github.izakyl.folkways.core.api.colony.Holding",
+      "io.github.izakyl.folkways.core.colony.api.Colony",
+      "io.github.izakyl.folkways.core.colony.internal.Contributions",
+      "io.github.izakyl.folkways.core.colony.api.Claimed",
+      "io.github.izakyl.folkways.core.colony.api.Claim",
       "io.github.izakyl.folkways.front.engine.charter.CurrentColony",
       "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
       "io.github.izakyl.folkways.front.engine.authority.ColonyAuthority",
@@ -106,11 +106,11 @@ out.put("view_class", colony.view(player.serverLevel()).getClass().getName());
 
 Set<BlockPos> members = new LinkedHashSet<BlockPos>();
 Set<BlockPos> claimed = new LinkedHashSet<BlockPos>();
-for (Holding holding : colony.holdings()) {
-    if (!(holding.what() instanceof Held.Block)) {
+for (Claim holding : colony.claims()) {
+    if (!(holding.what() instanceof Claimed.Block)) {
         continue;
     }
-    BlockPos at = ((Held.Block) holding.what()).cell().cell();
+    BlockPos at = ((Claimed.Block) holding.what()).cell().cell();
     members.add(at);
     if (!holding.owner().toString().equals("folkways:store")) {
         claimed.add(at);

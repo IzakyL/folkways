@@ -2,10 +2,10 @@ package io.github.izakyl.folkways.plugins.build.draft;
 
 import com.google.common.collect.ImmutableMap;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
-import io.github.izakyl.folkways.core.api.terms.ItemFilter;
+import io.github.izakyl.folkways.core.item.api.ItemFilter;
+import io.github.izakyl.folkways.core.world.api.StructurePayload;
 import io.github.izakyl.folkways.front.api.Schema;
 import io.github.izakyl.folkways.front.api.notice.Notice;
-import io.github.izakyl.folkways.core.api.structure.StructurePayload;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -961,7 +961,9 @@ public final class Vocabulary implements StarlarkValue {
             int z = at.getZ() + offset[2];
             if (x >= 0 && x < room[0] && y >= 0 && y < room[1] && z >= 0 && z < room[2]) {
                 local.put(at, cell.getValue());
-                if (chosen.payloads().containsKey(at)) payload.put(at, chosen.payloads().get(at));
+                if (chosen.payloads().containsKey(at)) {
+                    payload.put(at, chosen.payloads().get(at));
+                }
             }
         }
         if (local.isEmpty()) {

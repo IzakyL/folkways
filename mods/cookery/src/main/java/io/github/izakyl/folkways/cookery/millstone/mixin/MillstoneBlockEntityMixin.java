@@ -1,8 +1,8 @@
 package io.github.izakyl.folkways.cookery.millstone.mixin;
 
 import com.github.ysbbbbbb.kaleidoscopecookery.blockentity.kitchen.MillstoneBlockEntity;
-import io.github.izakyl.folkways.core.api.resident.body.Bodies;
 import io.github.izakyl.folkways.cookery.millstone.MillstoneDrive;
+import io.github.izakyl.folkways.core.resident.api.Bodies;
 import java.util.UUID;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.phys.Vec3;

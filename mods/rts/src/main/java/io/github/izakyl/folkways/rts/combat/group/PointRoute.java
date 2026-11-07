@@ -1,7 +1,7 @@
 package io.github.izakyl.folkways.rts.combat.group;
 
-import io.github.izakyl.folkways.core.api.resident.body.Body;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
+import io.github.izakyl.folkways.core.resident.api.Body;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.plugins.combat.group.GroupRoute;
 import java.util.List;
 

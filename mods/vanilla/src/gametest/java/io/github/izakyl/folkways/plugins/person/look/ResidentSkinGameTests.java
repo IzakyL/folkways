@@ -92,6 +92,27 @@ public final class ResidentSkinGameTests {
         helper.succeed();
     }
 
+    @GameTest(template = TEMPLATE, timeoutTicks = 40)
+    public static void anInvalidManifestUsesTheWholeUnmanifestedSkinInsteadOfPartialSettings(GameTestHelper helper) {
+        for (String manifest : java.util.List.of(
+                "{\"arms\":\"unknown\",\"weight\":7}",
+                "{\"arms\":\"wide\",\"weight\":0}", "{")) {
+            Skins files = new Skins();
+            files.png("farmers/wren", skin(64, true));
+            files.text("farmers/wren.json", manifest);
+            ModelLibrary library = ModelLibrary.read(files.held);
+            ResidentLook look = library.entries().get(id("skin/farmers/wren"));
+            helper.assertTrue(look != null, "an invalid optional manifest leaves the skin available");
+            helper.assertValueEqual(((ResidentLook.Skin) look.appearance()).arms(), ResidentLook.Arms.SLIM,
+                "no part of a rejected manifest overrides the pixels");
+            helper.assertValueEqual(look.weight(), 1, "the whole manifest is discarded, including valid fields");
+            helper.assertTrue(library.skinsRejected().size() == 1 && library.skinsRejected().getFirst()
+                .startsWith(id(ModelLibrary.SKIN_FOLDER + "/farmers/wren.json").toString()),
+                "the error names the full manifest resource path");
+        }
+        helper.succeed();
+    }
+
     private static ResourceLocation id(String path) {
         return ResourceLocation.fromNamespaceAndPath(FolkwaysMod.MOD_ID, path);
     }

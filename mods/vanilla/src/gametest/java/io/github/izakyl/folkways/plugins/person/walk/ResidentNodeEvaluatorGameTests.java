@@ -1,12 +1,12 @@
 package io.github.izakyl.folkways.plugins.person.walk;
 
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.ground.Grounds;
-import io.github.izakyl.folkways.core.api.terms.ClimbableBlocks;
-import io.github.izakyl.folkways.core.api.terms.Footing;
-import io.github.izakyl.folkways.core.api.terms.Keepouts;
-import io.github.izakyl.folkways.core.api.terms.ObstructedPathRegion;
-import io.github.izakyl.folkways.core.api.terms.Structures;
+import io.github.izakyl.folkways.core.world.api.ClimbableBlocks;
+import io.github.izakyl.folkways.core.world.api.Footing;
+import io.github.izakyl.folkways.core.world.api.Keepouts;
+import io.github.izakyl.folkways.core.world.api.ObstructedPathRegion;
+import io.github.izakyl.folkways.core.world.api.Structures;
+import io.github.izakyl.folkways.core.world.internal.Grounds;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
 import java.util.ArrayList;
 import java.util.List;

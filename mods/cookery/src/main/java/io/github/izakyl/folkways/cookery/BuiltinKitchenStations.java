@@ -1,20 +1,19 @@
 package io.github.izakyl.folkways.cookery;
 
-import io.github.izakyl.folkways.core.api.colony.Closing;
-
 import com.github.ysbbbbbb.kaleidoscopecookery.api.blockentity.IStockpot;
 import com.github.ysbbbbbb.kaleidoscopecookery.blockentity.kitchen.ChoppingBoardBlockEntity;
 import com.github.ysbbbbbb.kaleidoscopecookery.blockentity.kitchen.StockpotBlockEntity;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.work.Grown;
-import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.Workshop;
 import io.github.izakyl.folkways.cookery.board.ChoppingBoardWorkshops;
 import io.github.izakyl.folkways.cookery.pot.PotStation;
 import io.github.izakyl.folkways.cookery.stockpot.StockpotWorkshops;
 import io.github.izakyl.folkways.cookery.teapot.TeapotStation;
 import io.github.izakyl.folkways.cookery.tray.TrayStation;
+import io.github.izakyl.folkways.core.colony.api.Closing;
+import io.github.izakyl.folkways.core.plan.api.Grown;
+import io.github.izakyl.folkways.core.plan.api.Workshop;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;

@@ -1,15 +1,15 @@
 package io.github.izakyl.folkways.plugins.combat;
 
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.colony.Colonies;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.colony.Held;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
+import io.github.izakyl.folkways.core.colony.api.Claimed;
+import io.github.izakyl.folkways.core.colony.api.Colonies;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import io.github.izakyl.folkways.core.testing.Cleanup;
-import io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfile;
-import io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfiles;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
+import io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfile;
+import io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfiles;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import io.github.izakyl.folkways.plugins.person.PersonContent;
 import io.github.izakyl.folkways.plugins.person.ResidentEntity;
@@ -275,7 +275,7 @@ public final class SightGameTests {
             body.setNoAi(true);
             body.setNoGravity(true);
             level.addFreshEntity(body);
-            colony.hold(PersonContent.ID, Held.Entity.of(body)).orElseThrow();
+            colony.hold(PersonContent.ID, Claimed.Entity.of(body)).orElseThrow();
             body.joinColony(colony.id());
             entities.add(body);
             return body;

@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.front.api;
 
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import java.util.List;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;

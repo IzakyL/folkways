@@ -1,23 +1,3 @@
-import blockwright.minecraft.core.Sync;
-import dev.blockwright.api.Context;
-import io.github.izakyl.folkways.plugins.build.draft.Chosen;
-import io.github.izakyl.folkways.plugins.build.draft.Commission;
-import io.github.izakyl.folkways.plugins.build.draft.DraftTemplate;
-import io.github.izakyl.folkways.plugins.build.draft.Drafting;
-import io.github.izakyl.folkways.plugins.build.draft.Drawn;
-import io.github.izakyl.folkways.plugins.build.draft.Hint;
-import io.github.izakyl.folkways.plugins.build.draft.Patterns;
-import io.github.izakyl.folkways.plugins.build.draft.World;
-import java.io.ByteArrayOutputStream;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import net.minecraft.core.BlockPos;
-import net.minecraft.core.Direction;
-import net.minecraft.nbt.CompoundTag;
-import net.minecraft.nbt.NbtIo;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.level.block.Blocks;
 
 public final class Task {
 
@@ -26,7 +6,7 @@ public final class Task {
         var defaults = new CompoundTag();
         for (var setting : pattern.knobs().settings()) {
             if (setting instanceof io.github.izakyl.folkways.front.api.Schema.Setting.Items items) {
-                defaults.put(items.key(), io.github.izakyl.folkways.core.api.terms.ItemSpec.of(
+                defaults.put(items.key(), io.github.izakyl.folkways.core.item.api.ItemSpec.of(
                     items.byDefault().getFirst().id()).save());
             }
         }

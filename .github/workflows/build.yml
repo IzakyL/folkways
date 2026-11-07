@@ -139,7 +139,7 @@ jobs:
           if-no-files-found: warn
   client-smoke:
     needs: build
-    name: Client smoke (founding)
+    name: Client smoke
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:

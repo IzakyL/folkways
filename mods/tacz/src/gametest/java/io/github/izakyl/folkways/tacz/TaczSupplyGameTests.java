@@ -3,15 +3,15 @@ package io.github.izakyl.folkways.tacz;
 import com.tacz.guns.api.item.IGun;
 import com.tacz.guns.api.item.gun.FireMode;
 import com.tacz.guns.init.ModItems;
-import io.github.izakyl.folkways.core.api.colony.Colonies;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.colony.Held;
-import io.github.izakyl.folkways.core.api.terms.Containers;
-import io.github.izakyl.folkways.core.api.terms.Goods;
-import io.github.izakyl.folkways.core.api.terms.Reach;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.engine.labor.LaborFixture;
+import io.github.izakyl.folkways.core.colony.api.Claimed;
+import io.github.izakyl.folkways.core.colony.api.Colonies;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.item.api.Containers;
+import io.github.izakyl.folkways.core.item.api.Goods;
+import io.github.izakyl.folkways.core.runtime.LaborFixture;
 import io.github.izakyl.folkways.core.testing.Cleanup;
+import io.github.izakyl.folkways.core.world.api.Reach;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfile;
 import io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfiles;
 import io.github.izakyl.folkways.plugins.combat.weapon.LoadoutRegistry;
@@ -311,7 +311,7 @@ public final class TaczSupplyGameTests {
                 .getChunkSource()
                 .addRegionTicket(TaczWeaponGameTests.TICKING, body.chunkPosition(), 2, body.getUUID());
             helper.getLevel().addFreshEntity(body);
-            colony.hold(PersonContent.ID, Held.Entity.of(body)).orElseThrow();
+            colony.hold(PersonContent.ID, Claimed.Entity.of(body)).orElseThrow();
             body.joinColony(colony.id());
             people.add(body);
             return body;
@@ -344,7 +344,7 @@ public final class TaczSupplyGameTests {
                     cells.add(WorldPos.of(helper.getLevel(), body.blockPosition().below().offset(x, 0, z)));
                 }
             }
-            return colony.hold(SentryPosts.ZONE, new Held.Area(cells)).orElseThrow().id();
+            return colony.hold(SentryPosts.ZONE, new Claimed.Area(cells)).orElseThrow().id();
         }
 
         void run() {

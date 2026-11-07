@@ -383,8 +383,8 @@ const CYCLE_MODELS = defineTask<Record<string, any>, Record<string, any>>({
   timeoutMs: 20_000,
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.core.api.resident.body.Bodies",
-      "io.github.izakyl.folkways.core.api.vocation.Vocations",
+      "io.github.izakyl.folkways.core.resident.api.Bodies",
+      "io.github.izakyl.folkways.core.vocation.api.Vocations",
       "io.github.izakyl.folkways.plugins.person.ResidentEntity",
       "io.github.izakyl.folkways.plugins.person.look.ResidentLooks",
       "net.minecraft.resources.*",
@@ -419,8 +419,8 @@ const RIG_RESIDENT = defineTask<Record<string, any>, Record<string, any>>({
   timeoutMs: 20_000,
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.core.api.resident.body.Bodies",
-      "io.github.izakyl.folkways.core.api.vocation.Vocations",
+      "io.github.izakyl.folkways.core.resident.api.Bodies",
+      "io.github.izakyl.folkways.core.vocation.api.Vocations",
       "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
       "io.github.izakyl.folkways.front.engine.colony.ColonySettings",
       "io.github.izakyl.folkways.front.engine.colony.ZoneDrafts",
@@ -472,7 +472,7 @@ const WATCH_DOING = defineTask<Record<string, any>, Record<string, any>>({
   side: "server",
   timeoutMs: 20_000,
   source: javaTask({
-    imports: ["io.github.izakyl.folkways.core.api.resident.body.Bodies"],
+    imports: ["io.github.izakyl.folkways.core.resident.api.Bodies"],
     body: `
 var entity=ctx.server().overworld().getEntity(UUID.fromString(Args.of(ctx).string("uuid")));
 var doing=Bodies.of(entity).flatMap(body->body.doing())

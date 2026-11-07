@@ -1,8 +1,8 @@
 package io.github.izakyl.folkways.plugins.compost;
 
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.inventory.SlotSnapshot;
-import io.github.izakyl.folkways.core.api.terms.Goods;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.inventory.api.SlotSnapshot;
+import io.github.izakyl.folkways.core.item.api.Goods;
 import io.github.izakyl.folkways.front.api.Fronts;
 import io.github.izakyl.folkways.plugins.farming.CropSeeds;
 import io.github.izakyl.folkways.plugins.farming.FarmingContent;
@@ -41,16 +41,13 @@ public final class CompostSettings {
 
     public static int reserve(Colony colony, Item item) {
         CompoundTag overrides = colony.kept(ID).getCompound(OVERRIDES);
-        return SeedReserves.alternatives(item).stream()
-            .map(alternative -> BuiltInRegistries.ITEM.getKey(alternative).toString())
-            .filter(key -> overrides.contains(key, Tag.TAG_INT))
-            .mapToInt(key -> clamp(overrides.getInt(key))).max().orElseGet(() -> defaultReserve(colony));
+        String key = BuiltInRegistries.ITEM.getKey(SeedReserves.canonical(item)).toString();
+        return overrides.contains(key, Tag.TAG_INT) ? clamp(overrides.getInt(key)) : defaultReserve(colony);
     }
 
     public static boolean overridden(Colony colony, Item item) {
         CompoundTag overrides = colony.kept(ID).getCompound(OVERRIDES);
-        return SeedReserves.alternatives(item).stream()
-            .anyMatch(alternative -> overrides.contains(BuiltInRegistries.ITEM.getKey(alternative).toString(), Tag.TAG_INT));
+        return overrides.contains(BuiltInRegistries.ITEM.getKey(SeedReserves.canonical(item)).toString(), Tag.TAG_INT);
     }
 
     public static void enabled(Colony colony, boolean enabled) {
@@ -68,7 +65,6 @@ public final class CompostSettings {
     public static void reserve(Colony colony, Item item, int count) {
         CompoundTag tag = colony.kept(ID).copy();
         CompoundTag overrides = tag.getCompound(OVERRIDES).copy();
-        clear(overrides, item);
         overrides.putInt(BuiltInRegistries.ITEM.getKey(SeedReserves.canonical(item)).toString(), clamp(count));
         tag.put(OVERRIDES, overrides);
         colony.keep(ID, tag);
@@ -115,7 +111,7 @@ public final class CompostSettings {
     }
 
     private static void clear(CompoundTag overrides, Item item) {
-        SeedReserves.alternatives(item).forEach(alternative -> overrides.remove(BuiltInRegistries.ITEM.getKey(alternative).toString()));
+        overrides.remove(BuiltInRegistries.ITEM.getKey(SeedReserves.canonical(item)).toString());
     }
 
     private static int clamp(int count) { return Math.clamp(count, 0, MAX_RESERVE); }

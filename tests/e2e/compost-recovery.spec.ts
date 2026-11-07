@@ -214,8 +214,8 @@ return Map.of("fill",level.getBlockState(cell).getValue(ComposterBlock.LEVEL),"s
 const FILL_AND_WITHDRAW = defineTask<{ player: string; compost: Vec; withdrawn: Vec }, { fill: number; withdrawnSeeds: number; spent: number }>({
   name: "folkways.e2e.interrupt-compost-feed-with-player-batch", side: "server", timeoutMs: 20000,
   source: javaTask({ imports: [
-    "io.github.izakyl.folkways.core.api.colony.Colonies", "io.github.izakyl.folkways.core.api.resident.body.Bodies",
-    "io.github.izakyl.folkways.core.api.terms.Containers", "net.minecraft.core.BlockPos", "net.minecraft.world.Container",
+    "io.github.izakyl.folkways.core.colony.api.Colonies", "io.github.izakyl.folkways.core.resident.api.Bodies",
+    "io.github.izakyl.folkways.core.item.api.Containers", "net.minecraft.core.BlockPos", "net.minecraft.world.Container",
     "net.minecraft.world.item.Items", "net.minecraft.world.level.block.ComposterBlock",
   ], members: `
 private static BlockPos point(Object raw){var at=(Map<?,?>)raw;return new BlockPos(((Number)at.get("x")).intValue(),((Number)at.get("y")).intValue(),((Number)at.get("z")).intValue());}
@@ -224,7 +224,7 @@ var args=Args.of(ctx);var level=ctx.server().overworld();var colony=Colonies.all
 var player=ctx.server().getPlayerList().getPlayerByName(args.string("player"));var input=player.getMainHandItem();
 if(!input.is(Items.WHEAT_SEEDS)||input.getCount()!=64)throw new IllegalStateException("interruption needs the player's actual held 64 wheat seeds");
 if(!(level.getBlockEntity(point(args.value("withdrawn"))) instanceof Container isolated)||!isolated.isEmpty())throw new IllegalStateException("interruption needs an empty physical isolation chest");
-if(colony.holdingAt(io.github.izakyl.folkways.core.api.terms.WorldPos.of(level,point(args.value("withdrawn")))).isPresent())throw new IllegalStateException("isolation chest must stay outside colony logistics");
+if(colony.claimAt(io.github.izakyl.folkways.core.world.api.WorldPos.of(level,point(args.value("withdrawn")))).isPresent())throw new IllegalStateException("isolation chest must stay outside colony logistics");
 for(var resident:colony.residents()){
  var body=Bodies.of(level.getEntity(resident.id())).orElseThrow();
  for(var stack:body.pack().contents())if(stack.is(Items.WHEAT_SEEDS))throw new IllegalStateException("the planned feed already fetched its seed; the fixture must observe the earlier input-waiting stage");
@@ -247,9 +247,9 @@ return Map.of("fill",level.getBlockState(cell).getValue(ComposterBlock.LEVEL),"w
 const READ_COMPOST = defineTask<{ compost: Vec; withdrawn: Vec }, State>({
   name: "folkways.e2e.read-autonomous-compost", side: "server", timeoutMs: 20000,
   source: javaTask({ imports: [
-    "io.github.izakyl.folkways.core.api.colony.Colonies", "io.github.izakyl.folkways.core.api.resident.body.Bodies",
-    "io.github.izakyl.folkways.core.api.terms.WorldPos", "io.github.izakyl.folkways.plugins.compost.CompostPresence",
-    "io.github.izakyl.folkways.plugins.compost.CompostSettings", "io.github.izakyl.folkways.plugins.compost.CompostContent", "io.github.izakyl.folkways.core.api.work.Node", "net.minecraft.world.Container",
+    "io.github.izakyl.folkways.core.colony.api.Colonies", "io.github.izakyl.folkways.core.resident.api.Bodies",
+    "io.github.izakyl.folkways.core.world.api.WorldPos", "io.github.izakyl.folkways.plugins.compost.CompostPresence",
+    "io.github.izakyl.folkways.plugins.compost.CompostSettings", "io.github.izakyl.folkways.plugins.compost.CompostContent", "io.github.izakyl.folkways.core.work.api.Node", "net.minecraft.world.Container",
     "net.minecraft.world.entity.EquipmentSlot",
     "net.minecraft.core.BlockPos", "net.minecraft.core.registries.BuiltInRegistries", "net.minecraft.world.item.ItemStack",
     "net.minecraft.world.item.Items", "net.minecraft.world.entity.item.ItemEntity", "net.minecraft.world.level.block.ComposterBlock",

@@ -44,10 +44,10 @@ export async function combatWave(scene: Settlement, z: number, health = 40, coun
 }
 
 const IMPORTS = [
-  "io.github.izakyl.folkways.core.api.colony.Colonies",
-  "io.github.izakyl.folkways.core.api.colony.Held",
-  "io.github.izakyl.folkways.core.api.terms.WorldPos",
-  "io.github.izakyl.folkways.core.api.terms.ItemSpec",
+  "io.github.izakyl.folkways.core.colony.api.Colonies",
+  "io.github.izakyl.folkways.core.colony.api.Claimed",
+  "io.github.izakyl.folkways.core.world.api.WorldPos",
+  "io.github.izakyl.folkways.core.item.api.ItemSpec",
   "io.github.izakyl.folkways.plugins.person.PersonBody",
   "io.github.izakyl.folkways.plugins.person.PersonContent",
   "io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfiles",
@@ -91,7 +91,7 @@ at = new BlockPos(at.getX(), level.getHeight(
 var body = PersonBody.RESIDENT.get().create(level);
 body.moveTo(at.getX() - (station ? 3.5 : 0) + .5, at.getY(), at.getZ() + .5, 0, 0);
 level.addFreshEntity(body);
-colony.hold(PersonContent.ID, Held.Entity.of(body)).orElseThrow();
+colony.hold(PersonContent.ID, Claimed.Entity.of(body)).orElseThrow();
 body.joinColony(colony.id());
 body.addTag("draft_crew");
 body.getAttribute(Attributes.MAX_HEALTH).setBaseValue(200);
@@ -159,8 +159,8 @@ if (station) {
     }
 }
 var zone = station
-    ? colony.hold(SentryPosts.STATION, Held.Entity.of(emplacement)).orElseThrow()
-    : colony.hold(SentryPosts.ZONE, new Held.Area(cells)).orElseThrow();
+    ? colony.hold(SentryPosts.STATION, Claimed.Entity.of(emplacement)).orElseThrow()
+    : colony.hold(SentryPosts.ZONE, new Claimed.Area(cells)).orElseThrow();
 var staffing = PatrolStaffing.of(colony);
 var post = SentryPosts.of(colony).zone(level, zone.id()).orElseThrow();
 if (SentryPosts.of(colony).capacity(level, post) < 1 || !profiles.get(profile.id()).orElseThrow().hasRanged()) {

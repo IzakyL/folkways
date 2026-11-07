@@ -5,6 +5,7 @@ import com.github.ysbbbbbb.kaleidoscopecookery.crafting.recipe.BambooTrayRecipe;
 import java.util.Optional;
 import java.util.UUID;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
@@ -25,9 +26,18 @@ final class TrayBatch {
     }
     static Optional<Batch> read(BambooTrayBlockEntity tray, ServerLevel level) {
         CompoundTag tag = tray.getPersistentData().getCompound(KEY);
+        if (!tag.hasUUID("batch") || !tag.hasUUID("colony") || !tag.contains("input", Tag.TAG_COMPOUND)
+                || !tag.contains("output", Tag.TAG_COMPOUND) || !tag.contains("recipe", Tag.TAG_STRING)
+                || !tag.contains("slot", Tag.TAG_INT) || !tag.contains("subtype", Tag.TAG_STRING)
+                || !tag.contains("time", Tag.TAG_INT)) {
+            return Optional.empty();
+        }
         ResourceLocation recipe = ResourceLocation.tryParse(tag.getString("recipe"));
         int slot = tag.getInt("slot");
-        if (!tag.hasUUID("colony") || !tag.hasUUID("batch") || recipe == null || slot < 0 || slot >= 4) { return Optional.empty(); }
+        if (!tag.hasUUID("colony") || !tag.hasUUID("batch") || recipe == null || slot < 0 || slot >= 4
+                || !tag.contains("slot", Tag.TAG_INT) || !tag.contains("time", Tag.TAG_INT)) {
+            return Optional.empty();
+        }
         ItemStack input = ItemStack.parseOptional(level.registryAccess(), tag.getCompound("input"));
         ItemStack output = ItemStack.parseOptional(level.registryAccess(), tag.getCompound("output"));
         ItemStack actual = tray.getItem(slot);

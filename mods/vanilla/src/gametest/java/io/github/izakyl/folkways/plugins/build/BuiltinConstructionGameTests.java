@@ -1,15 +1,15 @@
 package io.github.izakyl.folkways.plugins.build;
 
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.resident.Resident;
-import io.github.izakyl.folkways.core.api.terms.Goods;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.work.Ending;
-import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Worker;
-import io.github.izakyl.folkways.core.engine.labor.Commit;
+import io.github.izakyl.folkways.core.item.api.Goods;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
+import io.github.izakyl.folkways.core.resident.api.Resident;
 import io.github.izakyl.folkways.core.testing.TestWorker;
+import io.github.izakyl.folkways.core.work.api.Ending;
+import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.work.internal.Commit;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.front.api.Schema;
 import io.github.izakyl.folkways.front.api.Settings;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
@@ -125,7 +125,8 @@ public final class BuiltinConstructionGameTests {
         BuildTarget target = BuildTarget.of(BlueprintBuildOrder.create(blueprint.id(), name,
             WorldPos.of(level, ready.corner()), Optional.empty(), "", level.getGameTime()), blueprint.confirm(level));
         SiteRig rig = SiteRig.start(level, target);
-        helper.assertTrue(rig.site.refusals().isEmpty(), name + " planning refuses no cells: " + rig.site.refusals().entrySet().stream().limit(8).toList());
+        helper.assertTrue(rig.site.refusals().isEmpty(), name + " planning refuses no cells: " + rig.site.refusals()
+            .entrySet().stream().limit(8).toList());
         SimpleContainer pack = new SimpleContainer(128);
         Mob body = PersonBody.RESIDENT.get().create(level);
         body.setPos(Vec3.atBottomCenterOf(at(helper, 1, 7, 1)));
@@ -141,7 +142,7 @@ public final class BuiltinConstructionGameTests {
                     if (!rig.site.before(piece).isEmpty()) { continue; }
                     pack.clearContent();
                     int slot = 0;
-                    for (var need : piece.node().spec().needs()) {
+                    for (var need : piece.action().spec().needs()) {
                         var item = Goods.members(need.spec()).stream().findFirst().orElseThrow();
                         long left = need.count();
                         while (left > 0) {
@@ -150,9 +151,9 @@ public final class BuiltinConstructionGameTests {
                             left -= count;
                         }
                     }
-                    Outcome outcome = Commit.run(level, piece.node(), worker);
+                    Outcome outcome = Commit.run(level, piece.action(), worker);
                     if (outcome instanceof Outcome.Done) {
-                        rig.end(piece.node(), Ending.DONE);
+                        rig.end(piece.action(), Ending.DONE);
                         commits[0]++;
                         progress = true;
                     } else {
@@ -176,7 +177,8 @@ public final class BuiltinConstructionGameTests {
                             ? wanted.getFluidState().isSource() && !level.getFluidState(pos).getType()
                                 .isSame(wanted.getFluidState().getType())
                             : !level.getBlockState(pos).is(wanted.getBlock()))) {
-                        wrong.add(helper.relativePos(pos).toShortString() + " expected=" + wanted + " actual=" + level.getBlockState(pos));
+                        wrong.add(helper.relativePos(pos)
+                            .toShortString() + " expected=" + wanted + " actual=" + level.getBlockState(pos));
                     }
                 });
                 helper.assertTrue(wrong.isEmpty(), name + " constructed blocks survive neighbor/fluid ticks; wrong="

@@ -364,10 +364,12 @@ const CREW = defineTask<Record<string, any>, Record<string, any>>({
   source: javaTask({
     imports: [
       "io.github.izakyl.folkways.front.engine.colony.*",
-      "io.github.izakyl.folkways.core.api.resident.body.Bodies",
-      "io.github.izakyl.folkways.core.api.vocation.Vocations",
-      "io.github.izakyl.folkways.core.api.work.*",
-      "io.github.izakyl.folkways.core.api.terms.*",
+      "io.github.izakyl.folkways.core.resident.api.Bodies",
+      "io.github.izakyl.folkways.core.vocation.api.Vocations",
+      "io.github.izakyl.folkways.core.work.api.*",
+      "io.github.izakyl.folkways.core.plan.api.*",
+      "io.github.izakyl.folkways.core.world.api.*",
+      "io.github.izakyl.folkways.core.item.api.*",
       "net.minecraft.server.MinecraftServer",
       "net.minecraft.core.BlockPos",
       "net.minecraft.resources.ResourceLocation",
@@ -473,8 +475,9 @@ const WORK = defineTask<Record<string, any>, Record<string, any>>({
     imports: [
       "dev.ryanhcode.sable.api.sublevel.SubLevelContainer",
       "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
-      "io.github.izakyl.folkways.core.api.resident.body.Bodies",
-      "io.github.izakyl.folkways.core.api.terms.*",
+      "io.github.izakyl.folkways.core.resident.api.Bodies",
+      "io.github.izakyl.folkways.core.world.api.*",
+      "io.github.izakyl.folkways.core.item.api.*",
       "net.minecraft.server.MinecraftServer",
       "net.minecraft.resources.ResourceLocation",
       "net.minecraft.world.Container",

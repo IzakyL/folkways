@@ -1,14 +1,13 @@
 package io.github.izakyl.folkways.plugins.combat.weapon;
 
-import io.github.izakyl.folkways.core.api.colony.Colonies;
-import io.github.izakyl.folkways.core.api.colony.Held;
-import io.github.izakyl.folkways.core.api.inventory.InventorySnapshot;
-import io.github.izakyl.folkways.core.api.resident.body.Pack;
-import io.github.izakyl.folkways.core.api.terms.Containers;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
-import io.github.izakyl.folkways.core.api.terms.Stash;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.engine.inventory.InventoryObservations;
+import io.github.izakyl.folkways.core.colony.api.Claimed;
+import io.github.izakyl.folkways.core.colony.api.Colonies;
+import io.github.izakyl.folkways.core.inventory.api.InventorySnapshot;
+import io.github.izakyl.folkways.core.inventory.api.Stash;
+import io.github.izakyl.folkways.core.inventory.internal.InventoryObservations;
+import io.github.izakyl.folkways.core.item.api.Containers;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import io.github.izakyl.folkways.plugins.person.PersonContent;
@@ -55,7 +54,7 @@ public final class CombatInventoryGameTests {
         BlockPos feet = helper.absolutePos(new BlockPos(2, 1, 2));
         body.moveTo(feet.getX() + .5, feet.getY(), feet.getZ() + .5);
         level.addFreshEntity(body);
-        colony.hold(PersonContent.ID, Held.Entity.of(body)).orElseThrow();
+        colony.hold(PersonContent.ID, Claimed.Entity.of(body)).orElseThrow();
         body.joinColony(colony.id());
         BlockPos cell = helper.absolutePos(new BlockPos(5, 1, 2));
         level.setBlockAndUpdate(cell, Blocks.BEACON.defaultBlockState());
@@ -64,7 +63,7 @@ public final class CombatInventoryGameTests {
         Probe pack = new Probe(body.pack().getContainerSize());
         STORES.put(at, store);
         try {
-            var field = Pack.class.getDeclaredField("container");
+            var field = body.pack().getClass().getDeclaredField("container");
             field.setAccessible(true);
             field.set(body.pack(), pack);
             colony.stores(OWNER, level.dimension(), List.of(at));

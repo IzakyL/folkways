@@ -3,19 +3,19 @@ import test from "node:test";
 import { parseColony, parseNav } from "./heartbeat.ts";
 
 const PLAIN = "  97decf70-3272-4ada-b5dc-0a13db838cbd@minecraft:overworld bodies=3 messages=5 nodes=6"
-  + " tours=2 phases={READY=4, WORKING=2} done=1 released=0 refused={NOTHING_FREE=1}"
+  + " tours=2 phases={READY=4, WORKING=2} done=1 released=0 unassignedNodes={} refused={NOTHING_FREE=1}"
   + " standing={walking=1, working=2}";
 
 const WITH_WHY = "  97decf70-3272-4ada-b5dc-0a13db838cbd@minecraft:overworld bodies=3 messages=9"
-  + " nodes=2 tours=1 phases={PENDING=2} done=0 released=0"
+  + " nodes=2 tours=1 phases={PENDING=2} done=0 released=0 unassignedNodes={}"
   + " unassigned={SAME_WORKER_SPLIT=1, NO_TOOL=2} shortfall=1 turned=2"
   + " broke={minecraft:wooden_hoe=1} standing={stalled=3} skipped=4 solving";
 
 const STUCK = "  97decf70-3272-4ada-b5dc-0a13db838cbd@minecraft:overworld bodies=0 messages=33"
-  + " nodes=18 tours=0 phases={} done=0 released=0 standing={idle=500} solving=634s";
+  + " nodes=18 tours=0 phases={} done=0 released=0 unassignedNodes={} standing={idle=500} solving=634s";
 
 const BARE = "  aaaaaaaa-0000-4000-8000-000000000000@minecraft:overworld bodies=0 messages=0 nodes=0"
-  + " tours=0 phases={} done=0 released=0";
+  + " tours=0 phases={} done=0 released=0 unassignedNodes={}";
 
 const NAV = "labor heartbeat colonies=1 searches=0 nodes=0 peakSearches/tick=0 peakNodes/tick=0"
   + " slices=109steps/495wall graph=812pts/1940edges/6shut/2parts disproved=17pts asksPending=3"
@@ -28,7 +28,8 @@ const NAV = "labor heartbeat colonies=1 searches=0 nodes=0 peakSearches/tick=0 p
 const NAV_IDLE = "labor heartbeat colonies=0 searches=0 nodes=0 peakSearches/tick=0 peakNodes/tick=0"
   + " slices=0steps/0wall graph=0pts/0edges/0shut/0parts disproved=0pts asksPending=0"
   + " quests=0found/0denied/0gaveup denied=0farEnd/0nearEnd/0frontier/0noGoals"
-  + " renumbered=0 straightened=0pts rambles=0/0edges hops=0 budget=-";
+  + " renumbered=0 straightened=0pts publish=0usstraighten/0usfreeze/0usmax"
+  + " rambles=0/0edges hops=0 attached=0laid/0closed/0far segments=0struck/0walked budget=-";
 
 test("a plain colony heartbeat line", () => {
   const beat = parseColony(PLAIN);
@@ -114,7 +115,11 @@ test("every field of the navigation line is read", () => {
   assert.equal(nav.hops, 2, "PathfindingLoad writes hops=, not the old rides=");
   assert.deepEqual(nav.attached, { laid: 9, closed: 1, far: 3 }, "attach searches by outcome");
   assert.deepEqual(nav.segments, { struck: 2, walked: 40 }, "walked graph segments, failed and done");
-  assert.equal(parseNav(NAV_IDLE)?.attached, null, "old logs without attached= read as null");
+});
+
+test("navigation lines require current fields", () => {
+  assert.equal(parseNav(NAV.replace(" attached=9laid/1closed/3far", "")), null);
+  assert.equal(parseNav(NAV.replace(" publish=1200usstraighten/3400usfreeze/95usmax", "")), null);
 });
 
 test("the budget line is what the config prose says to watch for starvation", () => {
@@ -139,12 +144,6 @@ test("a lagging window reads its negative slack instead of dropping the budget",
   assert.equal(budget.grantedAvgMicros, 0);
 });
 
-test("old logs without publish= read as null, not a fake 0", () => {
-  const old = NAV.replace(" publish=1200usstraighten/3400usfreeze/95usmax", "");
-  assert.equal(parseNav(old)?.publish, null);
-  assert.equal(parseNav(NAV)?.publish?.freezeMicros, 3400);
-});
-
 test("an empty window writes only budget=-, parsed as null rather than a row of zeros", () => {
   const nav = parseNav(NAV_IDLE);
   assert.ok(nav);
@@ -152,11 +151,12 @@ test("an empty window writes only budget=-, parsed as null rather than a row of 
   assert.deepEqual(nav.graph, { points: 0, edges: 0, shut: 0, parts: 0 });
 });
 
-test("reads full task identity, telling no waiting tasks apart from old logs without records", () => {
+test("reads task identity and rejects records without the required section", () => {
   const id = "aaaaaaaa-0000-4000-8000-000000000000";
-  assert.deepEqual(parseColony(PLAIN + ` unassignedNodes={${id}=WAY_PENDING}`)?.unassignedNodes, { [id]: "WAY_PENDING" });
-  assert.deepEqual(parseColony(PLAIN + " unassignedNodes={}")?.unassignedNodes, {});
-  assert.equal(parseColony(PLAIN)?.unassignedNodes, undefined);
+  const waiting = PLAIN.replace("unassignedNodes={}", `unassignedNodes={${id}=WAY_PENDING}`);
+  assert.deepEqual(parseColony(waiting)?.unassignedNodes, { [id]: "WAY_PENDING" });
+  assert.deepEqual(parseColony(PLAIN)?.unassignedNodes, {});
+  assert.equal(parseColony(PLAIN.replace(" unassignedNodes={}", "")), null);
 });
 
 test("completed plugin actions are parsed separately from active-node phases", () => {

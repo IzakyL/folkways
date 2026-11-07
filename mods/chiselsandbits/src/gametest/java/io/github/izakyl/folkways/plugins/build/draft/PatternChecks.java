@@ -1,7 +1,8 @@
 package io.github.izakyl.folkways.plugins.build.draft;
 
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import io.github.izakyl.folkways.front.api.Schema;
+import io.github.izakyl.folkways.front.engine.colony.ColonySettings;
 import java.util.List;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
@@ -21,9 +22,9 @@ public final class PatternChecks {
         }
     }
 
-    // Every material knob set to its declared defaults.
+    // A complete Chosen.load payload: every knob at its declared default, material lists as explicit specs.
     public static CompoundTag defaults(Pattern pattern) {
-        CompoundTag settings = new CompoundTag();
+        CompoundTag settings = Chosen.of(pattern.knobs(), ColonySettings.byDefault(pattern.knobs())).save();
         for (var setting : pattern.knobs().settings()) {
             if (setting instanceof Schema.Setting.Items items) {
                 settings.put(items.key(), ItemSpec.anyOf(items.byDefault().stream()

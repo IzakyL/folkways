@@ -1,23 +1,23 @@
 package io.github.izakyl.folkways.cookery.tools;
 
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.inventory.InventoryFeedback;
-import io.github.izakyl.folkways.core.api.inventory.InventorySnapshot;
-import io.github.izakyl.folkways.core.api.inventory.SlotSnapshot;
-import io.github.izakyl.folkways.core.api.resident.body.Bodies;
-import io.github.izakyl.folkways.core.api.resident.body.Body;
-import io.github.izakyl.folkways.core.api.terms.Containers;
-import io.github.izakyl.folkways.core.api.terms.Goods;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
-import io.github.izakyl.folkways.core.api.terms.Stand;
-import io.github.izakyl.folkways.core.api.terms.Stash;
-import io.github.izakyl.folkways.core.api.terms.StoreRule;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
-import io.github.izakyl.folkways.core.api.vocation.KitRules;
-import io.github.izakyl.folkways.core.api.vocation.Vocation;
-import io.github.izakyl.folkways.core.api.work.Stances;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.colony.api.KitRules;
+import io.github.izakyl.folkways.core.inventory.api.InventoryFeedback;
+import io.github.izakyl.folkways.core.inventory.api.InventorySnapshot;
+import io.github.izakyl.folkways.core.inventory.api.SlotSnapshot;
+import io.github.izakyl.folkways.core.inventory.api.Stash;
+import io.github.izakyl.folkways.core.inventory.api.StoreRule;
+import io.github.izakyl.folkways.core.item.api.Containers;
+import io.github.izakyl.folkways.core.item.api.Goods;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
+import io.github.izakyl.folkways.core.resident.api.Bodies;
+import io.github.izakyl.folkways.core.resident.api.Body;
+import io.github.izakyl.folkways.core.vocation.api.Vocation;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.world.api.Stand;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
+import io.github.izakyl.folkways.core.world.api.WorldSpaces;
 import io.github.izakyl.folkways.plugins.orders.Orders;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -362,16 +362,6 @@ final class ToolStock {
 
     int carriedSlot(Container pack, KitchenTools.Lease lease, ItemStack expected) {
         int slot = carried.getOrDefault(lease.id(), -1);
-        if (slot < 0 && !worn.containsKey(lease.id()) && !expected.isEmpty()) {
-            for (int candidate = 0; candidate < pack.getContainerSize(); candidate++) {
-                ItemStack stack = pack.getItem(candidate);
-                if (LoanClothing.same(stack, expected)) {
-                    remember(lease, stack, pack);
-                    slot = candidate;
-                    break;
-                }
-            }
-        }
         if (slot < 0 || slot >= pack.getContainerSize()) {
             return -1;
         }
@@ -405,9 +395,8 @@ final class ToolStock {
     boolean owns(KitchenTools.Lease lease, ItemStack stack) {
         InventorySnapshot observed = colony.inventory().snapshot();
         var resident = observed.residents().get(lease.resident());
-        boolean legacy = !carried.containsKey(lease.id()) && !worn.containsKey(lease.id());
         return (!live.containsKey(lease.id()) || live.get(lease.id()) == stack)
-            && (legacy || resident == null || resident.state() != InventorySnapshot.State.OBSERVED
+            && (resident == null || resident.state() != InventorySnapshot.State.OBSERVED
                 || !held(observed, lease).isEmpty());
     }
 

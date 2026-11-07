@@ -30,10 +30,6 @@ public record CombatAttackPacket(UUID colonyId, List<UUID> residents, UUID targe
         }
     }
 
-    public CombatAttackPacket(UUID colonyId, List<UUID> residents, UUID target) {
-        this(colonyId, residents, target, 0);
-    }
-
     private void encode(RegistryFriendlyByteBuf buffer) {
         buffer.writeUUID(colonyId);
         CombatSelectionPacket.writeIds(buffer, residents);

@@ -1,38 +1,36 @@
 package io.github.izakyl.folkways.plugins.build;
 
-import static io.github.izakyl.folkways.plugins.build.SiteRig.floor;
-import static io.github.izakyl.folkways.plugins.build.SiteRig.target;
-
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.colony.ColonyView;
-import io.github.izakyl.folkways.core.api.colony.Holding;
+import io.github.izakyl.folkways.base.persist.Reader;
+import io.github.izakyl.folkways.core.colony.api.Claim;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.colony.api.ColonyView;
+import io.github.izakyl.folkways.core.item.api.Goods;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
+import io.github.izakyl.folkways.core.plan.api.Grown;
+import io.github.izakyl.folkways.core.resident.api.Resident;
 import io.github.izakyl.folkways.core.testing.Proxies;
 import io.github.izakyl.folkways.core.testing.TestWorker;
+import io.github.izakyl.folkways.core.work.api.Amount;
+import io.github.izakyl.folkways.core.work.api.Ending;
+import io.github.izakyl.folkways.core.work.api.HoldingStep;
+import io.github.izakyl.folkways.core.work.api.LaborRefusal;
+import io.github.izakyl.folkways.core.work.api.Need;
+import io.github.izakyl.folkways.core.work.api.Node;
+import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.work.internal.Commit;
+import io.github.izakyl.folkways.core.world.api.Closures;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.effect.Effects;
-import io.github.izakyl.folkways.base.persist.Reader;
-import io.github.izakyl.folkways.core.api.resident.Resident;
-import io.github.izakyl.folkways.core.api.terms.Closures;
-import io.github.izakyl.folkways.core.api.terms.Goods;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.work.Amount;
-import io.github.izakyl.folkways.core.api.work.Ending;
-import io.github.izakyl.folkways.core.api.work.Grown;
-import io.github.izakyl.folkways.core.api.work.Need;
-import io.github.izakyl.folkways.core.api.work.Node;
-import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Worker;
-import io.github.izakyl.folkways.core.api.work.Workload;
-import io.github.izakyl.folkways.core.engine.labor.Commit;
-import io.github.izakyl.folkways.core.engine.labor.LaborRefusal;
 import io.github.izakyl.folkways.front.api.Schema;
 import io.github.izakyl.folkways.front.api.Settings;
+import io.github.izakyl.folkways.front.engine.colony.ColonySettings;
+import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
 import io.github.izakyl.folkways.plugins.build.draft.Chosen;
 import io.github.izakyl.folkways.plugins.build.draft.Hint;
 import io.github.izakyl.folkways.plugins.build.draft.Pattern;
 import io.github.izakyl.folkways.plugins.build.draft.Patterns;
-import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -74,6 +72,8 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
+import static io.github.izakyl.folkways.plugins.build.SiteRig.floor;
+import static io.github.izakyl.folkways.plugins.build.SiteRig.target;
 
 @EventBusSubscriber(modid = FolkwaysVanillaMod.ID, bus = EventBusSubscriber.Bus.MOD)
 @GameTestHolder(FolkwaysMod.MOD_ID)
@@ -136,14 +136,14 @@ public final class BuildPlanningGameTests {
                 cell.getY() == other.getY() && !cell.equals(other))),
             "access includes horizontal scaffolding from a clear shaft outside the blocked area");
         Worker worker = worker(helper, at(helper, 7, 1, 9));
-        helper.assertTrue(Commit.run(level, raising.node(), worker) instanceof Outcome.Done,
+        helper.assertTrue(Commit.run(level, raising.action(), worker) instanceof Outcome.Done,
             "the vertical shaft and horizontal extension can be built together");
         helper.assertTrue(access.stream().allMatch(cell -> level.getBlockState(cell).is(Blocks.SCAFFOLDING)),
             "every scaffold cell is placed in the world");
         helper.assertTrue(access.stream().allMatch(cell -> level.getBlockState(cell)
                 .getValue(ScaffoldingBlock.DISTANCE) <= 6),
             "the horizontal extension remains within the scaffolding support limit");
-        rig.end(raising.node(), Ending.DONE);
+        rig.end(raising.action(), Ending.DONE);
         rig.site.tick(level);
         helper.assertTrue(rig.work(helper, goal, worker) instanceof Outcome.Done,
             "work proceeds once runtime access is raised");
@@ -175,12 +175,12 @@ public final class BuildPlanningGameTests {
             .filter(piece -> piece.work().step().orElseThrow().kind() == BuildJob.Kind.RAISE)
             .findFirst().orElseThrow();
         Worker worker = worker(helper, at(helper, 10, 1, 9));
-        helper.assertTrue(Commit.run(level, raising.node(), worker) instanceof Outcome.Done,
+        helper.assertTrue(Commit.run(level, raising.action(), worker) instanceof Outcome.Done,
             "completed air does not stand in for the scaffold operation");
         helper.assertTrue(raising.work().step().orElseThrow().after().keySet().stream()
             .allMatch(cell -> level.getBlockState(cell).is(Blocks.SCAFFOLDING)),
             "the temporary scaffold is physically raised over completed air targets");
-        rig.end(raising.node(), Ending.DONE);
+        rig.end(raising.action(), Ending.DONE);
         rig.site.tick(level);
         helper.assertTrue(rig.work(helper, goal, worker) instanceof Outcome.Done, "the remaining target is laid");
         helper.succeed();
@@ -236,21 +236,21 @@ public final class BuildPlanningGameTests {
         helper.assertTrue(stay.spec().leaves().equals(List.of(new Amount(ItemSpec.of(
                 ResourceLocation.withDefaultNamespace("stone")), 1))),
             "the turn keeps room for what the stone breaks into, not " + stay.spec().leaves());
-        Workload.Within shift = (Workload.Within) stay.spec().workload();
+        SiteRig.Shift shift = new SiteRig.Shift(stay);
         BlockPos feet = at(helper, 5, 1, 7);
 
         // Room on a stack of stone is no room for cobble.
         SimpleContainer full = new SimpleContainer(2);
         full.setItem(0, new ItemStack(Items.DIRT, 64));
         full.setItem(1, new ItemStack(Items.STONE, 63));
-        helper.assertTrue(shift.next(level, worker(helper, feet, full)) == Workload.Within.LEAVE,
+        helper.assertTrue(shift.tick(level, worker(helper, feet, full)) instanceof HoldingStep.Done,
             "a pack with no room for the rubble leaves to put it away");
         helper.assertTrue(level.getEntitiesOfClass(ItemEntity.class, new AABB(rock).inflate(3.0D)).isEmpty()
             && level.getBlockState(rock).is(Blocks.STONE), "nothing is broken for want of room, and nothing dropped");
 
         SimpleContainer topped = new SimpleContainer(2);
         topped.setItem(0, new ItemStack(Items.STONE, 63));
-        helper.assertTrue(shift.next(level, worker(helper, feet, topped)) instanceof Workload.Within.Turn.Piece,
+        helper.assertTrue(shift.step(level, worker(helper, feet, topped)) instanceof Outcome.Done,
             "an empty cell is room enough");
         helper.succeed();
     }
@@ -269,12 +269,13 @@ public final class BuildPlanningGameTests {
         helper.assertTrue(soaked.equals(List.of(dry)),
             "only the block laid where no water stands has water let in after, not " + soaked);
         UUID laid = rig.site.pieces().stream().filter(piece -> piece.work().kind() == Layering.Kind.LAY
-            && piece.work().focus().equals(dry)).findFirst().orElseThrow().node().id();
+            && piece.work().focus().equals(dry)).findFirst().orElseThrow().id();
         UUID soak = rig.site.pieces().stream().filter(piece -> piece.work().kind() == Layering.Kind.SOAK)
-            .findFirst().orElseThrow().node().id();
+            .findFirst().orElseThrow().id();
         helper.assertTrue(rig.ordered(laid, soak), "the water is let in after the block is laid");
 
-        SimpleContainer pack = new SimpleContainer(new ItemStack(Items.STONE_STAIRS, 2), new ItemStack(Items.WATER_BUCKET));
+        SimpleContainer pack = new SimpleContainer(new ItemStack(Items.STONE_STAIRS, 2),
+            new ItemStack(Items.WATER_BUCKET));
         rig.workAll(helper, worker(helper, at(helper, 10, 1, 7), pack));
         helper.assertTrue(level.getBlockState(pond) == wet, "laid into water, the block takes it in: "
             + level.getBlockState(pond));
@@ -311,13 +312,13 @@ public final class BuildPlanningGameTests {
         helper.assertTrue(kinds.stream().filter(one -> one.contains(stone)).count() >= 2,
             "a hundred blocks of floor are more than one turn's work: " + kinds);
 
-        Workload.Within shift = (Workload.Within) rig.asked.stream()
+        SiteRig.Shift shift = new SiteRig.Shift(rig.asked.stream()
             .map(work -> work.nodes().getFirst())
             .filter(stay -> stay.spec().needs().stream().anyMatch(need -> need.spec().equals(stone)))
-            .findFirst().orElseThrow().spec().workload();
+            .findFirst().orElseThrow());
         SimpleContainer planks = new SimpleContainer(new ItemStack(Items.OAK_PLANKS, 20));
-        helper.assertTrue(shift.next(level, worker(helper, at(helper, 14, 1, 7), planks))
-                instanceof Workload.Within.Turn.Piece,
+        helper.assertTrue(shift.step(level, worker(helper, at(helper, 14, 1, 7), planks))
+                instanceof Outcome.Done,
             "a hand on one turn does the work of another it brought the goods for");
         helper.succeed();
     }
@@ -341,8 +342,10 @@ public final class BuildPlanningGameTests {
         helper.assertValueEqual(rig.site.left(), 1, "a cell met stays met when it is broken after");
         helper.assertTrue(!rig.site.complete(), "the other cell is still to do");
         BuildTarget frozen = rig.site.target();
-        var progress = BuildOrderView.of(UUID.randomUUID(), frozen, rig.site.metCells(), rig.site.metJoints()).orElseThrow();
-        helper.assertValueEqual(progress.placed(), 1, "the board reads completion history after a completed block breaks");
+        var progress = BuildOrderView.of(UUID.randomUUID(), frozen, rig.site.metCells(), rig.site.metJoints())
+            .orElseThrow();
+        helper.assertValueEqual(progress.placed(), 1,
+            "the board reads completion history after a completed block breaks");
         helper.assertTrue(BuildOrderView.pending(level, frozen, rig.site.metCells(), rig.site.metJoints()).stream()
             .noneMatch(ghost -> ghost.pos().equals(first)), "a completed block never returns as a ghost");
         helper.assertValueEqual(
@@ -352,7 +355,8 @@ public final class BuildPlanningGameTests {
         Set<BlockPos> saved = rig.site.met();
         rig.site.close();
         rig = SiteRig.start(level, frozen, new TemporaryScaffolds(() -> { }), saved);
-        helper.assertValueEqual(rig.site.left(), 1, "restoring the site preserves completed cells without checking them again");
+        helper.assertValueEqual(rig.site.left(), 1,
+            "restoring the site preserves completed cells without checking them again");
         helper.assertTrue(rig.at(first).isEmpty(), "restoring does not plan repair work for completed cells");
         helper.assertTrue(rig.work(helper, second, worker(helper, at(helper, 12, 1, 14))) instanceof Outcome.Done,
             "the other cell is laid");
@@ -366,18 +370,19 @@ public final class BuildPlanningGameTests {
         floor(helper);
         BlockPos cell = at(helper, 8, 1, 8);
         SiteRig rig = SiteRig.start(level, target(level, Map.of(cell, STONE)));
-        Node node = rig.node(cell);
+        BuildAction node = rig.action(cell);
         for (int hitch = 0; hitch <= BuildSite.MOST_TRIES; hitch++) {
-            rig.end(node, new Ending.Failed(node.id(), BuildRefusal.OCCUPIED));
+            rig.end(node, new Ending.Failed(rig.pieceAt(cell).id(), BuildRefusal.OCCUPIED));
             rig.site.tick(level);
         }
         helper.assertTrue(rig.at(cell).isPresent(), "a hitch that passes is never counted against the piece");
         for (int tried = 1; tried < BuildSite.MOST_TRIES; tried++) {
-            rig.end(node, new Ending.Failed(node.id(), BuildRefusal.NO_WAY_TO_BUILD));
+            rig.end(node, new Ending.Failed(rig.pieceAt(cell).id(), BuildRefusal.NO_WAY_TO_BUILD));
             rig.site.tick(level);
-            helper.assertTrue(rig.at(cell).isPresent() && rig.node(cell) == node, "the piece comes up again as it was");
+            helper.assertTrue(rig.at(cell).isPresent() && rig.action(cell) == node,
+                "the piece comes up again as it was");
         }
-        rig.end(node, new Ending.Failed(node.id(), BuildRefusal.NO_WAY_TO_BUILD));
+        rig.end(node, new Ending.Failed(rig.pieceAt(cell).id(), BuildRefusal.NO_WAY_TO_BUILD));
         rig.site.tick(level);
         helper.assertTrue(rig.site.pieces().isEmpty(), "at last it is given up");
         helper.assertValueEqual(rig.site.refusals().get(cell), BuildRefusal.NO_WAY_TO_BUILD, "and the board says why");
@@ -452,7 +457,7 @@ public final class BuildPlanningGameTests {
 
         BlockPos pour = at(helper, 6, 1, 6);
         SiteRig pouring = SiteRig.start(level, target(level, Map.of(pour, Blocks.WATER.defaultBlockState())));
-        Node poured = pouring.node(pour);
+        BuildAction poured = pouring.action(pour);
         helper.assertValueEqual(poured.spec().needs(),
             List.of(new Need(ItemSpec.of(ResourceLocation.withDefaultNamespace("water_bucket")), 1)),
             "pouring water asks for a water bucket");
@@ -475,7 +480,7 @@ public final class BuildPlanningGameTests {
         }
         SiteRig draining = SiteRig.start(level, target(level, dry));
         helper.assertValueEqual(draining.step(at(helper, 12, 1, 12)).after().size(), 9, "the pool drains as one layer");
-        Node drain = draining.node(at(helper, 12, 1, 12));
+        BuildAction drain = draining.action(at(helper, 12, 1, 12));
         helper.assertTrue(drain.spec().needs().isEmpty(), "clearing fluid needs nothing");
         helper.assertTrue(Commit.run(level, drain, worker) instanceof Outcome.Done done && done.made().isEmpty(),
             "and gives nothing");
@@ -529,12 +534,12 @@ public final class BuildPlanningGameTests {
         ServerLevel level = helper.getLevel();
         floor(helper);
         BlockPos players = at(helper, 18, 1, 18);
-        level.setBlock(players, ScaffoldNode.state(), 3);
+        level.setBlock(players, ScaffoldAction.state(), 3);
         TemporaryScaffolds temporary = new TemporaryScaffolds(() -> { });
         List<WorldPos> column = new ArrayList<>();
         for (int y = 1; y <= 3; y++) {
             BlockPos cell = at(helper, 10, y, 10);
-            level.setBlock(cell, ScaffoldNode.state(), 3);
+            level.setBlock(cell, ScaffoldAction.state(), 3);
             column.add(WorldPos.of(level, cell));
         }
         temporary.added(column);
@@ -548,7 +553,8 @@ public final class BuildPlanningGameTests {
         helper.assertValueEqual(rig.step(foot).kind(), BuildJob.Kind.LOWER, "the column is taken down");
         helper.assertTrue(rig.work(helper, foot, worker(helper, at(helper, 8, 1, 10))) instanceof Outcome.Done,
             "in one go");
-        helper.assertTrue(temporary.isEmpty() && column.stream().allMatch(cell -> level.getBlockState(cell.block(level)).isAir()),
+        helper.assertTrue(temporary.isEmpty() && column.stream()
+            .allMatch(cell -> level.getBlockState(cell.block(level)).isAir()),
             "nothing of the column is left");
         helper.assertTrue(level.getBlockState(players).is(Blocks.SCAFFOLDING), "a player's scaffolding is left alone");
         helper.assertTrue(rig.site.complete(), "the order has nothing left to do");
@@ -589,7 +595,7 @@ public final class BuildPlanningGameTests {
         BlockPos start = at(helper, 1, 2, 1);
         Hint hint = new Hint.Zone(start, start.offset(39, 0, 39));
         CompletableFuture<Rounds.Once> drawing = Rounds.drawOnce(level, pattern, hint,
-            Chosen.load(pattern.knobs(), new CompoundTag()), Direction.NORTH);
+            Chosen.of(pattern.knobs(), ColonySettings.byDefault(pattern.knobs())), Direction.NORTH);
         helper.startSequence().thenWaitUntil(() -> helper.assertTrue(drawing.isDone(), "the drawing comes back"))
             .thenExecute(() -> {
                 Rounds.Once once = drawing.join();
@@ -630,7 +636,7 @@ public final class BuildPlanningGameTests {
     }
 
     private static Chosen mineSettings(Pattern pattern, int y) {
-        CompoundTag values = new CompoundTag();
+        CompoundTag values = Chosen.of(pattern.knobs(), ColonySettings.byDefault(pattern.knobs())).save();
         values.putInt("y", y);
         values.putInt("main_east", 6);
         values.putInt("branch_east", 3);
@@ -713,7 +719,7 @@ public final class BuildPlanningGameTests {
                     }
                     pack.clearContent();
                     int slot = 0;
-                    for (var need : piece.node().spec().needs()) {
+                    for (var need : piece.action().spec().needs()) {
                         var item = Goods.members(need.spec()).stream().findFirst().orElseThrow();
                         long left = need.count();
                         while (left > 0) {
@@ -722,13 +728,13 @@ public final class BuildPlanningGameTests {
                             left -= count;
                         }
                     }
-                    Outcome outcome = Commit.run(level, piece.node(), builder.get());
+                    Outcome outcome = Commit.run(level, piece.action(), builder.get());
                     if (!(outcome instanceof Outcome.Done)) {
                         failure.set("mine piece " + piece.work().focus() + " failed: " + outcome
                             + " refusals=" + site.refusals());
                         break;
                     }
-                    site.ended(piece.node().id(), Ending.DONE);
+                    site.ended(piece.id(), Ending.DONE);
                 }
                 site.tick(level);
                 helper.assertTrue(site.complete() || failure.get() != null, "mine incomplete: left=" + site.left()
@@ -823,14 +829,17 @@ public final class BuildPlanningGameTests {
         helper.assertValueEqual(building.site.pieces().size(), 1, "one piece of work");
         helper.assertTrue(building.step(upper).after().keySet().containsAll(List.of(lower, upper)),
             "both halves are one step");
-        Node lay = building.node(upper);
+        BuildAction lay = building.action(upper);
         helper.assertValueEqual(lay.spec().needs(),
-            List.of(new Need(ItemSpec.of(ResourceLocation.withDefaultNamespace("oak_door")), 1)), "one door is asked for");
+            List.of(new Need(ItemSpec.of(ResourceLocation.withDefaultNamespace("oak_door")), 1)),
+                "one door is asked for");
         long doors = Goods.countIn(worker.pack(), ItemSpec.of(ResourceLocation.withDefaultNamespace("oak_door")));
         helper.assertTrue(Commit.run(level, lay, worker) instanceof Outcome.Done, "the door is laid");
-        helper.assertValueEqual(Goods.countIn(worker.pack(), ItemSpec.of(ResourceLocation.withDefaultNamespace("oak_door"))),
+        helper.assertValueEqual(Goods.countIn(worker.pack(),
+            ItemSpec.of(ResourceLocation.withDefaultNamespace("oak_door"))),
             doors - 1, "one door is spent");
-        helper.assertTrue(level.getBlockState(lower).is(Blocks.OAK_DOOR) && level.getBlockState(upper).is(Blocks.OAK_DOOR),
+        helper.assertTrue(level.getBlockState(lower).is(Blocks.OAK_DOOR) && level.getBlockState(upper)
+            .is(Blocks.OAK_DOOR),
             "both halves stand");
         helper.assertTrue(level.getBlockState(upper.above()).is(Blocks.STONE), "nothing above the door is touched");
         helper.assertTrue(BuildPlanner.complete(level, target), "the blueprint is complete");
@@ -842,13 +851,14 @@ public final class BuildPlanningGameTests {
             level.setBlock(half, level.getBlockState(half).setValue(BlockStateProperties.OPEN, true), 2);
         }
         building.site.tick(level);
-        helper.assertTrue(!BuildPlanner.complete(level, target), "the opened door differs from the confirmed closed state");
+        helper.assertTrue(!BuildPlanner.complete(level, target),
+            "the opened door differs from the confirmed closed state");
         helper.assertTrue(building.site.complete(), "opening a completed door does not undo its latched progress");
 
         SiteRig clearing = SiteRig.start(level, target(level, ordered(upper, AIR, lower, AIR)));
         helper.assertTrue(clearing.step(lower).after().keySet().containsAll(List.of(lower, upper)),
             "both halves come down in one step");
-        Outcome taken = Commit.run(level, clearing.node(lower), worker);
+        Outcome taken = Commit.run(level, clearing.action(lower), worker);
         helper.assertTrue(taken instanceof Outcome.Done done && done.made().size() == 1
             && done.made().getFirst().is(Items.OAK_DOOR) && done.made().getFirst().getCount() == 1,
             "the worker gets exactly one door back");
@@ -869,16 +879,18 @@ public final class BuildPlanningGameTests {
         level.setBlock(head, bed.setValue(BlockStateProperties.BED_PART, BedPart.HEAD), 3);
 
         SiteRig clearing = SiteRig.start(level, target(level, ordered(foot, AIR, head, AIR)));
-        Outcome taken = Commit.run(level, clearing.node(head), worker);
+        Outcome taken = Commit.run(level, clearing.action(head), worker);
         helper.assertTrue(taken instanceof Outcome.Done done && done.made().size() == 1
             && done.made().getFirst().is(Items.RED_BED), "the worker gets one bed");
         helper.assertTrue(loose(helper, foot).isEmpty(), "nothing drops on the ground");
 
-        BuildTarget target = printed(level, ordered(foot, bed, head, bed.setValue(BlockStateProperties.BED_PART, BedPart.HEAD)));
+        BuildTarget target = printed(level, ordered(foot, bed, head, bed.setValue(BlockStateProperties.BED_PART,
+            BedPart.HEAD)));
         SiteRig building = SiteRig.start(level, target);
-        Node lay = building.node(foot);
+        BuildAction lay = building.action(foot);
         helper.assertValueEqual(lay.spec().needs(),
-            List.of(new Need(ItemSpec.of(ResourceLocation.withDefaultNamespace("red_bed")), 1)), "one bed is asked for");
+            List.of(new Need(ItemSpec.of(ResourceLocation.withDefaultNamespace("red_bed")), 1)),
+                "one bed is asked for");
         helper.assertTrue(Commit.run(level, lay, worker) instanceof Outcome.Done, "the bed is laid");
         helper.assertTrue(BuildPlanner.complete(level, target), "both halves stand");
         helper.succeed();
@@ -898,7 +910,8 @@ public final class BuildPlanningGameTests {
         level.setBlock(base.above(), head, 2 | 16);
         helper.assertTrue(!BuildPlanner.complete(level, piston), "the confirmed piston target is retracted");
         level.setBlock(base, piston.wanted(base), 2 | 16);
-        helper.assertTrue(BuildPlanner.complete(level, piston), "the exact confirmed piston state satisfies the target");
+        helper.assertTrue(BuildPlanner.complete(level, piston),
+            "the exact confirmed piston state satisfies the target");
         level.setBlock(base, Blocks.PISTON.defaultBlockState(), 2 | 16);
         helper.assertTrue(!BuildPlanner.complete(level, piston), "one facing the wrong way is not");
 
@@ -908,22 +921,24 @@ public final class BuildPlanningGameTests {
             slab, Blocks.STONE_SLAB.defaultBlockState().setValue(BlockStateProperties.SLAB_TYPE, SlabType.DOUBLE),
             candles, Blocks.CANDLE.defaultBlockState().setValue(BlockStateProperties.CANDLES, 3)
                 .setValue(BlockStateProperties.LIT, true))));
-        helper.assertValueEqual(costs.node(slab).spec().needs(),
+        helper.assertValueEqual(costs.action(slab).spec().needs(),
             List.of(new Need(ItemSpec.of(ResourceLocation.withDefaultNamespace("stone_slab")), 2)),
             "a double slab takes two slabs");
-        helper.assertValueEqual(costs.node(candles).spec().needs(),
+        helper.assertValueEqual(costs.action(candles).spec().needs(),
             List.of(new Need(ItemSpec.of(ResourceLocation.withDefaultNamespace("candle")), 1)),
             "the cannon asks one candle for a cluster of three");
 
         BlockPos left = at(helper, 8, 1, 14);
         BlockState chest = Blocks.CHEST.defaultBlockState();
-        BlockPos right = left.relative(ChestBlock.getConnectedDirection(chest.setValue(BlockStateProperties.CHEST_TYPE, ChestType.LEFT)));
-        BuildTarget chests = printed(level, ordered(left, chest.setValue(BlockStateProperties.CHEST_TYPE, ChestType.LEFT),
+        BlockPos right = left.relative(ChestBlock.getConnectedDirection(
+            chest.setValue(BlockStateProperties.CHEST_TYPE, ChestType.LEFT)));
+        BuildTarget chests = printed(level, ordered(left, chest.setValue(BlockStateProperties.CHEST_TYPE,
+            ChestType.LEFT),
             right, chest.setValue(BlockStateProperties.CHEST_TYPE, ChestType.RIGHT)));
         Worker worker = worker(helper, at(helper, 8, 1, 11));
         SiteRig pairing = SiteRig.start(level, chests);
         for (BlockPos half : List.of(left, right)) {
-            Node layHalf = pairing.node(half);
+            BuildAction layHalf = pairing.action(half);
             helper.assertValueEqual(layHalf.spec().needs(),
                 List.of(new Need(ItemSpec.of(ResourceLocation.withDefaultNamespace("chest")), 1)),
                 "each half is a shot of its own, one chest each");
@@ -931,7 +946,7 @@ public final class BuildPlanningGameTests {
         }
         helper.assertTrue(BuildPlanner.complete(level, chests), "both halves stand paired");
         SiteRig unpairing = SiteRig.start(level, target(level, ordered(right, AIR, left, AIR)));
-        helper.assertTrue(Commit.run(level, unpairing.node(left), worker)
+        helper.assertTrue(Commit.run(level, unpairing.action(left), worker)
             instanceof Outcome.Done done && done.made().stream().mapToInt(ItemStack::getCount).sum() == 2,
             "taking it down gives both chests back");
         helper.succeed();
@@ -947,15 +962,16 @@ public final class BuildPlanningGameTests {
         BuildTarget target = target(level, Map.of(cell, wet));
 
         SiteRig laying = SiteRig.start(level, target);
-        Node lay = laying.node(cell);
+        BuildAction lay = laying.action(cell);
         helper.assertValueEqual(lay.spec().needs(),
             List.of(new Need(ItemSpec.of(ResourceLocation.withDefaultNamespace("stone_stairs")), 1)),
             "only the block is paid for: the cannon brings no water");
         helper.assertTrue(Commit.run(level, lay, worker) instanceof Outcome.Done, "the stairs are laid");
-        laying.end(lay, io.github.izakyl.folkways.core.api.work.Ending.DONE);
+        laying.end(lay, io.github.izakyl.folkways.core.work.api.Ending.DONE);
         laying.site.tick(level);
         helper.assertTrue(!level.getBlockState(cell).getValue(BlockStateProperties.WATERLOGGED), "dry");
-        helper.assertTrue(!laying.site.metCells().contains(cell), "the cell waits for its water, let in by a step of its own");
+        helper.assertTrue(!laying.site.metCells().contains(cell),
+            "the cell waits for its water, let in by a step of its own");
         helper.succeed();
     }
 
@@ -973,7 +989,7 @@ public final class BuildPlanningGameTests {
         BuildTarget target = printed(level, ordered(lower, door,
             lower.above(), door.setValue(BlockStateProperties.DOUBLE_BLOCK_HALF, DoubleBlockHalf.UPPER)));
         SiteRig site = SiteRig.start(level, target);
-        Node turn = site.node(lower);
+        BuildAction turn = site.action(lower);
         helper.assertTrue(turn.spec().needs().isEmpty() && turn.spec().tools().isEmpty(), "turning needs nothing");
         helper.assertTrue(Commit.run(level, turn, worker) instanceof Outcome.Done done && done.made().isEmpty(),
             "and gives nothing");
@@ -1005,7 +1021,7 @@ public final class BuildPlanningGameTests {
 
         SiteRig clearing = SiteRig.start(level, target(level, ordered(tip, AIR, root, AIR)));
         helper.assertTrue(clearing.pieceAt(root) == clearing.pieceAt(tip), "it comes down as one");
-        helper.assertTrue(Commit.run(level, clearing.node(root), worker) instanceof Outcome.Done done
+        helper.assertTrue(Commit.run(level, clearing.action(root), worker) instanceof Outcome.Done done
             && done.made().stream().filter(stack -> stack.is(Items.KELP)).mapToInt(ItemStack::getCount).sum() == 2,
             "the worker gets both kelp back");
         helper.assertTrue(level.getBlockState(root).is(Blocks.WATER) && level.getBlockState(tip).is(Blocks.WATER),
@@ -1022,7 +1038,7 @@ public final class BuildPlanningGameTests {
             stem.above(), Blocks.BIG_DRIPLEAF.defaultBlockState()));
         SiteRig site = SiteRig.start(level, target);
         for (BlockPos cell : List.of(stem, stem.above())) {
-            helper.assertValueEqual(site.node(cell).spec().needs(),
+            helper.assertValueEqual(site.action(cell).spec().needs(),
                 List.of(new Need(ItemSpec.of(ResourceLocation.withDefaultNamespace("big_dripleaf")), 1)),
                 "one dripleaf for each, as the cannon reckons it");
         }
@@ -1044,7 +1060,8 @@ public final class BuildPlanningGameTests {
         cells.put(fire, Blocks.FIRE.defaultBlockState());
         BuildTarget target = new BuildTarget(WorldPos.of(level, dry).realm(), cells, Set.of(modded), BlockPos.ZERO);
         SiteRig site = SiteRig.start(level, target);
-        helper.assertTrue(!site.site.refusals().containsKey(dry), "seagrass is placed as the cannon places it, water or not");
+        helper.assertTrue(!site.site.refusals().containsKey(dry),
+            "seagrass is placed as the cannon places it, water or not");
         helper.assertValueEqual(site.site.refusals().get(cut), BuildRefusal.NO_WAY_TO_BUILD,
             "a block with no item has no way to be built");
         helper.assertValueEqual(site.site.refusals().get(fire), BuildRefusal.NO_WAY_TO_BUILD,
@@ -1067,12 +1084,13 @@ public final class BuildPlanningGameTests {
         ServerLevel level = helper.getLevel();
         floor(helper);
         BlockPos cell = at(helper, 8, 1, 8);
-        BlockState slab = Blocks.STONE_SLAB.defaultBlockState().setValue(BlockStateProperties.SLAB_TYPE, SlabType.DOUBLE);
+        BlockState slab = Blocks.STONE_SLAB.defaultBlockState().setValue(BlockStateProperties.SLAB_TYPE,
+            SlabType.DOUBLE);
         Worker worker = worker(helper, at(helper, 8, 1, 5), new SimpleContainer(new ItemStack(Items.STONE_SLAB)));
         ItemSpec slabs = ItemSpec.of(ResourceLocation.withDefaultNamespace("stone_slab"));
 
         SiteRig site = SiteRig.start(level, target(level, Map.of(cell, slab)));
-        Node lay = site.node(cell);
+        BuildAction lay = site.action(cell);
         helper.assertTrue(Commit.run(level, lay, worker) instanceof Outcome.Failed(var noises, var why)
             && why == LaborRefusal.GOODS_GONE, "one slab for a double slab is goods gone, and the core notices");
         helper.assertTrue(level.getBlockState(cell).isAir(), "nothing is laid");
@@ -1097,7 +1115,7 @@ public final class BuildPlanningGameTests {
                 return level.dimension();
             }
 
-            public List<Holding> holdings() {
+            public List<Claim> claims() {
                 return List.of();
             }
 
@@ -1117,7 +1135,7 @@ public final class BuildPlanningGameTests {
 
     private static Colony colony(GameTestHelper helper, Asked asked) {
         ColonyView view = view(helper.getLevel());
-        var inventory = new io.github.izakyl.folkways.core.engine.inventory.InventoryIndex(UUID.randomUUID());
+        var inventory = new io.github.izakyl.folkways.core.inventory.internal.InventoryIndex(UUID.randomUUID());
         return Proxies.of(Colony.class, (proxy, method, args) -> switch (method.getName()) {
             case "kept" -> asked.saved.get();
             case "keep" -> {
@@ -1133,7 +1151,7 @@ public final class BuildPlanningGameTests {
                 yield null;
             }
             case "inventory" -> inventory;
-            case "holdingAt" -> Optional.empty();
+            case "claimAt" -> Optional.empty();
             case "views" -> List.of(view);
             case "view" -> view;
             default -> null;
@@ -1187,7 +1205,8 @@ public final class BuildPlanningGameTests {
     private static Worker worker(GameTestHelper helper, BlockPos feet) {
         return worker(helper, feet, new SimpleContainer(new ItemStack(Items.SCAFFOLDING, 64),
             new ItemStack(Items.STONE, 64), new ItemStack(Items.TORCH, 16), new ItemStack(Items.WATER_BUCKET),
-            new ItemStack(Items.OAK_DOOR, 4), new ItemStack(Items.RED_BED, 2), new ItemStack(Items.CHEST, 2), new ItemStack(Items.STONE_STAIRS, 4),
+            new ItemStack(Items.OAK_DOOR, 4), new ItemStack(Items.RED_BED, 2), new ItemStack(Items.CHEST, 2),
+                new ItemStack(Items.STONE_STAIRS, 4),
             new ItemStack(Items.KELP, 4), new ItemStack(Items.BIG_DRIPLEAF, 4)));
     }
 

@@ -1,11 +1,11 @@
 package io.github.izakyl.folkways.front.client;
 
-import io.github.izakyl.folkways.core.api.work.Doing;
+import io.github.izakyl.folkways.core.resident.api.Doing;
 import io.github.izakyl.folkways.front.api.notice.Line;
 import io.github.izakyl.folkways.front.api.notice.Meter;
 import io.github.izakyl.folkways.front.api.notice.Sentence;
-import io.github.izakyl.folkways.front.api.ui.Signs;
 import io.github.izakyl.folkways.front.api.ui.Signs.Sign;
+import io.github.izakyl.folkways.front.api.ui.Signs;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;

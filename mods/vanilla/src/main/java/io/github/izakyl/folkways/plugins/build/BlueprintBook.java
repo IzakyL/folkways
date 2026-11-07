@@ -3,7 +3,7 @@ package io.github.izakyl.folkways.plugins.build;
 import io.github.izakyl.folkways.base.persist.Entries;
 import io.github.izakyl.folkways.base.persist.Reader;
 import io.github.izakyl.folkways.base.persist.Writer;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -116,19 +116,6 @@ public final class BlueprintBook {
         return Optional.ofNullable(blueprints.get(id));
     }
 
-    /** The blueprint as its target: one filed before targets were resolved this way is resolved now, once. */
-    Optional<Blueprint> target(ServerLevel level, UUID id) {
-        Blueprint found = blueprints.get(id);
-        if (found != null) found.compatible();
-        if (found == null || found.confirmed()) {
-            return Optional.ofNullable(found);
-        }
-        Blueprint resolved = found.confirm(level);
-        blueprints.put(id, resolved);
-        dirty.run();
-        return Optional.of(resolved);
-    }
-
     List<BlueprintBuildOrder> allBuildOrders() {
         return List.copyOf(orders.values());
     }
@@ -160,10 +147,10 @@ public final class BlueprintBook {
 
     static BlueprintBook load(Reader reader, HolderLookup.Provider provider) {
         BlueprintBook book = new BlueprintBook();
-        for (Reader entry : reader.children(TAG_BLUEPRINTS)) {
+        for (Reader entry : reader.requiredChildren(TAG_BLUEPRINTS)) {
             Blueprint.load(entry, provider).ifPresent(blueprint -> {
                 book.blueprints.put(blueprint.id(), blueprint);
-                if (entry.flag(TAG_SINGLE_USE).orElse(false)) {
+                if (entry.flag(TAG_SINGLE_USE).orElseThrow()) {
                     book.singleUse.add(blueprint.id());
                 }
             });

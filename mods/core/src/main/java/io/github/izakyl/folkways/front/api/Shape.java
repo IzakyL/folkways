@@ -1,8 +1,8 @@
 package io.github.izakyl.folkways.front.api;
 
 import java.util.function.Predicate;
-import net.minecraft.network.chat.Component;
 import net.minecraft.core.BlockPos;
+import net.minecraft.network.chat.Component;
 import net.minecraft.util.StringRepresentable;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.level.Level;

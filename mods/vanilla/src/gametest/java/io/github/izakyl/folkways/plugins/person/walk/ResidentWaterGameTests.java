@@ -1,20 +1,27 @@
 package io.github.izakyl.folkways.plugins.person.walk;
 
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.resident.Going;
-import io.github.izakyl.folkways.core.api.work.Ending;
-import io.github.izakyl.folkways.core.api.work.Grown;
-import io.github.izakyl.folkways.core.api.work.Node;
-import io.github.izakyl.folkways.core.api.work.NodeSpec;
-import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.WorkSite;
-import io.github.izakyl.folkways.core.api.work.Worker;
-import io.github.izakyl.folkways.core.api.work.Workload;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.engine.travel.Faring;
-import io.github.izakyl.folkways.core.engine.travel.graph.Roamer;
-import io.github.izakyl.folkways.core.engine.travel.graph.Roaming;
+import io.github.izakyl.folkways.core.plan.api.Grown;
+import io.github.izakyl.folkways.core.resident.api.Going;
+import io.github.izakyl.folkways.core.travel.internal.Faring;
+import io.github.izakyl.folkways.core.travel.internal.graph.Roamer;
+import io.github.izakyl.folkways.core.travel.internal.graph.Roaming;
+import io.github.izakyl.folkways.core.work.api.Disposition;
+import io.github.izakyl.folkways.core.work.api.Ending;
+import io.github.izakyl.folkways.core.work.api.HoldingContext;
+import io.github.izakyl.folkways.core.work.api.HoldingStep;
+import io.github.izakyl.folkways.core.work.api.Node;
+import io.github.izakyl.folkways.core.work.api.NodeSpec;
+import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.PreemptReason;
+import io.github.izakyl.folkways.core.work.api.SoftPreempt;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.work.api.WorkHolding;
+import io.github.izakyl.folkways.core.work.api.WorkSite;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.work.api.Workload;
+import io.github.izakyl.folkways.core.work.support.WorkStances;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import io.github.izakyl.folkways.plugins.person.ResidentEntity;
@@ -24,8 +31,8 @@ import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
-import net.minecraft.server.level.ServerLevel;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.level.block.Block;
@@ -204,39 +211,75 @@ public final class ResidentWaterGameTests {
     }
 
     @GameTest(template = "empty", timeoutTicks = 1000)
-    public static void aWithinWorkerReturnsToItsPieceAfterFindingAir(GameTestHelper helper) {
+    public static void aHoldingReturnsToItsPrivateActionAfterFindingAir(GameTestHelper helper) {
         resumesAfterAir(helper, true);
     }
 
-    private static void resumesAfterAir(GameTestHelper helper, boolean within) {
+    private static void resumesAfterAir(GameTestHelper helper, boolean delegated) {
         Rig rig = new Rig(helper, 2, false);
         rig.roof();
         rig.body.moveTo(Vec3.atBottomCenterOf(rig.bank));
         var colony = WaterLabor.enlist(helper, rig.body).colony();
         ResourceLocation owner = ResourceLocation.fromNamespaceAndPath("folkways_test", "breathing");
         boolean[] pieceDone = {false};
-        boolean[] interrupted = {false};
+        boolean[] suspended = {false};
+        boolean[] resumed = {false};
+        boolean[] dropped = {false};
+        int[] acquired = {0};
         NodeSpec pieceSpec = NodeSpec.of(UUID.randomUUID(), owner, WorkSite.at(rig.level, rig.bank),
-            Stances.WHEREVER, Workload.Once.of(180)).doing(owner).done();
+            Stances.at(rig.level, rig.bank), Workload.Once.of(180)).doing(owner).done();
         Node piece = new Node() {
             public NodeSpec spec() { return pieceSpec; }
 
             public Outcome commit(ServerLevel level, Worker worker) {
+                helper.assertTrue(WorkStances.standingIn(worker.body(), pieceSpec.stances()),
+                    "the private action returns to its work cell before committing");
                 pieceDone[0] = true;
                 return Outcome.done();
             }
 
             public void released(ServerLevel level, Worker worker, Ending how) {
-                interrupted[0] |= how instanceof Ending.Dropped;
+                dropped[0] |= how instanceof Ending.Dropped;
             }
         };
-        Workload load = within ? (Workload.Within) (level, who) -> pieceDone[0]
-            ? Workload.Within.LEAVE : new Workload.Within.Turn.Piece(piece) : Workload.Once.of(180);
+        Workload load = delegated ? new Workload.Custom() : Workload.Once.of(180);
         NodeSpec spec = NodeSpec.of(UUID.randomUUID(), owner, WorkSite.at(rig.level, rig.bank),
             Stances.WHEREVER, load).doing(owner).done();
         boolean[] committed = {false};
         boolean[] escaped = {false};
         Node node = new Node() {
+            public WorkHolding acquire(HoldingContext context) {
+                acquired[0]++;
+                WorkHolding action = delegated ? context.action(piece) : Node.super.acquire(context);
+                return new WorkHolding() {
+                    public HoldingStep tick(HoldingContext at) {
+                        HoldingStep step = action.tick(at);
+                        if (delegated && step instanceof HoldingStep.Done) {
+                            committed[0] = true;
+                        }
+                        return step;
+                    }
+
+                    public void requestSoftPreempt(HoldingContext at, SoftPreempt request) {
+                        action.requestSoftPreempt(at, request);
+                    }
+
+                    public void hardRelease(HoldingContext at, Disposition disposition, PreemptReason reason) {
+                        action.hardRelease(at, disposition, reason);
+                    }
+
+                    public void suspended(HoldingContext at, PreemptReason reason) {
+                        suspended[0] = true;
+                        action.suspended(at, reason);
+                    }
+
+                    public void resumed(HoldingContext at) {
+                        resumed[0] = true;
+                        action.resumed(at);
+                    }
+                };
+            }
+
             public NodeSpec spec() { return spec; }
 
             public Outcome commit(ServerLevel level, Worker worker) {
@@ -245,7 +288,7 @@ public final class ResidentWaterGameTests {
             }
 
             public void released(ServerLevel level, Worker worker, Ending how) {
-                interrupted[0] |= !within && how instanceof Ending.Dropped;
+                dropped[0] |= how instanceof Ending.Dropped;
             }
         };
         colony.submit(owner, rig.level.dimension(), Grown.of(node), (id, how) -> { });
@@ -257,10 +300,14 @@ public final class ResidentWaterGameTests {
                 rig.body.moveTo(Vec3.atBottomCenterOf(rig.submergedStart));
                 rig.body.setAirSupply(100);
             })
-            .thenWaitUntil(() -> helper.assertTrue(escaped[0] && interrupted[0],
-                "the air emergency interrupts the running work"))
+            .thenWaitUntil(() -> helper.assertTrue(escaped[0] && suspended[0],
+                "the air emergency suspends the running holding"))
             .thenWaitUntil(() -> helper.assertTrue(committed[0], "the colony resumes and finishes the work"))
             .thenExecute(() -> {
+                helper.assertTrue(resumed[0], "the suspended holding is resumed");
+                helper.assertValueEqual(acquired[0], 1, "the same holding resumes without reacquiring work");
+                helper.assertFalse(dropped[0], "finding air never drops the suspended work");
+                helper.assertTrue(!delegated || pieceDone[0], "the delegated private action commits");
                 helper.assertTrue(rig.body.getHealth() == rig.body.getMaxHealth(), "the worker survives");
                 rig.body.discard();
             }).thenSucceed();
@@ -357,7 +404,7 @@ public final class ResidentWaterGameTests {
             var path = body.getNavigation().getPath();
             return "feet=" + body.position() + ", bank=" + bank + ", water=" + body.isInWater()
                 + ", ground=" + body.onGround() + ", nativeFloat=" + body.getNavigation().canFloat()
-                + ", graphFloat=" + Walking.INSTANCE.newEvaluator(io.github.izakyl.folkways.core.api.resident.Search.from(body.blockPosition())).canFloat()
+                + ", graphFloat=" + Walking.INSTANCE.newEvaluator(io.github.izakyl.folkways.core.resident.api.Search.from(body.blockPosition())).canFloat()
                 + ", path=" + (path == null ? "none" : path.getNextNodeIndex() + "/" + path.getNodeCount());
         }
     }

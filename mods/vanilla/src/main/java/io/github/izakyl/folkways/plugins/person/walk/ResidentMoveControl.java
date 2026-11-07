@@ -1,8 +1,8 @@
 package io.github.izakyl.folkways.plugins.person.walk;
 
-import io.github.izakyl.folkways.core.api.terms.ClimbableBlocks;
-import io.github.izakyl.folkways.core.api.terms.Realm;
-import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
+import io.github.izakyl.folkways.core.world.api.ClimbableBlocks;
+import io.github.izakyl.folkways.core.world.api.Realm;
+import io.github.izakyl.folkways.core.world.api.WorldSpaces;
 import net.minecraft.core.BlockPos;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.util.Mth;

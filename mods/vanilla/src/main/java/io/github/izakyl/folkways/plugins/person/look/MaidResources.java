@@ -9,9 +9,9 @@ import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
-import java.util.stream.Stream;
 
 /** A read-only maid pack; archives are read in place and never extracted. */
 public record MaidResources(Path root, boolean archive) {

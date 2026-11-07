@@ -1,9 +1,12 @@
 package io.github.izakyl.folkways.plugins.pasture;
 
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.resident.body.Body;
-import io.github.izakyl.folkways.core.api.work.*;
+import io.github.izakyl.folkways.core.resident.api.Body;
 import io.github.izakyl.folkways.core.testing.TestWorker;
+import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.work.api.WorkSite;
+import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.effect.Effects;
 import io.github.izakyl.folkways.effect.Modifier;
 import io.github.izakyl.folkways.front.api.PastDay;
@@ -84,7 +87,7 @@ public final class HusbandryPerkGameTests {
         var body = PersonBody.RESIDENT.get().create(level);
         var effects = Effects.of(List.of(new Effects.Part("twins", Modifier.add(PastureContent.TWINS, 1))));
         var pen = new Pen(UUID.randomUUID(), Livestock.COW, 3, true,
-            io.github.izakyl.folkways.core.api.terms.WorldPos.of(level, at), java.util.Set.of(at), at.getY(), at.getY());
+            io.github.izakyl.folkways.core.world.api.WorldPos.of(level, at), java.util.Set.of(at), at.getY(), at.getY());
         BreedingPerks.fed(level, worker(body, effects), first, second, pen);
         BreedingPerks.born(new net.neoforged.neoforge.event.entity.living.BabyEntitySpawnEvent(first, second, EntityType.COW.create(level)));
         helper.assertValueEqual(level.getEntitiesOfClass(net.minecraft.world.entity.animal.Cow.class, new net.minecraft.world.phys.AABB(at).inflate(1)).size(), 2,

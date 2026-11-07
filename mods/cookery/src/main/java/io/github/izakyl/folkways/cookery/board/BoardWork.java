@@ -4,33 +4,39 @@ import com.github.ysbbbbbb.kaleidoscopecookery.blockentity.kitchen.ChoppingBoard
 import com.github.ysbbbbbb.kaleidoscopecookery.crafting.recipe.ChoppingBoardRecipe;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModRecipes;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.tag.TagMod;
-import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
-import io.github.izakyl.folkways.core.api.terms.ItemDrops;
-import io.github.izakyl.folkways.core.api.terms.Reach;
-import io.github.izakyl.folkways.core.api.terms.RefusalKind;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
-import io.github.izakyl.folkways.core.api.work.Amount;
-import io.github.izakyl.folkways.core.api.work.Leaves;
-import io.github.izakyl.folkways.core.api.work.Ending;
-import io.github.izakyl.folkways.core.api.work.Hold;
-import io.github.izakyl.folkways.core.api.work.Need;
-import io.github.izakyl.folkways.core.api.work.Node;
-import io.github.izakyl.folkways.core.api.work.NodeSpec;
-import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.ToolNeed;
-import io.github.izakyl.folkways.core.api.work.ToolUse;
-import io.github.izakyl.folkways.core.api.work.WorkEffort;
-import io.github.izakyl.folkways.core.api.work.WorkGesture;
-import io.github.izakyl.folkways.core.api.work.WorkSite;
-import io.github.izakyl.folkways.core.api.work.Worker;
-import io.github.izakyl.folkways.core.api.work.Workload;
-import io.github.izakyl.folkways.core.api.work.Xp;
 import io.github.izakyl.folkways.cookery.CookeryContent;
 import io.github.izakyl.folkways.cookery.CookeryRefusal;
 import io.github.izakyl.folkways.cookery.KitchenBookings;
+import io.github.izakyl.folkways.cookery.KitchenClosure;
 import io.github.izakyl.folkways.cookery.KitchenDelivery;
+import io.github.izakyl.folkways.cookery.KitchenHolding;
+import io.github.izakyl.folkways.cookery.KitchenWork;
+import io.github.izakyl.folkways.core.item.api.ItemDrops;
+import io.github.izakyl.folkways.core.resident.api.RefusalKind;
+import io.github.izakyl.folkways.core.work.api.Amount;
+import io.github.izakyl.folkways.core.work.api.Hold;
+import io.github.izakyl.folkways.core.work.api.HoldingContext;
+import io.github.izakyl.folkways.core.work.api.HoldingStep;
+import io.github.izakyl.folkways.core.work.api.Need;
+import io.github.izakyl.folkways.core.work.api.NodeSpec;
+import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.work.api.ToolNeed;
+import io.github.izakyl.folkways.core.work.api.ToolUse;
+import io.github.izakyl.folkways.core.work.api.WorkAction;
+import io.github.izakyl.folkways.core.work.api.WorkEffort;
+import io.github.izakyl.folkways.core.work.api.WorkGesture;
+import io.github.izakyl.folkways.core.work.api.WorkHolding;
+import io.github.izakyl.folkways.core.work.api.WorkSite;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.work.api.Workload;
+import io.github.izakyl.folkways.core.work.api.Xp;
+import io.github.izakyl.folkways.core.work.support.Leaves;
+import io.github.izakyl.folkways.core.work.support.WorkStances;
+import io.github.izakyl.folkways.core.world.api.Reach;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
+import io.github.izakyl.folkways.core.world.api.WorldSpaces;
+import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
 import io.github.izakyl.folkways.plugins.wares.WaresContent;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -46,7 +52,7 @@ import net.minecraft.world.item.crafting.SingleRecipeInput;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-final class BoardWork implements Node, Workload.Within {
+final class BoardWork implements KitchenWork {
 
     private static final Logger LOGGER = LoggerFactory.getLogger("folkways-cookery");
 
@@ -66,6 +72,7 @@ final class BoardWork implements Node, Workload.Within {
     private boolean loaded;
     private boolean finished;
     private RefusalKind failed;
+    private final KitchenClosure closure;
 
     BoardWork(UUID colony, WorldPos at, Stances stances, ChoppingBoardWorkshops.Job job,
               KitchenBookings bookings, Runnable changed, BoardOwnership.Batch previous) {
@@ -80,7 +87,7 @@ final class BoardWork implements Node, Workload.Within {
             ? UUID.nameUUIDFromBytes(("folkways:board/recover/" + previous.id()).getBytes(StandardCharsets.UTF_8))
             : UUID.randomUUID();
         this.batch = recovering ? previous : new BoardOwnership.Batch(colony, id, job.recipe());
-        this.spec = declare(id, stances, this)
+        this.spec = declare(id, stances, new Workload.Custom())
             .needs(recovering ? List.of() : List.of(new Need(job.input(), 1, true)))
             .gives(job.gives())
             .leaves(job.gives())
@@ -89,11 +96,22 @@ final class BoardWork implements Node, Workload.Within {
             .estimate(ACTION_TICKS * (job.cuts() + (recovering ? 1 : 2)))
             .doing(CookeryContent.CHOPPING, job.input())
             .done();
+        closure = new KitchenClosure(how -> {
+            if (recoveryHold != null) {
+                recoveryHold.release(how);
+                recoveryHold = null;
+            }
+        }, changed);
     }
 
     private NodeSpec.Builder declare(UUID id, Stances stances, Workload workload) {
         return NodeSpec.of(id, CookeryContent.ID, new WorkSite.AtBlock(at), stances, workload)
             .vocation(WaresContent.trade()).gesture(WorkGesture.SWING).focus(at.cell());
+    }
+
+    @Override
+    public boolean producesBeforeSettlement() {
+        return true;
     }
 
     @Override
@@ -132,6 +150,9 @@ final class BoardWork implements Node, Workload.Within {
 
     @Override
     public Optional<RefusalKind> refusal(ServerLevel level) {
+        if (closure.closed()) {
+            return Optional.of(CookeryRefusal.STATION_CHANGED);
+        }
         if (bookings.cancelled(at, id(), generation)) {
             return Optional.of(CookeryRefusal.STATION_CHANGED);
         }
@@ -147,31 +168,42 @@ final class BoardWork implements Node, Workload.Within {
     }
 
     @Override
-    public Turn next(ServerLevel level, Worker who) {
-        if (bookings.cancelled(at, id(), generation)) {
-            failed = CookeryRefusal.STATION_CHANGED;
-            return LEAVE;
-        }
-        if (finished || failed != null) {
-            return LEAVE;
-        }
-        if (!bookings.first(at, id())) {
-            return WAIT;
-        }
-        if (!loaded) {
-            return new Turn.Piece(new Put());
-        }
-        if (!owned(level)) {
-            failed = CookeryRefusal.STATION_CHANGED;
-            return LEAVE;
-        }
-        return new Turn.Piece(new Cut());
+    public WorkHolding acquire(HoldingContext context) {
+        return new BoardHolding();
     }
 
-    @Override
-    public void ended(ServerLevel level, Node piece, Ending how) {
-        if (how instanceof Ending.Failed failure) {
-            failed = failure.why();
+    private final class BoardHolding extends KitchenHolding {
+
+        BoardHolding() {
+            super((level, who) -> {
+                if (finished || failed != null || !bookings.first(at, id())) {
+                    return null;
+                }
+                if (loaded && !owned(level)) {
+                    failed = CookeryRefusal.STATION_CHANGED;
+                    return null;
+                }
+                return loaded ? new Cut() : new Put();
+            }, () -> finished || failed != null, BoardWork.this::commit, why -> failed = why);
+        }
+
+        @Override
+        public HoldingStep tick(HoldingContext context) {
+            if (bookings.cancelled(at, id(), generation)) {
+                failed = CookeryRefusal.STATION_CHANGED;
+                hardRelease(
+                    context,
+                    io.github.izakyl.folkways.core.work.api.Disposition.END,
+                    io.github.izakyl.folkways.core.work.api.PreemptReason.REVOKED);
+                return new HoldingStep.Failed(failed);
+            }
+            return super.tick(context);
+        }
+
+        @Override
+        protected HoldingStep idle(HoldingContext context) {
+            return failed != null ? new HoldingStep.Failed(failed)
+                : finished ? new HoldingStep.Done() : new HoldingStep.Running();
         }
     }
 
@@ -182,12 +214,8 @@ final class BoardWork implements Node, Workload.Within {
     }
 
     @Override
-    public void ended(ServerLevel level, Ending how) {
-        if (recoveryHold != null) {
-            recoveryHold.release(how);
-            recoveryHold = null;
-        }
-        changed.run();
+    public KitchenClosure closure() {
+        return closure;
     }
 
     private boolean empty(ServerLevel level) {
@@ -202,14 +230,14 @@ final class BoardWork implements Node, Workload.Within {
 
     private boolean reachable(ServerLevel level, Worker who) {
         return io.github.izakyl.folkways.cookery.KitchenStation.canOperate(level, at, who.body())
-            && Reach.stanceHolding(who.body(), spec.stances())
+            && WorkStances.stanceHolding(who.body(), spec.stances())
             .flatMap(footing -> WorldSpaces.storage(level, new WorldPos(at.realm(), footing)))
             .filter(feet -> Reach.withinReach(feet, at.block(level))
                 && Reach.inSight(level, feet, at.block(level)))
             .isPresent();
     }
 
-    private abstract class Action implements Node {
+    private abstract class Action implements WorkAction {
 
         private final NodeSpec action;
 
@@ -228,18 +256,6 @@ final class BoardWork implements Node, Workload.Within {
         @Override
         public NodeSpec spec() {
             return action;
-        }
-
-        @Override
-        public boolean ready(ServerLevel level) {
-            return bookings.valid(at, BoardWork.this.id(), generation) && bookings.first(at, BoardWork.this.id())
-                && (loaded ? owned(level) : empty(level));
-        }
-
-        @Override
-        public Optional<RefusalKind> refusal(ServerLevel level) {
-            return bookings.cancelled(at, BoardWork.this.id(), generation)
-                ? Optional.of(CookeryRefusal.STATION_CHANGED) : Optional.empty();
         }
     }
 

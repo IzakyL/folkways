@@ -1,19 +1,18 @@
 package io.github.izakyl.folkways.plugins.compost;
 
 import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.item.api.Containers;
+import io.github.izakyl.folkways.core.item.api.Goods;
+import io.github.izakyl.folkways.core.resident.api.Body;
 import io.github.izakyl.folkways.core.testing.TestWorker;
+import io.github.izakyl.folkways.core.work.api.Ending;
+import io.github.izakyl.folkways.core.work.api.Node;
+import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.work.internal.Commit;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.effect.Effects;
-import io.github.izakyl.folkways.core.api.resident.body.Body;
-import io.github.izakyl.folkways.core.api.terms.Containers;
-import io.github.izakyl.folkways.core.api.terms.Goods;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.work.Ending;
-import io.github.izakyl.folkways.core.api.work.Node;
-import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.Worker;
-import io.github.izakyl.folkways.core.engine.labor.Commit;
-
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import java.util.List;
 import java.util.Map;
@@ -176,7 +175,9 @@ public final class CompostGameTests {
     public static void notificationFailureAfterNativeLayerMutationDoesNotRefundAFreeLayer(GameTestHelper helper) {
         try (Fixture fixture = new Fixture(helper)) {
             Consumer<VanillaGameEvent> listener = event -> {
-                if (event.getVanillaEvent().equals(GameEvent.BLOCK_CHANGE)) throw new IllegalStateException("test: native composter layer already changed");
+                if (event.getVanillaEvent().equals(GameEvent.BLOCK_CHANGE)) {
+                    throw new IllegalStateException("test: native composter layer already changed");
+                }
             };
             NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, false, VanillaGameEvent.class, listener);
             long before = fixture.seeds();
@@ -193,7 +194,9 @@ public final class CompostGameTests {
         fixture.fillNative();
         helper.runAfterDelay(25, () -> {
             Consumer<VanillaGameEvent> listener = event -> {
-                if (event.getVanillaEvent().equals(GameEvent.BLOCK_CHANGE)) throw new IllegalStateException("test: native composter already emptied");
+                if (event.getVanillaEvent().equals(GameEvent.BLOCK_CHANGE)) {
+                    throw new IllegalStateException("test: native composter already emptied");
+                }
             };
             NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, false, VanillaGameEvent.class, listener);
             try (fixture) {
@@ -244,7 +247,7 @@ public final class CompostGameTests {
         helper.runAfterDelay(25, () -> {
             try (fixture) {
                 helper.assertValueEqual(fixture.fill(), 8, "the accepted native input matures even after every source seed is gone");
-                List<io.github.izakyl.folkways.core.api.work.Grown> wanted = collectionOnly.recovery(fixture.colony,
+                List<io.github.izakyl.folkways.core.plan.api.Grown> wanted = collectionOnly.recovery(fixture.colony,
                     fixture.level, fixture.at, Stances.WHEREVER, fixture.bookings, () -> { });
                 helper.assertValueEqual(wanted.size(), 1, "mature recovery is available without a seed service or catalogue");
                 Node collect = wanted.getFirst().nodes().getFirst();
@@ -274,7 +277,7 @@ public final class CompostGameTests {
                 helper.assertTrue(Commit.run(fixture.level, abandoned, fixture.worker) instanceof Outcome.Failed,
                     "a cancelled extraction cannot take the still-present native output");
                 abandoned.ended(fixture.level, Ending.REVOKED);
-                fixture.station.stop(fixture.colony, io.github.izakyl.folkways.core.api.colony.Closing.SHUTDOWN);
+                fixture.station.stop(fixture.colony, io.github.izakyl.folkways.core.colony.api.Closing.SHUTDOWN);
                 fixture.bookings.clear();
                 fixture.pack.clearContent();
                 CompostBookings restoredBookings = new CompostBookings();
@@ -328,16 +331,16 @@ public final class CompostGameTests {
     }
 
     private static void commitAfterRepeatedOffers(GameTestHelper helper, Fixture fixture) {
-        var colony = io.github.izakyl.folkways.core.api.colony.Colonies.mint(fixture.level.getServer());
-        var works = (io.github.izakyl.folkways.core.engine.colony.ColonyWorks) colony;
+        var colony = io.github.izakyl.folkways.core.colony.api.Colonies.mint(fixture.level.getServer());
+        var works = (io.github.izakyl.folkways.core.colony.internal.ColonyWorks) colony;
         var submitted = new java.util.ArrayList<Node>(); var withdrawn = new java.util.ArrayList<UUID>();
         try {
-            works.listen(fixture.level.dimension(), new io.github.izakyl.folkways.core.engine.colony.ColonyWorks.Listening() {
-                public void submitted(net.minecraft.resources.ResourceLocation owner, io.github.izakyl.folkways.core.api.work.Grown work) { submitted.addAll(work.nodes()); }
+            works.listen(fixture.level.dimension(), new io.github.izakyl.folkways.core.colony.api.WorkListener() {
+                public void submitted(net.minecraft.resources.ResourceLocation owner, io.github.izakyl.folkways.core.plan.api.Grown work) { submitted.addAll(work.nodes()); }
                 public void withdrawn(net.minecraft.resources.ResourceLocation owner, UUID node) { withdrawn.add(node); }
                 public void offered() { }
             });
-            var asking = new io.github.izakyl.folkways.core.api.colony.Asking(colony,
+            var asking = new io.github.izakyl.folkways.core.colony.api.Asking(colony,
                 CompostContent.ID, () -> { });
             helper.assertTrue(fixture.station.activeRecovery(fixture.colony, fixture.level, fixture.at, fixture.bookings).isEmpty(),
                 "a blocked-stance query cannot create fresh unplanned compost work");
@@ -391,7 +394,9 @@ public final class CompostGameTests {
             level.setBlock(pos, Blocks.COMPOSTER.defaultBlockState(), Block.UPDATE_ALL);
             body = PersonBody.RESIDENT.get().create(level);
             body.mob().setPos(pos.getX() + 1.5, pos.getY(), pos.getZ() + 0.5);
-            for (int slot = 0; slot < 7; slot++) pack.setItem(slot, new ItemStack(Items.WHEAT_SEEDS, 64));
+            for (int slot = 0; slot < 7; slot++) {
+                pack.setItem(slot, new ItemStack(Items.WHEAT_SEEDS, 64));
+            }
             budget = new SeedBudget(() -> new SeedBudget.Snapshot(List.of(new SeedBudget.Stock("real resident pack",
                 SeedBudget.Location.pack(body.id()), IntStream.range(0, pack.getContainerSize()).mapToObj(pack::getItem).toList())),
                 claims, List.of(), Map.of()), () -> Set.of(Items.WHEAT_SEEDS), ignored -> retained);
@@ -401,7 +406,7 @@ public final class CompostGameTests {
             worker = TestWorker.of(body).pack(pack).effects(Effects.NONE);
         }
 
-        List<io.github.izakyl.folkways.core.api.work.Grown> goals() {
+        List<io.github.izakyl.folkways.core.plan.api.Grown> goals() {
             return station.recovery(colony, level, at, Stances.WHEREVER, bookings, () -> { });
         }
         Node node() { return goals().getFirst().nodes().getFirst(); }

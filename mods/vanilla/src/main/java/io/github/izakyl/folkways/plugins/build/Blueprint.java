@@ -2,8 +2,8 @@ package io.github.izakyl.folkways.plugins.build;
 
 import io.github.izakyl.folkways.base.persist.Reader;
 import io.github.izakyl.folkways.base.persist.Writer;
-import io.github.izakyl.folkways.core.api.structure.StructureCompat;
-import io.github.izakyl.folkways.core.api.structure.StructurePayload;
+import io.github.izakyl.folkways.core.work.api.StructureCompat;
+import io.github.izakyl.folkways.core.world.api.StructurePayload;
 import io.github.izakyl.folkways.plugins.build.draft.Drafting;
 import io.github.izakyl.folkways.plugins.build.draft.Joint;
 import java.util.ArrayList;
@@ -29,7 +29,6 @@ import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemp
 
 public record Blueprint(UUID id, String name, List<BlueprintBlock> blocks, List<UnloadedBlock> unloaded,
         List<Joint> joints, BlueprintVolume volume, long createdGameTime, boolean confirmed) {
-    // Targets resolved by earlier rules are resolved again under the schematicannon's.
     private static final String TAG_CONFIRMED = "printed";
     private static final String TAG_ID = "id";
     private static final String TAG_NAME = "name";
@@ -91,7 +90,9 @@ public record Blueprint(UUID id, String name, List<BlueprintBlock> blocks, List<
     public Blueprint confirm(ServerLevel level) {
         try (var processing = StructureCompat.processing()) {
             compatible();
-            for (BlueprintBlock block : blocks) StructureCompat.inspect(block.state(), new StructurePayload(block.data().tag()));
+            for (BlueprintBlock block : blocks) {
+                StructureCompat.inspect(block.state(), new StructurePayload(block.data().tag()));
+            }
             return confirmed ? this : SchematicPlacement.resolve(level, this);
         }
     }
@@ -101,7 +102,9 @@ public record Blueprint(UUID id, String name, List<BlueprintBlock> blocks, List<
         for (UnloadedBlock block : unloaded) {
             StructureCompat.validate(new StructurePayload(block.data().tag()));
             // A configured cell must wait for its missing mod, keeping both its payload and its price.
-            if (block.data().present()) throw new StructureCompat.Failure("folkways.refusal.build.missing_integration");
+            if (block.data().present()) {
+                throw new StructureCompat.Failure("folkways.refusal.build.missing_integration");
+            }
         }
     }
 
@@ -147,7 +150,6 @@ public record Blueprint(UUID id, String name, List<BlueprintBlock> blocks, List<
             unloaded.stream().map(UnloadedBlock::save)).toList();
         return Writer.of()
             .flag(TAG_CONFIRMED, confirmed)
-            .integer("payloadVersion", 1)
             .uuid(TAG_ID, id)
             .string(TAG_NAME, name)
             .longValue(TAG_CREATED_GAME_TIME, createdGameTime)
@@ -162,49 +164,42 @@ public record Blueprint(UUID id, String name, List<BlueprintBlock> blocks, List<
 
     public static Optional<Blueprint> load(Reader reader, HolderLookup.Provider provider) {
         Optional<UUID> id = reader.uuid(TAG_ID);
+        if (id.isEmpty() || reader.string(TAG_NAME).isEmpty()
+                || reader.longValue(TAG_CREATED_GAME_TIME).isEmpty() || reader.flag(TAG_CONFIRMED).isEmpty()) {
+            return Optional.empty();
+        }
         HolderGetter<Block> known = provider.lookupOrThrow(Registries.BLOCK);
         List<BlueprintBlock> blocks = new ArrayList<>();
         List<UnloadedBlock> unloaded = new ArrayList<>();
-        for (Reader cell : reader.children(TAG_BLOCKS)) {
+        for (Reader cell : reader.requiredChildren(TAG_BLOCKS)) {
             Optional<BlockPos> offset = cell.blockPos(BlueprintBlock.TAG_OFFSET);
             Optional<CompoundTag> state = cell.blob(BlueprintBlock.TAG_STATE);
-            if (offset.isEmpty() || state.isEmpty()) {
+            if (offset.isEmpty() || state.isEmpty() || cell.blob(BlueprintBlock.TAG_DATA).isEmpty()) {
                 continue;
             }
             UnloadedBlock written = new UnloadedBlock(offset.get(), state.get(), UnloadedBlock.turnsOf(cell),
-                BlockData.load(cell.blob(BlueprintBlock.TAG_DATA).orElseGet(CompoundTag::new)));
+                BlockData.load(cell.blob(BlueprintBlock.TAG_DATA).orElseThrow()));
             BlueprintBlock.read(known, state.get()).ifPresentOrElse(
                 read -> blocks.add(new BlueprintBlock(offset.get(), written.turn(read), written.data())),
                 () -> unloaded.add(written));
         }
-        if (id.isEmpty() || blocks.isEmpty() && unloaded.isEmpty() && !reader.flag(TAG_CONFIRMED).orElse(false)) {
+        if (blocks.isEmpty() && unloaded.isEmpty() && !reader.flag(TAG_CONFIRMED).orElseThrow()) {
             return Optional.empty();
         }
         List<Joint> joints = new ArrayList<>();
-        for (Reader joint : reader.children(TAG_JOINTS)) {
+        for (Reader joint : reader.requiredChildren(TAG_JOINTS)) {
             Optional<BlockPos> from = joint.blockPos(TAG_FROM);
             Optional<BlockPos> to = joint.blockPos(TAG_TO);
             if (from.isPresent() && to.isPresent() && !from.get().equals(to.get())) {
                 joints.add(new Joint(from.get(), to.get()));
             }
         }
-        List<BlockPos> offsets = new ArrayList<>();
-        blocks.forEach(block -> offsets.add(block.offset()));
-        unloaded.forEach(block -> offsets.add(block.offset()));
         Optional<BlueprintVolume> volume = reader.intArray(TAG_SIZE)
             .filter(stored -> stored.length == 3)
-            .map(stored -> BlueprintVolume.of(stored[0], stored[1], stored[2]))
-            .orElseGet(() -> BlueprintVolume.around(offsets));
-        return volume.map(parsed -> new Blueprint(id.get(), reader.string(TAG_NAME).orElse(""), blocks, unloaded,
-            joints, parsed, reader.longValue(TAG_CREATED_GAME_TIME).orElse(0L),
-            migratedConfirmation(reader, blocks, unloaded)));
-    }
-
-    private static boolean migratedConfirmation(Reader reader, List<BlueprintBlock> blocks, List<UnloadedBlock> unloaded) {
-        // Earlier chiseled orders were confirmed without voxel costs. Reconfirm their remaining cells once.
-        return reader.flag(TAG_CONFIRMED).orElse(false) && (reader.integer("payloadVersion").orElse(0) >= 1
-            || blocks.stream().noneMatch(block -> block.data().present() && StructureCompat.of(block.state()).isPresent())
-                && unloaded.stream().noneMatch(block -> block.data().present()));
+            .flatMap(stored -> BlueprintVolume.of(stored[0], stored[1], stored[2]));
+        return volume.map(parsed -> new Blueprint(id.get(), reader.string(TAG_NAME).orElseThrow(), blocks, unloaded,
+            joints, parsed, reader.longValue(TAG_CREATED_GAME_TIME).orElseThrow(),
+            reader.flag(TAG_CONFIRMED).orElseThrow()));
     }
 
     private static String normalizeName(String value) {

@@ -8,7 +8,7 @@ import com.simibubi.create.content.trains.entity.Carriage;
 import com.simibubi.create.content.trains.entity.CarriageContraption;
 import com.simibubi.create.content.trains.entity.CarriageContraptionEntity;
 import com.simibubi.create.content.trains.entity.Train;
-import io.github.izakyl.folkways.core.api.colony.Books;
+import io.github.izakyl.folkways.front.api.Books;
 import io.github.izakyl.folkways.front.client.ShadowPass;
 import java.util.List;
 import java.util.Optional;

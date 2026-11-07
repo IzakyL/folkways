@@ -4,17 +4,16 @@ import com.simibubi.create.Create;
 import com.simibubi.create.content.trains.graph.TrackGraph;
 import com.simibubi.create.content.trains.graph.TrackNodeLocation;
 import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.item.api.Goods;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
+import io.github.izakyl.folkways.core.resident.api.Resident;
 import io.github.izakyl.folkways.core.testing.TestWorker;
-import io.github.izakyl.folkways.core.api.resident.Resident;
-import io.github.izakyl.folkways.core.api.terms.Goods;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.work.Ending;
-import io.github.izakyl.folkways.core.api.work.Need;
-import io.github.izakyl.folkways.core.api.work.Node;
-import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Worker;
-import io.github.izakyl.folkways.core.engine.labor.Commit;
+import io.github.izakyl.folkways.core.work.api.Ending;
+import io.github.izakyl.folkways.core.work.api.Need;
+import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.work.internal.Commit;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
 import io.github.izakyl.folkways.plugins.build.draft.Joint;
 import java.util.ArrayList;
@@ -41,8 +40,8 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.Mirror;
 import net.minecraft.world.level.block.Rotation;
-import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -132,7 +131,8 @@ public final class CreateJointGameTests {
         Joints.Joiner joiner = Joints.joiner();
         var cost = joiner.cost(level, from, to).orElseThrow(() -> new AssertionError("Create lays this turn"));
         int owed = count(cost, track());
-        helper.assertTrue(owed > 0 && cost.stream().allMatch(stack -> stack.is(track())), "a turn is paid in track: " + cost);
+        helper.assertTrue(owed > 0 && cost.stream().allMatch(stack -> stack.is(track())),
+            "a turn is paid in track: " + cost);
         var sketch = Joints.sketch(from, track("xo"), to, track("zo"));
         helper.assertTrue(sketch.size() >= 8 && sketch.keySet().stream().allMatch(cell -> cell.getY() == from.getY()
             && cell.getX() >= from.getX() && cell.getX() <= to.getX() && cell.getZ() >= from.getZ()
@@ -147,7 +147,8 @@ public final class CreateJointGameTests {
         helper.assertTrue(paid.joined(), "paid in full, the turn is laid");
         helper.assertValueEqual(count(paid.left(), track()), 3, "Create takes exactly what it asked");
         helper.assertTrue(joiner.joined(level, from, to), "both ends hold the curve");
-        helper.assertValueEqual(joiner.cost(level, from, to).orElseThrow(), List.of(), "a laid turn costs nothing more");
+        helper.assertValueEqual(joiner.cost(level, from, to).orElseThrow(), List.of(),
+            "a laid turn costs nothing more");
 
         helper.runAfterDelay(10, () -> {
             helper.assertTrue(curveEdges(base, 10) > 0, "the curve is in Create's track graph");
@@ -155,7 +156,8 @@ public final class CreateJointGameTests {
             helper.assertValueEqual(count(refund, track()), owed, "taking the turn up gives back what laying it cost");
             helper.assertTrue(!joiner.joined(level, from, to), "the curve is gone");
             helper.runAfterDelay(10, () -> {
-                helper.assertValueEqual(level.getEntitiesOfClass(ItemEntity.class, new AABB(base).inflate(12)).size(), 0,
+                helper.assertValueEqual(level.getEntitiesOfClass(ItemEntity.class, new AABB(base).inflate(12))
+                    .size(), 0,
                     "nothing spills on the ground");
                 helper.assertValueEqual(curveEdges(base, 10), 0, "and Create's graph forgets it");
                 helper.succeed();
@@ -244,9 +246,9 @@ public final class CreateJointGameTests {
     // Does every piece the site has out, tells it each is done, and lets it hear so.
     static void work(GameTestHelper helper, SiteRig rig, Worker worker) {
         for (BuildSite.Piece piece : rig.site.pieces()) {
-            helper.assertTrue(Commit.run(helper.getLevel(), piece.node(), worker) instanceof Outcome.Done,
+            helper.assertTrue(Commit.run(helper.getLevel(), piece.action(), worker) instanceof Outcome.Done,
                 "work asked for can be done");
-            rig.end(piece.node(), Ending.DONE);
+            rig.end(piece.action(), Ending.DONE);
         }
         rig.site.tick(helper.getLevel());
     }
@@ -276,7 +278,7 @@ public final class CreateJointGameTests {
 
         List<BuildSite.Piece> joins = site.site.pieces();
         helper.assertValueEqual(joins.size(), 1, "one join is asked for once both ends stand");
-        Node join = joins.getFirst().node();
+        BuildAction join = joins.getFirst().action();
         int owed = count(Joints.joiner().cost(level, from, to).orElseThrow(), track());
         helper.assertValueEqual(join.spec().needs(), List.of(new Need(ItemSpec.of(
             ResourceLocation.fromNamespaceAndPath("create", "track")), owed)), "the join asks for what Create charges");
@@ -292,7 +294,7 @@ public final class CreateJointGameTests {
         long before = tracks(worker);
         List<ItemStack> made = new ArrayList<>();
         for (BuildSite.Piece piece : clearing.site.pieces()) {
-            if (Commit.run(level, piece.node(), worker) instanceof Outcome.Done done) {
+            if (Commit.run(level, piece.action(), worker) instanceof Outcome.Done done) {
                 made.addAll(done.made());
             }
         }
@@ -306,7 +308,8 @@ public final class CreateJointGameTests {
         helper.assertTrue(restored.site.complete(), "restoring does not recheck a completed railway after its removal");
         helper.assertValueEqual(BuildOrderView.of(UUID.randomUUID(), target, restored.site.metCells(),
             restored.site.metJoints()).orElseThrow().placed(), 3, "both endpoints and the turn retain their progress");
-        helper.assertTrue(BuildOrderView.pending(level, target, restored.site.metCells(), restored.site.metJoints()).isEmpty(),
+        helper.assertTrue(BuildOrderView.pending(level, target, restored.site.metCells(), restored.site.metJoints())
+            .isEmpty(),
             "completed endpoints and curves do not return as ghosts");
         restored.site.close();
         helper.runAfterDelay(5, () -> {

@@ -3,7 +3,6 @@ package io.github.izakyl.folkways.front.ui.screen;
 import com.lowdragmc.lowdraglib2.gui.holder.ModularUIScreen;
 import com.lowdragmc.lowdraglib2.gui.ui.ModularUI;
 import com.lowdragmc.lowdraglib2.gui.ui.UI;
-import com.lowdragmc.lowdraglib2.gui.ui.UIElement;
 import com.lowdragmc.lowdraglib2.gui.ui.style.StylesheetManager;
 import io.github.izakyl.folkways.front.api.ui.LonePanel;
 import java.util.List;

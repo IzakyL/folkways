@@ -2,10 +2,11 @@ package io.github.izakyl.folkways.cookery.tavern;
 
 import com.github.ysbbbbbb.kaleidoscopetavern.init.ModFluids;
 import com.github.ysbbbbbb.kaleidoscopetavern.init.ModItems;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import java.util.Optional;
 import java.util.UUID;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.server.level.ServerLevel;
 
 /** Ownership survives a cancelled task and a save; changed or player-owned batches are never adopted. */
@@ -28,8 +29,12 @@ final class TavernBatch {
         var be = level.getBlockEntity(at.block(level));
         if (be == null) return Optional.empty();
         var tag = be.getPersistentData().getCompound(KEY);
-        if (!tag.hasUUID("colony") || !tag.hasUUID("batch") || tag.getBoolean("barrel") != barrel) return Optional.empty();
-        int remaining = tag.contains("remaining") ? tag.getInt("remaining") : barrel ? 16 : 1;
+        if (!tag.hasUUID("colony") || !tag.hasUUID("batch") || !tag.contains("barrel", Tag.TAG_BYTE)
+                || !tag.contains("remaining", Tag.TAG_INT) || !tag.contains("bottle", Tag.TAG_INT)
+                || tag.getBoolean("barrel") != barrel) {
+            return Optional.empty();
+        }
+        int remaining = tag.getInt("remaining");
         int bottle = tag.getInt("bottle");
         if (remaining < 1 || remaining > 16 || bottle < 0 || bottle > 2) return Optional.empty();
         boolean valid;

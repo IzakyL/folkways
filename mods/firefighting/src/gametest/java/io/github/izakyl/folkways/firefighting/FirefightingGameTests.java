@@ -5,20 +5,21 @@ import com.mikoalopex.createfirefightingadd.content.equipment.extinguisher.FireE
 import com.mikoalopex.createfirefightingadd.content.equipment.extinguisher.FireExtinguisherItemHandler;
 import com.mikoalopex.createfirefightingadd.content.fluids.nozzle.FireExtinguisherSprayEffects;
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.colony.Closing;
-import io.github.izakyl.folkways.core.api.colony.Colonies;
-import io.github.izakyl.folkways.core.api.colony.Held;
-import io.github.izakyl.folkways.core.api.resident.Resident;
-import io.github.izakyl.folkways.core.api.resident.body.TaskTools;
-import io.github.izakyl.folkways.core.api.terms.Reach;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.work.Node;
-import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.Worker;
-import io.github.izakyl.folkways.core.engine.inventory.InventoryObservations;
-import io.github.izakyl.folkways.core.engine.labor.Commit;
+import io.github.izakyl.folkways.core.colony.api.Claimed;
+import io.github.izakyl.folkways.core.colony.api.Closing;
+import io.github.izakyl.folkways.core.colony.api.Colonies;
+import io.github.izakyl.folkways.core.inventory.internal.InventoryObservations;
+import io.github.izakyl.folkways.core.resident.api.Resident;
+import io.github.izakyl.folkways.core.resident.api.TaskTools;
 import io.github.izakyl.folkways.core.testing.TestWorker;
+import io.github.izakyl.folkways.core.work.api.Node;
+import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.work.internal.Commit;
+import io.github.izakyl.folkways.core.work.support.WorkStances;
+import io.github.izakyl.folkways.core.world.api.Reach;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.effect.Effects;
 import io.github.izakyl.folkways.front.engine.colony.ColonySettings;
 import io.github.izakyl.folkways.front.engine.colony.ZoneDrafts;
@@ -289,7 +290,7 @@ public final class FirefightingGameTests {
             }
         }
         rig.worker.body().setPos(Vec3.atBottomCenterOf(feet).add(-0.8D, 0, 0));
-        helper.assertTrue(Reach.standingIn(rig.worker.body(), Stances.at(rig.level, feet)),
+        helper.assertTrue(WorkStances.standingIn(rig.worker.body(), Stances.at(rig.level, feet)),
             "ordinary arrival accepts the body 0.8 blocks off center");
         var session = adapter.open(rig.level, rig.worker, WorldPos.of(rig.level, rig.fire)).orElseThrow();
         helper.assertTrue(session.suppress(rig.level, rig.fire) instanceof Outcome.Done,
@@ -393,7 +394,7 @@ public final class FirefightingGameTests {
         body.moveTo(chest.getX() - .5, chest.getY(), chest.getZ() + .5);
         level.addFreshEntity(body);
         colony.hold(PersonContent.ID,
-            Held.Entity.of(body));
+            Claimed.Entity.of(body));
         ZoneDrafts.zone(level, colony,
             DamageControlContent.ID,
             chest.offset(-2, 0, -2), chest.offset(2, 1, 2),

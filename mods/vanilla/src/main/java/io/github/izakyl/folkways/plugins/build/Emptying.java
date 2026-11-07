@@ -1,16 +1,16 @@
 package io.github.izakyl.folkways.plugins.build;
 
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.colony.Release;
-import io.github.izakyl.folkways.core.api.inventory.InventorySnapshot;
-import io.github.izakyl.folkways.core.api.inventory.SlotSnapshot;
-import io.github.izakyl.folkways.core.api.terms.Containers;
-import io.github.izakyl.folkways.core.api.terms.Stand;
-import io.github.izakyl.folkways.core.api.terms.StoreRule;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.work.Delivery;
-import io.github.izakyl.folkways.core.api.work.Grown;
-import io.github.izakyl.folkways.core.api.work.Stances;
+import io.github.izakyl.folkways.core.colony.api.ClaimRelease;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.inventory.api.InventorySnapshot;
+import io.github.izakyl.folkways.core.inventory.api.SlotSnapshot;
+import io.github.izakyl.folkways.core.inventory.api.StoreRule;
+import io.github.izakyl.folkways.core.item.api.Containers;
+import io.github.izakyl.folkways.core.plan.api.Delivery;
+import io.github.izakyl.folkways.core.plan.api.Grown;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.world.api.Stand;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -180,7 +180,7 @@ final class Emptying {
 
     private void hold(ServerLevel level, BlockPos cell) {
         WorldPos at = WorldPos.of(level, cell);
-        Optional<UUID> holding = colony.flatMap(one -> one.holdingAt(at)).map(one -> one.id());
+        Optional<UUID> holding = colony.flatMap(one -> one.claimAt(at)).map(one -> one.id());
         if (level.getBlockEntity(cell) != null || holding.isPresent()) {
             held.putIfAbsent(at, new Held(level.getBlockState(cell), level.getBlockEntity(cell), holding));
         }
@@ -211,7 +211,7 @@ final class Emptying {
                 return false;
             }
             colony.ifPresent(one -> entry.getValue().holding()
-                .ifPresent(holding -> one.release(holding, Release.GONE)));
+                .ifPresent(holding -> one.release(holding, ClaimRelease.GONE)));
             return true;
         });
         rule();

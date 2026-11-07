@@ -1,12 +1,12 @@
 package io.github.izakyl.folkways.front.engine.colony;
 
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.colony.ColonyView;
-import io.github.izakyl.folkways.core.api.colony.Held;
-import io.github.izakyl.folkways.core.api.colony.Holding;
-import io.github.izakyl.folkways.core.api.colony.Release;
-import io.github.izakyl.folkways.core.api.resident.body.Body;
-import io.github.izakyl.folkways.core.api.terms.Footing;
+import io.github.izakyl.folkways.core.colony.api.Claim;
+import io.github.izakyl.folkways.core.colony.api.ClaimRelease;
+import io.github.izakyl.folkways.core.colony.api.Claimed;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.colony.api.ColonyView;
+import io.github.izakyl.folkways.core.resident.api.Body;
+import io.github.izakyl.folkways.core.world.api.Footing;
 import io.github.izakyl.folkways.front.api.Endorsed;
 import io.github.izakyl.folkways.front.api.Endorsement;
 import io.github.izakyl.folkways.front.api.notice.Attempt;
@@ -54,11 +54,11 @@ public final class Endorsements {
 
     private static Attempt apply(Colony colony, Enrollments.Admitting admitting, Endorsed answer) {
         return switch (answer) {
-            case Endorsed.Joins joins -> colony.hold(admitting.owner(), Held.Entity.of(joins.body().mob()))
+            case Endorsed.Joins joins -> colony.hold(admitting.owner(), Claimed.Entity.of(joins.body().mob()))
                 .map(held -> Attempt.went())
                 .orElseGet(() -> Attempt.refused(EndorsementRefusal.HELD_ELSEWHERE));
             case Endorsed.Leaves leaves -> {
-                colony.holdingOf(leaves.body().id()).ifPresent(held -> colony.release(held.id(), Release.LET_GO));
+                colony.claimOf(leaves.body().id()).ifPresent(held -> colony.release(held.id(), ClaimRelease.LET_GO));
                 yield Attempt.went();
             }
             case Endorsed.Refused refused -> new Attempt.Refused(refused.why());
@@ -67,10 +67,10 @@ public final class Endorsements {
     }
 
     private static Optional<BlockPos> doorstep(ServerLevel level, ColonyView view) {
-        return view.holdings().stream()
+        return view.claims().stream()
             .sorted((one, other) -> Boolean.compare(one.what().singleCell().isEmpty(), other.what().singleCell().isEmpty()))
-            .map(Holding::what).flatMap(what -> what.cells().stream())
-            .flatMap(cell -> io.github.izakyl.folkways.core.api.terms.WorldSpaces.storage(level, cell).stream())
+            .map(Claim::what).flatMap(what -> what.cells().stream())
+            .flatMap(cell -> io.github.izakyl.folkways.core.world.api.WorldSpaces.storage(level, cell).stream())
             .findFirst().map(cell -> arrivalSpot(level, cell));
     }
 

@@ -2,14 +2,13 @@ package io.github.izakyl.folkways.cookery;
 
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks;
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.colony.Held;
-import io.github.izakyl.folkways.core.api.resident.body.Pack;
-import io.github.izakyl.folkways.core.api.terms.Stash;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.engine.colony.ColonyRegistry;
-import io.github.izakyl.folkways.core.engine.colony.ColonyWorks;
 import io.github.izakyl.folkways.cookery.racks.KitchenRacks;
-import io.github.izakyl.folkways.core.engine.inventory.InventoryObservations;
+import io.github.izakyl.folkways.core.colony.api.Claimed;
+import io.github.izakyl.folkways.core.colony.internal.ColonyRegistry;
+import io.github.izakyl.folkways.core.colony.internal.ColonyWorks;
+import io.github.izakyl.folkways.core.inventory.api.Stash;
+import io.github.izakyl.folkways.core.inventory.internal.InventoryObservations;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import java.util.ArrayList;
 import java.util.List;
@@ -55,10 +54,10 @@ public final class StationInventoryGameTests {
         level.addFreshEntity(body.mob());
         CountingPack pack = new CountingPack();
         try {
-            var field = Pack.class.getDeclaredField("container");
+            var field = body.pack().getClass().getDeclaredField("container");
             field.setAccessible(true);
             field.set(body.pack(), pack);
-            colony.hold(body.kind().id(), Held.Entity.of(body.mob())).orElseThrow();
+            colony.hold(body.kind().id(), Claimed.Entity.of(body.mob())).orElseThrow();
             WorldPos rack = WorldPos.of(level, rackCell);
             WorldPos store = WorldPos.of(level, barrelCell);
             colony.stores(CookeryContent.ID, level.dimension(), List.of(rack, store));

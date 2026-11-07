@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.plugins.build;
 
-import io.github.izakyl.folkways.core.api.structure.StructureCompat;
+import io.github.izakyl.folkways.core.work.api.StructureCompat;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.Predicate;
@@ -67,7 +67,9 @@ public final class BlueprintCapture {
 
     private static ListTag ints(int... values) {
         ListTag tag = new ListTag();
-        for (int value : values) tag.add(IntTag.valueOf(value));
+        for (int value : values) {
+            tag.add(IntTag.valueOf(value));
+        }
         return tag;
     }
 }

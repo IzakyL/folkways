@@ -1,8 +1,8 @@
 package io.github.izakyl.folkways.plugins.build;
 
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.work.Need;
-import io.github.izakyl.folkways.core.api.work.Stances;
+import io.github.izakyl.folkways.core.work.api.Need;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.plugins.build.draft.Joint;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -128,7 +128,7 @@ record Step(BuildJob.Kind kind, BlockPos focus, Map<BlockPos, BlockState> before
         Map<BlockPos, BlockState> raised = new LinkedHashMap<>();
         for (BlockPos cell : column) {
             empty.put(cell, Blocks.AIR.defaultBlockState());
-            raised.put(cell, ScaffoldNode.state());
+            raised.put(cell, ScaffoldAction.state());
         }
         return new Step(BuildJob.Kind.RAISE, column.getFirst(), empty, raised);
     }
@@ -137,7 +137,7 @@ record Step(BuildJob.Kind kind, BlockPos focus, Map<BlockPos, BlockState> before
         Map<BlockPos, BlockState> raised = new LinkedHashMap<>();
         Map<BlockPos, BlockState> empty = new LinkedHashMap<>();
         for (BlockPos cell : column) {
-            raised.put(cell, ScaffoldNode.state());
+            raised.put(cell, ScaffoldAction.state());
             empty.put(cell, Blocks.AIR.defaultBlockState());
         }
         return new Step(BuildJob.Kind.LOWER, column.getFirst(), raised, empty);

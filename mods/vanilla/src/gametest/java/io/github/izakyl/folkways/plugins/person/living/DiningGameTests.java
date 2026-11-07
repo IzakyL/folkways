@@ -2,20 +2,21 @@ package io.github.izakyl.folkways.plugins.person.living;
 
 import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.base.persist.Writer;
-import io.github.izakyl.folkways.core.api.colony.Colonies;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.resident.Resident;
-import io.github.izakyl.folkways.core.api.terms.ItemFilter;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.work.Ending;
-import io.github.izakyl.folkways.core.api.work.Node;
-import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Placement;
-import io.github.izakyl.folkways.core.api.work.ToolNeed;
-import io.github.izakyl.folkways.core.api.work.Urge;
-import io.github.izakyl.folkways.core.api.work.Worker;
-import io.github.izakyl.folkways.core.api.work.Workload;
-import io.github.izakyl.folkways.core.engine.inventory.InventoryObservations;
+import io.github.izakyl.folkways.core.colony.api.Colonies;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.inventory.internal.InventoryObservations;
+import io.github.izakyl.folkways.core.item.api.ItemFilter;
+import io.github.izakyl.folkways.core.resident.api.Resident;
+import io.github.izakyl.folkways.core.testing.TestWorker;
+import io.github.izakyl.folkways.core.work.api.Ending;
+import io.github.izakyl.folkways.core.work.api.Node;
+import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Placement;
+import io.github.izakyl.folkways.core.work.api.ToolNeed;
+import io.github.izakyl.folkways.core.work.api.Urge;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.work.api.Workload;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.effect.Effects;
 import io.github.izakyl.folkways.front.engine.colony.ColonyFront;
 import io.github.izakyl.folkways.front.engine.colony.ColonySettings;
@@ -149,7 +150,7 @@ public final class DiningGameTests {
     public static void multiFoodMenuKeepsRequestsStableAndChoosesFreshDishesAfterDelivery(GameTestHelper helper) {
         try (Fixture f = new Fixture(helper)) {
             f.zone(Items.BREAD, Items.COOKED_BEEF);
-            var seen = new java.util.HashSet<io.github.izakyl.folkways.core.api.terms.ItemSpec>();
+            var seen = new java.util.HashSet<io.github.izakyl.folkways.core.item.api.ItemSpec>();
             for (int serving = 0; serving < 32; serving++) {
                 var goals = f.goals();
                 var ids = goals.stream().map(node -> node.spec().id()).toList();
@@ -459,7 +460,7 @@ public final class DiningGameTests {
             f.rezone(cells);
             helper.assertTrue(f.colony.storesIn(f.level.dimension()).contains(WorldPos.of(f.level, cabinet)), "the marked cabinet exposes its real inventory as colony stock");
             Node refill = f.goals().stream().filter(node -> node.spec().focus().filter(cabinet::equals).isPresent()).findFirst().orElseThrow();
-            helper.assertFalse(refill.acceptsInput(new io.github.izakyl.folkways.core.api.terms.Stash(WorldPos.of(f.level, cabinet))), "a refill cannot empty the same cabinet into itself");
+            helper.assertFalse(refill.acceptsInput(new io.github.izakyl.folkways.core.inventory.api.Stash(WorldPos.of(f.level, cabinet))), "a refill cannot empty the same cabinet into itself");
             f.person.moveTo(cabinet.getX()+0.5, cabinet.getY(), cabinet.getZ()+1.5);
             f.worker.supplied = List.of(new ItemStack(Items.POTION));
             var result = (Outcome.Done) refill.commit(f.level, f.worker);
@@ -499,10 +500,10 @@ public final class DiningGameTests {
             helper.assertValueEqual(display.reads, 0, "unchanged decisions never read the display");
             helper.assertValueEqual(cabinetOpens, 0, "unchanged decisions do not reopen the cabinet");
             display.setItem(0, new ItemStack(Items.BREAD));
-            f.colony.inventoryFeedback().changed(io.github.izakyl.folkways.core.api.terms.Stash.at(WorldPos.of(f.level, f.at)));
+            f.colony.inventoryFeedback().changed(io.github.izakyl.folkways.core.inventory.api.Stash.at(WorldPos.of(f.level, f.at)));
             helper.assertValueEqual(f.observed(f.at).size(), 0, "a dirty display is unknown rather than empty");
             f.stock(cabinet).setItem(0, ItemStack.EMPTY);
-            f.colony.inventoryFeedback().changed(io.github.izakyl.folkways.core.api.terms.Stash.at(WorldPos.of(f.level, cabinet)));
+            f.colony.inventoryFeedback().changed(io.github.izakyl.folkways.core.inventory.api.Stash.at(WorldPos.of(f.level, cabinet)));
             helper.assertTrue(f.dining.drinking(f.worker, f.colony.view(f.level)).isEmpty(),
                 "dirty coverage does not serve an old bottle");
             f.publish();
@@ -531,7 +532,7 @@ public final class DiningGameTests {
             helper.assertTrue(drink.commit(f.level, f.worker) instanceof Outcome.Failed,
                 "the actual take rejects an unreported removal");
             helper.assertTrue(f.colony.inventory().snapshot().store(WorldPos.of(f.level, cabinet)).orElseThrow()
-                .state() != io.github.izakyl.folkways.core.api.inventory.InventorySnapshot.State.OBSERVED,
+                .state() != io.github.izakyl.folkways.core.inventory.api.InventorySnapshot.State.OBSERVED,
                 "the execution mismatch marks the observation stale");
         }
         helper.succeed();
@@ -571,7 +572,7 @@ public final class DiningGameTests {
             f.publish();
             WorldPos table = WorldPos.of(f.level, f.at);
             WorldPos counter = WorldPos.of(f.level, cabinet);
-            var data = io.github.izakyl.folkways.core.engine.colony.ColonyData.find(f.level.getServer(), f.colony.id())
+            var data = io.github.izakyl.folkways.core.colony.internal.ColonyData.find(f.level.getServer(), f.colony.id())
                 .orElseThrow();
             data.inventory().chunk(f.level, f.at.getX() >> 4, f.at.getZ() >> 4, false);
             data.inventory().chunk(f.level, cabinet.getX() >> 4, cabinet.getZ() >> 4, false);
@@ -661,8 +662,9 @@ public final class DiningGameTests {
             person.setNoAi(true);
             person.moveTo(at.getX() + 2.5, at.getY(), at.getZ() + 1.5);
             level.addFreshEntity(person);
-            colony.keep(LivingContent.ID, Writer.of().children("hunger", List.of(person.getUUID()), id ->
-                Writer.of().uuid("resident", id).integer("FoodLevel", 4).decimal("Saturation", 0).tag()).tag());
+            colony.keep(LivingContent.ID, Writer.of(new LivingPresence(colony).save()).blob("pets",
+                    Writer.of().longValue("next_attempt", -1L).uuids("pets", List.of()).tag()).children("hunger", List.of(person.getUUID()), id ->
+                Writer.of().uuid("resident", id).integer("FoodLevel", 4).decimal("Saturation", 0).decimal("Exhaustion", 0).tag()).tag());
             living = new LivingPresence(colony);
             dining = new Dining(colony, living, new java.util.Random(0xD1A1A6L));
             worker = new TestWorker(person);
@@ -718,7 +720,7 @@ public final class DiningGameTests {
         }
 
         void publish() {
-            var data = io.github.izakyl.folkways.core.engine.colony.ColonyData.find(level.getServer(), colony.id())
+            var data = io.github.izakyl.folkways.core.colony.internal.ColonyData.find(level.getServer(), colony.id())
                 .orElseThrow();
             // Connected native displays each require sliced admission sampling.
             InventoryObservations.publish(data, level, Map.of(person.getUUID(), person), 10000);
@@ -728,7 +730,7 @@ public final class DiningGameTests {
 
         void observeFixtureWrites() {
             colony.inventoryFeedback().changed(
-                io.github.izakyl.folkways.core.api.terms.Stash.at(WorldPos.of(level, at)));
+                io.github.izakyl.folkways.core.inventory.api.Stash.at(WorldPos.of(level, at)));
             for (var store : colony.inventory().snapshot().stores().keySet()) {
                 colony.inventoryFeedback().changed(store);
             }

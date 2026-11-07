@@ -1,12 +1,12 @@
 package io.github.izakyl.folkways.core.testing;
 
-import io.github.izakyl.folkways.core.api.resident.Resident;
-import io.github.izakyl.folkways.core.api.resident.body.Body;
-import io.github.izakyl.folkways.core.api.work.Node;
-import io.github.izakyl.folkways.core.api.work.Placement;
-import io.github.izakyl.folkways.core.api.work.ToolNeed;
-import io.github.izakyl.folkways.core.api.work.Tools;
-import io.github.izakyl.folkways.core.api.work.Worker;
+import io.github.izakyl.folkways.core.resident.api.Body;
+import io.github.izakyl.folkways.core.resident.api.Resident;
+import io.github.izakyl.folkways.core.work.api.Node;
+import io.github.izakyl.folkways.core.work.api.Placement;
+import io.github.izakyl.folkways.core.work.api.ToolNeed;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.work.support.Tools;
 import io.github.izakyl.folkways.effect.Effects;
 import java.util.List;
 import java.util.function.Consumer;
@@ -33,7 +33,7 @@ public final class TestWorker implements Worker {
             throw new AssertionError("unexpected spill: " + stack);
         }
     };
-    private List<Node> route = List.of();
+    private Supplier<List<Node>> route = List::of;
     private Placement placement = Placement.NOWHERE;
 
     private TestWorker(Supplier<Resident> resident, Supplier<Mob> body, Supplier<Container> pack,
@@ -42,6 +42,18 @@ public final class TestWorker implements Worker {
         this.body = body;
         this.pack = pack;
         this.effects = effects;
+    }
+
+    public TestWorker(Supplier<Resident> resident, Supplier<Mob> body, Supplier<Container> pack,
+            Placement placement, List<Store> stores) {
+        this(resident, body, pack, () -> Effects.NONE);
+        this.placement = placement;
+        this.within = stores;
+    }
+
+    public TestWorker route(Supplier<List<Node>> route) {
+        this.route = route;
+        return this;
     }
 
     // A resident's own body, pack and perks, read as they stand on each call.
@@ -106,7 +118,7 @@ public final class TestWorker implements Worker {
     }
 
     public TestWorker route(List<Node> route) {
-        this.route = route;
+        this.route = () -> route;
         return this;
     }
 
@@ -148,7 +160,7 @@ public final class TestWorker implements Worker {
     }
 
     public List<Node> route() {
-        return route;
+        return route.get();
     }
 
     public Placement placement() {

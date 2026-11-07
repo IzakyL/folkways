@@ -1,8 +1,8 @@
 package io.github.izakyl.folkways.carts;
 
-import io.github.izakyl.folkways.core.api.colony.Colonies;
 import com.jusipat.astikorcartsredux.entity.AbstractCargoCart;
-import io.github.izakyl.folkways.core.api.colony.Release;
+import io.github.izakyl.folkways.core.colony.api.ClaimRelease;
+import io.github.izakyl.folkways.core.colony.api.Colonies;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.animal.horse.AbstractHorse;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -46,9 +46,9 @@ public final class CartEvents {
             if (!horse && CartLinks.residentDrawn(entity)) {
                 CartLinks.sync((AbstractCargoCart) entity, ((SavedPuller) entity).folkways$puller());
             }
-            Release.fromWorld(entity.getRemovalReason()).ifPresent(why -> {
+            ClaimRelease.fromWorld(entity.getRemovalReason()).ifPresent(why -> {
                 for (var colony : Colonies.all(level.getServer())) {
-                    colony.holdingOf(entity.getUUID()).filter(holding -> holding.owner().equals(FolkwaysCartsMod.OWNER))
+                    colony.claimOf(entity.getUUID()).filter(holding -> holding.owner().equals(FolkwaysCartsMod.OWNER))
                         .ifPresent(holding -> colony.release(holding.id(), why));
                 }
             });

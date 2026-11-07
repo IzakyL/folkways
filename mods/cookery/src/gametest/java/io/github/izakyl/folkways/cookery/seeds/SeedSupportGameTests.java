@@ -1,22 +1,22 @@
 package io.github.izakyl.folkways.cookery.seeds;
 
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.colony.Colonies;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.colony.Held;
-import io.github.izakyl.folkways.core.api.terms.Containers;
-import io.github.izakyl.folkways.core.api.terms.ItemFilter;
-import io.github.izakyl.folkways.core.api.terms.StoreRule;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.engine.colony.ColonyData;
-import io.github.izakyl.folkways.core.api.work.Stances;
+import io.github.izakyl.folkways.cookery.CookeryContent;
+import io.github.izakyl.folkways.core.colony.api.Claimed;
+import io.github.izakyl.folkways.core.colony.api.Colonies;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.colony.internal.ColonyData;
+import io.github.izakyl.folkways.core.inventory.api.StoreRule;
+import io.github.izakyl.folkways.core.item.api.Containers;
+import io.github.izakyl.folkways.core.item.api.ItemFilter;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.front.api.Facings;
 import io.github.izakyl.folkways.front.api.Schema;
 import io.github.izakyl.folkways.front.api.Shape;
 import io.github.izakyl.folkways.front.engine.Enrollments;
 import io.github.izakyl.folkways.front.engine.colony.ColonyFront;
 import io.github.izakyl.folkways.front.engine.colony.ColonySettings;
-import io.github.izakyl.folkways.cookery.CookeryContent;
 import io.github.izakyl.folkways.plugins.compost.CompostBookings;
 import io.github.izakyl.folkways.plugins.compost.CompostContent;
 import io.github.izakyl.folkways.plugins.compost.CompostPresence;
@@ -32,7 +32,6 @@ import io.github.izakyl.folkways.plugins.person.ResidentEntity;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -114,7 +113,7 @@ public final class SeedSupportGameTests {
             helper.assertValueEqual(budget.tally(Items.WHEAT_SEEDS).compostable(), 20L,
                 "changing the default leaves an explicit individual setting intact");
             CompostSettings.enabled(rig.colony, false);
-            var data = io.github.izakyl.folkways.core.engine.colony.ColonyData.find(rig.level.getServer(), rig.colony.id()).orElseThrow();
+            var data = io.github.izakyl.folkways.core.colony.internal.ColonyData.find(rig.level.getServer(), rig.colony.id()).orElseThrow();
             var saved = data.save(new net.minecraft.nbt.CompoundTag()).getCompound("keeps")
                 .getCompound(CompostSettings.ID.toString());
             helper.assertTrue(saved.equals(rig.colony.kept(CompostSettings.ID)),
@@ -157,7 +156,7 @@ public final class SeedSupportGameTests {
                     new ColonySettings.Value.Choice(BuiltInRegistries.BLOCK.getKey(Blocks.BEETROOTS)))).isPresent(),
                 "a real colony plot is configured for beetroot without owning its seed");
             var data = ColonyData.find(rig.level.getServer(), rig.colony.id()).orElseThrow();
-            data.inventory().advance(rig.level, data, Map.of(rig.body.id(), rig.body));
+            data.inventory().advance(rig.level, data.works(), Map.of(rig.body.id(), rig.body));
             var found = CompostSettings.discovered(rig.colony, rig.level.getServer());
             helper.assertTrue(found.containsAll(List.of(Items.WHEAT_SEEDS, Items.CARROT, Items.BEETROOT_SEEDS)),
                 "carried seeds, edible stored seeds and the configured crop each receive an individual row");
@@ -171,7 +170,7 @@ public final class SeedSupportGameTests {
     }
 
     @GameTest(template = "empty")
-    public static void riceSharesOneVisibleRowAndMigratesLegacyOverrides(GameTestHelper helper) {
+    public static void riceSharesOneVisibleRowAndReserve(GameTestHelper helper) {
         try (var rig = new Fixture(helper)) {
             var wild = com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems.WILD_RICE_SEED.get();
             var rice = com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems.RICE_SEED.get();
@@ -179,14 +178,6 @@ public final class SeedSupportGameTests {
             rig.body.pack().setItem(1, new ItemStack(rice, 8));
             helper.assertValueEqual(CompostSettings.discovered(rig.colony, rig.level.getServer()),
                 List.of(SeedReserves.canonical(wild)), "both rice alternatives share one visible configuration row");
-            var legacy = new net.minecraft.nbt.CompoundTag();
-            var overrides = new net.minecraft.nbt.CompoundTag();
-            overrides.putInt(BuiltInRegistries.ITEM.getKey(wild).toString(), 40);
-            overrides.putInt(BuiltInRegistries.ITEM.getKey(rice).toString(), 96);
-            legacy.put("reserves", overrides);
-            rig.colony.keep(CompostSettings.ID, legacy);
-            helper.assertValueEqual(CompostSettings.reserve(rig.colony, wild), 96, "the larger legacy rice reserve remains protected");
-            helper.assertValueEqual(CompostSettings.reserve(rig.colony, rice), 96, "both alternatives read the same legacy reserve");
             CompostSettings.reserve(rig.colony, rice, 20);
             helper.assertValueEqual(rig.colony.kept(CompostSettings.ID).getCompound("reserves").getAllKeys().size(), 1,
                 "editing either rice alternative stores only one canonical override");
@@ -289,7 +280,7 @@ public final class SeedSupportGameTests {
             ResidentEntity unloaded = PersonBody.RESIDENT.get().create(rig.level);
             unloaded.moveTo(helper.absolutePos(new BlockPos(2, 2, 2)).getCenter());
             rig.level.addFreshEntity(unloaded);
-            rig.colony.hold(PersonContent.ID, Held.Entity.of(unloaded)).orElseThrow();
+            rig.colony.hold(PersonContent.ID, Claimed.Entity.of(unloaded)).orElseThrow();
             unloaded.remove(net.minecraft.world.entity.Entity.RemovalReason.UNLOADED_TO_CHUNK);
             helper.assertTrue(!rig.support.snapshot().complete(), "a held resident without a loaded entity has unknown physical stock");
             helper.assertValueEqual(rig.support.budget(rig.level).tally(Items.WHEAT_SEEDS).physical(), 100L, "known physical seeds are still reported faithfully");
@@ -307,7 +298,7 @@ public final class SeedSupportGameTests {
             for (int index = 0; index < 64; index++) {
                 var body = PersonBody.RESIDENT.get().create(level); body.setNoAi(true);
                 body.moveTo(helper.absolutePos(new BlockPos(2, 1, 5)).getCenter()); level.addFreshEntity(body);
-                colony.hold(PersonContent.ID, Held.Entity.of(body)).orElseThrow();
+                colony.hold(PersonContent.ID, Claimed.Entity.of(body)).orElseThrow();
                 body.joinColony(colony.id()); colony.entered(body); body.pack().setItem(0, new ItemStack(Items.WHEAT_SEEDS)); bodies.add(body);
             }
             var stores = new java.util.ArrayList<WorldPos>();
@@ -355,7 +346,7 @@ public final class SeedSupportGameTests {
             body.setNoAi(true);
             body.moveTo(helper.absolutePos(new BlockPos(2, 1, 4)).getCenter());
             level.addFreshEntity(body);
-            colony.hold(PersonContent.ID, Held.Entity.of(body)).orElseThrow();
+            colony.hold(PersonContent.ID, Claimed.Entity.of(body)).orElseThrow();
             body.joinColony(colony.id());
             colony.entered(body);
             support = new SeedSupport(colony, level.getServer());

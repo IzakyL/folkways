@@ -3,26 +3,26 @@ package io.github.izakyl.folkways.cookery.stockpot;
 import com.github.ysbbbbbb.kaleidoscopecookery.api.blockentity.IStockpot;
 import com.github.ysbbbbbb.kaleidoscopecookery.blockentity.kitchen.StockpotBlockEntity;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
-import io.github.izakyl.folkways.core.api.terms.RefusalKind;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.work.Need;
-import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.cookery.CookeryContent;
 import io.github.izakyl.folkways.cookery.CookeryRefusal;
 import io.github.izakyl.folkways.cookery.KitchenBookings;
 import io.github.izakyl.folkways.cookery.KitchenDelivery;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
+import io.github.izakyl.folkways.core.resident.api.RefusalKind;
+import io.github.izakyl.folkways.core.work.api.Need;
+import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import java.util.ArrayList;
-import java.util.function.Supplier;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Supplier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
 
-final class StockpotLoad extends StockpotNode {
+final class StockpotLoad extends StockpotAction {
 
     private final UUID colony;
     private final UUID batch;
@@ -65,7 +65,6 @@ final class StockpotLoad extends StockpotNode {
         return ItemSpec.of(ModItems.STOCKPOT_LID.get());
     }
 
-    @Override
     public boolean ready(ServerLevel level) {
         if (bookings.cancelled(at, turn, generation)) {
             return true;
@@ -77,7 +76,6 @@ final class StockpotLoad extends StockpotNode {
             : pot.getStatus() != IStockpot.PUT_SOUP_BASE || pot.hasHeatSource(level)).orElse(false);
     }
 
-    @Override
     public Optional<RefusalKind> refusal(ServerLevel level) {
         if (bookings.cancelled(at, turn, generation)) {
             return Optional.of(CookeryRefusal.STATION_CHANGED);
@@ -92,7 +90,7 @@ final class StockpotLoad extends StockpotNode {
         }
         return super.refusal(level);
     }
-    @Override
+
     public Outcome commit(ServerLevel level, Worker who) {
         if (bookings.cancelled(at, turn, generation)) {
             return Outcome.failed(CookeryRefusal.STATION_CHANGED);
@@ -161,8 +159,10 @@ final class StockpotLoad extends StockpotNode {
                 return rolledBack(level, before);
             }
             StockpotBatch.start(colony, batch, plan, pot, level, hasLid).save(pot, level);
-            // Carriers are preflighted before loading but spent only by serving. Within's one outer need books
-            // them once; returning them as unused keeps their real components in the worker's pack meanwhile.
+            // Carriers are preflighted before loading but spent only by serving. The work's one
+            // outer need books
+            // them once; returning them as unused keeps their real components in the worker's pack
+            // meanwhile.
             List<ItemStack> unused = new ArrayList<>(supplied.get().unused());
             int firstCarrier = 1 + ingredientCount + (hasLid ? 0 : 1);
             for (int index = firstCarrier; index < slots.size(); index++) {

@@ -1,10 +1,10 @@
 package io.github.izakyl.folkways.plugins.patrol;
 
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.resident.body.Body;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
-import io.github.izakyl.folkways.core.api.work.Node;
-import io.github.izakyl.folkways.core.api.work.Worker;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
+import io.github.izakyl.folkways.core.resident.api.Body;
+import io.github.izakyl.folkways.core.work.api.Node;
+import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.front.api.Fronts;
 import io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfile;
 import io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfiles;

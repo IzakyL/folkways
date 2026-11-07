@@ -20,7 +20,7 @@ import com.lowdragmc.lowdraglib2.gui.ui.event.UIEvents;
 import dev.vfyjxf.taffy.style.AlignContent;
 import dev.vfyjxf.taffy.style.AlignItems;
 import dev.vfyjxf.taffy.style.FlexDirection;
-import io.github.izakyl.folkways.core.api.terms.OptionQuery;
+import io.github.izakyl.folkways.core.item.api.OptionQuery;
 import io.github.izakyl.folkways.front.api.Schema;
 import java.util.ArrayList;
 import java.util.Comparator;

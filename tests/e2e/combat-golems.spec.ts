@@ -100,7 +100,7 @@ test("real Modular Golems retain humanoid and barehanded combat, and recover nat
 const IMPORTS = [
   "net.minecraft.server.MinecraftServer", "net.minecraft.world.entity.Mob", "net.minecraft.world.entity.EntityType",
   "net.minecraft.world.entity.ai.attributes.Attributes", "net.minecraft.world.item.ItemStack", "net.minecraft.world.item.Items",
-  "io.github.izakyl.folkways.core.api.resident.body.Bodies", "io.github.izakyl.folkways.core.api.colony.Colonies",
+  "io.github.izakyl.folkways.core.resident.api.Bodies", "io.github.izakyl.folkways.core.colony.api.Colonies",
   "io.github.izakyl.folkways.front.engine.colony.ColonyGround", "io.github.izakyl.folkways.front.engine.colony.Endorsements",
 ];
 

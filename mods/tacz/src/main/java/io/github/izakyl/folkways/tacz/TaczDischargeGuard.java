@@ -4,7 +4,7 @@ import com.tacz.guns.api.event.common.EntityHurtByGunEvent;
 import com.tacz.guns.api.event.common.GunFireEvent;
 import com.tacz.guns.api.event.server.AmmoHitBlockEvent;
 import com.tacz.guns.entity.EntityKineticBullet;
-import io.github.izakyl.folkways.core.api.resident.body.Bodies;
+import io.github.izakyl.folkways.core.resident.api.Bodies;
 import io.github.izakyl.folkways.plugins.person.ResidentEntity;
 import io.github.izakyl.folkways.plugins.person.living.LivingContent;
 import io.github.izakyl.folkways.tacz.mixin.KineticBulletAccessor;

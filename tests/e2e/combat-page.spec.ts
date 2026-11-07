@@ -315,8 +315,8 @@ function distance(entity: Pick<ResidentReading, "x" | "z">, destination: Vec): n
 const TASK_IMPORTS = [
   "java.util.ArrayList", "java.util.LinkedHashMap", "java.util.List", "java.util.Map", "java.util.UUID",
   "net.minecraft.server.MinecraftServer", "net.minecraft.core.BlockPos", "net.minecraft.world.entity.Entity",
-  "io.github.izakyl.folkways.core.api.colony.Colonies", "io.github.izakyl.folkways.plugins.person.PersonContent",
-  "io.github.izakyl.folkways.core.api.resident.body.Bodies",
+  "io.github.izakyl.folkways.core.colony.api.Colonies", "io.github.izakyl.folkways.plugins.person.PersonContent",
+  "io.github.izakyl.folkways.core.resident.api.Bodies",
   "io.github.izakyl.folkways.plugins.person.ResidentEntity",
   "io.github.izakyl.folkways.rts.combat.command.ResidentCommands",
   "io.github.izakyl.folkways.rts.combat.group.UnitGroups", "io.github.izakyl.folkways.rts.combat.group.UnitGroup",
@@ -327,7 +327,7 @@ const RESIDENTS = defineTask<{ colony: string }, string[]>({
   name: "folkways.combat-page.registered-residents",
   side: "server",
   source: javaTask({
-    imports: ["net.minecraft.server.MinecraftServer", "java.util.UUID", "io.github.izakyl.folkways.core.api.colony.Colonies",
+    imports: ["net.minecraft.server.MinecraftServer", "java.util.UUID", "io.github.izakyl.folkways.core.colony.api.Colonies",
       "io.github.izakyl.folkways.plugins.person.PersonBody", "io.github.izakyl.folkways.plugins.person.ResidentEntity"],
     body: `
 var level=((MinecraftServer)ctx.server()).overworld();var a=Args.of(ctx);
@@ -394,7 +394,7 @@ const ASSIGN_PROFILE = defineTask<Scene & { profile: string }, boolean>({
   side: "server",
   source: javaTask({
     imports: ["java.util.Optional", "java.util.UUID", "net.minecraft.server.MinecraftServer", "net.minecraft.world.item.Items",
-      "io.github.izakyl.folkways.core.api.colony.Colonies", "io.github.izakyl.folkways.core.api.terms.ItemSpec",
+      "io.github.izakyl.folkways.core.colony.api.Colonies", "io.github.izakyl.folkways.core.item.api.ItemSpec",
       "io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfiles", "io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfile"],
     body: `
 var a=Args.of(ctx);var colony=Colonies.of((MinecraftServer)ctx.server(),UUID.fromString(a.string("colony"))).orElseThrow();
@@ -409,7 +409,7 @@ const CLEANUP = defineTask<Scene, { done: true }>({
   name: "folkways.combat-page.cleanup",
   side: "server",
   source: javaTask({
-    imports: ["java.util.Map", "java.util.UUID", "net.minecraft.server.MinecraftServer", "io.github.izakyl.folkways.core.api.colony.Colonies",
+    imports: ["java.util.Map", "java.util.UUID", "net.minecraft.server.MinecraftServer", "io.github.izakyl.folkways.core.colony.api.Colonies",
       "io.github.izakyl.folkways.rts.combat.group.UnitGroups"],
     body: `
 var server=(MinecraftServer)ctx.server();var level=server.overworld();var a=Args.of(ctx);

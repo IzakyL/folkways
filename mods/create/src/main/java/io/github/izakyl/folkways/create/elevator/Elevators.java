@@ -1,10 +1,10 @@
 package io.github.izakyl.folkways.create.elevator;
 
-import io.github.izakyl.folkways.core.api.colony.Closing;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.colony.Held;
-import io.github.izakyl.folkways.core.api.colony.Holding;
-import io.github.izakyl.folkways.core.api.terms.Realm;
+import io.github.izakyl.folkways.core.colony.api.Claim;
+import io.github.izakyl.folkways.core.colony.api.Claimed;
+import io.github.izakyl.folkways.core.colony.api.Closing;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.world.api.Realm;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -33,8 +33,8 @@ public final class Elevators {
         this.server = server;
         Set<ElevatorRef> wanted = new LinkedHashSet<>();
         Set<UUID> held = new LinkedHashSet<>();
-        for (Holding holding : colony.holdings(ElevatorPlugin.ID)) {
-            if (!(holding.what() instanceof Held.Block block)
+        for (Claim holding : colony.claims(ElevatorPlugin.ID)) {
+            if (!(holding.what() instanceof Claimed.Block block)
                     || !(block.cell().realm() instanceof Realm.Dimension dimension)) {
                 continue;
             }

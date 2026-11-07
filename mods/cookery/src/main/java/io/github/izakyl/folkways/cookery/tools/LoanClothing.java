@@ -1,11 +1,11 @@
 package io.github.izakyl.folkways.cookery.tools;
 
-import io.github.izakyl.folkways.core.api.resident.body.Body;
-import io.github.izakyl.folkways.core.api.resident.body.Bodies;
-import io.github.izakyl.folkways.core.api.colony.Colonies;
-import io.github.izakyl.folkways.core.api.terms.Containers;
-import io.github.izakyl.folkways.core.api.terms.Goods;
-import io.github.izakyl.folkways.core.api.work.Worker;
+import io.github.izakyl.folkways.base.persist.Required;
+import io.github.izakyl.folkways.core.colony.api.Colonies;
+import io.github.izakyl.folkways.core.item.api.Containers;
+import io.github.izakyl.folkways.core.resident.api.Bodies;
+import io.github.izakyl.folkways.core.resident.api.Body;
+import io.github.izakyl.folkways.core.work.api.Worker;
 import java.util.Map;
 import java.util.Optional;
 import net.minecraft.nbt.CompoundTag;
@@ -140,7 +140,10 @@ final class LoanClothing {
                 for (EquipmentSlot slot : EquipmentSlot.values()) {
                     if (!worn.hasUUID(slot.getName())) { continue; }
                     ItemStack expected = ItemStack.parseOptional(body.mob().registryAccess(),
-                        items.getCompound(slot.getName()));
+                        Required.compound(items, slot.getName()));
+                    if (expected.isEmpty()) {
+                        throw new IllegalArgumentException("Invalid persisted clothing snapshot for " + slot.getName());
+                    }
                     if (same(body.mob().getItemBySlot(slot), expected)) { release(body, slot); }
                     else { unmark(body.mob(), slot); }
                 }

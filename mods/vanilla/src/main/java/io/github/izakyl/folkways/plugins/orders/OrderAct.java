@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.plugins.orders;
 
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import java.util.Optional;
 
 sealed interface OrderAct {

@@ -1,33 +1,34 @@
 package io.github.izakyl.folkways.plugins.combat.weapon;
 
-import io.github.izakyl.folkways.core.engine.inventory.InventoryObservations;
-import io.github.izakyl.folkways.core.api.colony.Colonies;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.colony.Held;
-import io.github.izakyl.folkways.core.api.resident.Locomotions;
-import io.github.izakyl.folkways.core.api.resident.Conveyance;
-import io.github.izakyl.folkways.core.api.resident.Going;
-import io.github.izakyl.folkways.core.api.work.Doing;
-import io.github.izakyl.folkways.core.engine.labor.LaborRefusal;
-import io.github.izakyl.folkways.plugins.patrol.PatrolContent;
-import io.github.izakyl.folkways.core.api.terms.Containers;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
-import io.github.izakyl.folkways.core.api.terms.Reach;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.work.Grown;
-import io.github.izakyl.folkways.core.api.work.Node;
-import io.github.izakyl.folkways.core.api.work.NodeSpec;
-import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.WorkSite;
-import io.github.izakyl.folkways.core.api.work.Worker;
-import io.github.izakyl.folkways.core.api.work.Workload;
-import io.github.izakyl.folkways.core.engine.labor.LaborFixture;
+import io.github.izakyl.folkways.core.colony.api.Claimed;
+import io.github.izakyl.folkways.core.colony.api.Colonies;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.inventory.internal.InventoryObservations;
+import io.github.izakyl.folkways.core.item.api.Containers;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
+import io.github.izakyl.folkways.core.plan.api.Grown;
+import io.github.izakyl.folkways.core.resident.api.Conveyance;
+import io.github.izakyl.folkways.core.resident.api.Doing;
+import io.github.izakyl.folkways.core.resident.api.Going;
+import io.github.izakyl.folkways.core.resident.api.Locomotions;
+import io.github.izakyl.folkways.core.runtime.LaborFixture;
+import io.github.izakyl.folkways.core.work.api.LaborRefusal;
+import io.github.izakyl.folkways.core.work.api.Node;
+import io.github.izakyl.folkways.core.work.api.NodeSpec;
+import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.work.api.WorkSite;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.work.api.Workload;
+import io.github.izakyl.folkways.core.work.support.WorkStances;
+import io.github.izakyl.folkways.core.world.api.Reach;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.front.engine.colony.ColonyFront;
 import io.github.izakyl.folkways.front.engine.colony.ColonySettings;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
 import io.github.izakyl.folkways.plugins.pasture.PastureContent;
 import io.github.izakyl.folkways.plugins.pasture.PastureHorses;
+import io.github.izakyl.folkways.plugins.patrol.PatrolContent;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import io.github.izakyl.folkways.plugins.person.PersonContent;
 import io.github.izakyl.folkways.plugins.person.ResidentEntity;
@@ -53,9 +54,8 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.MoverType;
-import net.minecraft.world.entity.animal.horse.Horse;
 import net.minecraft.world.entity.ai.attributes.Attributes;
-import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.entity.animal.horse.Horse;
 import net.minecraft.world.entity.monster.Zombie;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -64,6 +64,7 @@ import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
+import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
@@ -144,7 +145,7 @@ public final class ResidentMountGameTests {
         helper.assertTrue(scene.body.pack().count(Items.SADDLE) == 1
             && scene.body.pack().count(Items.DIAMOND_HORSE_ARMOR) == 1, "tack returns to the pack for storage");
         helper.assertTrue(!horse.getTags().contains(PastureContent.CLAIMED)
-            && scene.colony.holdingOf(horse.getUUID()).isEmpty() && !horse.isNoAi(),
+            && scene.colony.claimOf(horse.getUUID()).isEmpty() && !horse.isNoAi(),
             "the horse is released where it stands");
         helper.succeed();
     }
@@ -235,7 +236,7 @@ public final class ResidentMountGameTests {
             if (i > 0) {
                 rider.moveTo(helper.absolutePos(new BlockPos(2, 1, 2 + 2 * i)).getBottomCenter());
                 helper.getLevel().addFreshEntity(rider);
-                scene.colony.hold(PersonContent.ID, Held.Entity.of(rider)).orElseThrow();
+                scene.colony.hold(PersonContent.ID, Claimed.Entity.of(rider)).orElseThrow();
                 rider.joinColony(scene.colony.id());
                 scene.entities.add(rider);
             }
@@ -422,7 +423,7 @@ public final class ResidentMountGameTests {
         scene.refresh();
         first.kill();
         helper.assertTrue(!scene.supplies.mounts().assigned(scene.body.id())
-            && scene.colony.holdingOf(first.getUUID()).isEmpty(), "death ends the old horse holding");
+            && scene.colony.claimOf(first.getUUID()).isEmpty(), "death ends the old horse holding");
         Horse next = scene.horse();
         scene.refresh();
         helper.assertTrue(ResidentMounts.horse(scene.body).orElseThrow() == next && next.isSaddled(),
@@ -508,7 +509,7 @@ public final class ResidentMountGameTests {
         scene.supplies.mounts().tick(helper.getLevel().getServer(), scene.supplies.profiles());
         helper.assertTrue(!scene.supplies.mounts().assigned(scene.body.id())
             && !reloaded.getTags().contains(PastureContent.CLAIMED)
-            && scene.colony.holdingOf(reloaded.getUUID()).isEmpty(), "the reloaded horse is released exactly once");
+            && scene.colony.claimOf(reloaded.getUUID()).isEmpty(), "the reloaded horse is released exactly once");
         helper.assertTrue(!reloaded.isSaddled() && scene.body.pack().count(Items.SADDLE) == 1,
             "the saved physical saddle returns when its horse reloads");
         helper.succeed();
@@ -524,7 +525,7 @@ public final class ResidentMountGameTests {
         ResidentMounts.board(scene.body);
         scene.body.kill();
         helper.assertTrue(!scene.supplies.mounts().assigned(scene.body.id())
-            && scene.colony.holdingOf(horse.getUUID()).isEmpty(), "resident death ends its mount's holding");
+            && scene.colony.claimOf(horse.getUUID()).isEmpty(), "resident death ends its mount's holding");
         helper.assertTrue(!horse.isSaddled() && !horse.getTags().contains(PastureContent.CLAIMED)
             && !horse.isNoAi(), "the horse is unsaddled and free after its resident dies");
         helper.succeed();
@@ -602,7 +603,7 @@ public final class ResidentMountGameTests {
         helper.startSequence().thenWaitUntil(() -> helper.assertTrue(at[0] == stops.size(), "all stops reached"))
             .thenExecute(() -> {
                 helper.assertTrue(mounted[0], "the resident fetched and boarded its horse");
-                helper.assertTrue(Reach.standingIn(scene.body,
+                helper.assertTrue(WorkStances.standingIn(scene.body,
                     Stances.at(stops.getLast())), "mounted work uses the horse's footing");
                 scene.body.locomotion().stand(scene.body, false);
                 helper.assertFalse(scene.body.isPassenger(), "work requiring feet on the ground dismounts");
@@ -816,9 +817,9 @@ public final class ResidentMountGameTests {
         scene.profile(List.of(LoadoutProfile.Entry.mount()));
         scene.refresh();
         helper.assertTrue(horse.getTags().contains(PastureContent.CLAIMED)
-                && scene.colony.holdingOf(horse.getUUID()).isPresent(), "the mount is claimed");
+                && scene.colony.claimOf(horse.getUUID()).isPresent(), "the mount is claimed");
         scene.colony.raze();
-        helper.assertTrue(scene.colony.holdingOf(horse.getUUID()).isEmpty()
+        helper.assertTrue(scene.colony.claimOf(horse.getUUID()).isEmpty()
                 && !horse.getTags().contains(PastureContent.CLAIMED) && !horse.isNoAi(),
             "mount teardown clears the claim even after razing has forgotten the holdings");
         helper.succeed();
@@ -859,7 +860,7 @@ public final class ResidentMountGameTests {
             ticking = body.chunkPosition();
             helper.getLevel().getChunkSource().addRegionTicket(TICKING, ticking, 2, body.id());
             helper.getLevel().addFreshEntity(body);
-            colony.hold(PersonContent.ID, Held.Entity.of(body)).orElseThrow();
+            colony.hold(PersonContent.ID, Claimed.Entity.of(body)).orElseThrow();
             body.joinColony(colony.id());
             entities.add(body);
             helper.testInfo.addListener(this);

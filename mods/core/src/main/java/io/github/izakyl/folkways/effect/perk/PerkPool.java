@@ -19,6 +19,7 @@ public final class PerkPool {
     private static final Map<String, Perk> BY_ID = new LinkedHashMap<>();
     private static final Map<ResourceLocation, List<String>> VOCATION_POOLS = new LinkedHashMap<>();
     private static final List<String> GLOBAL_POOL = new ArrayList<>();
+    private static final Set<String> FIXED_GLOBALS = new LinkedHashSet<>();
 
     public static final String STOIC = "global_stoic";
 
@@ -44,10 +45,11 @@ public final class PerkPool {
         }
     }
 
-    public static void legacy(Perk perk) {
+    public static void fixedGlobal(Perk perk) {
         if (BY_ID.putIfAbsent(perk.id(), perk) != null) {
             throw new IllegalStateException("perk " + perk.id() + " is already registered");
         }
+        FIXED_GLOBALS.add(perk.id());
     }
 
     private static void claim(Perk perk) {
@@ -124,14 +126,8 @@ public final class PerkPool {
         return candidates(VOCATION_POOLS.getOrDefault(vocation, List.of()), ranks);
     }
 
-    public static List<String> candidatesFor(ResourceLocation vocation, Map<String, Integer> ranks) {
-        List<String> pool = new ArrayList<>(VOCATION_POOLS.getOrDefault(vocation, List.of()));
-        pool.addAll(GLOBAL_POOL);
-        return candidates(pool, ranks);
-    }
-
     public static boolean global(String id) {
-        return GLOBAL_POOL.contains(id) || id.equals(GlobalPerks.PACKMULE);
+        return GLOBAL_POOL.contains(id) || FIXED_GLOBALS.contains(id);
     }
 
     public static List<String> globalCandidates(Map<String, Integer> ranks) {

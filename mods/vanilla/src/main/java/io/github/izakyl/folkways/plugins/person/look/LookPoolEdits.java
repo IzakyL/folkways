@@ -1,8 +1,8 @@
 package io.github.izakyl.folkways.plugins.person.look;
 
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.colony.Books;
-import io.github.izakyl.folkways.core.api.colony.Colony;
+import io.github.izakyl.folkways.front.api.Books;
+import io.github.izakyl.folkways.core.colony.api.Colony;
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;

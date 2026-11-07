@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.plugins.person.fear;
 
-import io.github.izakyl.folkways.core.api.terms.Footing;
+import io.github.izakyl.folkways.core.world.api.Footing;
 import java.util.Optional;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.Mob;

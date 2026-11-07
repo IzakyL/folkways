@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.plugins.combat.group;
 
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;

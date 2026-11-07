@@ -1,5 +1,6 @@
 package io.github.izakyl.folkways.create;
 
+import io.github.izakyl.folkways.create.upgrade.CreateUpgrades;
 import io.github.izakyl.folkways.effect.perk.PerkPool;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
@@ -13,6 +14,7 @@ public final class FolkwaysCreateMod {
     public static final String ID = "folkways_create";
 
     public FolkwaysCreateMod(IEventBus modBus, ModContainer container) {
+        CreateUpgrades.register();
         container.registerConfig(ModConfig.Type.SERVER, FolkwaysCreateConfig.SPEC);
         // The quick hands read their ladders from this config, so its loading grants them again.
         modBus.addListener(ModConfigEvent.Loading.class, event -> PerkPool.regrant());

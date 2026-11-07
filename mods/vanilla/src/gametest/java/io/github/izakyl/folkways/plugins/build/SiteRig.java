@@ -1,14 +1,29 @@
 package io.github.izakyl.folkways.plugins.build;
 
-import io.github.izakyl.folkways.core.api.resident.Resident;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.work.Ending;
-import io.github.izakyl.folkways.core.api.work.Grown;
-import io.github.izakyl.folkways.core.api.work.Node;
-import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Worker;
-import io.github.izakyl.folkways.core.engine.labor.Commit;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.item.api.Containers;
+import io.github.izakyl.folkways.core.plan.api.Grown;
+import io.github.izakyl.folkways.core.resident.api.Body;
+import io.github.izakyl.folkways.core.resident.api.Conveyance;
+import io.github.izakyl.folkways.core.resident.api.Resident;
+import io.github.izakyl.folkways.core.resident.api.ResidentKind;
+import io.github.izakyl.folkways.core.runtime.TestActionServices;
 import io.github.izakyl.folkways.core.testing.TestWorker;
+import io.github.izakyl.folkways.core.work.api.ActionServices;
+import io.github.izakyl.folkways.core.work.api.Ending;
+import io.github.izakyl.folkways.core.work.api.HoldingContext;
+import io.github.izakyl.folkways.core.work.api.HoldingStep;
+import io.github.izakyl.folkways.core.work.api.Node;
+import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Settlement;
+import io.github.izakyl.folkways.core.work.api.WorkAction;
+import io.github.izakyl.folkways.core.work.api.WorkHolding;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.work.internal.Commit;
+import io.github.izakyl.folkways.core.work.support.StandardHoldings;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
+import io.github.izakyl.folkways.plugins.person.PersonBody;
+import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -37,6 +52,28 @@ final class SiteRig implements BuildSite.Asks {
     final List<UUID> withdrawn = new ArrayList<>();
     private final Map<UUID, BiConsumer<UUID, Ending>> heard = new HashMap<>();
     final BuildSite site;
+    private final Map<UUID, UUID> holders = new HashMap<>();
+    private final Map<UUID, Shift> shifts = new HashMap<>();
+    private final Colony colony = (Colony) Proxy.newProxyInstance(SiteRig.class.getClassLoader(),
+        new Class<?>[] {Colony.class}, (proxy, method, args) -> switch (method.getName()) {
+            case "holder" -> Optional.ofNullable(holders.get((UUID) args[0]));
+            case "isHeld" -> holders.containsKey((UUID) args[0]);
+            case "isSuspended", "isApproaching" -> false;
+            case "hold", "claimAt", "claimOf", "claim", "store" -> Optional.empty();
+            case "storesIn", "storeRules", "claims" -> List.of();
+            default -> method.isDefault()
+                ? java.lang.reflect.InvocationHandler.invokeDefault(proxy, method, args) : null;
+        });
+
+    @Override
+    public Optional<Colony> colony() {
+        return Optional.of(colony);
+    }
+
+    Shift shift() {
+        Node node = asked.getFirst().nodes().getFirst();
+        return shifts.computeIfAbsent(node.id(), ignored -> new Shift(node, holders));
+    }
 
     private SiteRig(UUID order, BuildTarget target, TemporaryScaffolds temporary) {
         site = new BuildSite(order, this, target, temporary);
@@ -92,6 +129,11 @@ final class SiteRig implements BuildSite.Asks {
     }
 
     @Override
+    public Optional<List<ItemStack>> pack(UUID worker) {
+        return Optional.empty();
+    }
+
+    @Override
     public void submit(ResourceKey<Level> dimension, Grown work, BiConsumer<UUID, Ending> ended) {
         asked.add(work);
         work.nodes().forEach(node -> heard.put(node.id(), ended));
@@ -112,8 +154,8 @@ final class SiteRig implements BuildSite.Asks {
         return at(cell).orElseThrow(() -> new AssertionError("no piece of work at " + cell.toShortString()));
     }
 
-    Node node(BlockPos cell) {
-        return pieceAt(cell).node();
+    BuildAction action(BlockPos cell) {
+        return pieceAt(cell).action();
     }
 
     Step step(BlockPos cell) {
@@ -122,19 +164,19 @@ final class SiteRig implements BuildSite.Asks {
 
     /** Whether the piece with the node {@code first} goes in before the one with {@code then}. */
     boolean ordered(UUID first, UUID then) {
-        return site.pieces().stream().filter(piece -> piece.node().id().equals(then))
+        return site.pieces().stream().filter(piece -> piece.id().equals(then))
             .anyMatch(piece -> site.before(piece).contains(first));
     }
 
     /** Whether the piece at {@code first} goes in before the piece at {@code then}. */
     boolean before(BlockPos first, BlockPos then) {
-        return site.before(pieceAt(then)).contains(node(first).id());
+        return site.before(pieceAt(then)).contains(pieceAt(first).id());
     }
 
     /** The cells of every piece that goes in straight before the piece at {@code cell}. */
     List<BlockPos> after(BlockPos cell) {
         Map<UUID, BlockPos> focus = new HashMap<>();
-        site.pieces().forEach(piece -> focus.put(piece.node().id(), piece.work().focus()));
+        site.pieces().forEach(piece -> focus.put(piece.id(), piece.work().focus()));
         return site.before(pieceAt(cell)).stream().map(focus::get).filter(java.util.Objects::nonNull).toList();
     }
 
@@ -147,9 +189,14 @@ final class SiteRig implements BuildSite.Asks {
         site.ended(node.id(), how);
     }
 
+    void end(WorkAction action, Ending how) {
+        site.pieces().stream().filter(piece -> piece.action() == action).findFirst()
+            .ifPresent(piece -> site.ended(piece.id(), how));
+    }
+
     /** Does the piece at {@code cell} as a worker would, tells the site it ended, and lets the site hear it. */
     Outcome work(GameTestHelper helper, BlockPos cell, Worker worker) {
-        Node node = node(cell);
+        BuildAction node = action(cell);
         Outcome outcome = Commit.run(helper.getLevel(), node, worker);
         if (outcome instanceof Outcome.Done) {
             end(node, Ending.DONE);
@@ -162,11 +209,85 @@ final class SiteRig implements BuildSite.Asks {
     void workAll(GameTestHelper helper, Worker worker) {
         for (int round = 0; round < 64 && !site.pieces().isEmpty(); round++) {
             for (BuildSite.Piece piece : site.pieces()) {
-                Outcome outcome = Commit.run(helper.getLevel(), piece.node(), worker);
+                Outcome outcome = Commit.run(helper.getLevel(), piece.action(), worker);
                 helper.assertTrue(outcome instanceof Outcome.Done, "work asked for can be done, not " + outcome);
-                end(piece.node(), Ending.DONE);
+                end(piece.action(), Ending.DONE);
             }
             site.tick(helper.getLevel());
         }
     }
+
+    // Observe real settlements while driving the public holding contract.
+    static final class Shift {
+        private final Node node;
+        private final Map<UUID, UUID> holders;
+        private WorkHolding holding;
+        WorkAction operation;
+        Outcome outcome;
+        int commits;
+
+        Shift(Node node) {
+            this(node, new HashMap<>());
+        }
+
+        Shift(Node node, Map<UUID, UUID> holders) {
+            this.node = node;
+            this.holders = holders;
+        }
+
+        HoldingStep tick(ServerLevel level, Worker worker) {
+            HoldingContext context = context(level, worker);
+            if (holding == null) {
+                holding = node.acquire(context);
+            }
+            holders.put(node.id(), worker.resident().id());
+            return holding.tick(context);
+        }
+
+        Outcome step(ServerLevel level, Worker worker) {
+            int before = commits;
+            for (int tick = 0; tick < 4096 && commits == before; tick++) {
+                if (tick(level, worker) instanceof HoldingStep.Done) {
+                    throw new AssertionError("holding ended before its next settlement");
+                }
+            }
+            if (commits == before) {
+                throw new AssertionError("holding did not settle within its work budget");
+            }
+            return outcome;
+        }
+
+        private HoldingContext context(ServerLevel level, Worker worker) {
+            Body body = new Body() {
+                public Mob mob() {
+                    return worker.body();
+                }
+
+                public ResidentKind kind() {
+                    return PersonBody.person();
+                }
+            };
+            ActionServices services = new TestActionServices() {
+                public Optional<Conveyance> approach(HoldingContext context, WorkAction action,
+                        Set<WorldPos> footings) {
+                    return Optional.of(body.kind().locomotion().along(action.spec().pace(), noWay()));
+                }
+
+            };
+            Settlement settlement = new Settlement() {
+                public Outcome commit(WorkAction action) {
+                    operation = action;
+                    outcome = Commit.run(level, action, worker);
+                    commits++;
+                    return outcome;
+                }
+
+                public void stow(List<ItemStack> made) {
+                    made.forEach(stack -> worker.spill(Containers.insert(worker.pack(), stack.copy())));
+                }
+            };
+            return new HoldingContext(level, body, worker, services, settlement, StandardHoldings.INSTANCE);
+        }
+    }
+
 }

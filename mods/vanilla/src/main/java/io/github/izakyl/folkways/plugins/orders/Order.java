@@ -2,8 +2,8 @@ package io.github.izakyl.folkways.plugins.orders;
 
 import io.github.izakyl.folkways.base.persist.Reader;
 import io.github.izakyl.folkways.base.persist.Writer;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import java.util.Objects;
 import java.util.Optional;
 import net.minecraft.nbt.CompoundTag;
@@ -52,14 +52,15 @@ record Order(WorldPos into, ItemSpec what, int low, int high, boolean standing) 
     static Optional<Order> load(Reader reader) {
         Optional<WorldPos> into = reader.child(TAG_INTO).flatMap(WorldPos::load);
         Optional<ItemSpec> what = reader.child(TAG_WHAT).flatMap(ItemSpec::load);
-        if (into.isEmpty() || what.isEmpty()) {
+        if (into.isEmpty() || what.isEmpty() || reader.integer(TAG_HIGH).isEmpty()
+                || reader.integer(TAG_LOW).isEmpty() || reader.flag(TAG_STANDING).isEmpty()) {
             return Optional.empty();
         }
-        int high = reader.integer(TAG_HIGH).orElse(MIN_COUNT);
+        int high = reader.integer(TAG_HIGH).orElseThrow();
         return Optional.of(new Order(into.get(), what.get(),
-            reader.integer(TAG_LOW).orElse(high),
+            reader.integer(TAG_LOW).orElseThrow(),
             high,
-            reader.flag(TAG_STANDING).orElse(false)));
+            reader.flag(TAG_STANDING).orElseThrow()));
     }
 
 }

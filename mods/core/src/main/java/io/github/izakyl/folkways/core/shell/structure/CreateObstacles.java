@@ -1,7 +1,7 @@
 package io.github.izakyl.folkways.core.shell.structure;
 
 import com.simibubi.create.content.contraptions.AbstractContraptionEntity;
-import io.github.izakyl.folkways.core.api.terms.Structures;
+import io.github.izakyl.folkways.core.world.api.Structures;
 import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.core.BlockPos;

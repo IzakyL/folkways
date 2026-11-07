@@ -1,10 +1,10 @@
 package io.github.izakyl.folkways.plugins.wares;
 
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.colony.Held;
-import io.github.izakyl.folkways.core.api.colony.Holding;
-import io.github.izakyl.folkways.core.api.colony.Release;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
+import io.github.izakyl.folkways.core.colony.api.Claim;
+import io.github.izakyl.folkways.core.colony.api.ClaimRelease;
+import io.github.izakyl.folkways.core.colony.api.Claimed;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -16,7 +16,7 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.level.Level;
 
 // Offers the colony's work every container held as a store, again whenever one is taken up or let go.
-final class StorePresence implements Holding.Watch {
+final class StorePresence implements Claim.Watch {
 
     private final Colony colony;
 
@@ -30,19 +30,19 @@ final class StorePresence implements Holding.Watch {
     }
 
     @Override
-    public void held(Holding holding) {
+    public void held(Claim holding) {
         offer();
     }
 
     @Override
-    public void released(Holding holding, Release why) {
+    public void released(Claim holding, ClaimRelease why) {
         offer();
     }
 
     private void offer() {
         Map<ResourceKey<Level>, List<WorldPos>> byDimension = new LinkedHashMap<>();
-        for (Holding holding : colony.holdings(WaresContent.STORE)) {
-            if (holding.what() instanceof Held.Block(WorldPos cell)) {
+        for (Claim holding : colony.claims(WaresContent.STORE)) {
+            if (holding.what() instanceof Claimed.Block(WorldPos cell)) {
                 cell.level(server).ifPresent(level ->
                     byDimension.computeIfAbsent(level.dimension(), key -> new ArrayList<>()).add(cell));
             }

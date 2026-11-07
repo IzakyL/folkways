@@ -7,8 +7,8 @@ export type HeldCell = { owner: string; frame?: string; local?: string; unplaced
 
 const COLONY_IMPORTS = [
   "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
-  "io.github.izakyl.folkways.core.api.terms.Realm",
-  "io.github.izakyl.folkways.core.api.terms.WorldSpaces",
+  "io.github.izakyl.folkways.core.world.api.Realm",
+  "io.github.izakyl.folkways.core.world.api.WorldSpaces",
   "net.minecraft.core.registries.BuiltInRegistries",
   "net.minecraft.resources.ResourceLocation",
   "net.minecraft.world.Container",
@@ -47,7 +47,7 @@ var colony=ColonyGround.of(server,UUID.fromString(args.string("colony_id"))).orE
 var item=BuiltInRegistries.ITEM.get(ResourceLocation.parse(args.string("item")));
 var cells=new ArrayList<Object>();int stock=0;
 for(var view:colony.views(server)){
-  for(var holding:view.holdings())for(var cell:holding.what().cells()){
+  for(var holding:view.claims())for(var cell:holding.what().cells()){
     var one=new LinkedHashMap<String,Object>();
     one.put("owner",holding.owner().toString());
     // A cell aboard is kept relative to its ship; read back where the level stores it, to compare with the plot.
@@ -214,8 +214,8 @@ const ROUND_TRIP = defineTask<Record<string, any>, Record<string, any>>({
   source: javaTask({
     imports: [
       "dev.ryanhcode.sable.Sable",
-      "io.github.izakyl.folkways.core.api.terms.Realm",
-      "io.github.izakyl.folkways.core.api.terms.WorldSpaces",
+      "io.github.izakyl.folkways.core.world.api.Realm",
+      "io.github.izakyl.folkways.core.world.api.WorldSpaces",
       "net.minecraft.core.BlockPos",
       "net.minecraft.world.phys.Vec3",
     ],

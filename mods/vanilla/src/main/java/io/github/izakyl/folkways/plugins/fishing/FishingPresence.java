@@ -1,12 +1,12 @@
 package io.github.izakyl.folkways.plugins.fishing;
 
-import io.github.izakyl.folkways.core.api.colony.Closing;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.colony.ColonyView;
-import io.github.izakyl.folkways.core.api.colony.Sweep;
 import io.github.izakyl.folkways.base.persist.Reader;
 import io.github.izakyl.folkways.base.persist.Writer;
-import io.github.izakyl.folkways.core.api.work.Grown;
+import io.github.izakyl.folkways.core.colony.api.Closing;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.colony.api.ColonyView;
+import io.github.izakyl.folkways.core.colony.api.Sweep;
+import io.github.izakyl.folkways.core.plan.api.Grown;
 import io.github.izakyl.folkways.front.api.Facing;
 import io.github.izakyl.folkways.front.api.Fronts;
 import io.github.izakyl.folkways.front.api.PastDay;
@@ -42,7 +42,10 @@ final class FishingPresence implements Facing {
     FishingPresence(Colony colony) {
         this.colony = colony;
         this.sweep = new Sweep(colony, FishingContent.ID, 100);
-        Reader.of(colony.kept(FishingContent.ID)).child(TAG_MADE).ifPresent(made::load);
+        Reader kept = Reader.of(colony.kept(FishingContent.ID));
+        if (!kept.keys().isEmpty()) {
+            made.load(kept.child(TAG_MADE).orElseThrow());
+        }
     }
 
     @Override

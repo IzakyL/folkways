@@ -1,19 +1,19 @@
 package io.github.izakyl.folkways.carts;
 
 import com.jusipat.astikorcartsredux.entity.AbstractCargoCart;
-import io.github.izakyl.folkways.core.api.colony.Closing;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.colony.Held;
-import io.github.izakyl.folkways.core.api.colony.Holding;
-import io.github.izakyl.folkways.core.api.colony.Release;
-import io.github.izakyl.folkways.core.api.resident.body.Bodies;
+import io.github.izakyl.folkways.core.colony.api.Claim;
+import io.github.izakyl.folkways.core.colony.api.ClaimRelease;
+import io.github.izakyl.folkways.core.colony.api.Claimed;
+import io.github.izakyl.folkways.core.colony.api.Closing;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.resident.api.Bodies;
 import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Mob;
 
-final class CartPresence implements Holding.Watch {
+final class CartPresence implements Claim.Watch {
     private final Colony colony;
     private final MinecraftServer server;
 
@@ -24,8 +24,8 @@ final class CartPresence implements Holding.Watch {
 
     private List<AbstractCargoCart> carts(ServerLevel level) {
         List<AbstractCargoCart> carts = new ArrayList<>();
-        for (Holding holding : colony.holdings(FolkwaysCartsMod.OWNER)) {
-            if (holding.what() instanceof Held.Entity held
+        for (Claim holding : colony.claims(FolkwaysCartsMod.OWNER)) {
+            if (holding.what() instanceof Claimed.Entity held
                     && level.getEntity(held.entity()) instanceof AbstractCargoCart cart && cart.isAlive()) {
                 carts.add(cart);
             }
@@ -35,8 +35,8 @@ final class CartPresence implements Holding.Watch {
     }
 
     @Override
-    public void released(Holding holding, Release why) {
-        if (!(holding.what() instanceof Held.Entity held) || server == null) {
+    public void released(Claim holding, ClaimRelease why) {
+        if (!(holding.what() instanceof Claimed.Entity held) || server == null) {
             return;
         }
         for (var level : server.getAllLevels()) {

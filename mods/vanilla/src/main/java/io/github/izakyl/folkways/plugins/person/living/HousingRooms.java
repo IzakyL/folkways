@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.plugins.person.living;
 
-import io.github.izakyl.folkways.core.api.terms.Footing;
+import io.github.izakyl.folkways.core.world.api.Footing;
 import java.util.ArrayDeque;
 import java.util.Collections;
 import java.util.Comparator;

@@ -2,7 +2,7 @@ package io.github.izakyl.folkways.plugins.build;
 
 import io.github.izakyl.folkways.base.persist.Reader;
 import io.github.izakyl.folkways.base.persist.Writer;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -68,18 +68,20 @@ public record BlueprintBuildOrder(
         Optional<UUID> id = reader.uuid(TAG_ID);
         Optional<UUID> blueprintId = reader.uuid(TAG_BLUEPRINT_ID);
         Optional<WorldPos> anchor = reader.child(TAG_ANCHOR).flatMap(WorldPos::load);
-        if (id.isEmpty() || blueprintId.isEmpty() || anchor.isEmpty()) {
+        if (id.isEmpty() || blueprintId.isEmpty() || anchor.isEmpty()
+                || reader.string(TAG_NAME).isEmpty() || reader.string(TAG_PLAYER_NAME).isEmpty()
+                || reader.longValue(TAG_CREATED_GAME_TIME).isEmpty()) {
             return Optional.empty();
         }
         return Optional.of(
             new BlueprintBuildOrder(
                 id.get(),
                 blueprintId.get(),
-                reader.string(TAG_NAME).orElse(""),
+                reader.string(TAG_NAME).orElseThrow(),
                 anchor.get(),
                 reader.uuid(TAG_PLAYER_ID),
-                reader.string(TAG_PLAYER_NAME).orElse(""),
-                reader.longValue(TAG_CREATED_GAME_TIME).orElse(0L)
+                reader.string(TAG_PLAYER_NAME).orElseThrow(),
+                reader.longValue(TAG_CREATED_GAME_TIME).orElseThrow()
             )
         );
     }

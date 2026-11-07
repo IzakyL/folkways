@@ -1,11 +1,11 @@
 package io.github.izakyl.folkways.front.engine.colony;
 
-import io.github.izakyl.folkways.core.api.colony.Held;
-import io.github.izakyl.folkways.core.api.colony.Holding;
 import io.github.izakyl.folkways.base.persist.Reader;
 import io.github.izakyl.folkways.base.persist.Writer;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
+import io.github.izakyl.folkways.core.colony.api.Claim;
+import io.github.izakyl.folkways.core.colony.api.Claimed;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
+import io.github.izakyl.folkways.core.world.api.WorldSpaces;
 import io.github.izakyl.folkways.front.api.PathView;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -55,8 +55,8 @@ public final class ColonyPath implements PathView {
     }
 
     // A held line, where the level its first point lies in stores it, with the settings drawn on it.
-    public static Optional<ColonyPath> of(Holding holding, MinecraftServer server, ColonySettings settings) {
-        if (!(holding.what() instanceof Held.Line line)) {
+    public static Optional<ColonyPath> of(Claim holding, MinecraftServer server, ColonySettings settings) {
+        if (!(holding.what() instanceof Claimed.Line line)) {
             return Optional.empty();
         }
         ServerLevel level = line.points().getFirst().level(server).orElse(null);
@@ -123,7 +123,8 @@ public final class ColonyPath implements PathView {
         Optional<ResourceLocation> delegation = reader.id(TAG_DELEGATION);
         Optional<ResourceLocation> dimension = reader.id(TAG_DIMENSION);
         Optional<int[]> packed = reader.intArray(TAG_POINTS);
-        if (id.isEmpty() || delegation.isEmpty() || dimension.isEmpty() || packed.isEmpty()) {
+        if (id.isEmpty() || delegation.isEmpty() || dimension.isEmpty() || packed.isEmpty()
+                || reader.child(TAG_SETTINGS).isEmpty()) {
             return Optional.empty();
         }
         int[] coordinates = packed.get();
@@ -136,7 +137,7 @@ public final class ColonyPath implements PathView {
         }
         ColonySettings settings = reader.child(TAG_SETTINGS)
             .map(ColonySettings::load)
-            .orElseGet(ColonySettings::empty);
+            .orElseThrow();
         return Optional.of(new ColonyPath(id.get(), delegation.get(),
             ResourceKey.create(Registries.DIMENSION, dimension.get()), points, List.of(), settings));
     }

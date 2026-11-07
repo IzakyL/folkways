@@ -1,19 +1,19 @@
 package io.github.izakyl.folkways.plugins.person.walk;
 
-import io.github.izakyl.folkways.core.api.resident.Conveyance;
-import io.github.izakyl.folkways.core.api.resident.Going;
-import io.github.izakyl.folkways.core.api.resident.body.Bodies;
-import io.github.izakyl.folkways.core.api.terms.Reach;
-import io.github.izakyl.folkways.core.api.terms.Realm;
-import io.github.izakyl.folkways.core.api.terms.RefusalKind;
-import io.github.izakyl.folkways.core.api.terms.Structures;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
-import io.github.izakyl.folkways.core.api.vocation.Vocations;
-import io.github.izakyl.folkways.core.api.work.Doing;
-import io.github.izakyl.folkways.core.api.work.Doings;
-import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.WorkExertion;
+import io.github.izakyl.folkways.core.resident.api.Bodies;
+import io.github.izakyl.folkways.core.resident.api.Conveyance;
+import io.github.izakyl.folkways.core.resident.api.Doing;
+import io.github.izakyl.folkways.core.resident.api.Doings;
+import io.github.izakyl.folkways.core.resident.api.Going;
+import io.github.izakyl.folkways.core.resident.api.RefusalKind;
+import io.github.izakyl.folkways.core.vocation.api.Vocations;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.work.api.WorkExertion;
+import io.github.izakyl.folkways.core.work.support.WorkStances;
+import io.github.izakyl.folkways.core.world.api.Realm;
+import io.github.izakyl.folkways.core.world.api.Structures;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
+import io.github.izakyl.folkways.core.world.api.WorldSpaces;
 import io.github.izakyl.folkways.plugins.build.SiteTravel;
 import io.github.izakyl.folkways.plugins.damagecontrol.DamageControlContent;
 import io.github.izakyl.folkways.plugins.patrol.PatrolContent;
@@ -60,7 +60,7 @@ public final class OnFoot implements Conveyance {
         if (cells.isEmpty()) {
             return new Going.Failed(lost);
         }
-        if (Reach.standingIn(body, new Stances.Cells(allowed(level, body, to)))) {
+        if (WorkStances.standingIn(body, new Stances.Cells(allowed(level, body, to)))) {
             return Going.ARRIVED;
         }
         // Only dimension-local work areas permit relocation; aboard coordinates keep their usual travel.
@@ -70,7 +70,7 @@ public final class OnFoot implements Conveyance {
             sinceProgress = 0;
             settling = 0;
             repath(body, cells);
-            return Reach.standingIn(body, new Stances.Cells(allowed(level, body, to))) ? Going.ARRIVED : Going.UNDERWAY;
+            return WorkStances.standingIn(body, new Stances.Cells(allowed(level, body, to))) ? Going.ARRIVED : Going.UNDERWAY;
         }
         if (!closingIn(body, to)) {
             return new Going.Failed(lost);

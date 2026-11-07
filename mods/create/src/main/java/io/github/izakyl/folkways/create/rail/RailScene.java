@@ -1,11 +1,11 @@
 package io.github.izakyl.folkways.create.rail;
 
-import io.github.izakyl.folkways.core.api.terms.Gait;
-import io.github.izakyl.folkways.front.api.ponder.PonderScenery;
+import io.github.izakyl.folkways.core.resident.api.Gait;
 import io.github.izakyl.folkways.create.CreateMod;
+import io.github.izakyl.folkways.create.rail.domain.RailContent;
+import io.github.izakyl.folkways.front.api.ponder.PonderScenery;
 import io.github.izakyl.folkways.front.api.ponder.Scenes;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
-import io.github.izakyl.folkways.create.rail.domain.RailContent;
 import java.util.List;
 import net.createmod.catnip.math.Pointing;
 import net.createmod.ponder.api.PonderPalette;

@@ -1,17 +1,15 @@
 package io.github.izakyl.folkways.plugins.build;
 
-import static io.github.izakyl.folkways.plugins.build.SiteRig.floor;
-
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.resident.Resident;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.work.Ending;
-import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.Worker;
-import io.github.izakyl.folkways.core.api.work.Workload;
-import io.github.izakyl.folkways.core.engine.labor.Commit;
+import io.github.izakyl.folkways.core.resident.api.Resident;
 import io.github.izakyl.folkways.core.testing.TestWorker;
+import io.github.izakyl.folkways.core.work.api.Ending;
+import io.github.izakyl.folkways.core.work.api.HoldingStep;
+import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.work.internal.Commit;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import java.util.LinkedHashMap;
@@ -32,6 +30,7 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
+import static io.github.izakyl.folkways.plugins.build.SiteRig.floor;
 
 @EventBusSubscriber(modid = FolkwaysVanillaMod.ID, bus = EventBusSubscriber.Bus.MOD)
 @GameTestHolder(FolkwaysMod.MOD_ID)
@@ -59,21 +58,28 @@ public final class WorkSurfaceGameTests {
         SiteRig rig = site(helper, goal);
         Mob body = body(helper, new BlockPos(8, 1, 6));
         Worker worker = worker(body);
-        Workload.Within shift = shift(rig);
-        Workload.Within.Turn turn = shift.next(helper.getLevel(), worker);
-        helper.assertTrue(turn instanceof Workload.Within.Turn.Piece,
+        SiteRig.Shift shift = shift(rig);
+        helper.assertTrue(shift.tick(helper.getLevel(), worker) instanceof HoldingStep.Running,
             "work starts while the resident is still on the ground");
         BlockPos aim = body.getNavigation().getTargetPos();
         helper.assertTrue(aim != null && aim.getY() >= goal.getY() - 1,
             "the route selects the upper working surface even when ground is already within work reach");
-        helper.assertTrue(Commit.run(helper.getLevel(), ((Workload.Within.Turn.Piece) turn).node(), worker)
-                instanceof Outcome.Done,
-            "taking the longer staircase does not postpone the construction operation");
-        helper.onEachTick(() -> shift.tick(helper.getLevel(), worker));
+        helper.assertValueEqual(shift.commits, 0, "the work clock starts before the climb finishes");
+        // Give native locomotion world ticks between public work ticks.
+        helper.onEachTick(() -> {
+            if (helper.getTick() % 20 == 0) {
+                shift.tick(helper.getLevel(), worker);
+            }
+        });
         helper.startSequence().thenWaitUntil(() -> helper.assertTrue(body.getY() >= goal.getY() - 0.25D,
                 "the resident physically climbs the ordinary staircase to the platform"))
             .thenExecute(() -> {
-                helper.assertTrue(helper.getLevel().getBlockState(goal).is(Blocks.STONE), "the operation built its block");
+                if (shift.commits == 0) {
+                    helper.assertTrue(shift.step(helper.getLevel(), worker) instanceof Outcome.Done,
+                        "the public holding settles its construction");
+                }
+                helper.assertTrue(helper.getLevel().getBlockState(goal).is(Blocks.STONE),
+                    "the operation built its block");
                 body.discard();
             }).thenSucceed();
     }
@@ -90,11 +96,14 @@ public final class WorkSurfaceGameTests {
         BlockPos goal = helper.absolutePos(new BlockPos(10, 4, 10));
         SiteRig rig = site(helper, goal);
         Mob body = body(helper, new BlockPos(10, 1, 7));
-        Workload.Within.Turn turn = shift(rig).next(helper.getLevel(), worker(body));
-        helper.assertTrue(turn instanceof Workload.Within.Turn.Piece, "unreachable upper geometry does not gate work");
+        SiteRig.Shift shift = shift(rig);
+        helper.assertTrue(shift.tick(helper.getLevel(), worker(body)) instanceof HoldingStep.Running,
+            "unreachable upper geometry does not gate work");
         var path = body.getNavigation().getPath();
-        helper.assertTrue(path != null && path.canReach(), "the bounded route search retains a fully reachable fallback");
-        helper.assertTrue(body.getNavigation().getTargetPos().getY() == helper.absolutePos(new BlockPos(0, 1, 0)).getY(),
+        helper.assertTrue(path != null && path.canReach(),
+            "the bounded route search retains a fully reachable fallback");
+        helper.assertTrue(body.getNavigation().getTargetPos().getY() == helper.absolutePos(new BlockPos(0, 1, 0))
+            .getY(),
             "the fallback is on the connected ground rather than the isolated platform");
         body.discard();
         helper.succeed();
@@ -122,27 +131,32 @@ public final class WorkSurfaceGameTests {
             "the blueprint plan contains no temporary access");
         Mob body = body(helper, new BlockPos(6, 1, 9));
         Worker worker = worker(body);
-        Workload.Within shift = shift(rig);
-        Workload.Within.Turn turn = shift.next(helper.getLevel(), worker);
-        helper.assertTrue(turn instanceof Workload.Within.Turn.Piece,
+        SiteRig.Shift shift = shift(rig);
+        helper.assertTrue(shift.tick(helper.getLevel(), worker) instanceof HoldingStep.Running,
             "ordinary construction starts before the new access column is built");
-        var operation = ((Workload.Within.Turn.Piece) turn).node();
         var raise = rig.site.pieces().stream().filter(piece ->
             piece.work().step().orElseThrow().kind() == BuildJob.Kind.RAISE).findFirst();
         helper.assertTrue(raise.isPresent(), "failed upper access creates a physical scaffold alongside the platform");
-        helper.assertTrue(Commit.run(helper.getLevel(), operation, worker) instanceof Outcome.Done,
+        helper.assertTrue(shift.step(helper.getLevel(), worker) instanceof Outcome.Done,
             "improving access never becomes a prerequisite of the current operation");
         var column = raise.orElseThrow();
         BlockPos top = column.work().step().orElseThrow().after().keySet().stream()
             .max(java.util.Comparator.comparingInt(BlockPos::getY)).orElseThrow().above();
         helper.assertTrue(top.getY() >= helper.absolutePos(new BlockPos(0, 4, 0)).getY(),
             "the column anticipates the next layer rather than stopping below the useful platform height");
-        helper.assertTrue(Commit.run(helper.getLevel(), column.node(), worker) instanceof Outcome.Done,
+        helper.assertTrue(Commit.run(helper.getLevel(), column.action(), worker) instanceof Outcome.Done,
             "the access column can actually be raised");
-        rig.end(column.node(), Ending.DONE);
+        rig.end(column.action(), Ending.DONE);
         rig.site.tick(helper.getLevel());
-        helper.onEachTick(() -> shift.tick(helper.getLevel(), worker));
-        helper.startSequence().thenWaitUntil(() -> helper.assertTrue(body.getY() >= helper.absolutePos(new BlockPos(0, 4, 0)).getY() - 0.25D,
+        // Give native locomotion world ticks between public work ticks.
+        helper.onEachTick(() -> {
+            if (helper.getTick() % 20 == 0) {
+                shift.tick(helper.getLevel(), worker);
+            }
+        });
+        helper.startSequence()
+            .thenWaitUntil(() -> helper.assertTrue(body.getY() >= helper.absolutePos(new BlockPos(0, 4, 0))
+                .getY() - 0.25D,
                 "the resident reconsiders the ground fallback and physically reaches the working platform"))
             .thenExecute(body::discard).thenSucceed();
     }
@@ -153,7 +167,7 @@ public final class WorkSurfaceGameTests {
         BlockPos base = helper.absolutePos(new BlockPos(10, 1, 10));
         List<BlockPos> column = java.util.stream.IntStream.range(0, 7).mapToObj(base::above).toList();
         TemporaryScaffolds temporary = new TemporaryScaffolds(() -> { });
-        column.forEach(cell -> helper.getLevel().setBlock(cell, ScaffoldNode.state(), 3));
+        column.forEach(cell -> helper.getLevel().setBlock(cell, ScaffoldAction.state(), 3));
         temporary.added(column.stream().map(cell -> WorldPos.of(helper.getLevel(), cell)).toList());
         for (int x = 11; x <= 15; x++) {
             for (int z = 8; z <= 12; z++) {
@@ -163,17 +177,17 @@ public final class WorkSurfaceGameTests {
         Mob resident = body(helper, new BlockPos(13, 8, 10));
         Mob hand = body(helper, new BlockPos(8, 1, 10));
         Worker worker = worker(hand);
-        var lower = BuildNode.of(Step.lower(column).job(helper.getLevel(), new BuildTarget(
+        var lower = BuildAction.of(Step.lower(column).job(helper.getLevel(), new BuildTarget(
             WorldPos.of(helper.getLevel(), base).realm(), Map.of(base.east(6), Blocks.STONE.defaultBlockState())),
-            Stances.WHEREVER), (ended, how) -> { }, temporary);
+            Stances.WHEREVER), temporary);
         float health = resident.getHealth();
         helper.assertTrue(Commit.run(helper.getLevel(), lower, worker) instanceof Outcome.Failed,
             "cleanup keeps the only access column while a resident is on an adjacent permanent roof");
         resident.getNavigation().moveTo(base.getX() + 0.5D, column.getLast().getY() + 1.0D,
             base.getZ() + 0.5D, 1.0D);
-        var retry = BuildNode.of(lower.job(), (ended, how) -> { }, temporary);
-        helper.assertTrue(!retry.id().equals(lower.id()) && !resident.getNavigation().isDone(),
-            "a subsequent Within attempt has a fresh node while the returner is walking across the roof");
+        var retry = BuildAction.of(lower.job(), temporary);
+        helper.assertTrue(retry != lower && !resident.getNavigation().isDone(),
+            "a subsequent attempt has a fresh private action while the returner is walking across the roof");
         helper.assertTrue(Commit.run(helper.getLevel(), retry, worker) instanceof Outcome.Failed,
             "a fresh cleanup node still protects the pending returner before it reaches the column");
         boolean[] removed = {false};
@@ -186,7 +200,7 @@ public final class WorkSurfaceGameTests {
                 enteredColumn[0] = true;
             }
             if (!removed[0] && ++ticks[0] % 20 == 0) {
-                var nextAttempt = BuildNode.of(lower.job(), (ended, how) -> { }, temporary);
+                var nextAttempt = BuildAction.of(lower.job(), temporary);
                 removed[0] = Commit.run(helper.getLevel(), nextAttempt, worker) instanceof Outcome.Done;
             }
         });
@@ -195,7 +209,8 @@ public final class WorkSurfaceGameTests {
                     + " pos=" + resident.blockPosition()))
             .thenExecute(() -> {
                 helper.assertTrue(enteredColumn[0], "the resident walked to the upper entry before descending");
-                helper.assertTrue(resident.getY() <= base.getY() + 1.25D, "cleanup waited until the resident reached ground");
+                helper.assertTrue(resident.getY() <= base.getY() + 1.25D,
+                    "cleanup waited until the resident reached ground");
                 helper.assertTrue(resident.getHealth() >= health && resident.fallDistance < 2.0F,
                     "the return caused no fall damage or drop off the roof");
                 helper.assertTrue(temporary.isEmpty(), "the access column is fully removed after the return");
@@ -210,7 +225,7 @@ public final class WorkSurfaceGameTests {
         BlockPos base = helper.absolutePos(new BlockPos(10, 1, 10));
         List<BlockPos> column = java.util.stream.IntStream.range(0, 7).mapToObj(base::above).toList();
         TemporaryScaffolds temporary = new TemporaryScaffolds(() -> { });
-        column.forEach(cell -> helper.getLevel().setBlock(cell, ScaffoldNode.state(), 3));
+        column.forEach(cell -> helper.getLevel().setBlock(cell, ScaffoldAction.state(), 3));
         temporary.added(column.stream().map(cell -> WorldPos.of(helper.getLevel(), cell)).toList());
         for (int x = 14; x <= 16; x++) {
             for (int z = 9; z <= 11; z++) {
@@ -219,9 +234,9 @@ public final class WorkSurfaceGameTests {
         }
         Mob resident = body(helper, new BlockPos(15, 8, 10));
         Mob hand = body(helper, new BlockPos(8, 1, 10));
-        var lower = BuildNode.of(Step.lower(column).job(helper.getLevel(), new BuildTarget(
+        var lower = BuildAction.of(Step.lower(column).job(helper.getLevel(), new BuildTarget(
             WorldPos.of(helper.getLevel(), base).realm(), Map.of(base.east(7), Blocks.STONE.defaultBlockState())),
-            Stances.WHEREVER), (ended, how) -> { }, temporary);
+            Stances.WHEREVER), temporary);
         helper.assertTrue(Commit.run(helper.getLevel(), lower, worker(hand)) instanceof Outcome.Done,
             "a resident on an unrelated roof with no route to the column does not hold cleanup");
         helper.assertTrue(temporary.isEmpty(), "the unused column is removed immediately");
@@ -253,9 +268,8 @@ public final class WorkSurfaceGameTests {
         helper.assertTrue(helper.getLevel().getBlockState(roof).is(Blocks.STONE), "the roof is now closed above the builder");
         BlockPos goal = helper.absolutePos(new BlockPos(8, 1, 9));
         SiteRig rig = site(helper, goal);
-        Workload.Within shift = shift(rig);
-        Workload.Within.Turn turn = shift.next(helper.getLevel(), worker);
-        helper.assertTrue(turn instanceof Workload.Within.Turn.Piece, "the builder starts a real site turn: " + turn);
+        SiteRig.Shift shift = rig.shift();
+        shift.tick(helper.getLevel(), worker);
         int[] firstDamage = {-1};
         helper.onEachTick(() -> {
             shift.tick(helper.getLevel(), worker);
@@ -286,8 +300,8 @@ public final class WorkSurfaceGameTests {
         return body;
     }
 
-    private static Workload.Within shift(SiteRig rig) {
-        return (Workload.Within) rig.asked.getFirst().nodes().getFirst().spec().workload();
+    private static SiteRig.Shift shift(SiteRig rig) {
+        return rig.shift();
     }
 
     private static Worker worker(Mob body) {

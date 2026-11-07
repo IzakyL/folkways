@@ -4,15 +4,15 @@ import com.github.ysbbbbbb.kaleidoscopecookery.block.crop.RiceCropBlock;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems;
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.terms.Containers;
-import io.github.izakyl.folkways.core.api.terms.Goods;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.work.Ending;
-import io.github.izakyl.folkways.core.api.work.Grown;
-import io.github.izakyl.folkways.core.api.work.Node;
-import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.engine.labor.Commit;
+import io.github.izakyl.folkways.core.item.api.Containers;
+import io.github.izakyl.folkways.core.item.api.Goods;
+import io.github.izakyl.folkways.core.plan.api.Grown;
+import io.github.izakyl.folkways.core.work.api.Ending;
+import io.github.izakyl.folkways.core.work.api.Node;
+import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.work.internal.Commit;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.front.api.PastDay;
 import io.github.izakyl.folkways.front.api.Settings;
 import io.github.izakyl.folkways.front.api.ZoneView;
@@ -171,7 +171,9 @@ public final class CookeryPaddyGameTests {
         var rig = new CookeryCropGameTests.Field(helper, ModBlocks.RICE_CROP.get(), 0);
         for (int x = -2; x <= 2; x++) for (int z = -2; z <= 2; z++) {
             place(rig, rig.ground.offset(x, 0, z), Blocks.STONE.defaultBlockState());
-            for (int up = 1; up <= 3; up++) place(rig, rig.ground.offset(x, up, z), Blocks.AIR.defaultBlockState());
+            for (int up = 1; up <= 3; up++) {
+                place(rig, rig.ground.offset(x, up, z), Blocks.AIR.defaultBlockState());
+            }
         }
         place(rig, rig.ground, soil.defaultBlockState());
         place(rig, rig.ground.above(), Blocks.WATER.defaultBlockState());

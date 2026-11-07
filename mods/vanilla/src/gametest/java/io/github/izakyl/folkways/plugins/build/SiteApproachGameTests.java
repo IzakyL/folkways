@@ -43,8 +43,8 @@ public final class SiteApproachGameTests {
         ServerLevel level = helper.getLevel();
         BlockPos foot = helper.absolutePos(new BlockPos(8, 2, 8));
         level.setBlock(foot.below(), Blocks.STONE.defaultBlockState(), 3);
-        level.setBlock(foot, ScaffoldNode.state(), 3);
-        level.setBlock(foot.above(), ScaffoldNode.state(), 3);
+        level.setBlock(foot, ScaffoldAction.state(), 3);
+        level.setBlock(foot.above(), ScaffoldAction.state(), 3);
         BlockPos top = foot.above(2);
         helper.assertTrue(SiteApproach.stands(level, foot, Set.of()), "a worker can climb inside scaffolding");
         helper.assertTrue(SiteApproach.stands(level, top, Set.of()), "a worker can stand on its top");

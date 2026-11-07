@@ -2,9 +2,9 @@ package io.github.izakyl.folkways.plugins.build;
 
 import com.lowdragmc.lowdraglib2.gui.ui.UIElement;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Button;
+import io.github.izakyl.folkways.front.api.ui.LonePanel;
 import io.github.izakyl.folkways.front.api.ui.Pane;
 import io.github.izakyl.folkways.front.api.ui.Rows;
-import io.github.izakyl.folkways.front.api.ui.LonePanel;
 import io.github.izakyl.folkways.front.api.ui.Tokens;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;

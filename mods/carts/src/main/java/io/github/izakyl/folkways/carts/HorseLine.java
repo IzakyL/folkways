@@ -1,7 +1,7 @@
 package io.github.izakyl.folkways.carts;
 
 import com.jusipat.astikorcartsredux.entity.AbstractCargoCart;
-import io.github.izakyl.folkways.core.api.resident.MobControls;
+import io.github.izakyl.folkways.core.resident.api.MobControls;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;

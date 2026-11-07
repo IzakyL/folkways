@@ -2,19 +2,20 @@ package io.github.izakyl.folkways.rts.combat.group;
 
 import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.base.persist.Writer;
-import io.github.izakyl.folkways.core.api.colony.Colonies;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.colony.Held;
-import io.github.izakyl.folkways.core.api.resident.body.Body;
-import io.github.izakyl.folkways.core.api.terms.Footing;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
-import io.github.izakyl.folkways.core.api.terms.Reach;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
-import io.github.izakyl.folkways.core.engine.labor.LaborFixture;
+import io.github.izakyl.folkways.core.colony.api.Claimed;
+import io.github.izakyl.folkways.core.colony.api.Colonies;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
+import io.github.izakyl.folkways.core.resident.api.Body;
+import io.github.izakyl.folkways.core.runtime.LaborFixture;
 import io.github.izakyl.folkways.core.testing.Cleanup;
+import io.github.izakyl.folkways.core.world.api.Footing;
+import io.github.izakyl.folkways.core.world.api.Reach;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
+import io.github.izakyl.folkways.core.world.api.WorldSpaces;
 import io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfile;
 import io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfiles;
+import io.github.izakyl.folkways.plugins.combat.weapon.PatrolSupplies;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import io.github.izakyl.folkways.plugins.person.PersonContent;
 import io.github.izakyl.folkways.rts.FolkwaysRtsMod;
@@ -33,6 +34,7 @@ import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.tags.ItemTags;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EquipmentSlot;
@@ -58,24 +60,24 @@ public final class UnitGroupGameTests {
     }
 
     @GameTest(template = "empty_large")
-    public static void legacyGroupOwnerRestoresExactIdsAndMemberOrderWithoutControl(GameTestHelper helper) {
+    public static void groupWithoutControlRestoresExactIdsAndMemberOrder(GameTestHelper helper) {
         Scene scene = new Scene(helper);
         List<Body> people = scene.people(4);
         UUID id = UUID.randomUUID();
         List<UUID> members = people.reversed().stream().map(Body::id).toList();
-        var legacy =
+        var saved =
             Writer.of()
             .children(
             "groups",
             List.of(id),
             group -> Writer.of().uuid("id", group).uuids("members", members).tag())
             .tag();
-        scene.colony.keep(ResourceLocation.fromNamespaceAndPath("folkways", "unit_groups"), legacy);
+        scene.colony.keep(ResourceLocation.fromNamespaceAndPath("folkways", "unit_groups"), saved);
         UnitGroups loaded = new UnitGroups(scene.colony, scene.level.getServer());
         UnitGroup group = loaded.group(id).orElseThrow();
         helper.assertValueEqual(
-            List.copyOf(group.members), members, "the pre-split owner preserves exact member order");
-        helper.assertValueEqual(group.phase(), UnitGroup.Phase.IDLE, "legacy groups resume without orders");
+            List.copyOf(group.members), members, "the saved group preserves exact member order");
+        helper.assertValueEqual(group.phase(), UnitGroup.Phase.IDLE, "groups without control resume without orders");
         helper.assertTrue(
             people.stream().allMatch(body -> scene.commands.current(body.id()).isEmpty()),
             "saved membership cannot restore a running command handle");
@@ -89,7 +91,7 @@ public final class UnitGroupGameTests {
         List<Body> people = scene.people(4);
         helper.setBlock(new BlockPos(16, 1, 8), Blocks.STONE);
         WorldPos click = scene.at(16, 1, 10);
-        scene.groups.commandSelectionPoints(people, List.of(click), -1);
+        scene.groups.commandSelectionPoints(people, List.of(click), -1, false);
         UnitGroup group = scene.groups.ofResident(people.getFirst().id()).orElseThrow();
         helper.startSequence()
             .thenWaitUntil(
@@ -125,7 +127,7 @@ public final class UnitGroupGameTests {
             }
         }
         WorldPos click = scene.at(16, 1, 10);
-        scene.groups.commandSelectionPoints(people, List.of(click), -1);
+        scene.groups.commandSelectionPoints(people, List.of(click), -1, false);
         UnitGroup group = scene.groups.ofResident(people.getFirst().id()).orElseThrow();
         helper.startSequence()
             .thenWaitUntil(
@@ -164,7 +166,7 @@ public final class UnitGroupGameTests {
         var handles = people.stream().map(body -> scene.commands.current(body.id()).orElseThrow()).toList();
         helper.setBlock(new BlockPos(18, 1, 10), Blocks.STONE);
         try {
-            scene.groups.commandSelectionPoints(people, List.of(scene.at(8, 1, 10), scene.at(18, 1, 10)), 0);
+            scene.groups.commandSelectionPoints(people, List.of(scene.at(8, 1, 10), scene.at(18, 1, 10)), 0, false);
             helper.fail("the unsafe later click must reject the entire route");
         } catch (IllegalArgumentException expected) {
             helper.assertTrue(
@@ -767,7 +769,7 @@ public final class UnitGroupGameTests {
                 BlockPos cell = at(2, 1, 7 + n * 2).block(level);
                 body.mob().moveTo(cell.getX() + .5, cell.getY(), cell.getZ() + .5);
                 level.addFreshEntity(body.mob());
-                colony.hold(PersonContent.ID, Held.Entity.of(body.mob())).orElseThrow();
+                colony.hold(PersonContent.ID, Claimed.Entity.of(body.mob())).orElseThrow();
                 body.joinColony(colony.id());
                 arm(colony, body, "Melee", ItemSpec.of(Tags.Items.MELEE_WEAPON_TOOLS));
                 bodies.add(body);
@@ -810,6 +812,33 @@ public final class UnitGroupGameTests {
             .filter(one -> one.name().equals(name))
             .findFirst()
             .orElseGet(() -> profiles.add(profiles.create(name).id(), LoadoutProfile.Entry.weapon(weapon)));
+        profiles.assign(List.of(body.id()), Optional.of(profile.id()));
+    }
+
+    private static void assignLoadout(
+        PatrolSupplies supplies,
+        Body body, String name) {
+        var profiles = supplies.profiles();
+        var profile = profiles.all().stream().filter(value -> value.name().equals(name)).findFirst()
+            .orElseGet(() -> {
+                var created = profiles.create(name);
+                var weapon = switch (name) {
+                    case "melee" -> ItemSpec.of(
+                        Tags.Items.MELEE_WEAPON_TOOLS);
+                    case "bow" -> ItemSpec.of(Items.BOW);
+                    case "crossbow" -> ItemSpec.of(Items.CROSSBOW);
+                    default -> throw new IllegalArgumentException(name);
+                };
+                var entries = new ArrayList<LoadoutProfile.Entry>();
+                entries.add(LoadoutProfile.Entry.weapon(weapon));
+                if (!name.equals("melee")) {
+                    entries.add(LoadoutProfile.Entry.supply(
+                        ItemSpec.of(ItemTags.ARROWS), 8, 8));
+                }
+                profiles.replace(new LoadoutProfile(
+                    created.id(), created.name(), entries));
+                return profiles.get(created.id()).orElseThrow();
+            });
         profiles.assign(List.of(body.id()), Optional.of(profile.id()));
     }
 }

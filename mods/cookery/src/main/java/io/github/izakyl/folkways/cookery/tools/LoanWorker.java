@@ -1,13 +1,13 @@
 package io.github.izakyl.folkways.cookery.tools;
 
+import io.github.izakyl.folkways.core.item.api.Goods;
+import io.github.izakyl.folkways.core.resident.api.Resident;
+import io.github.izakyl.folkways.core.work.api.Node;
+import io.github.izakyl.folkways.core.work.api.Placement;
+import io.github.izakyl.folkways.core.work.api.ToolNeed;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.work.support.Tools;
 import io.github.izakyl.folkways.effect.Effects;
-import io.github.izakyl.folkways.core.api.resident.Resident;
-import io.github.izakyl.folkways.core.api.terms.Goods;
-import io.github.izakyl.folkways.core.api.work.Node;
-import io.github.izakyl.folkways.core.api.work.Placement;
-import io.github.izakyl.folkways.core.api.work.ToolNeed;
-import io.github.izakyl.folkways.core.api.work.Tools;
-import io.github.izakyl.folkways.core.api.work.Worker;
 import java.util.List;
 import java.util.Map;
 import net.minecraft.world.Container;
@@ -16,7 +16,7 @@ import net.minecraft.world.item.ItemStack;
 
 // A worker may carry another knife too. Native actions must use the exact borrowed tool, including its components.
 record LoanWorker(Worker delegate, TaskTools service,
-                  Map<io.github.izakyl.folkways.core.api.terms.ItemSpec, KitchenTools.Lease> loans) implements Worker {
+                  Map<io.github.izakyl.folkways.core.item.api.ItemSpec, KitchenTools.Lease> loans) implements Worker {
 
     public Resident resident() { return delegate.resident(); }
     public Mob body() { return delegate.body(); }

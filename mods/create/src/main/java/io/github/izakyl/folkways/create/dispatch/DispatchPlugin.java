@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.create.dispatch;
 
-import io.github.izakyl.folkways.core.api.Declaring;
+import io.github.izakyl.folkways.core.extension.api.Declaring;
 import io.github.izakyl.folkways.front.api.Registering;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.loading.FMLEnvironment;

@@ -2,16 +2,16 @@ package io.github.izakyl.folkways.firefighting;
 
 import com.mikoalopex.createfirefightingadd.CreateFireFightingAdd;
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.inventory.ColonyInventory;
-import io.github.izakyl.folkways.core.api.inventory.InventorySnapshot;
-import io.github.izakyl.folkways.core.api.resident.body.Pack;
-import io.github.izakyl.folkways.core.api.terms.Containers;
-import io.github.izakyl.folkways.core.api.terms.Stash;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.engine.colony.ColonyData;
-import io.github.izakyl.folkways.core.engine.inventory.InventoryObservations;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.colony.internal.ColonyData;
+import io.github.izakyl.folkways.core.inventory.api.ColonyInventory;
+import io.github.izakyl.folkways.core.inventory.api.InventorySnapshot;
+import io.github.izakyl.folkways.core.inventory.api.Stash;
+import io.github.izakyl.folkways.core.inventory.internal.InventoryObservations;
+import io.github.izakyl.folkways.core.item.api.Containers;
+import io.github.izakyl.folkways.core.resident.api.Pack;
 import io.github.izakyl.folkways.core.testing.Proxies;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import java.lang.reflect.Field;
 import java.util.HashMap;
@@ -64,7 +64,7 @@ public final class FireStockGameTests {
         ColonyData data = new ColonyData();
         try {
             data.works().stores(OWNER, level.dimension(), List.of(at));
-            data.inventory().advance(level, data, Map.of(body.id(), body));
+            data.inventory().advance(level, data.works(), Map.of(body.id(), body));
             InventoryObservations.work(data.inventory(), level.getServer(), 1000);
             int[] requests = new int[2];
             var delegate = data.works().inventory();
@@ -127,7 +127,7 @@ public final class FireStockGameTests {
 
     private static void replacePack(Pack pack, Probe probe) {
         try {
-            Field field = Pack.class.getDeclaredField("container");
+            Field field = pack.getClass().getDeclaredField("container");
             field.setAccessible(true);
             field.set(pack, probe);
         } catch (ReflectiveOperationException broken) {

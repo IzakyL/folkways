@@ -57,21 +57,6 @@ public record ResidentLook(Appearance appearance, int weight) {
             float scale,
             Map<String, String> leisureAnimations) implements Appearance {
 
-        // Old callers retain both the original signature and the leisure-animation extension.
-        public Model(ResourceLocation geometry, ResourceLocation animations, ResourceLocation texture,
-                String idleAnimation, String walkAnimation, Optional<String> workAnimation,
-                Skin fallback, float scale) {
-            this(geometry, animations, texture, idleAnimation, walkAnimation, workAnimation,
-                Optional.empty(), fallback, scale, Map.of());
-        }
-
-        public Model(ResourceLocation geometry, ResourceLocation animations, ResourceLocation texture,
-                String idleAnimation, String walkAnimation, Optional<String> workAnimation,
-                Skin fallback, float scale, Map<String, String> leisureAnimations) {
-            this(geometry, animations, texture, idleAnimation, walkAnimation, workAnimation,
-                Optional.empty(), fallback, scale, leisureAnimations);
-        }
-
         public Model(ResourceLocation geometry, ResourceLocation animations, ResourceLocation texture,
                 String idleAnimation, String walkAnimation, Optional<String> workAnimation,
                 Optional<String> seatedAnimation, Skin fallback, float scale) {

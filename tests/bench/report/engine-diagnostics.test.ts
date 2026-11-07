@@ -3,8 +3,14 @@ import test from "node:test";
 import { engineDiagnostics } from "./engine-diagnostics.ts";
 
 test("keeps Post work separate from vanilla MSPT and each planning stage apart", () => {
-  const report = engineDiagnostics(`
-labor heartbeat colonies=1 asksPending=546971 slack=500usavg budget=250usavg(ceil8000us) spent=4573usavg/18192usmax work=43143usavg/229638usmax skipped=20/200
+  const heartbeat = "labor heartbeat colonies=1 searches=0 nodes=0 peakSearches/tick=0 peakNodes/tick=0" +
+    " slices=0steps/0wall graph=0pts/0edges/0shut/0parts disproved=0pts asksPending=546971" +
+    " quests=0found/0denied/0gaveup denied=0farEnd renumbered=0 straightened=0pts" +
+    " publish=0usstraighten/0usfreeze/0usmax rambles=0/0edges hops=0" +
+    " attached=0laid/0closed/0far segments=0struck/0walked" +
+    " slack=500usavg budget=250usavg(ceil8000us) spent=4573usavg/18192usmax" +
+    " work=43143usavg/229638usmax skipped=20/200";
+  const report = engineDiagnostics(`${heartbeat}
 weave timing tick=12000 queue_us=1000 messages_us=2000 weave_us=3000 total_us=6000 bodies=500 messages=900 nodes=1200 put=40 removed=3
 schedule timing tick=12000 changes=2 apply_us=500 schedule_us=12000000 total_us=12000500 nodes=1200 tours=300 unassigned=10
 `);

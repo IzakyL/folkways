@@ -2,37 +2,36 @@ package io.github.izakyl.folkways.carts;
 
 import com.jusipat.astikorcartsredux.entity.AbstractCargoCart;
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.colony.Closing;
-import io.github.izakyl.folkways.core.api.colony.Colonies;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.colony.Held;
-import io.github.izakyl.folkways.core.api.terms.Goods;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
-import io.github.izakyl.folkways.core.api.terms.Stand;
-import io.github.izakyl.folkways.core.api.terms.Stash;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.transport.BatchRequest;
-import io.github.izakyl.folkways.core.api.transport.QuoteResult;
-import io.github.izakyl.folkways.core.api.transport.TransportPublication;
-import io.github.izakyl.folkways.core.api.transport.TransportQuery;
-import io.github.izakyl.folkways.core.api.transport.TransportSnapshot;
-import io.github.izakyl.folkways.core.api.transport.TransportTravel;
-import io.github.izakyl.folkways.core.api.work.Ending;
-import io.github.izakyl.folkways.core.api.work.Hold;
-import io.github.izakyl.folkways.core.api.work.Node;
-import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Recourse;
-import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.WorkSite;
-import io.github.izakyl.folkways.core.api.work.Worker;
-import io.github.izakyl.folkways.core.engine.labor.LaborRefusal;
-import io.github.izakyl.folkways.core.engine.plan.Claims;
-import io.github.izakyl.folkways.core.engine.plan.Cooldowns;
-import io.github.izakyl.folkways.core.engine.plan.Crew;
-import io.github.izakyl.folkways.core.engine.plan.PlanningFixture;
-import io.github.izakyl.folkways.core.engine.plan.Situation;
-import io.github.izakyl.folkways.core.engine.plan.Stands;
-import io.github.izakyl.folkways.core.engine.plan.Stock;
+import io.github.izakyl.folkways.core.colony.api.Claimed;
+import io.github.izakyl.folkways.core.colony.api.Closing;
+import io.github.izakyl.folkways.core.colony.api.Colonies;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.inventory.api.Stash;
+import io.github.izakyl.folkways.core.inventory.internal.Stands;
+import io.github.izakyl.folkways.core.item.api.Goods;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
+import io.github.izakyl.folkways.core.plan.internal.Claims;
+import io.github.izakyl.folkways.core.plan.internal.Cooldowns;
+import io.github.izakyl.folkways.core.plan.internal.Crew;
+import io.github.izakyl.folkways.core.plan.internal.PlanningFixture;
+import io.github.izakyl.folkways.core.plan.internal.Situation;
+import io.github.izakyl.folkways.core.plan.internal.Stock;
+import io.github.izakyl.folkways.core.transport.api.BatchRequest;
+import io.github.izakyl.folkways.core.transport.api.QuoteResult;
+import io.github.izakyl.folkways.core.transport.api.TransportPublication;
+import io.github.izakyl.folkways.core.transport.api.TransportQuery;
+import io.github.izakyl.folkways.core.transport.api.TransportSnapshot;
+import io.github.izakyl.folkways.core.transport.api.TransportTravel;
+import io.github.izakyl.folkways.core.work.api.Ending;
+import io.github.izakyl.folkways.core.work.api.Hold;
+import io.github.izakyl.folkways.core.work.api.Node;
+import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Recourse;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.work.api.WorkSite;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.world.api.Stand;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.front.engine.colony.ColonyFront;
 import io.github.izakyl.folkways.front.engine.colony.ColonySettings;
 import io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfile;
@@ -86,7 +85,7 @@ public final class LineGameTests {
             helper.assertTrue(open.lap(0).getFirst().station() == 0 && open.lap(0).getLast().station() == 1
                     && open.lap(1).getFirst().station() < 0 && open.lap(1).getLast().station() == 0,
                 "an open line runs out, then back without standing twice at the far end");
-            long walk = (long) Math.ceil(24 / io.github.izakyl.folkways.core.api.terms.Gait.BLOCKS_PER_TICK);
+            long walk = (long) Math.ceil(24 / io.github.izakyl.folkways.core.resident.api.Gait.BLOCKS_PER_TICK);
             helper.assertTrue(open.ride(0, 1) == walk && open.ride(1, 0) == walk && open.ride(0, 0) < 0,
                 "a ride is reckoned along the line both ways from an open line's ends");
             helper.assertTrue(open.cycle() == 2 * (walk + 2L * Line.DWELL_TICKS),
@@ -108,7 +107,7 @@ public final class LineGameTests {
                     "spruce_hand_cart"))))));
             helper.assertTrue(done instanceof Outcome.Done && state.cart.isPresent(), "the cart is set down: " + done);
             AbstractCargoCart cart = state.cart(helper.getLevel()).orElseThrow();
-            helper.assertTrue(Line.Kind.HAND.is(cart) && rig.colony.holdingOf(cart.getUUID())
+            helper.assertTrue(Line.Kind.HAND.is(cart) && rig.colony.claimOf(cart.getUUID())
                     .filter(held -> held.owner().equals(FolkwaysCartsMod.OWNER)).isPresent()
                     && cart.position().distanceTo(rig.station(0).cell().getBottomCenter()) < 1,
                 "a hand cart of the colony's stands at the first station");
@@ -217,7 +216,7 @@ public final class LineGameTests {
             helper.assertTrue(quote instanceof QuoteResult.Available available
                     && available.quote().covered() == 128
                     && available.quote().cost() == 2L * io.github.izakyl.folkways.FolkwaysConfig.haulReachTicks()
-                        + io.github.izakyl.folkways.core.api.transport.TransportQuote.delay(
+                        + io.github.izakyl.folkways.core.transport.api.TransportQuote.delay(
                             line.cycle() / 2 + line.ride(0, 1))
                     && available.quote().handedAt() == 2L * io.github.izakyl.folkways.FolkwaysConfig.haulReachTicks()
                         + line.cycle() / 2 + line.ride(0, 1),
@@ -315,7 +314,7 @@ public final class LineGameTests {
             front.erase(path.id());
             rig.lines.refresh(level.getServer());
             helper.assertTrue(!horse.isNoAi() && !horse.getTags().contains(PastureContent.CLAIMED)
-                    && rig.colony.holdingOf(horse.getUUID()).isEmpty(),
+                    && rig.colony.claimOf(horse.getUUID()).isEmpty(),
                 "erasing the line restores the horse's navigation, AI and pasture availability");
             cart.discard();
             horse.discard();
@@ -329,7 +328,7 @@ public final class LineGameTests {
             var body = (ResidentEntity) rig.fixture.worker.body();
             body.moveTo(rig.station(0).cell().getBottomCenter());
             helper.getLevel().addFreshEntity(body);
-            rig.colony.hold(PersonContent.ID, Held.Entity.of(body)).orElseThrow();
+            rig.colony.hold(PersonContent.ID, Claimed.Entity.of(body)).orElseThrow();
             body.joinColony(rig.colony.id());
             var front = ColonyFront.of(rig.colony);
             front.addZone(helper.getLevel(), PastureContent.PASTURE,
@@ -347,7 +346,7 @@ public final class LineGameTests {
             profiles.replace(new LoadoutProfile(created.id(),
                 created.name(), List.of(LoadoutProfile.Entry.mount())));
             profiles.assign(List.of(body.id()), Optional.of(created.id()));
-            helper.assertTrue(rig.colony.holdingOf(horse.getUUID()).orElseThrow().owner()
+            helper.assertTrue(rig.colony.claimOf(horse.getUUID()).orElseThrow().owner()
                 .equals(ResidentMounts.ID),
                 "the profile owns the pasture horse first");
             var path = front.addPath(helper.getLevel(), FolkwaysCartsMod.LINE,
@@ -432,7 +431,7 @@ public final class LineGameTests {
                     "the line's horse is loaded in the Nether");
                 rig.lines.refresh(nether.getServer());
                 helper.assertTrue(!horse.getTags().contains(PastureContent.CLAIMED)
-                        && rig.colony.holdingOf(horse.getUUID()).isEmpty()
+                        && rig.colony.claimOf(horse.getUUID()).isEmpty()
                         && !(horse.getNavigation() instanceof HorseCartNavigation),
                     "removing a line searches every dimension before forgetting the horse");
             } finally {
@@ -460,7 +459,7 @@ public final class LineGameTests {
                     helper.assertTrue(!(horse.getNavigation() instanceof HorseCartNavigation),
                         "closing restores the team's navigation");
                     helper.assertTrue(horse.getTags().contains(PastureContent.CLAIMED) == (why == Closing.SHUTDOWN)
-                            && rig.colony.holdingOf(horse.getUUID()).isPresent() == (why == Closing.SHUTDOWN),
+                            && rig.colony.claimOf(horse.getUUID()).isPresent() == (why == Closing.SHUTDOWN),
                         "only shutdown keeps the supply horse's ownership: " + why);
                 } finally {
                     horse.discard();
@@ -510,7 +509,7 @@ public final class LineGameTests {
             horse.moveTo(first.cell().getBottomCenter());
             horse.setTamed(true);
             helper.assertTrue(level.addFreshEntity(horse), "the supply horse is admitted to its level");
-            colony.hold(FolkwaysCartsMod.OWNER, Held.Entity.of(horse)).orElseThrow();
+            colony.hold(FolkwaysCartsMod.OWNER, Claimed.Entity.of(horse)).orElseThrow();
             horse.addTag(PastureContent.CLAIMED);
             state.horse = Optional.of(horse.getUUID());
             state.team = new HorseLine(level, line, state, horse);
@@ -538,26 +537,26 @@ public final class LineGameTests {
                 .create(helper.getLevel());
             cart.moveTo(station(at).cell().getBottomCenter());
             helper.getLevel().addFreshEntity(cart);
-            colony.hold(FolkwaysCartsMod.OWNER, Held.Entity.of(cart)).orElseThrow();
+            colony.hold(FolkwaysCartsMod.OWNER, Claimed.Entity.of(cart)).orElseThrow();
             state.cart = Optional.of(cart.getUUID());
             return cart;
         }
 
-        private io.github.izakyl.folkways.core.api.transport.TransportEndpoint endpoint() {
+        private io.github.izakyl.folkways.core.transport.api.TransportEndpoint endpoint() {
             ResourceLocation id = ResourceLocation.fromNamespaceAndPath("folkways", "test_end");
-            return new io.github.izakyl.folkways.core.api.transport.TransportEndpoint(id, fixture.source,
-                Set.of(new Stand(fixture.source)), new io.github.izakyl.folkways.core.api.transport.TransportEndpoint
-                    .Handover(io.github.izakyl.folkways.core.api.transport.TransportEndpoint.Form.INVENTORY, id));
+            return new io.github.izakyl.folkways.core.transport.api.TransportEndpoint(id, fixture.source,
+                Set.of(new Stand(fixture.source)), new io.github.izakyl.folkways.core.transport.api.TransportEndpoint
+                    .Handover(io.github.izakyl.folkways.core.transport.api.TransportEndpoint.Form.INVENTORY, id));
         }
 
         private Worker worker(List<ItemStack> supplied) {
             Worker actual = fixture.worker;
             return new Worker() {
-                public io.github.izakyl.folkways.core.api.resident.Resident resident() { return actual.resident(); }
+                public io.github.izakyl.folkways.core.resident.api.Resident resident() { return actual.resident(); }
                 public Mob body() { return actual.body(); }
                 public net.minecraft.world.Container pack() { return actual.pack(); }
                 public List<Store> within() { return List.of(); }
-                public ItemStack held(io.github.izakyl.folkways.core.api.work.ToolNeed need) {
+                public ItemStack held(io.github.izakyl.folkways.core.work.api.ToolNeed need) {
                     return ItemStack.EMPTY;
                 }
                 public void spill(ItemStack stack) {
@@ -567,8 +566,8 @@ public final class LineGameTests {
                     return io.github.izakyl.folkways.effect.Effects.NONE;
                 }
                 public List<Node> route() { return List.of(); }
-                public io.github.izakyl.folkways.core.api.work.Placement placement() {
-                    return io.github.izakyl.folkways.core.api.work.Placement.NOWHERE;
+                public io.github.izakyl.folkways.core.work.api.Placement placement() {
+                    return io.github.izakyl.folkways.core.work.api.Placement.NOWHERE;
                 }
                 public List<ItemStack> supplied() { return supplied; }
             };

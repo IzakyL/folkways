@@ -28,7 +28,7 @@ public final class PersonContent {
         ResourceLocation.fromNamespaceAndPath(FolkwaysMod.MOD_ID, "work_defaults"),
         "folkways.tab.work_defaults", ResourceLocation.withDefaultNamespace("iron_pickaxe"));
 
-    public static void declare(io.github.izakyl.folkways.core.api.Declaring declaring) {
+    public static void declare(io.github.izakyl.folkways.core.extension.api.Declaring declaring) {
         declaring.colony(ID, scope -> {
             PersonPresence state = new PersonPresence(scope.colony());
             scope.share(state);

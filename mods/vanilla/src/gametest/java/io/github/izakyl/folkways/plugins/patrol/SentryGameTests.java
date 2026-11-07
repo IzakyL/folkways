@@ -1,21 +1,21 @@
 package io.github.izakyl.folkways.plugins.patrol;
 
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.colony.Colonies;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.colony.Held;
-import io.github.izakyl.folkways.core.api.resident.body.Body;
-import io.github.izakyl.folkways.core.api.terms.Goods;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.work.Ending;
-import io.github.izakyl.folkways.core.api.work.Node;
-import io.github.izakyl.folkways.core.api.work.Tools;
-import io.github.izakyl.folkways.core.api.work.Worker;
-import io.github.izakyl.folkways.core.api.work.Workload;
-import io.github.izakyl.folkways.core.engine.labor.LaborFixture;
+import io.github.izakyl.folkways.core.colony.api.Claimed;
+import io.github.izakyl.folkways.core.colony.api.Colonies;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.item.api.Goods;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
+import io.github.izakyl.folkways.core.resident.api.Body;
+import io.github.izakyl.folkways.core.runtime.LaborFixture;
 import io.github.izakyl.folkways.core.testing.Cleanup;
 import io.github.izakyl.folkways.core.testing.TestWorker;
+import io.github.izakyl.folkways.core.work.api.Ending;
+import io.github.izakyl.folkways.core.work.api.Node;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.work.api.Workload;
+import io.github.izakyl.folkways.core.work.support.Tools;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
 import io.github.izakyl.folkways.plugins.combat.FireSafety;
@@ -25,6 +25,7 @@ import io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfile;
 import io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfiles;
 import io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProvider;
 import io.github.izakyl.folkways.plugins.combat.weapon.LoadoutRegistry;
+import io.github.izakyl.folkways.plugins.combat.weapon.PatrolSupplies;
 import io.github.izakyl.folkways.plugins.combat.weapon.ProfileShortages;
 import io.github.izakyl.folkways.plugins.combat.weapon.WeaponSession;
 import io.github.izakyl.folkways.plugins.combat.weapon.Weapons;
@@ -47,6 +48,7 @@ import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.tags.ItemTags;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EquipmentSlot;
@@ -110,7 +112,6 @@ public final class SentryGameTests {
         Fixture f = new Fixture(helper);
         f.sentry.setNoAi(true);
         Zombie target = f.zombie(new BlockPos(43, 1, 2));
-        target.setGlowingTag(true);
         double base = SpottedTargets.sight(f.sentry, target);
         helper.assertFalse(SpottedTargets.sees(f.sentry, target), "the target is beyond default sight");
         f.sentry.pack().setItem(2, new ItemStack(Items.SPYGLASS));
@@ -298,7 +299,7 @@ public final class SentryGameTests {
         BlockPos from = helper.absolutePos(new BlockPos(3, 0, 14));
         BlockPos to = helper.absolutePos(new BlockPos(20, 0, 14));
         UUID route = fixture.colony.hold(PatrolContent.BEAT,
-            new Held.Line(List.of(WorldPos.of(fixture.level, from), WorldPos.of(fixture.level, to))))
+            new Claimed.Line(List.of(WorldPos.of(fixture.level, from), WorldPos.of(fixture.level, to))))
             .orElseThrow().id();
         PatrolStaffing.of(fixture.colony).configure(fixture.level, route,
             Set.of(LoadoutProfiles.of(fixture.colony).assigned(patroller.id()).orElseThrow().id()), 1);
@@ -306,6 +307,8 @@ public final class SentryGameTests {
         patrol.refresh(fixture.level.getServer());
         LaborFixture simulation = fixture.simulate();
         Zombie target = fixture.zombie(new BlockPos(12, 1, 2));
+        helper.assertTrue(SpottedTargets.sees(fixture.sentry, target),
+            "the sentry can observe the hostile beyond its weapon range");
         helper.assertFalse(patroller.hasLineOfSight(target),
             "the nearby responder needs the sentry's call before it can see around the wall");
         AtomicBoolean called = new AtomicBoolean();
@@ -412,7 +415,6 @@ public final class SentryGameTests {
         scout.setNoGravity(true);
         Zombie target = fixture.zombie(new BlockPos(37, 1, 2));
         target.setNoGravity(true);
-        target.setGlowingTag(true);
         SpottedTargets spots = SpottedTargets.of(fixture.colony);
         helper.assertFalse(SpottedTargets.sees(fixture.sentry, target), "the hostile is outside the shooter's sight");
         helper.assertTrue(spots.report(scout, target), "the scout reports a target within the long-range bow's reach");
@@ -587,6 +589,29 @@ public final class SentryGameTests {
         helper.succeed();
     }
 
+    @GameTest(template = "empty")
+    public static void malformedSavedSeatMarkerIsRetainedInsteadOfForgettingDismount(GameTestHelper helper) {
+        Fixture fixture = new Fixture(helper);
+        try {
+            var marker = new net.minecraft.nbt.CompoundTag();
+            marker.putUUID("lease", UUID.randomUUID());
+            fixture.sentry.getPersistentData().put("folkways:station_seat", marker);
+            boolean rejected = false;
+            try {
+                WeaponStations.restored(new net.neoforged.neoforge.event.tick.EntityTickEvent.Post(fixture.sentry));
+            } catch (IllegalArgumentException expected) {
+                rejected = true;
+            }
+            helper.assertTrue(rejected, "a present marker requires its paired vehicle UUID");
+            helper.assertTrue(fixture.sentry.getPersistentData().contains("folkways:station_seat"),
+                "failed validation leaves the marker for recovery");
+            fixture.sentry.getPersistentData().remove("folkways:station_seat");
+        } finally {
+            fixture.close();
+        }
+        helper.succeed();
+    }
+
     private static class TestStation implements WeaponStations.Station {
         private final WorldPos at;
         private int shots;
@@ -663,7 +688,7 @@ public final class SentryGameTests {
                     cells.add(WorldPos.of(level, helper.absolutePos(new BlockPos(x, 0, z))));
                 }
             }
-            zone = colony.hold(SentryPosts.ZONE, new Held.Area(cells)).orElseThrow().id();
+            zone = colony.hold(SentryPosts.ZONE, new Claimed.Area(cells)).orElseThrow().id();
             posts = SentryPosts.of(colony);
             Cleanup.on(helper, this::close);
         }
@@ -672,7 +697,7 @@ public final class SentryGameTests {
             ResidentEntity body = PersonBody.RESIDENT.get().create(level);
             move(body, at);
             level.addFreshEntity(body);
-            colony.hold(PersonContent.ID, Held.Entity.of(body)).orElseThrow();
+            colony.hold(PersonContent.ID, Claimed.Entity.of(body)).orElseThrow();
             body.joinColony(colony.id());
             entities.add(body);
             return body;
@@ -681,6 +706,8 @@ public final class SentryGameTests {
         private Zombie zombie(BlockPos at) {
             Zombie body = EntityType.ZOMBIE.create(level);
             move(body, at);
+            // These scenarios exercise sentry behavior, independently of ambient light and its propagation.
+            body.setGlowingTag(true);
             body.setNoAi(true);
             body.setItemSlot(EquipmentSlot.HEAD, new ItemStack(Items.IRON_HELMET));
             body.getAttribute(Attributes.MAX_HEALTH).setBaseValue(100);
@@ -704,8 +731,8 @@ public final class SentryGameTests {
                 arm(colony, sentry, "Bow", ItemSpec.of(Items.BOW));
             }
             if (stationEntity != null) {
-                if (colony.holding(zone).isEmpty()) {
-                    zone = colony.hold(SentryPosts.STATION, Held.Entity.of(level.getEntity(stationEntity)))
+                if (colony.claim(zone).isEmpty()) {
+                    zone = colony.hold(SentryPosts.STATION, Claimed.Entity.of(level.getEntity(stationEntity)))
                         .orElseThrow().id();
                 }
                 PatrolStaffing.of(colony).tick(level.getServer());
@@ -717,7 +744,7 @@ public final class SentryGameTests {
 
         private void unassign() {
             if (stationEntity != null) {
-                colony.release(zone, io.github.izakyl.folkways.core.api.colony.Release.LET_GO);
+                colony.release(zone, io.github.izakyl.folkways.core.colony.api.ClaimRelease.LET_GO);
                 PatrolStaffing.of(colony).tick(level.getServer());
             } else {
                 PatrolStaffing.of(colony).configure(level, zone, Set.of(), 0);
@@ -735,7 +762,7 @@ public final class SentryGameTests {
             level.addFreshEntity(marker);
             entities.add(marker);
             stationEntity = marker.getUUID();
-            zone = colony.hold(SentryPosts.STATION, Held.Entity.of(marker)).orElseThrow().id();
+            zone = colony.hold(SentryPosts.STATION, Claimed.Entity.of(marker)).orElseThrow().id();
             TestStation station = new TestStation(WorldPos.of(level, helper.absolutePos(new BlockPos(2, 0, 2))));
             station.entity = stationEntity;
             STATIONS.put(station.at(), station);
@@ -803,6 +830,33 @@ public final class SentryGameTests {
             .filter(one -> one.name().equals(name))
             .findFirst()
             .orElseGet(() -> profiles.add(profiles.create(name).id(), LoadoutProfile.Entry.weapon(weapon)));
+        profiles.assign(List.of(body.id()), Optional.of(profile.id()));
+    }
+
+    private static void assignLoadout(
+        PatrolSupplies supplies,
+        Body body, String name) {
+        var profiles = supplies.profiles();
+        var profile = profiles.all().stream().filter(value -> value.name().equals(name)).findFirst()
+            .orElseGet(() -> {
+                var created = profiles.create(name);
+                var weapon = switch (name) {
+                    case "melee" -> ItemSpec.of(
+                        Tags.Items.MELEE_WEAPON_TOOLS);
+                    case "bow" -> ItemSpec.of(Items.BOW);
+                    case "crossbow" -> ItemSpec.of(Items.CROSSBOW);
+                    default -> throw new IllegalArgumentException(name);
+                };
+                var entries = new ArrayList<LoadoutProfile.Entry>();
+                entries.add(LoadoutProfile.Entry.weapon(weapon));
+                if (!name.equals("melee")) {
+                    entries.add(LoadoutProfile.Entry.supply(
+                        ItemSpec.of(ItemTags.ARROWS), 8, 8));
+                }
+                profiles.replace(new LoadoutProfile(
+                    created.id(), created.name(), entries));
+                return profiles.get(created.id()).orElseThrow();
+            });
         profiles.assign(List.of(body.id()), Optional.of(profile.id()));
     }
 }

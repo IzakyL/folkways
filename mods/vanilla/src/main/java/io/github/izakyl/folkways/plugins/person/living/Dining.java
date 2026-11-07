@@ -1,41 +1,41 @@
 package io.github.izakyl.folkways.plugins.person.living;
 
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.colony.ColonyView;
-import io.github.izakyl.folkways.core.api.inventory.InventorySnapshot;
-import io.github.izakyl.folkways.core.api.ground.BlockChanges;
-import io.github.izakyl.folkways.core.api.terms.Stash;
-import io.github.izakyl.folkways.core.api.terms.Containers;
-import io.github.izakyl.folkways.core.api.terms.Footing;
-import io.github.izakyl.folkways.core.api.terms.Goods;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
-import io.github.izakyl.folkways.core.api.work.Ending;
-import io.github.izakyl.folkways.core.api.work.Grown;
-import io.github.izakyl.folkways.core.api.work.Need;
-import io.github.izakyl.folkways.core.api.work.Node;
-import io.github.izakyl.folkways.core.api.work.NodeSpec;
-import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.Urge;
-import io.github.izakyl.folkways.core.api.work.WorkEffort;
-import io.github.izakyl.folkways.core.api.work.WorkGesture;
-import io.github.izakyl.folkways.core.api.work.WorkSite;
-import io.github.izakyl.folkways.core.api.work.Worker;
-import io.github.izakyl.folkways.core.api.work.Workload;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.colony.api.ColonyView;
+import io.github.izakyl.folkways.core.inventory.api.InventorySnapshot;
+import io.github.izakyl.folkways.core.inventory.api.Stash;
+import io.github.izakyl.folkways.core.item.api.Containers;
+import io.github.izakyl.folkways.core.item.api.Goods;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
+import io.github.izakyl.folkways.core.plan.api.Grown;
+import io.github.izakyl.folkways.core.work.api.Ending;
+import io.github.izakyl.folkways.core.work.api.Need;
+import io.github.izakyl.folkways.core.work.api.Node;
+import io.github.izakyl.folkways.core.work.api.NodeSpec;
+import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.work.api.Urge;
+import io.github.izakyl.folkways.core.work.api.WorkEffort;
+import io.github.izakyl.folkways.core.work.api.WorkGesture;
+import io.github.izakyl.folkways.core.work.api.WorkSite;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.work.api.Workload;
+import io.github.izakyl.folkways.core.world.api.BlockChanges;
+import io.github.izakyl.folkways.core.world.api.Footing;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
+import io.github.izakyl.folkways.core.world.api.WorldSpaces;
 import io.github.izakyl.folkways.front.api.Fronts;
 import io.github.izakyl.folkways.front.api.ZoneView;
 import io.github.izakyl.folkways.front.api.notice.Line;
-import io.github.izakyl.folkways.plugins.person.ResidentEntity;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
+import io.github.izakyl.folkways.plugins.person.ResidentEntity;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
 import java.util.ArrayDeque;
-import java.util.LinkedHashMap;
+import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashSet;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -47,9 +47,6 @@ import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.world.level.Level;
-import net.minecraft.world.level.ChunkPos;
-import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
@@ -57,6 +54,9 @@ import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.monster.Enemy;
 import net.minecraft.world.food.FoodProperties;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.levelgen.structure.BoundingBox;
 
 // Furniture is surveyed once per colony sweep. Food stays in the real table or world block across reloads.
 final class Dining {
@@ -546,7 +546,7 @@ final class Dining {
                 Stances.at(cabinet.level(), approach), Workload.Once.of(1)).effort(WorkEffort.NONE)
                 .doing(LivingContent.DINING_DRINKING).focus(cabinet.at()).done();
             public NodeSpec spec() { return spec; }
-            public Optional<io.github.izakyl.folkways.core.api.terms.RefusalKind> refusal(ServerLevel level) {
+            public Optional<io.github.izakyl.folkways.core.resident.api.RefusalKind> refusal(ServerLevel level) {
                 return Optional.of(LivingRefusal.NOTHING_TO_EAT);
             }
             public Outcome commit(ServerLevel level, Worker worker) { return Outcome.failed(LivingRefusal.NOTHING_TO_EAT); }
@@ -587,7 +587,7 @@ final class Dining {
                         if (!body.isPassenger()) { DiningTables.sit(cabinet.level(), seat.chair, who.body()); }
                         if (body instanceof ResidentEntity person) { person.leisureMotion("drinking"); }
                         body.getPersistentData().putBoolean("folkways:dining_drinking", true);
-                        io.github.izakyl.folkways.core.api.resident.body.Bodies.of(who.body()).ifPresent(actor -> actor.presentHeldItem(bottle));
+                        io.github.izakyl.folkways.core.resident.api.Bodies.of(who.body()).ifPresent(actor -> actor.presentHeldItem(bottle));
                         who.body().getLookControl().setLookAt(cabinet.at().getX() + .5, cabinet.at().getY() + 1, cabinet.at().getZ() + .5);
                     }
                     public void release(net.minecraft.world.entity.LivingEntity body) { finish(); }
@@ -605,7 +605,7 @@ final class Dining {
             return false;
         }
 
-        public Optional<io.github.izakyl.folkways.core.api.terms.RefusalKind> refusal(ServerLevel level) {
+        public Optional<io.github.izakyl.folkways.core.resident.api.RefusalKind> refusal(ServerLevel level) {
             var stock = colony.inventory().snapshot().store(WorldPos.of(cabinet.level(), cabinet.at())).orElse(null);
             boolean serving = stock == null || stock.state() != InventorySnapshot.State.OBSERVED
                 || stock.version().epoch().equals(observed.epoch())
@@ -613,7 +613,8 @@ final class Dining {
                         && ItemStack.isSameItemSameComponents(item.stackCopy(), bottle));
             return finished || level != cabinet.level() || who.body().level() != level || !who.body().isAlive()
                 || who.body().isRemoved() || level.getEntity(who.body().getUUID()) != who.body() || unsafe(who.body())
-                || !supplies.current(cabinet) || !DiningTables.chair(level, seat.chair)
+                || !supplies.current(cabinet) || level.isLoaded(cabinet.at()) && !DiningDrinks.hasSupply(level, cabinet.at())
+                || !DiningTables.chair(level, seat.chair)
                 || !DiningTables.available(level, seat.chair, who.body())
                 || !level.isLoaded(seat.approach) || !Footing.withFeetAt(level, seat.approach)
                 || Fronts.of(colony).zonesIn(level).stream()
@@ -657,7 +658,7 @@ final class Dining {
             Runnable stand = () -> {
                 DiningTables.stand(who.body());
                 who.body().getPersistentData().remove("folkways:dining_drinking");
-                io.github.izakyl.folkways.core.api.resident.body.Bodies.of(who.body()).ifPresent(actor -> actor.clearHandPresentation());
+                io.github.izakyl.folkways.core.resident.api.Bodies.of(who.body()).ifPresent(actor -> actor.clearHandPresentation());
                 if (who.body() instanceof ResidentEntity person && person.leisureMotion().equals("drinking")) { person.leisureMotion(""); }
             };
             if (cabinet.level().getServer().isSameThread()) { stand.run(); } else { cabinet.level().getServer().execute(stand); }
@@ -749,7 +750,7 @@ final class Dining {
                 && level.getEntity(body.getUUID()) == body && (!nearby || WorldSpaces.world(level,
                     WorldPos.of(level, choice.seat.chair)).map(at -> body.position().distanceToSqr(at) <= 4 * 4).orElse(false));
         }
-        @Override public Optional<io.github.izakyl.folkways.core.api.terms.RefusalKind> refusal(ServerLevel level) {
+        @Override public Optional<io.github.izakyl.folkways.core.resident.api.RefusalKind> refusal(ServerLevel level) {
             return level != choice.table.level || finished || !present(engaged)
                     || !valid(choice.table) || !valid(choice.table, choice.seat) || unsafe(who.body())
                     || !DiningTables.available(level, choice.seat.chair, who.body())
@@ -800,7 +801,7 @@ final class Dining {
             Runnable stand = () -> {
                 DiningTables.stand(who.body());
                 who.body().getPersistentData().remove("folkways:dining_drinking");
-                io.github.izakyl.folkways.core.api.resident.body.Bodies.of(who.body()).ifPresent(body -> body.clearHandPresentation());
+                io.github.izakyl.folkways.core.resident.api.Bodies.of(who.body()).ifPresent(body -> body.clearHandPresentation());
                 if (who.body() instanceof ResidentEntity person && person.leisureMotion().equals("dining")) { person.leisureMotion(""); }
             };
             MinecraftServer server = choice.table.level.getServer();

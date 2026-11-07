@@ -15,7 +15,7 @@ type State = { building: boolean; farming: boolean; crafting: boolean; buildingR
 const STATE = defineTask<{ colony: string; reload?: boolean }, State>({
   name: "folkways.tools.state", side: "server",
   source: javaTask({ imports: [
-    "io.github.izakyl.folkways.core.engine.colony.ColonyRegistry",
+    "io.github.izakyl.folkways.core.colony.internal.ColonyRegistry",
     "io.github.izakyl.folkways.front.engine.colony.ColonyFront",
     "net.minecraft.resources.ResourceLocation",
     "net.minecraft.server.MinecraftServer",

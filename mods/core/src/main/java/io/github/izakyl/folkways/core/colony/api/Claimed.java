@@ -1,0 +1,125 @@
+package io.github.izakyl.folkways.core.colony.api;
+
+import io.github.izakyl.folkways.core.world.api.WorldPos;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.ResourceLocation;
+
+// What a colony holds, by its shape alone. The core keeps where it lies and whom it is held for; what it means
+// is the business of whoever holds it.
+public sealed interface Claimed {
+
+    // Every cell it lies on; an entity lies on none, it goes where it goes.
+    List<WorldPos> cells();
+
+    // A single registered site: blocks carry a block-entity mark, points are kept in the colony ledger.
+    default Optional<WorldPos> singleCell() {
+        return switch (this) {
+            case Block block -> Optional.of(block.cell());
+            case Point point -> Optional.of(point.cell());
+            default -> Optional.empty();
+        };
+    }
+
+    // The same thing after the cells in `moved` were carried along with their realm.
+    Claimed moved(Map<WorldPos, WorldPos> moved);
+
+    // An entity, and the type it was when taken up, so it can be known while it is not loaded.
+    record Entity(UUID entity, ResourceLocation type) implements Claimed {
+
+        public Entity {
+            Objects.requireNonNull(entity, "entity");
+            Objects.requireNonNull(type, "type");
+        }
+
+        public static Entity of(net.minecraft.world.entity.Entity entity) {
+            return new Entity(entity.getUUID(), BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()));
+        }
+
+        @Override
+        public List<WorldPos> cells() {
+            return List.of();
+        }
+
+        @Override
+        public Claimed moved(Map<WorldPos, WorldPos> moved) {
+            return this;
+        }
+    }
+
+    record Block(WorldPos cell) implements Claimed {
+
+        public Block {
+            Objects.requireNonNull(cell, "cell");
+        }
+
+        @Override
+        public List<WorldPos> cells() {
+            return List.of(cell);
+        }
+
+        @Override
+        public Claimed moved(Map<WorldPos, WorldPos> moved) {
+            return new Block(moved.getOrDefault(cell, cell));
+        }
+    }
+
+    // A native block without a block entity. Its owner's registered predicate validates loaded contents.
+    record Point(WorldPos cell) implements Claimed {
+        public Point { Objects.requireNonNull(cell, "cell"); }
+        public List<WorldPos> cells() { return List.of(cell); }
+        public Claimed moved(Map<WorldPos, WorldPos> moved) { return new Point(moved.getOrDefault(cell, cell)); }
+    }
+
+    record Area(Set<WorldPos> covered) implements Claimed {
+
+        public Area {
+            if (covered.isEmpty()) {
+                throw new IllegalArgumentException("an area covering no cells is not an area");
+            }
+            covered = Collections.unmodifiableSet(new LinkedHashSet<>(covered));
+        }
+
+        @Override
+        public List<WorldPos> cells() {
+            return List.copyOf(covered);
+        }
+
+        @Override
+        public Claimed moved(Map<WorldPos, WorldPos> moved) {
+            Set<WorldPos> next = new LinkedHashSet<>(covered.size());
+            covered.forEach(cell -> next.add(moved.getOrDefault(cell, cell)));
+            return new Area(next);
+        }
+    }
+
+    record Line(List<WorldPos> points) implements Claimed {
+
+        public Line {
+            if (points.size() < 2) {
+                throw new IllegalArgumentException("a line of fewer than two points is not a line");
+            }
+            points = List.copyOf(points);
+        }
+
+        @Override
+        public List<WorldPos> cells() {
+            return points;
+        }
+
+        @Override
+        public Claimed moved(Map<WorldPos, WorldPos> moved) {
+            List<WorldPos> next = new ArrayList<>(points.size());
+            points.forEach(point -> next.add(moved.getOrDefault(point, point)));
+            return new Line(next);
+        }
+    }
+}

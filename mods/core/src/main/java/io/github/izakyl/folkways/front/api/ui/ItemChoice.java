@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.front.api.ui;
 
-import io.github.izakyl.folkways.core.api.terms.ItemFilter;
+import io.github.izakyl.folkways.core.item.api.ItemFilter;
 import java.util.Optional;
 import java.util.function.Consumer;
 import net.minecraft.client.gui.screens.Screen;

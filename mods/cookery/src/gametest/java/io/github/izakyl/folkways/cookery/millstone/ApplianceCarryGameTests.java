@@ -8,40 +8,6 @@ import com.github.ysbbbbbb.kaleidoscopecookery.blockentity.kitchen.TeapotBlockEn
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems;
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.testing.TestWorker;
-import io.github.izakyl.folkways.effect.Effects;
-import io.github.izakyl.folkways.core.api.terms.Containers;
-import io.github.izakyl.folkways.core.api.terms.Goods;
-import io.github.izakyl.folkways.core.api.terms.Stand;
-import io.github.izakyl.folkways.core.api.terms.Stash;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.vocation.Vocations;
-import io.github.izakyl.folkways.core.api.work.Amount;
-import io.github.izakyl.folkways.core.api.work.Ending;
-import io.github.izakyl.folkways.core.api.work.Grown;
-import io.github.izakyl.folkways.core.api.work.Intent;
-import io.github.izakyl.folkways.core.api.work.Need;
-import io.github.izakyl.folkways.core.api.work.Node;
-import io.github.izakyl.folkways.core.api.work.NodeSpec;
-import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Placement;
-import io.github.izakyl.folkways.core.api.work.Produce;
-import io.github.izakyl.folkways.core.api.work.Refinement;
-import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.WorkSite;
-import io.github.izakyl.folkways.core.api.work.Worker;
-import io.github.izakyl.folkways.core.api.work.Workload;
-import io.github.izakyl.folkways.core.api.work.Workshop;
-import io.github.izakyl.folkways.core.engine.labor.Commit;
-import io.github.izakyl.folkways.core.engine.plan.Crew;
-import io.github.izakyl.folkways.core.engine.plan.Known;
-import io.github.izakyl.folkways.core.engine.plan.Message;
-import io.github.izakyl.folkways.core.engine.plan.PlanningFixture;
-import io.github.izakyl.folkways.core.engine.plan.Situation;
-import io.github.izakyl.folkways.core.engine.plan.Solving;
-import io.github.izakyl.folkways.core.engine.plan.Stands;
-import io.github.izakyl.folkways.core.engine.plan.Stock;
-import io.github.izakyl.folkways.core.engine.plan.haul.TransferNode;
 import io.github.izakyl.folkways.cookery.CookeryContent;
 import io.github.izakyl.folkways.cookery.KitchenBookings;
 import io.github.izakyl.folkways.cookery.KitchenStation;
@@ -49,6 +15,41 @@ import io.github.izakyl.folkways.cookery.spit.SpitStation;
 import io.github.izakyl.folkways.cookery.steamer.SteamerStation;
 import io.github.izakyl.folkways.cookery.teapot.TeapotStation;
 import io.github.izakyl.folkways.cookery.tray.TrayStation;
+import io.github.izakyl.folkways.core.inventory.api.Stash;
+import io.github.izakyl.folkways.core.inventory.internal.Stands;
+import io.github.izakyl.folkways.core.item.api.Containers;
+import io.github.izakyl.folkways.core.item.api.Goods;
+import io.github.izakyl.folkways.core.plan.api.Grown;
+import io.github.izakyl.folkways.core.plan.api.Intent;
+import io.github.izakyl.folkways.core.plan.api.Produce;
+import io.github.izakyl.folkways.core.plan.api.Refinement;
+import io.github.izakyl.folkways.core.plan.api.Workshop;
+import io.github.izakyl.folkways.core.plan.internal.Crew;
+import io.github.izakyl.folkways.core.plan.internal.Known;
+import io.github.izakyl.folkways.core.plan.internal.Message;
+import io.github.izakyl.folkways.core.plan.internal.PlanningFixture;
+import io.github.izakyl.folkways.core.plan.internal.Situation;
+import io.github.izakyl.folkways.core.plan.internal.Solving;
+import io.github.izakyl.folkways.core.plan.internal.Stock;
+import io.github.izakyl.folkways.core.runtime.HoldingFixture;
+import io.github.izakyl.folkways.core.testing.TestWorker;
+import io.github.izakyl.folkways.core.vocation.api.Vocations;
+import io.github.izakyl.folkways.core.work.api.Amount;
+import io.github.izakyl.folkways.core.work.api.Ending;
+import io.github.izakyl.folkways.core.work.api.Need;
+import io.github.izakyl.folkways.core.work.api.Node;
+import io.github.izakyl.folkways.core.work.api.NodeSpec;
+import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Placement;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.work.api.WorkSite;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.work.api.Workload;
+import io.github.izakyl.folkways.core.work.internal.Commit;
+import io.github.izakyl.folkways.core.work.internal.TransferNode;
+import io.github.izakyl.folkways.core.world.api.Stand;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
+import io.github.izakyl.folkways.effect.Effects;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import io.github.izakyl.folkways.plugins.person.ResidentEntity;
 import io.github.izakyl.folkways.plugins.wares.WaresContent;
@@ -172,7 +173,7 @@ public final class ApplianceCarryGameTests {
         helper.succeed();
     }
 
-    private static long carried(Placement placement, io.github.izakyl.folkways.core.api.terms.ItemSpec spec) {
+    private static long carried(Placement placement, io.github.izakyl.folkways.core.item.api.ItemSpec spec) {
         return placement.carrying().stream().filter(amount -> amount.spec().equals(spec)).mapToLong(Amount::count).sum();
     }
 
@@ -227,7 +228,9 @@ public final class ApplianceCarryGameTests {
             var tour = planned.schedule().tours().values().iterator().next(); Node work = null; Placement placement = Placement.NOWHERE; int fetches = 0;
             for (UUID id : tour.nodes()) {
                 var vertex = planned.weave().vertices().get(id); Node node = vertex.node();
-                if (node.spec().workload() instanceof Workload.Within) { work = node; placement = vertex.plan(); break; }
+                if (node.spec().workload() instanceof Workload.Custom) {
+                    work = node; placement = vertex.plan(); break;
+                }
                 helper.assertTrue(node instanceof TransferNode, block + ": work starts only after real source transfers");
                 Worker who = worker(actor, pack, fixture.source, store, vertex.plan());
                 helper.assertTrue(Commit.run(level, node, who) instanceof Outcome.Done, block + ": the actual planned transfer lifts raw materials into the real pack");
@@ -243,13 +246,12 @@ public final class ApplianceCarryGameTests {
             helper.assertTrue(placement.draws().stream().allMatch(draw -> draw.from().isEmpty()), block + ": native child inputs are reserved in the pack");
             helper.assertTrue(store.isEmpty(), block + ": the actual source no longer retains an unspent duplicate of any batch ingredient");
             for (ItemStack input : ingredients) { helper.assertValueEqual(Goods.countIn(pack, Goods.specOf(input)), (long) input.getCount(), block + ": every actual ingredient was fetched once"); }
-            Worker who = worker(actor, pack, fixture.source, store, placement); Workload.Within within = (Workload.Within) work.spec().workload();
+            Worker who = worker(actor, pack, fixture.source, store, placement);
+            HoldingFixture holding = new HoldingFixture(level, work, who);
             for (int index = 0; index < loads; index++) {
-                var turn = within.next(level, who); helper.assertTrue(turn instanceof Workload.Within.Turn.Piece, block + ": actual native loading is available after fetching");
-                Node piece = ((Workload.Within.Turn.Piece) turn).node(); Outcome outcome = Commit.run(level, piece, who);
+                Outcome outcome = holding.step();
                 helper.assertTrue(outcome instanceof Outcome.Done, block + ": the original native API accepts the fetched ingredients: " + outcome);
                 ((Outcome.Done) outcome).made().forEach(stack -> helper.assertTrue(Containers.insert(pack, stack).isEmpty(), "actual returned containers fit"));
-                within.ended(level, piece, Ending.DONE);
             }
             var nativeBlock = level.getBlockEntity(cell);
             if (nativeBlock instanceof MillstoneBlockEntity mill) { helper.assertValueEqual(mill.getInput().getCount(), 3, "three fetched wheat enter the actual mill"); }
@@ -262,7 +264,7 @@ public final class ApplianceCarryGameTests {
                 helper.assertValueEqual(Goods.countIn(pack, Goods.specOf(new ItemStack(Items.BUCKET))), 1L, "native fluid loading returns exactly one empty bucket");
             } else { helper.fail("native appliance is missing after real loading"); }
             helper.assertTrue(level.getEntitiesOfClass(ItemEntity.class, new AABB(cell).inflate(5)).isEmpty(), "loading has no duplicate physical drops");
-        } finally { solver.closed(); station.release(colony, level, at); station.stop(colony, io.github.izakyl.folkways.core.api.colony.Closing.RAZED); actor.discard(); fixture.worker.body().discard(); }
+        } finally { solver.closed(); station.release(colony, level, at); station.stop(colony, io.github.izakyl.folkways.core.colony.api.Closing.RAZED); actor.discard(); fixture.worker.body().discard(); }
         helper.succeed();
     }
 

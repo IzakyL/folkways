@@ -151,16 +151,15 @@ public final class ResidentModelGameTests {
     }
 
     @GameTest(template = TEMPLATE, timeoutTicks = 40)
-    public static void oldModelEntriesStillDecodeWithoutASeatedAnimation(GameTestHelper helper) {
+    public static void modelsWithoutASeatedAnimationRoundTrip(GameTestHelper helper) {
         DataPack files = new DataPack();
         files.model("ranger", YSM_ANIMATIONS, "main");
         ResidentLook look = ModelLibrary.read(files.held).entries().values().iterator().next();
         var json = ResidentLook.CODEC.encodeStart(com.mojang.serialization.JsonOps.INSTANCE, look).getOrThrow();
-        json.getAsJsonObject().remove("seated_animation");
         ResidentLook restored = ResidentLook.CODEC.parse(com.mojang.serialization.JsonOps.INSTANCE, json).getOrThrow();
         helper.assertValueEqual(((ResidentLook.Model) restored.appearance()).seatedAnimation(), Optional.empty(),
-            "old saved and networked entries retain the generic humanoid rider fallback");
-        helper.assertValueEqual(restored, look, "all old fields must survive the codec round trip");
+            "models without a custom sitting pose use the generic humanoid rider pose");
+        helper.assertValueEqual(restored, look, "all model fields survive the codec round trip");
         helper.succeed();
     }
 
@@ -264,6 +263,25 @@ public final class ResidentModelGameTests {
         helper.assertValueEqual(library.rejected(), List.of(), "nothing should have been refused");
         helper.assertValueEqual(library.entries().size(), 1, "one texture, one entry");
         return (ResidentLook.Model) library.entries().values().iterator().next().appearance();
+    }
+
+    @GameTest(template = TEMPLATE, timeoutTicks = 40)
+    public static void anInvalidModelManifestCannotApplyItsPartialAnimationMap(GameTestHelper helper) {
+        DataPack files = new DataPack();
+        files.model("ranger", YSM_ANIMATIONS, "main");
+        files.put("ranger", "folkways.json", """
+            {"weight":7,"leisure_animations":{"dining":"idle","drinking":false}}
+            """);
+        ModelLibrary library = ModelLibrary.read(files.held);
+        helper.assertValueEqual(library.entries().size(), 1, "the model remains available without its manifest");
+        ResidentLook.Model model = (ResidentLook.Model) library.entries().values().iterator().next().appearance();
+        helper.assertTrue(model.leisureAnimations().isEmpty(), "no valid entry from the partial map is adopted");
+        helper.assertValueEqual(library.entries().values().iterator().next().weight(), 1,
+            "other valid fields of the failed manifest are discarded too");
+        helper.assertTrue(library.rejected().size() == 1 && library.rejected().getFirst()
+            .startsWith(id(ModelLibrary.FOLDER + "/ranger/folkways.json").toString()),
+            "the error names the full manifest resource path");
+        helper.succeed();
     }
 
     private static ResourceLocation id(String path) {

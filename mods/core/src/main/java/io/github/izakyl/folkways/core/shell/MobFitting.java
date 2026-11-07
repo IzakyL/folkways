@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.core.shell;
 
-import io.github.izakyl.folkways.core.api.resident.MobControls;
+import io.github.izakyl.folkways.core.resident.api.MobControls;
 import io.github.izakyl.folkways.core.shell.mixin.MobAccessor;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.control.MoveControl;

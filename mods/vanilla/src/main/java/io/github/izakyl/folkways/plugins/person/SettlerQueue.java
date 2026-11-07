@@ -1,8 +1,8 @@
 package io.github.izakyl.folkways.plugins.person;
 
-import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
 import io.github.izakyl.folkways.base.persist.Reader;
 import io.github.izakyl.folkways.base.persist.Writer;
+import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
 import net.minecraft.nbt.CompoundTag;
 
 final class SettlerQueue {
@@ -76,8 +76,11 @@ final class SettlerQueue {
     }
 
     private void load(Reader reader) {
-        waiting = Math.max(0, Math.min(reader.integer("waiting").orElse(0), cap()));
-        progress = Math.max(0L, reader.longValue("progress").orElse(0L));
-        lastDayTime = reader.longValue("lastDayTime").orElse(UNREAD);
+        if (reader.keys().isEmpty()) {
+            return;
+        }
+        waiting = Math.max(0, Math.min(reader.integer("waiting").orElseThrow(), cap()));
+        progress = Math.max(0L, reader.longValue("progress").orElseThrow());
+        lastDayTime = reader.longValue("lastDayTime").orElseThrow();
     }
 }

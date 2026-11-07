@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.plugins.combat.weapon;
 
-import io.github.izakyl.folkways.core.api.work.Worker;
+import io.github.izakyl.folkways.core.work.api.Worker;
 import java.util.Optional;
 import net.minecraft.world.item.ItemStack;
 

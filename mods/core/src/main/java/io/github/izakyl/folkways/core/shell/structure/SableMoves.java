@@ -1,9 +1,9 @@
 package io.github.izakyl.folkways.core.shell.structure;
 
 import dev.ryanhcode.sable.api.SubLevelAssemblyHelper.AssemblyTransform;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.engine.colony.ColonyData;
-import io.github.izakyl.folkways.core.engine.colony.ColonyRegistry;
+import io.github.izakyl.folkways.core.colony.internal.ColonyData;
+import io.github.izakyl.folkways.core.colony.internal.ColonyRegistry;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;

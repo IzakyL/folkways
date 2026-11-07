@@ -2,17 +2,16 @@ package io.github.izakyl.folkways.warfare;
 
 import com.atsuishio.superbwarfare.data.gun.GunData;
 import com.atsuishio.superbwarfare.data.gun.GunProp;
-import io.github.izakyl.folkways.core.api.Declaring;
-import io.github.izakyl.folkways.core.api.colony.Colonies;
-import io.github.izakyl.folkways.core.api.terms.Goods;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
+import io.github.izakyl.folkways.core.colony.api.Colonies;
+import io.github.izakyl.folkways.core.extension.api.Declaring;
+import io.github.izakyl.folkways.core.item.api.Goods;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProvider;
 import io.github.izakyl.folkways.plugins.combat.weapon.LoadoutRegistry;
 import io.github.izakyl.folkways.plugins.combat.weapon.Weapons;
 import io.github.izakyl.folkways.plugins.person.ResidentEntity;
 import java.util.List;
 import java.util.Optional;
-import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
@@ -33,9 +32,6 @@ public final class WarfareWeapons {
             return ALL.stream().filter(weapon -> weapon.accepts(stack)).findFirst().orElseThrow();
         }
 
-        public Component label() {
-            return Component.translatable("folkways.combat.loadout.warfare.firearm");
-        }
 
         public boolean accepts(ItemStack stack) {
             return ALL.stream().anyMatch(weapon -> weapon.accepts(stack));
@@ -69,6 +65,7 @@ public final class WarfareWeapons {
                 data.get(GunProp.BOLT_ACTION_TIME) + 1,
                 Math.max(3, (int) Math.ceil(1200.0 / Math.max(1, data.get(GunProp.RPM)))));
         }
+
     }
 
     private WarfareWeapons() {

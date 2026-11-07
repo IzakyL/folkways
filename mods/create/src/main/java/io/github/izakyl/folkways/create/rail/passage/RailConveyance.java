@@ -1,7 +1,7 @@
 package io.github.izakyl.folkways.create.rail.passage;
 
-import io.github.izakyl.folkways.core.api.resident.Going;
-import io.github.izakyl.folkways.core.api.terms.RefusalKind;
+import io.github.izakyl.folkways.core.resident.api.Going;
+import io.github.izakyl.folkways.core.resident.api.RefusalKind;
 import io.github.izakyl.folkways.create.rail.domain.Boarding;
 import io.github.izakyl.folkways.create.rail.domain.RailContent;
 import io.github.izakyl.folkways.create.rail.domain.RailRefusal;

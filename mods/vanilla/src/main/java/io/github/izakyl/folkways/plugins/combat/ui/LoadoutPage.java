@@ -13,12 +13,12 @@ import com.lowdragmc.lowdraglib2.gui.ui.event.UIEvents;
 import dev.vfyjxf.taffy.style.AlignItems;
 import dev.vfyjxf.taffy.style.FlexDirection;
 import dev.vfyjxf.taffy.style.FlexWrap;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.inventory.InventorySnapshot;
-import io.github.izakyl.folkways.core.api.terms.Goods;
-import io.github.izakyl.folkways.core.api.terms.ItemFilter;
-import io.github.izakyl.folkways.core.api.terms.ItemQuery;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.inventory.api.InventorySnapshot;
+import io.github.izakyl.folkways.core.item.api.Goods;
+import io.github.izakyl.folkways.core.item.api.ItemFilter;
+import io.github.izakyl.folkways.core.item.api.ItemQuery;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import io.github.izakyl.folkways.front.api.notice.Notice;
 import io.github.izakyl.folkways.front.api.notice.Sentence;
 import io.github.izakyl.folkways.front.api.ui.Picker;
@@ -60,8 +60,8 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.item.Items;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 
 /** Commands carry the profile revision shown to the player; a stale editor cannot overwrite another keeper. */
 public final class LoadoutPage implements Draw {
@@ -741,7 +741,11 @@ public final class LoadoutPage implements Draw {
                 }
                 switch (action) {
                     case "rename" ->
-                    profiles.replace(new LoadoutProfile(profile.id(), request.getString("name"), profile.entries()));
+                    profiles.replace(
+                        new LoadoutProfile(
+                        profile.id(),
+                        request.getString("name"),
+                        profile.entries()));
                     case "duplicate" -> selected = profiles.duplicate(profile.id()).id();
                     case "delete" -> {
                         profiles.delete(profile.id());
@@ -794,12 +798,12 @@ public final class LoadoutPage implements Draw {
     private static ItemSpec decode(ServerPlayer player, CompoundTag request) {
         return ItemSpec.CODEC
             .parse(player.registryAccess().createSerializationContext(NbtOps.INSTANCE),
-                LoadoutProfiles.withoutPins(request.getCompound("items")))
+                request.getCompound("items"))
             .getOrThrow();
     }
 
     private void requireResident(Colony colony, UUID id) {
-        if (colony.holdingOf(id).isEmpty()
+        if (colony.claimOf(id).isEmpty()
             || colony.residents().stream()
             .noneMatch(resident -> resident.id().equals(id) && resident.kind().equals(PersonBody.ID))) {
             throw new IllegalArgumentException("resident outside colony");

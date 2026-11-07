@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.front.engine;
 
-import io.github.izakyl.folkways.core.api.colony.Colony;
+import io.github.izakyl.folkways.core.colony.api.Colony;
 import io.github.izakyl.folkways.front.api.Admission;
 import io.github.izakyl.folkways.front.api.Delegation;
 import io.github.izakyl.folkways.front.api.Enrollment;
@@ -74,7 +74,7 @@ public final class Enrollments {
         }
         for (Delegation delegation : enrollment.delegations()) {
             if (delegation.shape() instanceof io.github.izakyl.folkways.front.api.Shape.Point point) {
-                io.github.izakyl.folkways.core.api.colony.PointSites.register(delegation.id(), point.accepts()::test);
+                io.github.izakyl.folkways.core.colony.internal.PointSites.register(delegation.id(), point.accepts()::test);
             }
             if (DELEGATIONS.putIfAbsent(delegation.id(), delegation) != null) {
                 throw new IllegalStateException(delegation.id() + " is already declared");

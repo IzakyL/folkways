@@ -3,18 +3,18 @@ package io.github.izakyl.folkways.cookery.stockpot;
 import com.github.ysbbbbbb.kaleidoscopecookery.api.blockentity.IStockpot;
 import com.github.ysbbbbbb.kaleidoscopecookery.blockentity.kitchen.StockpotBlockEntity;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModRecipes;
-import io.github.izakyl.folkways.core.api.colony.Colonies;
-import io.github.izakyl.folkways.core.api.terms.Goods;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.work.Grown;
-import io.github.izakyl.folkways.core.api.work.Intent;
-import io.github.izakyl.folkways.core.api.work.Produce;
-import io.github.izakyl.folkways.core.api.work.Refinement;
-import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.Workshop;
-import io.github.izakyl.folkways.core.api.work.WorkSite;
 import io.github.izakyl.folkways.cookery.CookeryContent;
 import io.github.izakyl.folkways.cookery.KitchenBookings;
+import io.github.izakyl.folkways.core.colony.api.Colonies;
+import io.github.izakyl.folkways.core.item.api.Goods;
+import io.github.izakyl.folkways.core.plan.api.Grown;
+import io.github.izakyl.folkways.core.plan.api.Intent;
+import io.github.izakyl.folkways.core.plan.api.Produce;
+import io.github.izakyl.folkways.core.plan.api.Refinement;
+import io.github.izakyl.folkways.core.plan.api.Workshop;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.work.api.WorkSite;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.plugins.wares.WaresContent;
 import java.util.ArrayList;
 import java.util.List;
@@ -28,8 +28,10 @@ public final class StockpotWorkshops {
     // Only successfully planned autonomous recovery roots are kept here, never ordinary recipe descendants.
     private record RecoveryKey(UUID colony, WorldPos at) { }
     private static final java.util.Map<RecoveryKey, Grown> RECOVERING = new java.util.concurrent.ConcurrentHashMap<>();
-    static void rememberRecovery(UUID colony, WorldPos at, StockpotTake work) { RECOVERING.put(new RecoveryKey(colony, at), work.recoveryGoal()); }
-    static void endRecovery(UUID colony, WorldPos at, StockpotTake work) { RECOVERING.remove(new RecoveryKey(colony, at), work.recoveryGoal()); }
+    static void rememberRecovery(UUID colony, WorldPos at,
+        StockpotTake.Recovery work) { RECOVERING.put(new RecoveryKey(colony, at), work.recoveryGoal()); }
+    static void endRecovery(UUID colony, WorldPos at,
+        StockpotTake.Recovery work) { RECOVERING.remove(new RecoveryKey(colony, at), work.recoveryGoal()); }
     public static List<Grown> activeRecovery(UUID colony, ServerLevel level, WorldPos at, KitchenBookings bookings) {
         if (!at.in(level)) { return List.of(); }
         RecoveryKey key = new RecoveryKey(colony, at);
@@ -54,7 +56,7 @@ public final class StockpotWorkshops {
         if (StockpotBatch.claimed(pot) && pot.getStatus() == IStockpot.PUT_SOUP_BASE && pot.isEmpty()) {
             var marker = pot.getPersistentData().getCompound(StockpotBatch.KEY);
             boolean stillHeld = marker.hasUUID("colony") && Colonies.of(level.getServer(), marker.getUUID("colony"))
-                .flatMap(colony -> colony.holdingAt(at))
+                .flatMap(colony -> colony.claimAt(at))
                 .filter(holding -> holding.owner().equals(CookeryContent.STATION)).isPresent();
             if (!stillHeld) {
                 // An unloaded unmark may leave only a marker. Empty cookware can be reclaimed; invested goods cannot.
@@ -95,8 +97,8 @@ public final class StockpotWorkshops {
             return List.of();
         }
         StockpotBatch current = batch.get();
-        return List.of(new StockpotTake(colonyId, current.id(), at, stances, current.plan(), bookings,
-            changed, true).recoveryGoal());
+        return List.of(new StockpotTake.Recovery(colonyId, current.id(), at, stances, current.plan(), bookings,
+            changed).recoveryGoal());
     }
 
     public static void release(UUID colonyId, ServerLevel level, WorldPos at) {

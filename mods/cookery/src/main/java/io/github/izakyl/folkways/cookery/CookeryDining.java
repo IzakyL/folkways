@@ -6,7 +6,7 @@ import com.github.ysbbbbbb.kaleidoscopecookery.block.food.FoodBiteThreeByThreeBl
 import com.github.ysbbbbbb.kaleidoscopecookery.init.registry.FoodBiteRegistry;
 import com.github.ysbbbbbb.kaleidoscopecookery.item.quality.Quality;
 import com.github.ysbbbbbb.kaleidoscopecookery.item.quality.QualityUtils;
-import io.github.izakyl.folkways.core.api.work.Worker;
+import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.plugins.person.living.DiningFoods;
 import java.util.List;
 import java.util.Optional;

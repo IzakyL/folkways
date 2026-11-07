@@ -1,11 +1,11 @@
 package io.github.izakyl.folkways.cookery.testing;
 
-import io.github.izakyl.folkways.core.api.colony.Asking;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.work.Ending;
-import io.github.izakyl.folkways.core.api.work.Grown;
 import io.github.izakyl.folkways.cookery.CookeryContent;
+import io.github.izakyl.folkways.core.colony.api.Asking;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.plan.api.Grown;
 import io.github.izakyl.folkways.core.testing.Proxies;
+import io.github.izakyl.folkways.core.work.api.Ending;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -39,7 +39,9 @@ public final class RecoveryAsking {
     public static void assertKept(GameTestHelper helper, Grown original, Supplier<List<Grown>> wanted) {
         RecoveryAsking asking = new RecoveryAsking(helper);
         asking.offer(List.of(original));
-        for (int sweep = 0; sweep < 4; sweep++) asking.assertKept(original, wanted.get());
+        for (int sweep = 0; sweep < 4; sweep++) {
+            asking.assertKept(original, wanted.get());
+        }
     }
 
     public void offer(List<Grown> goals) { asking.offer(Map.of(helper.getLevel().dimension(), goals)); }

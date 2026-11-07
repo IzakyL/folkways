@@ -1,11 +1,11 @@
 package io.github.izakyl.folkways.create.build;
 
-import io.github.izakyl.folkways.plugins.build.BlueprintHandoffPanel;
 import com.simibubi.create.content.schematics.client.tools.ISchematicTool;
 import com.simibubi.create.content.schematics.client.tools.SchematicToolBase;
 import com.simibubi.create.foundation.gui.AllIcons;
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.colony.Books;
+import io.github.izakyl.folkways.front.api.Books;
+import io.github.izakyl.folkways.plugins.build.BlueprintHandoffPanel;
 import java.util.List;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;

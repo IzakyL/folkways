@@ -1,17 +1,18 @@
 package io.github.izakyl.folkways.plugins.patrol;
 
-import io.github.izakyl.folkways.core.api.colony.Colonies;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.colony.Held;
-import io.github.izakyl.folkways.core.api.resident.body.Body;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.work.Tools;
-import io.github.izakyl.folkways.core.api.work.Worker;
+import io.github.izakyl.folkways.core.colony.api.Claimed;
+import io.github.izakyl.folkways.core.colony.api.Colonies;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
+import io.github.izakyl.folkways.core.resident.api.Body;
 import io.github.izakyl.folkways.core.testing.TestWorker;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.work.support.Tools;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.plugins.combat.SpottedTargets;
 import io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfile;
 import io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfiles;
+import io.github.izakyl.folkways.plugins.combat.weapon.PatrolSupplies;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import io.github.izakyl.folkways.plugins.person.PersonContent;
 import io.github.izakyl.folkways.plugins.person.ResidentEntity;
@@ -25,6 +26,7 @@ import java.util.function.BooleanSupplier;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.tags.ItemTags;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.Mob;
@@ -65,7 +67,7 @@ public final class RtsStaffingGameTests {
                 ResidentEntity person = PersonBody.RESIDENT.get().create(level);
                 move(helper, person, at);
                 level.addFreshEntity(person);
-                colony.hold(PersonContent.ID, Held.Entity.of(person)).orElseThrow();
+                colony.hold(PersonContent.ID, Claimed.Entity.of(person)).orElseThrow();
                 person.joinColony(colony.id());
                 person.pack().insert(new ItemStack(Items.IRON_SWORD));
                 arm(colony, person, "Melee", ItemSpec.of(Tags.Items.MELEE_WEAPON_TOOLS));
@@ -75,7 +77,7 @@ public final class RtsStaffingGameTests {
             ResidentEntity second = people.get(1);
             UUID profile = LoadoutProfiles.of(colony).assigned(first.id()).orElseThrow().id();
             LoadoutProfiles.of(colony).assign(List.of(second.id()), Optional.of(profile));
-            UUID route = colony.hold(PatrolContent.BEAT, new Held.Line(List.of(
+            UUID route = colony.hold(PatrolContent.BEAT, new Claimed.Line(List.of(
                 WorldPos.of(level, helper.absolutePos(new BlockPos(3, 1, 5))),
                 WorldPos.of(level, helper.absolutePos(new BlockPos(23, 1, 5)))))).orElseThrow().id();
             PatrolStaffing staffing = PatrolStaffing.of(colony);
@@ -132,6 +134,33 @@ public final class RtsStaffingGameTests {
             .filter(one -> one.name().equals(name))
             .findFirst()
             .orElseGet(() -> profiles.add(profiles.create(name).id(), LoadoutProfile.Entry.weapon(weapon)));
+        profiles.assign(List.of(body.id()), Optional.of(profile.id()));
+    }
+
+    private static void assignLoadout(
+        PatrolSupplies supplies,
+        Body body, String name) {
+        var profiles = supplies.profiles();
+        var profile = profiles.all().stream().filter(value -> value.name().equals(name)).findFirst()
+            .orElseGet(() -> {
+                var created = profiles.create(name);
+                var weapon = switch (name) {
+                    case "melee" -> ItemSpec.of(
+                        Tags.Items.MELEE_WEAPON_TOOLS);
+                    case "bow" -> ItemSpec.of(Items.BOW);
+                    case "crossbow" -> ItemSpec.of(Items.CROSSBOW);
+                    default -> throw new IllegalArgumentException(name);
+                };
+                var entries = new ArrayList<LoadoutProfile.Entry>();
+                entries.add(LoadoutProfile.Entry.weapon(weapon));
+                if (!name.equals("melee")) {
+                    entries.add(LoadoutProfile.Entry.supply(
+                        ItemSpec.of(ItemTags.ARROWS), 8, 8));
+                }
+                profiles.replace(new LoadoutProfile(
+                    created.id(), created.name(), entries));
+                return profiles.get(created.id()).orElseThrow();
+            });
         profiles.assign(List.of(body.id()), Optional.of(profile.id()));
     }
 }

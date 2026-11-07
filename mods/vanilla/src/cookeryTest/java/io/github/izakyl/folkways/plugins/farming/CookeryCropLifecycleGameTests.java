@@ -5,11 +5,11 @@ import com.github.ysbbbbbb.kaleidoscopecookery.block.crop.TeaTreeBlock;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems;
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.Declaring;
-import io.github.izakyl.folkways.core.api.terms.Goods;
-import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.engine.labor.Commit;
 import io.github.izakyl.folkways.cookery.farming.CookeryCrops;
+import io.github.izakyl.folkways.core.extension.api.Declaring;
+import io.github.izakyl.folkways.core.item.api.Goods;
+import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.internal.Commit;
 import java.util.List;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
@@ -71,7 +71,9 @@ public final class CookeryCropLifecycleGameTests {
         for (Block block : List.of(ModBlocks.TOMATO_CROP.get(), ModBlocks.TEA_TREE.get())) {
             try (var field = new CookeryCropGameTests.Field(helper, block, 1)) {
                 boolean tea = block == ModBlocks.TEA_TREE.get();
-                if (tea) field.level().setBlock(field.ground, Blocks.DIRT.defaultBlockState(), Block.UPDATE_ALL);
+                if (tea) {
+                    field.level().setBlock(field.ground, Blocks.DIRT.defaultBlockState(), Block.UPDATE_ALL);
+                }
                 field.pack.setItem(0, new ItemStack(field.crop.seed()));
                 field.sow();
                 if (tea) {
@@ -96,8 +98,8 @@ public final class CookeryCropLifecycleGameTests {
         try (var field = rice(helper, 0)) {
             Crop fallback = field.crop.using(ModItems.RICE_SEED.get());
             field.pack.setItem(0, new ItemStack(ModItems.RICE_SEED.get()));
-            var job = new Job(io.github.izakyl.folkways.core.api.terms.WorldPos.of(field.level(), field.ground),
-                List.of(field.ground), io.github.izakyl.folkways.core.api.work.Stances.WHEREVER, field.ground);
+            var job = new Job(io.github.izakyl.folkways.core.world.api.WorldPos.of(field.level(), field.ground),
+                List.of(field.ground), io.github.izakyl.folkways.core.work.api.Stances.WHEREVER, field.ground);
             var node = new PlantNode(new FarmNode.Chore(java.util.UUID.randomUUID(), fallback, job,
                 new FieldChores("plant", PlantNode::new, () -> { }, new io.github.izakyl.folkways.front.api.PastDay())));
             helper.assertTrue(Commit.run(field.level(), node, field.worker) instanceof Outcome.Done,

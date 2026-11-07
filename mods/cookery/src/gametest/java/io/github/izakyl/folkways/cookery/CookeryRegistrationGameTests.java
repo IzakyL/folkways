@@ -5,35 +5,35 @@ import com.github.ysbbbbbb.kaleidoscopecookery.blockentity.kitchen.StockpotBlock
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems;
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.engine.inventory.InventoryObservations;
+import io.github.izakyl.folkways.core.colony.api.Claimed;
+import io.github.izakyl.folkways.core.colony.api.Closing;
+import io.github.izakyl.folkways.core.colony.api.Colonies;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.colony.internal.ColonyData;
+import io.github.izakyl.folkways.core.colony.internal.ColonyWorks;
+import io.github.izakyl.folkways.core.inventory.internal.InventoryObservations;
+import io.github.izakyl.folkways.core.item.api.Containers;
+import io.github.izakyl.folkways.core.item.api.Goods;
+import io.github.izakyl.folkways.core.plan.api.Grown;
+import io.github.izakyl.folkways.core.plan.api.Produce;
+import io.github.izakyl.folkways.core.plan.api.Refinement;
+import io.github.izakyl.folkways.core.plan.api.Workshop;
+import io.github.izakyl.folkways.core.runtime.HoldingFixture;
 import io.github.izakyl.folkways.core.testing.TestWorker;
-import io.github.izakyl.folkways.plugins.compost.CompostContent;
-import io.github.izakyl.folkways.plugins.compost.CompostPresence;
-import io.github.izakyl.folkways.core.api.colony.Closing;
-import io.github.izakyl.folkways.core.api.colony.Colonies;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.colony.Held;
-import io.github.izakyl.folkways.core.engine.colony.ColonyData;
-import io.github.izakyl.folkways.front.api.Shape;
-import io.github.izakyl.folkways.core.api.terms.Containers;
-import io.github.izakyl.folkways.core.api.terms.Goods;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.work.Ending;
-import io.github.izakyl.folkways.core.api.work.Grown;
-import io.github.izakyl.folkways.core.api.work.Hold;
-import io.github.izakyl.folkways.core.api.work.Node;
-import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Produce;
-import io.github.izakyl.folkways.core.api.work.Refinement;
-import io.github.izakyl.folkways.core.api.work.Worker;
-import io.github.izakyl.folkways.core.api.work.Workload;
-import io.github.izakyl.folkways.core.api.work.Workshop;
-import io.github.izakyl.folkways.core.engine.colony.ColonyWorks;
-import io.github.izakyl.folkways.core.engine.labor.Commit;
+import io.github.izakyl.folkways.core.work.api.Ending;
+import io.github.izakyl.folkways.core.work.api.Hold;
+import io.github.izakyl.folkways.core.work.api.Node;
+import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.work.internal.Commit;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.front.api.Facing;
+import io.github.izakyl.folkways.front.api.Shape;
 import io.github.izakyl.folkways.front.api.panel.Board;
 import io.github.izakyl.folkways.front.engine.Enrollments;
 import io.github.izakyl.folkways.front.engine.colony.MemberToggle;
+import io.github.izakyl.folkways.plugins.compost.CompostContent;
+import io.github.izakyl.folkways.plugins.compost.CompostPresence;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import io.github.izakyl.folkways.plugins.person.ResidentEntity;
 import java.util.ArrayList;
@@ -49,7 +49,6 @@ import net.minecraft.network.chat.contents.TranslatableContents;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
-import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
@@ -106,7 +105,9 @@ public final class CookeryRegistrationGameTests {
         try (Kitchen rig = new Kitchen(helper)) {
             rig.mark(rig.boardCell);
             for (BlockPos cell : BlockPos.betweenClosed(rig.boardCell.offset(-1, -1, -1), rig.boardCell.offset(1, 2, 1))) {
-                if (!cell.equals(rig.boardCell)) rig.level.setBlockAndUpdate(cell, Blocks.STONE.defaultBlockState());
+                if (!cell.equals(rig.boardCell)) {
+                    rig.level.setBlockAndUpdate(cell, Blocks.STONE.defaultBlockState());
+                }
             }
             rig.presence.refresh(rig.level.getServer());
             var page = rig.presence.board(CookeryContent.ID, rig.colony.view(rig.level)).orElseThrow();
@@ -210,8 +211,8 @@ public final class CookeryRegistrationGameTests {
             rig.mark(cell);
             helper.assertTrue(Enrollments.delegation(CookeryContent.STOVE).orElseThrow().shape() instanceof Shape.Point,
                 "native stoves use their own ledger-point delegation");
-            helper.assertTrue(rig.colony.holdingAt(at).filter(holding -> holding.owner().equals(CookeryContent.STOVE)
-                && holding.what() instanceof Held.Point).isPresent(), "the actual book membership operation holds a real stove point");
+            helper.assertTrue(rig.colony.claimAt(at).filter(holding -> holding.owner().equals(CookeryContent.STOVE)
+                && holding.what() instanceof Claimed.Point).isPresent(), "the actual book membership operation holds a real stove point");
             helper.assertTrue(rig.level.getBlockEntity(cell) == null, "book marking never fabricates a block entity");
             helper.assertTrue(rig.colony.view(rig.level).blocks(CookeryContent.STOVE).contains(cell), "the loaded point enters the real colony view");
             rig.presence.refresh(rig.level.getServer());
@@ -230,12 +231,12 @@ public final class CookeryRegistrationGameTests {
             helper.assertValueEqual(rig.pack.getItem(0).getDamageValue(), 1, "the actual ignition costs one native durability use");
             light.ended(rig.level, Ending.DONE);
             ColonyData.find(rig.level.getServer(), rig.colony.id()).orElseThrow().reconcile(rig.level.getServer());
-            helper.assertTrue(rig.colony.holdingAt(at).isPresent(), "the lit-state change preserves native point membership");
+            helper.assertTrue(rig.colony.claimAt(at).isPresent(), "the lit-state change preserves native point membership");
             helper.assertTrue(rig.presence.goals(rig.colony.view(rig.level)).isEmpty(), "a lit registered stove needs no second ignition");
             rig.level.setBlockAndUpdate(cell, Blocks.AIR.defaultBlockState());
             ColonyData.find(rig.level.getServer(), rig.colony.id()).orElseThrow().reconcile(rig.level.getServer());
             rig.presence.refresh(rig.level.getServer());
-            helper.assertTrue(rig.colony.holdingAt(at).isEmpty(), "removing the actual stove releases its ledger point");
+            helper.assertTrue(rig.colony.claimAt(at).isEmpty(), "removing the actual stove releases its ledger point");
             helper.assertTrue(rig.presence.board(CookeryContent.ID, rig.colony.view(rig.level)).orElseThrow().rows().stream()
                 .noneMatch(row -> row.icon().is(ModBlocks.STOVE.get().asItem())), "removal leaves no ghost stove row");
         }
@@ -250,8 +251,8 @@ public final class CookeryRegistrationGameTests {
             rig.level.setBlockAndUpdate(cell, Blocks.COMPOSTER.defaultBlockState()); rig.mark(cell);
             helper.assertTrue(Enrollments.delegation(CompostContent.POINT).orElseThrow().shape() instanceof Shape.Point,
                 "the actual front declares native composters as ledger points");
-            helper.assertTrue(rig.colony.holdingAt(at).filter(holding -> holding.owner().equals(CompostContent.POINT)
-                && holding.what() instanceof Held.Point).isPresent(), "real book membership persists its distinct compost delegation");
+            helper.assertTrue(rig.colony.claimAt(at).filter(holding -> holding.owner().equals(CompostContent.POINT)
+                && holding.what() instanceof Claimed.Point).isPresent(), "real book membership persists its distinct compost delegation");
             helper.assertTrue(rig.level.getBlockEntity(cell) == null, "the real native composter keeps no block entity");
             helper.assertTrue(rig.colony.view(rig.level).blocks(CompostContent.POINT).contains(cell), "the actual loaded point view reaches the kitchen service");
             compost.refresh(rig.level.getServer());
@@ -264,7 +265,7 @@ public final class CookeryRegistrationGameTests {
             InventoryObservations.publish(rig.colony, rig.level);
             helper.assertValueEqual(compost.goals(rig.colony.view(rig.level)).size(), 1, "the real marked point exposes its native ready-compost task");
             rig.mark(cell); compost.refresh(rig.level.getServer());
-            helper.assertTrue(rig.colony.holdingAt(at).isEmpty() && compost.goals(rig.colony.view(rig.level)).isEmpty(), "a second real book click unmarks and withdraws the native point");
+            helper.assertTrue(rig.colony.claimAt(at).isEmpty() && compost.goals(rig.colony.view(rig.level)).isEmpty(), "a second real book click unmarks and withdraws the native point");
         }
         helper.succeed();
     }
@@ -307,16 +308,16 @@ public final class CookeryRegistrationGameTests {
             rig.level.setBlockAndUpdate(cell, nativeState); rig.mark(cell);
             Colony next = Colonies.mint(rig.level.getServer());
             try {
-                var original = rig.colony.holdingAt(at).orElseThrow();
+                var original = rig.colony.claimAt(at).orElseThrow();
                 helper.assertTrue(MemberToggle.toggleAt(rig.level, next, cell, rig.player).refusal()
                         .filter(notice -> notice.key().equals(MemberToggle.Refusal.ANOTHER_COLONY.translationKey())).isPresent(),
                     "a different colony's real book cannot steal an owned native point");
-                helper.assertTrue(rig.colony.holdingAt(at).filter(original::equals).isPresent()
-                        && next.holdingAt(at).isEmpty(), "the refusal preserves the same original point and creates no second owner");
+                helper.assertTrue(rig.colony.claimAt(at).filter(original::equals).isPresent()
+                        && next.claimAt(at).isEmpty(), "the refusal preserves the same original point and creates no second owner");
                 rig.colony.raze();
                 helper.assertTrue(rig.level.getBlockState(cell).equals(nativeState), "raze does not change native compost progress or contents");
                 helper.assertTrue(MemberToggle.toggleAt(rig.level, next, cell, rig.player).refusal().isEmpty(), "the released position can join another colony");
-                helper.assertTrue(next.holdingAt(at).filter(holding -> holding.what() instanceof Held.Point).isPresent(), "the next owner holds exactly one native point");
+                helper.assertTrue(next.claimAt(at).filter(holding -> holding.what() instanceof Claimed.Point).isPresent(), "the next owner holds exactly one native point");
             } finally { next.raze(); }
         }
         helper.succeed();
@@ -330,7 +331,7 @@ public final class CookeryRegistrationGameTests {
             rig.level.setBlockAndUpdate(cell, Blocks.AIR.defaultBlockState());
             ColonyData.find(rig.level.getServer(), rig.colony.id()).orElseThrow().reconcile(rig.level.getServer());
             rig.presence.refresh(rig.level.getServer());
-            helper.assertTrue(rig.colony.holdingAt(at).isEmpty(), "loaded native point validation releases a removed composter");
+            helper.assertTrue(rig.colony.claimAt(at).isEmpty(), "loaded native point validation releases a removed composter");
             helper.assertTrue(rig.presence.board(CookeryContent.ID, rig.colony.view(rig.level)).orElseThrow().rows().stream()
                 .noneMatch(row -> row.icon().is(Blocks.COMPOSTER.asItem())
                     && row.acts().stream().anyMatch(act -> act instanceof Board.Act.Ping)), "the actual kitchen page does not retain a ghost native point");
@@ -362,7 +363,7 @@ public final class CookeryRegistrationGameTests {
         final FakePlayer player;
         final ResidentEntity body;
         final StockpotBlockEntity pot;
-        final SimpleContainer pack = new SimpleContainer(36);
+        final Container pack;
         final Container sharedTools;
         final List<Hold> holds = new ArrayList<>();
         final Worker worker;
@@ -388,6 +389,9 @@ public final class CookeryRegistrationGameTests {
             body = PersonBody.RESIDENT.get().create(level);
             body.setNoAi(true);
             body.moveTo(potCell.getX() - 0.5, potCell.getY() - 1, potCell.getZ() + 1.5, 0, 0);
+            level.addFreshEntity(body);
+            colony.hold(PersonBody.ID, Claimed.Entity.of(body)).orElseThrow();
+            pack = body.pack();
             worker = TestWorker.of(body).pack(pack).heldFromPack();
         }
 
@@ -423,28 +427,16 @@ public final class CookeryRegistrationGameTests {
         }
 
         void firstPiece(Node work) {
-            // A published kitchen task can first borrow its shared tool. Continue to the actual food load.
+            HoldingFixture holding = new HoldingFixture(level, work, worker).walking();
             for (int step = 0; step < 8; step++) {
                 InventoryObservations.publish(colony, level);
-                Node piece = work;
-                Workload.Within within = work.spec().workload() instanceof Workload.Within nested ? nested : null;
-                if (within != null) {
-                    var turn = within.next(level, worker);
-                    helper.assertTrue(turn instanceof Workload.Within.Turn.Piece,
-                        "production prepares or loads a physical batch: " + turn);
-                    piece = ((Workload.Within.Turn.Piece) turn).node();
-                }
-                piece.spec().stances().cells().stream().findFirst().ifPresent(at ->
-                    body.moveTo(at.cell().getX() + 0.5, at.cell().getY(), at.cell().getZ() + 0.5));
-                Outcome outcome = Commit.run(level, piece, worker);
-                helper.assertTrue(outcome instanceof Outcome.Done, "the physical production piece " +
-                    piece.getClass().getName() + " commits: " + outcome);
+                Outcome outcome = holding.step();
+                helper.assertTrue(outcome instanceof Outcome.Done, "the real production holding commits: " + outcome);
                 ((Outcome.Done) outcome).made().forEach(this::put);
-                piece.released(level, worker, Ending.DONE);
-                piece.ended(level, Ending.DONE);
-                if (within != null) within.ended(level, piece, Ending.DONE);
                 if (level.getBlockEntity(boardCell) instanceof ChoppingBoardBlockEntity board
-                        && !board.getCurrentCutStack().isEmpty() || !pot.isEmpty()) return;
+                    && !board.getCurrentCutStack().isEmpty() || !pot.isEmpty()) {
+                    return;
+                }
             }
             throw new AssertionError("production never reached its actual food loading action");
         }
@@ -472,7 +464,9 @@ public final class CookeryRegistrationGameTests {
 
         void emptyPot() {
             operate(ItemStack.EMPTY, () -> pot.onLitClick(level, body, ItemStack.EMPTY));
-            while (!pot.isEmpty()) operate(ItemStack.EMPTY, () -> pot.removeIngredient(level, body));
+            while (!pot.isEmpty()) {
+                operate(ItemStack.EMPTY, () -> pot.removeIngredient(level, body));
+            }
             ItemStack bucket = Containers.extract(pack, stack -> stack.is(Items.BUCKET), 1);
             helper.assertTrue(!bucket.isEmpty(), "the batch returned its empty bucket");
             operate(bucket, () -> pot.removeSoupBase(level, body, bucket));

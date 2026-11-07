@@ -1,7 +1,7 @@
 package io.github.izakyl.folkways.plugins.combat.weapon;
 
-import io.github.izakyl.folkways.core.api.terms.Goods;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
+import io.github.izakyl.folkways.core.item.api.Goods;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import io.github.izakyl.folkways.plugins.person.ResidentEntity;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -11,7 +11,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import net.minecraft.core.component.DataComponents;
-import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.world.item.ItemStack;
@@ -22,16 +21,15 @@ public final class LoadoutRegistry {
     private static volatile Map<ResourceLocation, LoadoutProvider> providers = Map.of();
 
     static {
-        ordinary("melee", ItemSpec.of(Tags.Items.MELEE_WEAPON_TOOLS), false);
-        ordinary("bow", ItemSpec.of(Items.BOW), true);
-        ordinary("crossbow", ItemSpec.of(Items.CROSSBOW), true);
+        register(ResourceLocation.fromNamespaceAndPath("folkways", "melee"),
+            new Ordinary("melee", ItemSpec.of(Tags.Items.MELEE_WEAPON_TOOLS), false));
+        register(ResourceLocation.fromNamespaceAndPath("folkways", "bow"),
+            new Ordinary("bow", ItemSpec.of(Items.BOW), true));
+        register(ResourceLocation.fromNamespaceAndPath("folkways", "crossbow"),
+            new Ordinary("crossbow", ItemSpec.of(Items.CROSSBOW), true));
     }
 
     private LoadoutRegistry() {
-    }
-
-    private static void ordinary(String name, ItemSpec weapon, boolean ranged) {
-        register(ResourceLocation.fromNamespaceAndPath("folkways", name), new Ordinary(name, weapon, ranged));
     }
 
     public static synchronized void register(ResourceLocation id, LoadoutProvider provider) {
@@ -66,10 +64,6 @@ public final class LoadoutRegistry {
     }
 
     private record Ordinary(String name, ItemSpec weapon, boolean ranged) implements LoadoutProvider {
-        @Override
-        public Component label() {
-            return Component.translatable("folkways.combat.loadout." + name);
-        }
 
         @Override
         public boolean accepts(ItemStack stack) {

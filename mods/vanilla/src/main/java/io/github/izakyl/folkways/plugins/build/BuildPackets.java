@@ -1,8 +1,8 @@
 package io.github.izakyl.folkways.plugins.build;
 
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.colony.Books;
-import io.github.izakyl.folkways.core.api.structure.StructureCompat;
+import io.github.izakyl.folkways.core.work.api.StructureCompat;
+import io.github.izakyl.folkways.front.api.Books;
 import io.github.izakyl.folkways.library.Shelves;
 import io.github.izakyl.folkways.plugins.build.draft.Chosen;
 import io.github.izakyl.folkways.plugins.build.draft.Drafting;
@@ -83,10 +83,14 @@ public final class BuildPackets {
             NbtIo.writeCompressed(file, written);
             bytes = written.toByteArray();
         }
-        if (!BlueprintUploads.fits(bytes)) throw new IllegalArgumentException("Capture exceeds the upload limit");
+        if (!BlueprintUploads.fits(bytes)) {
+            throw new IllegalArgumentException("Capture exceeds the upload limit");
+        }
         Path blueprint = Templates.BLUEPRINTS.path().resolve(name + ".nbt");
         Path piece = Templates.SHELF.path().resolve(name + ".nbt");
-        if (Files.exists(blueprint) || Files.exists(piece)) throw new IOException("Capture name already used");
+        if (Files.exists(blueprint) || Files.exists(piece)) {
+            throw new IOException("Capture name already used");
+        }
         Files.createDirectories(blueprint.getParent());
         Files.createDirectories(piece.getParent());
         Files.write(blueprint, bytes, StandardOpenOption.CREATE_NEW);
@@ -224,7 +228,14 @@ public final class BuildPackets {
                 return;
             }
             ServerLevel level = player.serverLevel();
-            Chosen settings = Chosen.load(pattern.get().knobs(), packet.settings());
+            Chosen settings;
+            try {
+                settings = Chosen.load(pattern.get().knobs(), packet.settings());
+            } catch (IllegalArgumentException | java.util.NoSuchElementException stale) {
+                // A /reload can change the pattern's knobs while the player's panel still holds the old ones.
+                refuse(player, Component.translatable("folkways.draft.stale", packet.pattern().toString()));
+                return;
+            }
             if (packet.raiseInCreative() && player.isCreative()) {
                 raiseOnce(level, player, pattern.get(), hint.get(), settings, packet.facing());
                 return;

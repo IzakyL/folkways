@@ -1,10 +1,10 @@
 package io.github.izakyl.folkways.plugins.combat;
 
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.colony.Colonies;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.colony.Held;
-import io.github.izakyl.folkways.core.api.resident.body.Body;
+import io.github.izakyl.folkways.core.colony.api.Claimed;
+import io.github.izakyl.folkways.core.colony.api.Colonies;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.resident.api.Body;
 import io.github.izakyl.folkways.core.testing.Cleanup;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
@@ -338,7 +338,7 @@ public final class NativeHostilityGameTests {
             body.mob().setNoAi(true);
             place(body.mob(), at);
             if (enrolled) {
-                colony.hold(PersonContent.ID, Held.Entity.of(body.mob())).orElseThrow();
+                colony.hold(PersonContent.ID, Claimed.Entity.of(body.mob())).orElseThrow();
                 body.joinColony(colony.id());
             }
             return body;

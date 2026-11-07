@@ -39,10 +39,33 @@ public record BlueprintBlock(BlockPos offset, BlockState state, BlockData data) 
             .tag();
     }
 
-    static Optional<BlockState> read(HolderGetter<Block> blocks, CompoundTag state) {
+    static Optional<BlockState> readImported(HolderGetter<Block> blocks, CompoundTag state) {
         ResourceLocation name = ResourceLocation.tryParse(state.getString("Name"));
         if (name == null || blocks.get(ResourceKey.create(Registries.BLOCK, name)).isEmpty()) {
             return Optional.empty();
+        }
+        return Optional.of(NbtUtils.readBlockState(blocks, state));
+    }
+
+    static Optional<BlockState> read(HolderGetter<Block> blocks, CompoundTag state) {
+        if (!state.contains("Name", net.minecraft.nbt.Tag.TAG_STRING)) {
+            return Optional.empty();
+        }
+        ResourceLocation name = ResourceLocation.tryParse(state.getString("Name"));
+        if (name == null || blocks.get(ResourceKey.create(Registries.BLOCK, name)).isEmpty()) {
+            return Optional.empty();
+        }
+        BlockState base = blocks.get(ResourceKey.create(Registries.BLOCK, name)).orElseThrow().value()
+            .defaultBlockState();
+        for (var property : base.getProperties()) {
+            if (!state.contains("Properties", net.minecraft.nbt.Tag.TAG_COMPOUND)) {
+                return Optional.empty();
+            }
+            CompoundTag properties = state.getCompound("Properties");
+            if (!properties.contains(property.getName(), net.minecraft.nbt.Tag.TAG_STRING)
+                    || property.getValue(properties.getString(property.getName())).isEmpty()) {
+                return Optional.empty();
+            }
         }
         return Optional.of(NbtUtils.readBlockState(blocks, state));
     }

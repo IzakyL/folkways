@@ -42,7 +42,7 @@ const SITES = defineTask<{ player: string }, Record<string, any>>({
   timeoutMs: 20_000,
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.core.api.colony.Books",
+      "io.github.izakyl.folkways.front.api.Books",
       "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
       "io.github.izakyl.folkways.plugins.build.BuildContent",
     ],
@@ -101,15 +101,15 @@ try {
         new Schema.Setting.Flag("flag", "", stone, true),
         new Schema.Setting.Choice("choice", "", stone, List.of(stone, dirt), stone),
         Schema.Setting.Items.oneBlock("material", "", stone, stone)));
-    var load = KnobValues.class.getDeclaredMethod("load", Schema.class, CompoundTag.class);
-    load.setAccessible(true);
+    var restore = KnobValues.class.getDeclaredMethod("restore", Schema.class, CompoundTag.class);
+    restore.setAccessible(true);
     var saved = a.copy(); saved.putBoolean("flag", false);
     saved.putString("choice", "minecraft:dirt"); saved.put("material", new CompoundTag());
-    var restored = (KnobValues) load.invoke(null, schema, saved);
+    var restored = (KnobValues) restore.invoke(null, schema, saved);
     boolean restoredValues = restored.count("width") == 8 && !restored.flag("flag")
         && restored.choice("choice").equals(dirt) && restored.items("material").isEmpty();
     b.putString("choice", "minecraft:missing_option");
-    var fallback = (KnobValues) load.invoke(null, schema, b);
+    var fallback = (KnobValues) restore.invoke(null, schema, b);
     boolean conformed = fallback.count("width") == 2 && fallback.flag("flag")
         && fallback.choice("choice").equals(stone) && fallback.items("material").isPresent();
     byte[] written = Files.readAllBytes(path);

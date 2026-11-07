@@ -127,14 +127,14 @@ const IMPORTS = [
   "net.neoforged.bus.api.EventPriority",
   "net.neoforged.neoforge.common.NeoForge",
   "net.neoforged.neoforge.event.tick.ServerTickEvent",
-  "io.github.izakyl.folkways.core.api.colony.Colonies",
-  "io.github.izakyl.folkways.core.api.colony.Held",
-  "io.github.izakyl.folkways.core.api.resident.body.Body",
+  "io.github.izakyl.folkways.core.colony.api.Colonies",
+  "io.github.izakyl.folkways.core.colony.api.Claimed",
+  "io.github.izakyl.folkways.core.resident.api.Body",
   "io.github.izakyl.folkways.plugins.person.PersonBody",
   "io.github.izakyl.folkways.plugins.person.PersonContent",
   "io.github.izakyl.folkways.plugins.person.ResidentEntity",
   "io.github.izakyl.folkways.rts.combat.command.ResidentCommands",
-  "io.github.izakyl.folkways.core.api.terms.WorldSpaces",
+  "io.github.izakyl.folkways.core.world.api.WorldSpaces",
 ];
 
 const SPAWN = defineTask<{ each: string; x: string; y: string; z: string }, Scene>({
@@ -157,9 +157,9 @@ for (int index = 0; index < each; index++) {
   resident.setHealth(1024.0f);
   resident.pack().insert(new ItemStack(Items.IRON_SWORD));
   resident.setPersistenceRequired();
-  colony.hold(PersonContent.ID, Held.Entity.of(resident)).orElseThrow();
-  resident.joinColony(colony.id());
   level.addFreshEntity(resident);
+  colony.hold(PersonContent.ID, Claimed.Entity.of(resident)).orElseThrow();
+  resident.joinColony(colony.id());
   ResidentCommands.of(colony).guard(resident, WorldSpaces.at(resident), new Vec3(1, 0, 0));
   residents.add(resident.getUUID().toString());
 

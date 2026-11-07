@@ -1,7 +1,7 @@
 package io.github.izakyl.folkways.plugins.groundwork;
 
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -40,8 +40,8 @@ public final class SurveyGameTests {
     public static void completedChoresStaySpentAcrossSweeps(GameTestHelper helper) {
         java.util.UUID zone = java.util.UUID.randomUUID();
         BlockPos cell = helper.absolutePos(new BlockPos(2, 1, 2));
-        Job job = Job.at(cell, new io.github.izakyl.folkways.core.api.work.WorkSite.AtBlock(
-            WorldPos.of(helper.getLevel(), cell)), io.github.izakyl.folkways.core.api.work.Stances.WHEREVER);
+        Job job = Job.at(cell, new io.github.izakyl.folkways.core.work.api.WorkSite.AtBlock(
+            WorldPos.of(helper.getLevel(), cell)), io.github.izakyl.folkways.core.work.api.Stances.WHEREVER);
         Chores chores = new Chores(zone, "weed", (level, chore) -> {
             throw new AssertionError("completed work must never be offered again");
         }, () -> {}, new io.github.izakyl.folkways.front.api.PastDay());
@@ -49,7 +49,7 @@ public final class SurveyGameTests {
         Chores.Chore chore = new Chores.Chore(java.util.UUID.randomUUID(), job, chores);
         chores.planned(chore);
         helper.assertTrue(chores.busy(), "planned work keeps the site busy");
-        chores.ended(chore, io.github.izakyl.folkways.core.api.work.Ending.DONE);
+        chores.ended(chore, io.github.izakyl.folkways.core.work.api.Ending.DONE);
         chores.settle(List.of(job));
         chores.goals(helper.getLevel(), new java.util.ArrayList<>());
         helper.assertTrue(!chores.busy() && chores.spent().contains(job.key()),

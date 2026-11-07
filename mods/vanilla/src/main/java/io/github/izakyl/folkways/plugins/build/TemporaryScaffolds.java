@@ -2,16 +2,16 @@ package io.github.izakyl.folkways.plugins.build;
 
 import io.github.izakyl.folkways.base.persist.Reader;
 import io.github.izakyl.folkways.base.persist.Writer;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.ArrayDeque;
 import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
-import net.minecraft.nbt.CompoundTag;
 import net.minecraft.core.Direction;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.Blocks;
 
@@ -87,6 +87,6 @@ final class TemporaryScaffolds {
     }
 
     void load(Reader reader) {
-        reader.children("cells").forEach(entry -> WorldPos.load(entry).ifPresent(cells::add));
+        reader.requiredChildren("cells").forEach(entry -> WorldPos.load(entry).ifPresent(cells::add));
     }
 }

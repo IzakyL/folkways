@@ -2,12 +2,10 @@ package io.github.izakyl.folkways.front.engine.item;
 
 import io.github.izakyl.folkways.front.api.Shape;
 import io.github.izakyl.folkways.front.engine.charter.CurrentColony;
-import io.github.izakyl.folkways.front.engine.charter.LegacyBooks;
 import io.github.izakyl.folkways.front.engine.colony.ColonyBoards;
 import io.github.izakyl.folkways.front.engine.registry.FolkwaysDataComponents;
 import io.github.izakyl.folkways.front.ui.screen.ColonyShell;
 import java.util.Optional;
-import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -34,7 +32,6 @@ public final class ColonyBookItem extends Item {
         if (!(level instanceof ServerLevel serverLevel) || !(player instanceof ServerPlayer serverPlayer)) {
             return InteractionResult.sidedSuccess(level.isClientSide);
         }
-        LegacyBooks.takeUp(serverPlayer, stack);
         // A block the colony keeps a board for opens on that board; anything else opens the colony's own panel.
         BlockPos at = context.getClickedPos();
         if (CurrentColony.of(serverPlayer)
@@ -50,7 +47,6 @@ public final class ColonyBookItem extends Item {
     public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
         ItemStack stack = player.getItemInHand(hand);
         if (player instanceof ServerPlayer serverPlayer) {
-            LegacyBooks.takeUp(serverPlayer, stack);
             ColonyShell.open(serverPlayer);
         }
         return InteractionResultHolder.sidedSuccess(stack, level.isClientSide);

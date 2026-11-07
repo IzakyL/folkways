@@ -4,35 +4,40 @@ import com.github.ysbbbbbb.kaleidoscopecookery.api.blockentity.ITeapot;
 import com.github.ysbbbbbb.kaleidoscopecookery.blockentity.kitchen.TeapotBlockEntity;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems;
 import com.github.ysbbbbbb.kaleidoscopecookery.item.TeapotItem;
-import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
-import io.github.izakyl.folkways.core.api.terms.Goods;
-import io.github.izakyl.folkways.core.api.terms.ItemDrops;
-import io.github.izakyl.folkways.core.api.terms.Reach;
-import io.github.izakyl.folkways.core.api.terms.RefusalKind;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
-import io.github.izakyl.folkways.core.api.work.Amount;
-import io.github.izakyl.folkways.core.api.work.Leaves;
-import io.github.izakyl.folkways.core.api.work.Ending;
-import io.github.izakyl.folkways.core.api.work.Grown;
-import io.github.izakyl.folkways.core.api.work.Hold;
-import io.github.izakyl.folkways.core.api.work.Need;
-import io.github.izakyl.folkways.core.api.work.Node;
-import io.github.izakyl.folkways.core.api.work.NodeSpec;
-import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.WorkEffort;
-import io.github.izakyl.folkways.core.api.work.WorkGesture;
-import io.github.izakyl.folkways.core.api.work.WorkSite;
-import io.github.izakyl.folkways.core.api.work.Worker;
-import io.github.izakyl.folkways.core.api.work.Workload;
 import io.github.izakyl.folkways.cookery.CookeryContent;
 import io.github.izakyl.folkways.cookery.CookeryRefusal;
 import io.github.izakyl.folkways.cookery.KitchenBookings;
-import io.github.izakyl.folkways.cookery.KitchenStation;
+import io.github.izakyl.folkways.cookery.KitchenClosure;
 import io.github.izakyl.folkways.cookery.KitchenDelivery;
+import io.github.izakyl.folkways.cookery.KitchenHolding;
+import io.github.izakyl.folkways.cookery.KitchenStation;
+import io.github.izakyl.folkways.cookery.KitchenWork;
+import io.github.izakyl.folkways.core.item.api.Goods;
+import io.github.izakyl.folkways.core.item.api.ItemDrops;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
+import io.github.izakyl.folkways.core.plan.api.Grown;
+import io.github.izakyl.folkways.core.resident.api.RefusalKind;
+import io.github.izakyl.folkways.core.work.api.Amount;
+import io.github.izakyl.folkways.core.work.api.Hold;
+import io.github.izakyl.folkways.core.work.api.HoldingContext;
+import io.github.izakyl.folkways.core.work.api.Need;
+import io.github.izakyl.folkways.core.work.api.NodeSpec;
+import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.work.api.WorkAction;
+import io.github.izakyl.folkways.core.work.api.WorkEffort;
+import io.github.izakyl.folkways.core.work.api.WorkGesture;
+import io.github.izakyl.folkways.core.work.api.WorkHolding;
+import io.github.izakyl.folkways.core.work.api.WorkSite;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.work.api.Workload;
+import io.github.izakyl.folkways.core.work.support.Leaves;
+import io.github.izakyl.folkways.core.work.support.WorkStances;
+import io.github.izakyl.folkways.core.world.api.Reach;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
+import io.github.izakyl.folkways.core.world.api.WorldSpaces;
+import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
 import io.github.izakyl.folkways.plugins.wares.WaresContent;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -45,7 +50,7 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 
-final class TeapotWork implements Node, Workload.Within {
+final class TeapotWork implements KitchenWork {
     private enum Kind { FLUID, INGREDIENT, SERVE }
     private final UUID colony;
     private final UUID batch;
@@ -54,7 +59,6 @@ final class TeapotWork implements Node, Workload.Within {
     private final TeapotStation.Job job;
     private final KitchenBookings bookings;
     private final long generation;
-    private final Runnable changed;
     private final boolean recovering;
     private final Grown recoveryGoal;
     private final NodeSpec spec;
@@ -63,11 +67,12 @@ final class TeapotWork implements Node, Workload.Within {
     private boolean ingredient;
     private boolean finished;
     private RefusalKind failed;
+    private final KitchenClosure closure;
 
     TeapotWork(UUID colony, WorldPos at, Stances stances, TeapotStation.Job job, KitchenBookings bookings,
                Runnable changed, TeaBatch.Batch previous) {
         this.colony = colony; this.at = at; this.stances = stances; this.job = job; this.bookings = bookings;
-        generation = bookings.generation(at); this.changed = changed; recovering = previous != null;
+        generation = bookings.generation(at); recovering = previous != null;
         fluid = recovering; ingredient = recovering && previous.loaded(); batch = recovering ? previous.id() : UUID.randomUUID();
         List<Need> needs = new ArrayList<>();
         if (!fluid) { needs.add(new Need(Goods.specOf(job.bucket()), 1, true)); }
@@ -75,11 +80,27 @@ final class TeapotWork implements Node, Workload.Within {
         needs.add(new Need(ItemSpec.of(ModItems.EMPTY_CUP.get()), job.output().getCount(), true));
         List<Amount> leaves = new ArrayList<>(List.of(new Amount(Goods.specOf(job.output()), job.output().getCount())));
         if (!fluid) { leaves.add(new Amount(Goods.specOf(new ItemStack(Items.BUCKET)), 1)); }
-        spec = NodeSpec.of(batch, CookeryContent.ID, new WorkSite.AtBlock(at), stances, this).needs(needs)
+        spec = NodeSpec.of(batch, CookeryContent.ID, new WorkSite.AtBlock(at), stances,
+            new Workload.Custom()).needs(needs)
             .gives(new Amount(Goods.specOf(job.output()), job.output().getCount())).leaves(leaves).effort(WorkEffort.NONE)
             .vocation(WaresContent.trade()).estimate(260 + job.time()).doing(CookeryContent.COOKING).done();
         recoveryGoal = recovering ? Grown.of(this) : null;
+        closure = new KitchenClosure(how -> {
+            if (hold != null) {
+                hold.release(how);
+                hold = null;
+            }
+            if (recovering) {
+                TeapotStation.endRecovery(colony, at, this);
+            }
+        }, changed, "tea refresh failed after settlement");
     }
+
+    @Override
+    public boolean producesBeforeSettlement() {
+        return true;
+    }
+
     public NodeSpec spec() { return spec; }
 
     @Override
@@ -89,15 +110,23 @@ final class TeapotWork implements Node, Workload.Within {
     Grown recoveryGoal() { return recoveryGoal; }
     public Optional<RefusalKind> planned(ServerLevel level) {
         if (!recovering) { return Optional.empty(); }
-        if (hold != null) return bookings.valid(at, id(), generation) ? Optional.empty() : Optional.of(CookeryRefusal.STATION_CHANGED);
+        if (hold != null) {
+            return bookings.valid(at, id(), generation) ? Optional.empty()
+                : Optional.of(CookeryRefusal.STATION_CHANGED);
+        }
         if (generation != bookings.generation(at) || !bookings.free(at)) { return Optional.of(CookeryRefusal.STATION_CHANGED); }
         hold = bookings.hold(at, id(), spec().estimate());
         var refused = hold.take();
-        if (refused.isEmpty()) TeapotStation.rememberRecovery(colony, at, this);
+        if (refused.isEmpty()) {
+            TeapotStation.rememberRecovery(colony, at, this);
+        }
         return refused;
     }
     public boolean ready(ServerLevel level) { return bookings.cancelled(at, id(), generation) || bookings.first(at, id()); }
     public Optional<RefusalKind> refusal(ServerLevel level) {
+        if (closure.closed()) {
+            return Optional.of(CookeryRefusal.STATION_CHANGED);
+        }
         if (bookings.cancelled(at, id(), generation)) { return Optional.of(CookeryRefusal.STATION_CHANGED); }
         var pot = TeapotStation.pot(level, at);
         if (pot.isEmpty()) { return Optional.of(CookeryRefusal.NOT_A_STATION); }
@@ -107,36 +136,45 @@ final class TeapotWork implements Node, Workload.Within {
         if (!fluid && bookings.first(at, id()) && !TeapotStation.empty(pot.get())) { return Optional.of(CookeryRefusal.STATION_BUSY); }
         return Optional.empty();
     }
-    public Turn next(ServerLevel level, Worker who) {
+
+    @Override
+    public WorkHolding acquire(HoldingContext context) {
+        return new KitchenHolding(this::operation, () -> finished || failed != null,
+            this::commit, why -> failed = why);
+    }
+
+    private WorkAction operation(ServerLevel level, Worker who) {
         refusal(level).ifPresent(why -> failed = why);
-        if (failed != null || finished) { return LEAVE; }
-        if (!bookings.first(at, id())) { return WAIT; }
+        if (failed != null || finished) { return null; }
+        if (!bookings.first(at, id())) { return null; }
         var pot = TeapotStation.pot(level, at).orElseThrow();
-        if (!fluid || !ingredient) { return new Turn.Piece(new Action(!fluid ? Kind.FLUID : Kind.INGREDIENT)); }
-        if (pot.getStatus() != ITeapot.FINISHED) { return WAIT; }
+        if (!fluid || !ingredient) { return new Action(!fluid ? Kind.FLUID : Kind.INGREDIENT); }
+        if (pot.getStatus() != ITeapot.FINISHED) { return null; }
         if (cupPlace(level, who).isEmpty()) {
             // All tables may be occupied temporarily. Keep the real finished tea and wait for a space.
             // If another stance can serve it now, release this old placement so recovery publishes that stance.
             if (new TeapotStation().stances(level, at).isPresent()) {
                 failed = CookeryRefusal.STATION_BUSY;
-                return LEAVE;
+                return null;
             }
-            return WAIT;
+            return null;
         }
-        return new Turn.Piece(new Action(Kind.SERVE));
+        return new Action(Kind.SERVE);
     }
-    public void ended(ServerLevel level, Node piece, Ending how) { if (how instanceof Ending.Failed failure) { failed = failure.why(); } }
     public Outcome commit(ServerLevel level, Worker who) {
         return finished && !bookings.cancelled(at, id(), generation) ? Outcome.done() : Outcome.failed(failed == null ? CookeryRefusal.STATION_CHANGED : failed);
     }
-    public void ended(ServerLevel level, Ending how) { if (hold != null) { hold.release(how); hold = null; } if (recovering) TeapotStation.endRecovery(colony, at, this); nudge(); }
+
+    @Override
+    public KitchenClosure closure() {
+        return closure;
+    }
+
     private void nudge() {
-        try { changed.run(); } catch (RuntimeException | LinkageError broken) {
-            org.slf4j.LoggerFactory.getLogger("folkways-cookery").warn("tea refresh failed after settlement", broken);
-        }
+        closure.refresh();
     }
     private Optional<BlockPos> feet(ServerLevel level, Worker who) {
-        var local = stances instanceof Stances.Cells ? Reach.stanceHolding(who.body(), stances)
+        var local = stances instanceof Stances.Cells ? WorkStances.stanceHolding(who.body(), stances)
             : WorldSpaces.relative(level, at.realm(), who.body().position()).map(BlockPos::containing);
         return local
             .flatMap(footing -> WorldSpaces.storage(level, new WorldPos(at.realm(), footing)));
@@ -156,7 +194,7 @@ final class TeapotWork implements Node, Workload.Within {
         TeapotBlockEntity restored = TeapotStation.pot(level, at).orElseThrow();
         restored.loadWithComponents(data, level.registryAccess()); restored.setChanged();
     }
-    private final class Action implements Node {
+    private final class Action implements WorkAction {
         private final Kind kind;
         private final NodeSpec spec;
         Action(Kind kind) {

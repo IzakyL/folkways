@@ -1,17 +1,17 @@
 package io.github.izakyl.folkways.plugins.build.draft.client;
 
-import io.github.izakyl.folkways.core.api.terms.ItemFilter;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
+import io.github.izakyl.folkways.core.item.api.ItemFilter;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import io.github.izakyl.folkways.front.api.Schema;
 import io.github.izakyl.folkways.front.api.Settings;
 import io.github.izakyl.folkways.plugins.build.draft.Chosen;
-import net.minecraft.nbt.CompoundTag;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import net.minecraft.core.registries.Registries;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.tags.TagKey;
 import net.neoforged.api.distmarker.Dist;
@@ -42,12 +42,14 @@ public final class KnobValues implements Settings {
         return values;
     }
 
-    static KnobValues load(Schema schema, CompoundTag saved) {
+    static KnobValues restore(Schema schema, CompoundTag saved) {
         KnobValues values = of(schema);
-        var chosen = Chosen.load(schema, saved);
+        var chosen = Chosen.normalize(schema, saved);
         for (Schema.Setting setting : schema.settings()) {
             String key = setting.key();
-            if (!saved.contains(key)) continue;
+            if (!saved.contains(key) && setting instanceof Schema.Setting.Items) {
+                continue;
+            }
             switch (setting) {
                 case Schema.Setting.Flag flag -> values.flags.put(key, chosen.flag(key));
                 case Schema.Setting.Count count -> values.counts.put(key, chosen.count(key));
@@ -59,6 +61,17 @@ public final class KnobValues implements Settings {
             }
         }
         return values;
+    }
+
+    CompoundTag save(Schema schema) {
+        CompoundTag saved = Chosen.of(schema, this).save();
+        // An explicitly empty material selection must not restore the pattern's defaults.
+        for (Schema.Setting setting : schema.settings()) {
+            if (setting instanceof Schema.Setting.Items && !saved.contains(setting.key())) {
+                saved.put(setting.key(), new CompoundTag());
+            }
+        }
+        return saved;
     }
 
     public void set(String key, boolean on) {

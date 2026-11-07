@@ -1,10 +1,10 @@
 package io.github.izakyl.folkways.plugins.person.walk;
 
-import io.github.izakyl.folkways.core.api.resident.Conveyance;
-import io.github.izakyl.folkways.core.api.resident.Locomotion;
-import io.github.izakyl.folkways.core.api.resident.MobControls;
-import io.github.izakyl.folkways.core.api.resident.Search;
-import io.github.izakyl.folkways.core.api.terms.RefusalKind;
+import io.github.izakyl.folkways.core.resident.api.Conveyance;
+import io.github.izakyl.folkways.core.resident.api.Locomotion;
+import io.github.izakyl.folkways.core.resident.api.MobControls;
+import io.github.izakyl.folkways.core.resident.api.RefusalKind;
+import io.github.izakyl.folkways.core.resident.api.Search;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.goal.WrappedGoal;

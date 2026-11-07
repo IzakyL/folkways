@@ -1,7 +1,7 @@
 package io.github.izakyl.folkways.plugins.person.ride;
 
-import io.github.izakyl.folkways.core.api.resident.MobControls;
-import io.github.izakyl.folkways.core.api.terms.ClimbableBlocks;
+import io.github.izakyl.folkways.core.resident.api.MobControls;
+import io.github.izakyl.folkways.core.world.api.ClimbableBlocks;
 import io.github.izakyl.folkways.plugins.person.walk.ResidentNodeEvaluator;
 import io.github.izakyl.folkways.plugins.person.walk.ResidentPathNavigation;
 import java.util.ArrayList;

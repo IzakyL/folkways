@@ -1,8 +1,8 @@
 package io.github.izakyl.folkways.rts.client;
 
 import io.github.izakyl.folkways.front.api.ui.OverheadTools;
-import io.github.izakyl.folkways.rts.combat.ui.CombatContent;
 import io.github.izakyl.folkways.rts.FolkwaysRtsMod;
+import io.github.izakyl.folkways.rts.combat.ui.CombatContent;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;

@@ -2,12 +2,11 @@ package io.github.izakyl.folkways.tacz;
 
 import com.tacz.guns.api.TimelessAPI;
 import com.tacz.guns.api.item.IGun;
-import io.github.izakyl.folkways.core.api.terms.Goods;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
+import io.github.izakyl.folkways.core.item.api.Goods;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProvider;
 import java.util.List;
 import java.util.Optional;
-import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 
@@ -15,10 +14,6 @@ final class TaczLoadouts implements LoadoutProvider {
 
     static final ResourceLocation ID = ResourceLocation.fromNamespaceAndPath("folkways", "tacz");
 
-    @Override
-    public Component label() {
-        return Component.translatable("folkways.combat.loadout.tacz");
-    }
 
     @Override
     public boolean accepts(ItemStack stack) {
@@ -83,4 +78,5 @@ final class TaczLoadouts implements LoadoutProvider {
     public ItemSpec profileWeapon(ItemStack stack) {
         return TaczGuns.weapon(((IGun) stack.getItem()).getGunId(stack));
     }
+
 }

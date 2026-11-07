@@ -1,7 +1,7 @@
 package io.github.izakyl.folkways.rts.combat.command;
 
-import io.github.izakyl.folkways.core.api.Declaring;
-import io.github.izakyl.folkways.core.api.colony.Colony;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.extension.api.Declaring;
 import io.github.izakyl.folkways.plugins.combat.DefenseControl;
 import io.github.izakyl.folkways.rts.combat.control.CombatSelectionOwnership;
 import io.github.izakyl.folkways.rts.combat.group.UnitGroup;

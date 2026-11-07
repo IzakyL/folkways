@@ -127,7 +127,7 @@ return Sync.stamp(Map.of("y",y,"members",members));`,
 const CREW = defineTask<Record<string, any>, Record<string, any>>({
   name: "folkways.construction.crew", side: "server", source: javaTask({
     imports: ["io.github.izakyl.folkways.front.engine.colony.ColonyGround",
-      "io.github.izakyl.folkways.core.api.resident.body.Bodies", "io.github.izakyl.folkways.core.api.vocation.Vocations",
+      "io.github.izakyl.folkways.core.resident.api.Bodies", "io.github.izakyl.folkways.core.vocation.api.Vocations",
       "net.minecraft.world.item.*"],
     body: `
 var level=ctx.server().overworld();var args=Args.of(ctx);
@@ -149,8 +149,8 @@ const imports = ["io.github.izakyl.folkways.front.engine.colony.ColonyGround",
   "io.github.izakyl.folkways.plugins.build.*", "net.minecraft.core.BlockPos",
   "net.minecraft.core.registries.BuiltInRegistries", "net.minecraft.resources.ResourceLocation",
   "net.minecraft.world.item.ItemStack", "net.minecraft.world.level.block.Blocks", "net.minecraft.world.Container",
-  "io.github.izakyl.folkways.core.api.resident.body.Bodies", "io.github.izakyl.folkways.front.api.notice.Doings",
-  "io.github.izakyl.folkways.core.api.work.Node"];
+  "io.github.izakyl.folkways.core.resident.api.Bodies", "io.github.izakyl.folkways.front.api.notice.Doings",
+  "io.github.izakyl.folkways.core.work.api.Node"];
 const members = `
 static BlockPos pos(Map<?,?> raw){return new BlockPos(((Number)raw.get("x")).intValue(),((Number)raw.get("y")).intValue(),((Number)raw.get("z")).intValue());}
 static Object field(Object target,String name) throws Exception {var field=target.getClass().getDeclaredField(name);field.setAccessible(true);return field.get(target);}

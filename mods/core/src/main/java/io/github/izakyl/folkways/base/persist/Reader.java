@@ -93,6 +93,21 @@ public final class Reader {
         return readers;
     }
 
+    public List<Reader> requiredChildren(String key) {
+        Required.list(tag, key, Tag.TAG_COMPOUND);
+        return children(key);
+    }
+
+    public List<UUID> requiredUuids(String key) {
+        Required.list(tag, key, Tag.TAG_INT_ARRAY);
+        return uuids(key);
+    }
+
+    public List<ResourceLocation> requiredIds(String key) {
+        Required.list(tag, key, Tag.TAG_STRING);
+        return ids(key);
+    }
+
     public Optional<CompoundTag> blob(String key) {
         return tag.contains(key, Tag.TAG_COMPOUND) ? Optional.of(tag.getCompound(key)) : Optional.empty();
     }

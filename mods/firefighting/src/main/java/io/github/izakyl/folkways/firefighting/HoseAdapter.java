@@ -6,11 +6,11 @@ import com.mikoalopex.createfirefightingadd.content.equipment.handheld.FireHydra
 import com.mikoalopex.createfirefightingadd.content.equipment.handheld.HandheldNozzleControllerEntity;
 import com.mikoalopex.createfirefightingadd.content.equipment.handheld.HandheldNozzleControllerItem;
 import com.mikoalopex.createfirefightingadd.content.equipment.handheld.HandheldNozzleType;
-import io.github.izakyl.folkways.core.api.resident.body.Bodies;
-import io.github.izakyl.folkways.core.api.terms.Reach;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.Worker;
+import io.github.izakyl.folkways.core.resident.api.Bodies;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.world.api.Reach;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
 import io.github.izakyl.folkways.plugins.damagecontrol.DamageControlContent;
 import io.github.izakyl.folkways.plugins.damagecontrol.DamageControlRefusal;

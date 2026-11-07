@@ -3,7 +3,7 @@ import { writeFileSync } from "node:fs";
 import { defineTask, javaTask, player, screen, tick, world, type MinecraftClient, type MinecraftServer } from "@izakyl/blockwright-minecraft";
 import { clickElement } from "../ldlib2";
 import { foundColonyFast, foundingBox, optInViaBook, vocationPriority, waitForGroundedPlayer } from "../shared/colony/colony-founding";
-import { deliverOrderViaSitePanel } from "../shared/colony/membership-optin";
+import { deliverOrderViaSitePanel, filedOrdersAt } from "../shared/colony/membership-optin";
 import { runColonyTask } from "../shared/colony/colony-tasks";
 import { scrollCellIntoView, wheelCell } from "../shared/ui/site-panel";
 import { launchPair, type E2EPair } from "../shared/harness/pair";
@@ -163,9 +163,9 @@ const MILL_READ = defineTask<Record<string, any>, Record<string, any>>({
   name: "folkways.e2e.read-native-millstone", side: "server", timeoutMs: 20000,
   source: javaTask({ imports: [
     "com.github.ysbbbbbb.kaleidoscopecookery.blockentity.kitchen.MillstoneBlockEntity",
-    "io.github.izakyl.folkways.core.api.resident.body.Bodies",
-    "io.github.izakyl.folkways.core.api.terms.WorldPos",
-    "io.github.izakyl.folkways.core.api.terms.WorldSpaces",
+    "io.github.izakyl.folkways.core.resident.api.Bodies",
+    "io.github.izakyl.folkways.core.world.api.WorldPos",
+    "io.github.izakyl.folkways.core.world.api.WorldSpaces",
     "net.minecraft.core.BlockPos", "net.minecraft.core.registries.BuiltInRegistries",
     "net.minecraft.world.entity.item.ItemEntity", "net.minecraft.Util",
   ], body: `

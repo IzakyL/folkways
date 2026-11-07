@@ -118,9 +118,9 @@ const IGNITION_READ = defineTask<Record<string, any>, Record<string, any>>({
     "com.github.ysbbbbbb.kaleidoscopecookery.block.kitchen.StoveBlock",
     "io.github.izakyl.folkways.cookery.stove.StoveIgnition",
     "io.github.izakyl.folkways.cookery.CookeryContent",
-    "io.github.izakyl.folkways.core.api.colony.Colonies", "io.github.izakyl.folkways.core.api.colony.Held",
-    "io.github.izakyl.folkways.core.api.resident.body.Bodies",
-    "io.github.izakyl.folkways.core.api.terms.WorldPos", "io.github.izakyl.folkways.core.api.terms.WorldSpaces",
+    "io.github.izakyl.folkways.core.colony.api.Colonies", "io.github.izakyl.folkways.core.colony.api.Claimed",
+    "io.github.izakyl.folkways.core.resident.api.Bodies",
+    "io.github.izakyl.folkways.core.world.api.WorldPos", "io.github.izakyl.folkways.core.world.api.WorldSpaces",
     "net.minecraft.core.BlockPos", "net.minecraft.core.registries.BuiltInRegistries", "net.minecraft.world.Container",
     "net.minecraft.world.item.ItemStack", "net.minecraft.world.entity.item.ItemEntity",
   ], members: `
@@ -151,7 +151,7 @@ var out=new LinkedHashMap<String,Object>();out.put("lit",level.getBlockState(sto
 out.put("rainingAt",level.isRainingAt(rainAt));out.put("globalRaining",level.isRaining());
 out.put("canSeeSky",level.canSeeSky(rainAt));out.put("precipitation",level.getBiome(rainAt).value().getPrecipitationAt(rainAt).toString());
 out.put("source",items);out.put("shared",shared);out.put("residents",residents);out.put("drops",drops);
-out.put("stovePoint",colony.holdingAt(at).filter(holding->holding.owner().equals(CookeryContent.STOVE)&&holding.what() instanceof Held.Point).isPresent());
+out.put("stovePoint",colony.claimAt(at).filter(holding->holding.owner().equals(CookeryContent.STOVE)&&holding.what() instanceof Claimed.Point).isPresent());
 return out;
 ` }),
 });

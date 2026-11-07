@@ -1,11 +1,11 @@
 package io.github.izakyl.folkways.create.elevator;
 
-import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import java.util.Set;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import java.util.List;
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.Set;
 import java.util.UUID;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.entity.Mob;
@@ -13,7 +13,6 @@ import net.minecraft.world.entity.Mob;
 public interface ElevatorNetwork {
 
     record Floor(int y, Stances.Cells platform, Stances.Cells waiting) {
-        public Floor(int y, Stances.Cells platform) { this(y, platform, platform); }
     }
 
     record View(UUID vehicle, boolean powered, double contactY, double blocksPerTick,
@@ -42,9 +41,5 @@ public interface ElevatorNetwork {
 
     Optional<Integer> placeOf(MinecraftServer server, ElevatorRef lift, Mob body);
 
-    boolean disembark(MinecraftServer server, ElevatorRef lift, int place, Mob body);
-
-    default boolean disembark(MinecraftServer server, ElevatorRef lift, int place, Mob body, Set<WorldPos> exits) {
-        return disembark(server, lift, place, body);
-    }
+    boolean disembark(MinecraftServer server, ElevatorRef lift, int place, Mob body, Set<WorldPos> exits);
 }

@@ -1,10 +1,10 @@
 package io.github.izakyl.folkways.plugins.wares;
 
-import io.github.izakyl.folkways.core.api.terms.Containers;
-import io.github.izakyl.folkways.core.api.terms.Goods;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
-import io.github.izakyl.folkways.core.api.work.Amount;
-import io.github.izakyl.folkways.core.api.work.Leaves;
+import io.github.izakyl.folkways.core.item.api.Containers;
+import io.github.izakyl.folkways.core.item.api.Goods;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
+import io.github.izakyl.folkways.core.work.api.Amount;
+import io.github.izakyl.folkways.core.work.support.Leaves;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -30,7 +30,7 @@ import net.minecraft.world.item.crafting.StonecutterRecipe;
 interface Assembly {
 
     default Optional<List<ItemStack>> runOnce(ServerLevel level, Container pool,
-            io.github.izakyl.folkways.core.api.work.Worker who) {
+            io.github.izakyl.folkways.core.work.api.Worker who) {
         return runOnce(level, pool);
     }
 
@@ -46,7 +46,7 @@ interface Assembly {
 
             @Override
             public Optional<List<ItemStack>> runOnce(ServerLevel level, Container pool,
-                    io.github.izakyl.folkways.core.api.work.Worker who) {
+                    io.github.izakyl.folkways.core.work.api.Worker who) {
                 List<ItemStack> before = new ArrayList<>();
                 for (int slot = 0; slot < pool.getContainerSize(); slot++) {
                     before.add(pool.getItem(slot).copy());

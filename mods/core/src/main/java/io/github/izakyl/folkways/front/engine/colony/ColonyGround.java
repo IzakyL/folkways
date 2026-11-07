@@ -1,13 +1,13 @@
 package io.github.izakyl.folkways.front.engine.colony;
 
-import io.github.izakyl.folkways.core.api.colony.Colonies;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.colony.ColonyView;
-import io.github.izakyl.folkways.core.api.colony.Held;
-import io.github.izakyl.folkways.core.api.colony.Holding;
-import io.github.izakyl.folkways.core.api.colony.Release;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
+import io.github.izakyl.folkways.core.colony.api.Claim;
+import io.github.izakyl.folkways.core.colony.api.ClaimRelease;
+import io.github.izakyl.folkways.core.colony.api.Claimed;
+import io.github.izakyl.folkways.core.colony.api.Colonies;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.colony.api.ColonyView;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
+import io.github.izakyl.folkways.core.world.api.WorldSpaces;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -29,7 +29,7 @@ public final class ColonyGround {
     public static Optional<Colony> ofBlock(ServerLevel level, BlockPos pos) {
         WorldPos cell = WorldPos.of(level, pos);
         for (Colony colony : Colonies.all(level.getServer())) {
-            if (colony.holdingAt(cell).isPresent()) {
+            if (colony.claimAt(cell).isPresent()) {
                 return Optional.of(colony);
             }
         }
@@ -56,7 +56,7 @@ public final class ColonyGround {
         for (ColonyView view : colony.views(level.getServer())) {
             if (view.dimension().equals(level.dimension())) {
                 List<BlockPos> found = new ArrayList<>();
-                for (Holding holding : view.holdings()) {
+                for (Claim holding : view.claims()) {
                     holding.what().singleCell().flatMap(cell -> WorldSpaces.storage(level, cell)).ifPresent(found::add);
                 }
                 return List.copyOf(found);
@@ -65,22 +65,22 @@ public final class ColonyGround {
         return List.of();
     }
 
-    public static Optional<Holding> heldAt(ServerLevel level, Colony colony, BlockPos pos) {
-        return colony.holdingAt(WorldPos.of(level, pos));
+    public static Optional<Claim> heldAt(ServerLevel level, Colony colony, BlockPos pos) {
+        return colony.claimAt(WorldPos.of(level, pos));
     }
 
     public static boolean holds(ServerLevel level, Colony colony, BlockPos pos) {
         return heldAt(level, colony, pos).isPresent();
     }
 
-    public static Optional<Holding> hold(ServerLevel level, Colony colony, ResourceLocation owner, BlockPos pos) {
+    public static Optional<Claim> hold(ServerLevel level, Colony colony, ResourceLocation owner, BlockPos pos) {
         WorldPos at = WorldPos.of(level, pos);
         boolean point = io.github.izakyl.folkways.front.engine.Enrollments.delegation(owner)
             .filter(delegation -> delegation.shape() instanceof io.github.izakyl.folkways.front.api.Shape.Point).isPresent();
-        return colony.hold(owner, point ? new Held.Point(at) : new Held.Block(at));
+        return colony.hold(owner, point ? new Claimed.Point(at) : new Claimed.Block(at));
     }
 
     public static void letGo(ServerLevel level, Colony colony, BlockPos pos) {
-        heldAt(level, colony, pos).ifPresent(held -> colony.release(held.id(), Release.LET_GO));
+        heldAt(level, colony, pos).ifPresent(held -> colony.release(held.id(), ClaimRelease.LET_GO));
     }
 }

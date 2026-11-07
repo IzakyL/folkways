@@ -1,14 +1,14 @@
 package io.github.izakyl.folkways.plugins.person.living;
 
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.colony.Colonies;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.colony.Held;
-import io.github.izakyl.folkways.core.api.terms.ItemFilter;
-import io.github.izakyl.folkways.core.api.terms.StoreRule;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.work.WorkExertion;
-import io.github.izakyl.folkways.core.engine.labor.LaborFixture;
+import io.github.izakyl.folkways.core.colony.api.Claimed;
+import io.github.izakyl.folkways.core.colony.api.Colonies;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.inventory.api.StoreRule;
+import io.github.izakyl.folkways.core.item.api.ItemFilter;
+import io.github.izakyl.folkways.core.runtime.LaborFixture;
+import io.github.izakyl.folkways.core.work.api.WorkExertion;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.front.engine.colony.ColonyFront;
 import io.github.izakyl.folkways.front.engine.colony.ColonySettings;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
@@ -21,13 +21,13 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
-import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.level.ChunkPos;
-import net.minecraft.world.Container;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.Container;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.CakeBlock;
 import net.minecraft.world.level.block.state.BlockState;
@@ -181,7 +181,9 @@ public final class DiningSchedulingGameTests {
         int total = 0;
         for (int slot = 0; slot < stock.getContainerSize(); slot++) {
             ItemStack stack = stock.getItem(slot);
-            if (stack.is(item)) total += stack.getCount();
+            if (stack.is(item)) {
+                total += stack.getCount();
+            }
         }
         return total;
     }
@@ -218,12 +220,16 @@ public final class DiningSchedulingGameTests {
             for (int cx = (table.getX() - 4) >> 4; cx <= (table.getX() + 4) >> 4; cx++) {
                 for (int cz = (table.getZ() - 4) >> 4; cz <= (table.getZ() + 4) >> 4; cz++) {
                     long chunk = ChunkPos.asLong(cx, cz);
-                    if (!alreadyForced.contains(chunk) && level.setChunkForced(cx, cz, true)) forced.add(chunk);
+                    if (!alreadyForced.contains(chunk) && level.setChunkForced(cx, cz, true)) {
+                        forced.add(chunk);
+                    }
                 }
             }
             for (BlockPos floor : BlockPos.betweenClosed(table.offset(-3, -1, -3), table.offset(3, -1, 3))) {
                 level.setBlockAndUpdate(floor, Blocks.STONE.defaultBlockState());
-                for (int y = 1; y <= 3; y++) level.setBlockAndUpdate(floor.above(y), Blocks.AIR.defaultBlockState());
+                for (int y = 1; y <= 3; y++) {
+                    level.setBlockAndUpdate(floor.above(y), Blocks.AIR.defaultBlockState());
+                }
             }
             level.setBlockAndUpdate(table, tableBlock);
             level.setBlockAndUpdate(chair, chairBlock);
@@ -232,7 +238,9 @@ public final class DiningSchedulingGameTests {
             source = (Container) level.getBlockEntity(chest);
             foodItem = food.getItem();
             startingStock = 1;
-            for (int slot = 0; slot < startingStock; slot++) source.setItem(slot, food.copyWithCount(1));
+            for (int slot = 0; slot < startingStock; slot++) {
+                source.setItem(slot, food.copyWithCount(1));
+            }
             source.setChanged();
             colony = Colonies.mint(level.getServer());
             colony.stores(ResourceLocation.fromNamespaceAndPath("folkways", "dining_test_stock"),
@@ -250,19 +258,25 @@ public final class DiningSchedulingGameTests {
             person = PersonBody.RESIDENT.get().create(level);
             person.moveTo(Vec3.atBottomCenterOf(table.offset(2, 0, 1)));
             level.addFreshEntity(person);
-            colony.hold(PersonContent.ID, Held.Entity.of(person)).orElseThrow();
+            colony.hold(PersonContent.ID, Claimed.Entity.of(person)).orElseThrow();
             living = colony.service(LivingContent.ID, LivingPresence.class).orElseThrow();
             helper.onEachTick(() -> {
-                if (closed) return;
+                if (closed) {
+                    return;
+                }
                 try { labor.tick(); }
                 catch (RuntimeException broken) { throw new IllegalStateException("dining pipeline failed: " + status(), broken); }
                 setting |= person.doing().filter(doing -> doing.what().equals(LivingContent.SETTING_TABLE)).isPresent();
                 fetching |= person.doing().filter(doing -> doing.what().equals(LivingContent.DINING_DRINKING)).isPresent();
                 dining |= person.leisureMotion().equals("dining");
-                if (person.isPassenger()) mountedTicks++;
+                if (person.isPassenger()) {
+                    mountedTicks++;
+                }
             });
             helper.runAtTickTime(1380L, () -> {
-                if (!closed) org.slf4j.LoggerFactory.getLogger("folkways-dining-test").warn("Dining scheduling progress: {}", status());
+                if (!closed) {
+                    org.slf4j.LoggerFactory.getLogger("folkways-dining-test").warn("Dining scheduling progress: {}", status());
+                }
             });
             helper.runAtTickTime(1390, this::close);
         }
@@ -292,7 +306,9 @@ public final class DiningSchedulingGameTests {
         }
 
         @Override public void close() {
-            if (closed) return;
+            if (closed) {
+                return;
+            }
             closed = true;
             labor.close();
             person.discard();

@@ -1,8 +1,5 @@
 package io.github.izakyl.folkways.plugins.build.draft;
 
-import static io.github.izakyl.folkways.plugins.build.draft.DraftKit.parse;
-import static io.github.izakyl.folkways.plugins.build.draft.DraftKit.refused;
-
 import com.simibubi.create.Create;
 import com.simibubi.create.content.trains.graph.TrackGraph;
 import com.simibubi.create.content.trains.graph.TrackNodeLocation;
@@ -37,6 +34,8 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
+import static io.github.izakyl.folkways.plugins.build.draft.DraftKit.parse;
+import static io.github.izakyl.folkways.plugins.build.draft.DraftKit.refused;
 
 @EventBusSubscriber(modid = FolkwaysVanillaMod.ID, bus = EventBusSubscriber.Bus.MOD)
 @GameTestHolder(FolkwaysMod.MOD_ID)

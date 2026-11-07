@@ -4,28 +4,26 @@ import com.github.ysbbbbbb.kaleidoscopecookery.blockentity.kitchen.KitchenwareRa
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems;
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.terms.Containers;
+import io.github.izakyl.folkways.core.inventory.api.Stash;
+import io.github.izakyl.folkways.core.inventory.internal.Stands;
+import io.github.izakyl.folkways.core.item.api.Containers;
+import io.github.izakyl.folkways.core.plan.internal.Claims;
+import io.github.izakyl.folkways.core.plan.internal.Cooldowns;
+import io.github.izakyl.folkways.core.plan.internal.Crew;
+import io.github.izakyl.folkways.core.plan.internal.PlanningFixture;
+import io.github.izakyl.folkways.core.plan.internal.Shown;
+import io.github.izakyl.folkways.core.plan.internal.Situation;
+import io.github.izakyl.folkways.core.plan.internal.Stock;
+import io.github.izakyl.folkways.core.plan.internal.Weaver;
+import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.work.internal.Commit;
+import io.github.izakyl.folkways.core.work.support.WorkStances;
+import io.github.izakyl.folkways.core.world.api.Reach;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
-import io.github.izakyl.folkways.core.api.terms.Reach;
-import io.github.izakyl.folkways.core.api.terms.Stash;
-import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.engine.labor.Commit;
-import io.github.izakyl.folkways.core.engine.plan.Claims;
-import io.github.izakyl.folkways.core.engine.plan.Cooldowns;
-import io.github.izakyl.folkways.core.engine.plan.Crew;
-import io.github.izakyl.folkways.core.engine.plan.PlanningFixture;
-import io.github.izakyl.folkways.core.engine.plan.Shown;
-import io.github.izakyl.folkways.core.engine.plan.Situation;
-import io.github.izakyl.folkways.core.engine.plan.Stands;
-import io.github.izakyl.folkways.core.engine.plan.Stock;
-import io.github.izakyl.folkways.core.engine.plan.Weaver;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import net.minecraft.world.item.ShieldItem;
-import net.minecraft.world.level.block.Blocks;
-import net.neoforged.neoforge.common.Tags;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.gametest.framework.GameTest;
@@ -35,8 +33,11 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.ShieldItem;
+import net.minecraft.world.level.block.Blocks;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.common.Tags;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
@@ -183,7 +184,7 @@ public final class RackContainerGameTests {
         var stances = Stances.of(level,
             Reach.workableCells(level, fixture.target.cell())).orElseThrow();
         var stands = Stands.building()
-            .container(source, fixture.stands.around(source)).container(target, Stands.cellsOf(stances)).done();
+            .container(source, fixture.stands.around(source)).container(target, WorkStances.cellsOf(stances)).done();
         var stock = new Stock(List.of(), Map.of(source, 27, target, 2),
             Map.of(target, KitchenRacks.rules(List.of(fixture.target))),
             Map.of(target, Containers.refused(preferred)));

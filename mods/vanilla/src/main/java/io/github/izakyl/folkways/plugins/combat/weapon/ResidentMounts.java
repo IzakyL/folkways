@@ -1,12 +1,13 @@
 package io.github.izakyl.folkways.plugins.combat.weapon;
 
-import io.github.izakyl.folkways.core.api.colony.Closing;
-import io.github.izakyl.folkways.core.api.colony.Colonies;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.resident.Locomotions;
-import io.github.izakyl.folkways.core.api.terms.Containers;
-import io.github.izakyl.folkways.core.api.terms.Stash;
-import io.github.izakyl.folkways.core.api.terms.StoreRule;
+import io.github.izakyl.folkways.base.persist.Required;
+import io.github.izakyl.folkways.core.colony.api.Closing;
+import io.github.izakyl.folkways.core.colony.api.Colonies;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.inventory.api.Stash;
+import io.github.izakyl.folkways.core.inventory.api.StoreRule;
+import io.github.izakyl.folkways.core.item.api.Containers;
+import io.github.izakyl.folkways.core.resident.api.Locomotions;
 import io.github.izakyl.folkways.plugins.pasture.PastureContent;
 import io.github.izakyl.folkways.plugins.pasture.PastureHorses;
 import io.github.izakyl.folkways.plugins.patrol.PatrolContent;
@@ -56,12 +57,16 @@ public final class ResidentMounts {
 
     ResidentMounts(Colony colony) {
         this.colony = colony;
-        for (Tag value : colony.kept(ID).getList("riders", Tag.TAG_COMPOUND)) {
+        CompoundTag saved = colony.kept(ID);
+        if (saved.isEmpty()) {
+            return;
+        }
+        for (Tag value : Required.list(saved, "riders", Tag.TAG_COMPOUND)) {
             CompoundTag row = (CompoundTag) value;
-            Link link = new Link(row.getUUID("horse"), row.getBoolean("no_ai"));
-            link.saddle = row.getBoolean("saddle");
-            link.armor = row.getBoolean("armor");
-            links.put(row.getUUID("rider"), link);
+            Link link = new Link(Required.uuid(row, "horse"), Required.flag(row, "no_ai"));
+            link.saddle = Required.flag(row, "saddle");
+            link.armor = Required.flag(row, "armor");
+            links.put(Required.uuid(row, "rider"), link);
         }
     }
 
@@ -133,7 +138,7 @@ public final class ResidentMounts {
     }
 
     private boolean held(Link link) {
-        return colony.holdingOf(link.horse).filter(holding -> holding.owner().equals(ID)).isPresent();
+        return colony.claimOf(link.horse).filter(holding -> holding.owner().equals(ID)).isPresent();
     }
 
     void tick(MinecraftServer server, LoadoutProfiles profiles) {
@@ -172,7 +177,7 @@ public final class ResidentMounts {
     }
 
     public void reconcile(ServerLevel level, ResidentEntity body, Optional<LoadoutProfile> profile) {
-        boolean wanted = body.isAlive() && colony.holdingOf(body.id()).isPresent()
+        boolean wanted = body.isAlive() && colony.claimOf(body.id()).isPresent()
             && profile.stream().flatMap(value -> value.entries().stream())
                 .anyMatch(entry -> entry.kind() == LoadoutProfile.Kind.MOUNT);
         if (!wanted) {

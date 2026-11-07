@@ -1,7 +1,7 @@
 package io.github.izakyl.folkways.rts.combat.net;
 
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -25,19 +25,6 @@ public record CombatSelectionPacket(
         if (residents.size() > CombatPackets.MAX_MEMBERS || points.size() > CombatPackets.MAX_POINTS) {
             throw new IllegalArgumentException("selection exceeds the packet safety limit");
         }
-    }
-
-    public CombatSelectionPacket(UUID colonyId, List<UUID> residents, List<WorldPos> points, boolean patrol) {
-        this(colonyId, residents, points, patrol ? 0 : -1, 0, false);
-    }
-
-    public CombatSelectionPacket(UUID colonyId, List<UUID> residents, List<WorldPos> points, int cycleStart) {
-        this(colonyId, residents, points, cycleStart, 0, false);
-    }
-
-    public CombatSelectionPacket(
-        UUID colonyId, List<UUID> residents, List<WorldPos> points, int cycleStart, long request) {
-        this(colonyId, residents, points, cycleStart, request, false);
     }
 
     public boolean patrol() {

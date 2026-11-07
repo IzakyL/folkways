@@ -31,7 +31,7 @@ const MATERIALS = ["minecraft:oak_planks", "minecraft:iron_ingot", "minecraft:br
 // Which residents are still walking clear of the millstone they drove.
 const READ_MILL_EXIT = defineTask<void, any>({
   name: "folkways.cookery.complete-read-mill-exit", side: "server", timeoutMs: 20_000,
-  source: javaTask({ imports: ["io.github.izakyl.folkways.core.api.resident.body.Bodies"], body: `
+  source: javaTask({ imports: ["io.github.izakyl.folkways.core.resident.api.Bodies"], body: `
 var workers = new ArrayList<Object>();
 for (var entity : ctx.server().overworld().getAllEntities()) {
     if (Bodies.of(entity).isEmpty()) continue;

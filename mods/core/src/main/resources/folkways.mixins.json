@@ -5,6 +5,8 @@
   "compatibilityLevel": "JAVA_21",
   "mixins": [
     "ColonyDisplayMixin",
+    "EntityUpgradeMixin",
+    "BlockEntityUpgradeMixin",
     "MobAccessor",
     "PathfindingContextMixin"
   ],

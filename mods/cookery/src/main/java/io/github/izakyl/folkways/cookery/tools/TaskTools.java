@@ -1,47 +1,48 @@
 package io.github.izakyl.folkways.cookery.tools;
 
 import com.github.ysbbbbbb.kaleidoscopecookery.init.tag.TagMod;
+import io.github.izakyl.folkways.base.persist.Reader;
+import io.github.izakyl.folkways.base.persist.Required;
 import io.github.izakyl.folkways.cookery.gear.CookeryGear;
 import io.github.izakyl.folkways.cookery.racks.KitchenRacks;
-import io.github.izakyl.folkways.core.api.colony.Closing;
-import io.github.izakyl.folkways.base.persist.Reader;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.colony.ColonyView;
-import io.github.izakyl.folkways.core.api.inventory.InventorySnapshot;
-import io.github.izakyl.folkways.core.api.terms.Goods;
-import io.github.izakyl.folkways.core.api.terms.Containers;
-import io.github.izakyl.folkways.core.api.terms.Stash;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
+import io.github.izakyl.folkways.core.colony.api.Closing;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.colony.api.ColonyView;
+import io.github.izakyl.folkways.core.inventory.api.InventorySnapshot;
+import io.github.izakyl.folkways.core.inventory.api.Stash;
+import io.github.izakyl.folkways.core.item.api.Containers;
+import io.github.izakyl.folkways.core.item.api.Goods;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
+import io.github.izakyl.folkways.core.plan.api.Delivery;
+import io.github.izakyl.folkways.core.plan.api.Grown;
+import io.github.izakyl.folkways.core.plan.api.Intent;
+import io.github.izakyl.folkways.core.plan.api.Refinement;
+import io.github.izakyl.folkways.core.plan.api.Workshop;
+import io.github.izakyl.folkways.core.work.api.Node;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.work.api.ToolNeed;
+import io.github.izakyl.folkways.core.work.api.WorkSite;
+import io.github.izakyl.folkways.core.work.support.Tools;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.plugins.orders.OrderReturns;
 import io.github.izakyl.folkways.plugins.orders.Orders;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
-import io.github.izakyl.folkways.core.api.work.Delivery;
-import io.github.izakyl.folkways.core.api.work.Grown;
-import io.github.izakyl.folkways.core.api.work.Intent;
-import io.github.izakyl.folkways.core.api.work.Node;
-import io.github.izakyl.folkways.core.api.work.Refinement;
-import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.ToolNeed;
-import io.github.izakyl.folkways.core.api.work.Tools;
-import io.github.izakyl.folkways.core.api.work.WorkSite;
-import io.github.izakyl.folkways.core.api.work.Workshop;
 import io.github.izakyl.folkways.plugins.wares.WaresContent;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import java.util.Optional;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
-import net.minecraft.world.Container;
-import net.minecraft.world.item.ItemStack;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.Container;
+import net.minecraft.world.item.ItemStack;
 
 // One colony's runtime borrowing and merged missing-tool orders. Food graphs keep their original material budget.
 public final class TaskTools {
@@ -74,24 +75,28 @@ public final class TaskTools {
         var items = saved.getList("items", Tag.TAG_COMPOUND);
         for (int index = 0; index < items.size(); index++) {
             var item = items.getCompound(index);
-            if (item.hasUUID("loan")) {
-                var stack = ItemStack.parseOptional(server.overworld().registryAccess(), item.getCompound("stack"));
-                if (!stack.isEmpty()) {
-                    borrowed.put(item.getUUID("loan"), stack);
-                    pool.leases(colony.id()).stream().filter(lease -> lease.id().equals(item.getUUID("loan")))
-                        .findFirst().ifPresent(lease -> stock.restored(lease,
-                            item.contains("slot") ? item.getInt("slot") : -1,
-                            item.contains("equipment") ? Optional.of(net.minecraft.world.entity.EquipmentSlot
-                                .byName(item.getString("equipment"))) : Optional.empty(),
-                            item.hasUUID("epoch") && item.getUUID("epoch").equals(
-                                colony.inventory().snapshot().version().epoch()) ? item.getLong("incarnation") : 0,
-                            item.hasUUID("epoch") && item.getUUID("epoch").equals(
-                                colony.inventory().snapshot().version().epoch()) ? item.getLong("resident") : 0));
-                    WorldPos.load(Reader.of(item.getCompound("return"))).ifPresent(at ->
-                        returningTo.put(item.getUUID("loan"), at));
-                }
+            UUID loan = Required.uuid(item, "loan");
+            int slot = Required.integer(item, "slot");
+            UUID epoch = Required.uuid(item, "epoch");
+            long incarnation = Required.longValue(item, "incarnation");
+            long resident = Required.longValue(item, "resident");
+            var stack = ItemStack.parseOptional(server.overworld().registryAccess(), Required.compound(item, "stack"));
+            if (!stack.isEmpty()) {
+                borrowed.put(loan, stack);
+                pool.leases(colony.id()).stream().filter(lease -> lease.id().equals(loan))
+                    .findFirst().ifPresent(lease -> stock.restored(lease,
+                        slot,
+                        item.contains("equipment") ? Optional.of(net.minecraft.world.entity.EquipmentSlot
+                            .byName(item.getString("equipment"))) : Optional.empty(),
+                        epoch.equals(
+                            colony.inventory().snapshot().version().epoch()) ? incarnation : 0,
+                        epoch.equals(
+                            colony.inventory().snapshot().version().epoch()) ? resident : 0));
+                WorldPos.load(Reader.of(item.getCompound("return"))).ifPresent(at ->
+                    returningTo.put(loan, at));
             }
         }
+
         pool.leases(colony.id()).forEach(lease ->
             protect(lease.id(), lease.resident(), List.of(lease.request().tools())));
         returnObserver = OrderReturns.register(colony.id(), ID, this::promises);
@@ -112,7 +117,6 @@ public final class TaskTools {
             public UUID key() { return original.key(); }
 
             public boolean alike() { return original.alike(); }
-
 
             public ResourceLocation id() { return original.id(); }
 
@@ -148,7 +152,7 @@ public final class TaskTools {
     synchronized void ended(ToolWork work) {
         active.remove(work.id(), work);
         pool.cancel(colony.id(), work.id());
-        io.github.izakyl.folkways.core.api.resident.body.TaskTools.release(work.id());
+        io.github.izakyl.folkways.core.resident.api.TaskTools.release(work.id());
         for (KitchenTools.Lease lease : pool.leases(colony.id())) {
             if (lease.request().node().equals(work.id())) {
                 stock.body(lease.resident()).ifPresent(body -> LoanClothing.recover(this, lease, body));
@@ -169,7 +173,7 @@ public final class TaskTools {
     synchronized void ended(ClothingWork work) {
         clothing.remove(work.id(), work);
         pool.cancel(colony.id(), work.id());
-        io.github.izakyl.folkways.core.api.resident.body.TaskTools.release(work.id());
+        io.github.izakyl.folkways.core.resident.api.TaskTools.release(work.id());
         for (KitchenTools.Lease lease : pool.leases(colony.id())) {
             if (!lease.request().node().equals(work.id())) { continue; }
             stock.body(lease.resident()).ifPresent(body -> LoanClothing.recover(this, lease, body));
@@ -180,7 +184,7 @@ public final class TaskTools {
     }
 
     void protect(UUID task, UUID resident, List<ItemSpec> tools) {
-        io.github.izakyl.folkways.core.api.resident.body.TaskTools.keep(task, resident,
+        io.github.izakyl.folkways.core.resident.api.TaskTools.keep(task, resident,
             stack -> tools.stream().anyMatch(family -> Goods.matches(stack, family)));
     }
 
@@ -191,7 +195,7 @@ public final class TaskTools {
         stock.forget(lease);
         borrowed.remove(lease.id());
         returningTo.remove(lease.id());
-        io.github.izakyl.folkways.core.api.resident.body.TaskTools.release(lease.id());
+        io.github.izakyl.folkways.core.resident.api.TaskTools.release(lease.id());
         persist();
     }
 
@@ -225,7 +229,7 @@ public final class TaskTools {
         stock.forget(lease);
         borrowed.remove(lease.id());
         returningTo.remove(lease.id());
-        io.github.izakyl.folkways.core.api.resident.body.TaskTools.release(lease.id());
+        io.github.izakyl.folkways.core.resident.api.TaskTools.release(lease.id());
         persist();
     }
 
@@ -422,10 +426,10 @@ public final class TaskTools {
         for (UUID supply : supplying.keySet()) {
             colony.withdraw(ID, supply);
         }
-        active.keySet().forEach(io.github.izakyl.folkways.core.api.resident.body.TaskTools::release);
+        active.keySet().forEach(io.github.izakyl.folkways.core.resident.api.TaskTools::release);
         pool.leases(colony.id()).forEach(lease ->
-            io.github.izakyl.folkways.core.api.resident.body.TaskTools.release(lease.id()));
-        clothing.keySet().forEach(io.github.izakyl.folkways.core.api.resident.body.TaskTools::release);
+            io.github.izakyl.folkways.core.resident.api.TaskTools.release(lease.id()));
+        clothing.keySet().forEach(io.github.izakyl.folkways.core.resident.api.TaskTools::release);
         clothing.clear();
         active.clear();
         supplying.clear();

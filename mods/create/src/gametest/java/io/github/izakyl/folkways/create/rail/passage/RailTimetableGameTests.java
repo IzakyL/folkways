@@ -1,10 +1,10 @@
 package io.github.izakyl.folkways.create.rail.passage;
 
-import io.github.izakyl.folkways.create.FolkwaysCreateMod;
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.passage.Hop;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.work.Stances;
+import io.github.izakyl.folkways.core.travel.api.Hop;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
+import io.github.izakyl.folkways.create.FolkwaysCreateMod;
 import io.github.izakyl.folkways.create.rail.domain.Itinerary;
 import io.github.izakyl.folkways.create.rail.domain.TrainCrew;
 import io.github.izakyl.folkways.create.rail.domain.TransitNetwork;

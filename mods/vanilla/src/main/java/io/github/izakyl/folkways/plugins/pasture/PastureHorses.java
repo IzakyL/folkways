@@ -1,9 +1,9 @@
 package io.github.izakyl.folkways.plugins.pasture;
 
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.colony.Colonies;
-import io.github.izakyl.folkways.core.api.colony.Held;
-import io.github.izakyl.folkways.core.api.colony.Release;
+import io.github.izakyl.folkways.core.colony.api.ClaimRelease;
+import io.github.izakyl.folkways.core.colony.api.Claimed;
+import io.github.izakyl.folkways.core.colony.api.Colonies;
+import io.github.izakyl.folkways.core.colony.api.Colony;
 import io.github.izakyl.folkways.front.api.Fronts;
 import io.github.izakyl.folkways.front.api.ZoneView;
 import java.util.ArrayList;
@@ -40,9 +40,9 @@ public final class PastureHorses {
                         && !horse.getTags().contains(PastureContent.CLAIMED)
                         && (zone.cells().contains(horse.blockPosition())
                             || zone.cells().contains(horse.blockPosition().below()))
-                        && colony.holdingOf(horse.getUUID()).isEmpty()
+                        && colony.claimOf(horse.getUUID()).isEmpty()
                         && Colonies.all(level.getServer()).stream()
-                            .noneMatch(other -> other.holdingOf(horse.getUUID()).isPresent()))) {
+                            .noneMatch(other -> other.claimOf(horse.getUUID()).isPresent()))) {
                 if (!available.contains(horse)) {
                     available.add(horse);
                 }
@@ -53,7 +53,7 @@ public final class PastureHorses {
 
     public static Optional<AbstractHorse> claim(Colony colony, ServerLevel level, ResourceLocation owner) {
         for (AbstractHorse horse : available(colony, level)) {
-            if (colony.hold(owner, Held.Entity.of(horse)).isPresent()) {
+            if (colony.hold(owner, Claimed.Entity.of(horse)).isPresent()) {
                 horse.addTag(PastureContent.CLAIMED);
                 return Optional.of(horse);
             }
@@ -62,12 +62,12 @@ public final class PastureHorses {
     }
 
     public static void release(Colony colony, ResourceLocation owner, AbstractHorse horse) {
-        var holding = colony.holdingOf(horse.getUUID());
+        var holding = colony.claimOf(horse.getUUID());
         if (holding.isPresent() && !holding.get().owner().equals(owner)) {
             return;
         }
         // Razing forgets the holdings before their owners close.
         horse.removeTag(PastureContent.CLAIMED);
-        holding.ifPresent(held -> colony.release(held.id(), Release.LET_GO));
+        holding.ifPresent(held -> colony.release(held.id(), ClaimRelease.LET_GO));
     }
 }

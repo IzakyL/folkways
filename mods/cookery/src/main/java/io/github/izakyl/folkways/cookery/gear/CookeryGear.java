@@ -3,11 +3,11 @@ package io.github.izakyl.folkways.cookery.gear;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.tag.TagMod;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.resident.body.Body;
-import io.github.izakyl.folkways.core.api.terms.Goods;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
-import io.github.izakyl.folkways.core.api.work.Node;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.item.api.Goods;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
+import io.github.izakyl.folkways.core.resident.api.Body;
+import io.github.izakyl.folkways.core.work.api.Node;
 import io.github.izakyl.folkways.plugins.farming.FarmingContent;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -52,8 +52,12 @@ public final class CookeryGear {
     }
 
     public static boolean permits(Colony colony, Body body, Request request) {
-        if (body.licences().of(FarmingContent.trade()).isEmpty()) return false;
-        if (request.required() ? !hats.test(colony) : !armor.test(colony)) return false;
+        if (body.licences().of(FarmingContent.trade()).isEmpty()) {
+            return false;
+        }
+        if (request.required() ? !hats.test(colony) : !armor.test(colony)) {
+            return false;
+        }
         return request.slots().values().stream().allMatch(family -> Goods.members(family).stream()
             .allMatch(item -> clothing.test(colony, item)));
     }
@@ -79,7 +83,9 @@ public final class CookeryGear {
                 || !level.getFluidState(at.block(level)).is(net.minecraft.tags.FluidTags.WATER))) return Request.NONE;
         Map<EquipmentSlot, ItemSpec> slots = new LinkedHashMap<>();
         var hat = hat(colony);
-        if (hat.isEmpty()) return Request.NONE;
+        if (hat.isEmpty()) {
+            return Request.NONE;
+        }
         slots.put(EquipmentSlot.HEAD, hat.get());
         slots.put(EquipmentSlot.CHEST, exact(ModItems.FARMER_CHEST_PLATE.get()));
         slots.put(EquipmentSlot.LEGS, exact(ModItems.FARMER_LEGGINGS.get()));

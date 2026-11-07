@@ -1,9 +1,9 @@
 package io.github.izakyl.folkways.plugins.person.ride;
 
-import io.github.izakyl.folkways.core.api.resident.Conveyance;
-import io.github.izakyl.folkways.core.api.resident.Locomotion;
-import io.github.izakyl.folkways.core.api.resident.Search;
-import io.github.izakyl.folkways.core.api.terms.RefusalKind;
+import io.github.izakyl.folkways.core.resident.api.Conveyance;
+import io.github.izakyl.folkways.core.resident.api.Locomotion;
+import io.github.izakyl.folkways.core.resident.api.RefusalKind;
+import io.github.izakyl.folkways.core.resident.api.Search;
 import io.github.izakyl.folkways.plugins.combat.weapon.ResidentMounts;
 import io.github.izakyl.folkways.plugins.person.walk.Walking;
 import net.minecraft.resources.ResourceLocation;

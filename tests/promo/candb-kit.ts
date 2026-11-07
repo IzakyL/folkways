@@ -84,8 +84,8 @@ export const CREW = defineTask<Record<string, any>, Record<string, any>>({
   name: "folkways.construction.crew", side: "server", source: javaTask({
     imports: [
       "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
-      "io.github.izakyl.folkways.core.api.resident.body.Bodies",
-      "io.github.izakyl.folkways.core.api.vocation.Vocations",
+      "io.github.izakyl.folkways.core.resident.api.Bodies",
+      "io.github.izakyl.folkways.core.vocation.api.Vocations",
       "net.minecraft.world.item.Items",
       "net.minecraft.world.item.ItemStack",
     ],
@@ -118,7 +118,7 @@ export const COMMISSION = defineTask<Record<string, any>, Record<string, any>>({
       "io.github.izakyl.folkways.plugins.build.draft.Hint",
       "io.github.izakyl.folkways.plugins.build.draft.Patterns",
       "io.github.izakyl.folkways.front.api.Schema",
-      "io.github.izakyl.folkways.core.api.terms.ItemSpec",
+      "io.github.izakyl.folkways.core.item.api.ItemSpec",
       "net.minecraft.core.registries.Registries",
       "net.minecraft.tags.TagKey",
       "net.minecraft.core.BlockPos",
@@ -211,9 +211,9 @@ export const GALLERY = defineTask<Record<string, any>, Record<string, any>>({
       "io.github.izakyl.folkways.plugins.build.draft.Drawn",
       "io.github.izakyl.folkways.plugins.build.draft.World",
       "io.github.izakyl.folkways.front.api.Schema",
-      "io.github.izakyl.folkways.core.api.terms.ItemSpec",
-      "io.github.izakyl.folkways.core.api.structure.StructureCompat",
-      "io.github.izakyl.folkways.core.api.structure.Voxelizer",
+      "io.github.izakyl.folkways.core.item.api.ItemSpec",
+      "io.github.izakyl.folkways.core.work.api.StructureCompat",
+      "io.github.izakyl.folkways.core.work.api.Voxelizer",
       "net.minecraft.core.BlockPos",
       "net.minecraft.core.Direction",
       "net.minecraft.nbt.CompoundTag",
@@ -268,16 +268,16 @@ export const AUDIT = defineTask<Record<string, any>, Record<string, any>>({
       "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
       "io.github.izakyl.folkways.plugins.build.Blueprint",
       "io.github.izakyl.folkways.plugins.build.BlueprintBuildOrder",
-      "io.github.izakyl.folkways.core.api.structure.StructureCompat",
-      "io.github.izakyl.folkways.core.api.structure.StructurePayload",
-      "io.github.izakyl.folkways.core.api.resident.body.Bodies",
+      "io.github.izakyl.folkways.core.work.api.StructureCompat",
+      "io.github.izakyl.folkways.core.world.api.StructurePayload",
+      "io.github.izakyl.folkways.core.resident.api.Bodies",
       "net.minecraft.core.BlockPos",
       "net.minecraft.world.level.block.state.BlockState",
       "net.minecraft.resources.ResourceLocation",
       "net.minecraft.core.registries.BuiltInRegistries",
       "net.minecraft.world.Container",
       "net.minecraft.world.item.ItemStack",
-      "io.github.izakyl.folkways.core.api.terms.ItemSpec",
+      "io.github.izakyl.folkways.core.item.api.ItemSpec",
     ],
     members: `
 static Map<BlockPos, BlockState> states = new LinkedHashMap<>();
@@ -456,7 +456,7 @@ var f=presence.getClass().getDeclaredField("owed");f.setAccessible(true);
 var items=new LinkedHashMap<String,Integer>();
 for (var owed : ((Map<?, ?>) f.get(presence)).values()) {
   for (var need : ((Map<?, ?>) owed).entrySet()) {
-    var spec = (io.github.izakyl.folkways.core.api.terms.ItemSpec) need.getKey();
+    var spec = (io.github.izakyl.folkways.core.item.api.ItemSpec) need.getKey();
     items.merge(spec.item().orElseThrow().toString(), ((Number) need.getValue()).intValue(), Integer::sum);
   }
 }

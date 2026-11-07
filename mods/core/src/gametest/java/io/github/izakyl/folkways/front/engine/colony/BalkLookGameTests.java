@@ -1,13 +1,13 @@
 package io.github.izakyl.folkways.front.engine.colony;
 
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.colony.Colonies;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.resident.body.Body;
-import io.github.izakyl.folkways.core.api.work.Balk;
-import io.github.izakyl.folkways.core.api.work.Doing;
-import io.github.izakyl.folkways.core.api.work.Doings;
-import io.github.izakyl.folkways.core.engine.plan.haul.HaulRefusal;
+import io.github.izakyl.folkways.core.colony.api.Colonies;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.resident.api.Balk;
+import io.github.izakyl.folkways.core.resident.api.Body;
+import io.github.izakyl.folkways.core.resident.api.Doing;
+import io.github.izakyl.folkways.core.resident.api.Doings;
+import io.github.izakyl.folkways.core.work.internal.HaulRefusal;
 import io.github.izakyl.folkways.front.api.notice.Line;
 import io.github.izakyl.folkways.front.api.notice.Sentence;
 import io.github.izakyl.folkways.plugins.farming.FarmRefusal;

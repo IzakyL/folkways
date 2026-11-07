@@ -218,7 +218,7 @@ const DRAW_ZONE = defineTask<{ colony_id: string; works: string; fill_block: str
       "net.minecraft.core.BlockPos",
       "net.minecraft.resources.ResourceLocation",
       "java.util.Arrays",
-      "io.github.izakyl.folkways.core.api.terms.ItemFilter",
+      "io.github.izakyl.folkways.core.item.api.ItemFilter",
     ],
     body: `
 Args args = Args.of(ctx);

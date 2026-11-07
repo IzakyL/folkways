@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.core.shell.mixin;
 
-import io.github.izakyl.folkways.core.api.terms.ObstructedPathRegion;
+import io.github.izakyl.folkways.core.world.api.ObstructedPathRegion;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.level.CollisionGetter;

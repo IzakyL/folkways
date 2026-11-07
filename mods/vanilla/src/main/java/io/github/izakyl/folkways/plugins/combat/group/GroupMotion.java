@@ -1,16 +1,16 @@
 package io.github.izakyl.folkways.plugins.combat.group;
 
-import io.github.izakyl.folkways.core.api.resident.body.Body;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
+import io.github.izakyl.folkways.core.resident.api.Body;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
+import io.github.izakyl.folkways.core.world.api.WorldSpaces;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.UUID;
 import java.util.Set;
-import java.util.stream.Collectors;
+import java.util.UUID;
 import java.util.function.BiConsumer;
+import java.util.stream.Collectors;
 
 /** Autonomous runner policy over the shared planner. No navigation or command handles are owned here. */
 public final class GroupMotion {

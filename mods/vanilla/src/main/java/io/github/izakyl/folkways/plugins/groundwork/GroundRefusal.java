@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.plugins.groundwork;
 
-import io.github.izakyl.folkways.core.api.terms.RefusalKind;
+import io.github.izakyl.folkways.core.resident.api.RefusalKind;
 
 public enum GroundRefusal implements RefusalKind.Named {
 

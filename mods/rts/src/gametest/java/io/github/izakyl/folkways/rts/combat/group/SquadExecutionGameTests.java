@@ -2,21 +2,22 @@ package io.github.izakyl.folkways.rts.combat.group;
 
 import com.mojang.authlib.GameProfile;
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.colony.Colonies;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.colony.Held;
-import io.github.izakyl.folkways.core.api.resident.body.Body;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.work.Ending;
-import io.github.izakyl.folkways.core.engine.labor.LaborFixture;
+import io.github.izakyl.folkways.core.colony.api.Claimed;
+import io.github.izakyl.folkways.core.colony.api.Colonies;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
+import io.github.izakyl.folkways.core.resident.api.Body;
+import io.github.izakyl.folkways.core.runtime.LaborFixture;
 import io.github.izakyl.folkways.core.testing.Cleanup;
+import io.github.izakyl.folkways.core.work.api.Ending;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.front.engine.charter.Charter;
 import io.github.izakyl.folkways.front.engine.charter.Charters;
 import io.github.izakyl.folkways.front.engine.registry.FolkwaysItems;
 import io.github.izakyl.folkways.front.engine.registry.FolkwaysPlayerAttachments;
 import io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfile;
 import io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfiles;
+import io.github.izakyl.folkways.plugins.combat.weapon.PatrolSupplies;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import io.github.izakyl.folkways.plugins.person.PersonContent;
 import io.github.izakyl.folkways.rts.FolkwaysRtsMod;
@@ -35,6 +36,7 @@ import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.players.PlayerList;
+import net.minecraft.tags.ItemTags;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EquipmentSlot;
@@ -64,7 +66,7 @@ public final class SquadExecutionGameTests {
     public static void explicitAttackKeepsTheActualSquadAndReformsAfterTargetDeath(GameTestHelper helper) {
         Fixture f = new Fixture(helper);
         List<Body> people = f.people(2);
-        f.groups.commandSelectionPoints(people, List.of(f.at(18, 10)), -1);
+        f.groups.commandSelectionPoints(people, List.of(f.at(18, 10)), -1, false);
         UnitGroup original = f.groups.ofResident(people.getFirst().id()).orElseThrow();
         UUID previous = original.commandId().orElseThrow();
         Zombie enemy = f.enemy(10, 10);
@@ -177,6 +179,16 @@ public final class SquadExecutionGameTests {
     @GameTest(template = "empty_large")
     public static void runnerRefusalAfterTargetEscapesPreservesTheSpecificAttackEnd(GameTestHelper helper) {
         Fixture f = new Fixture(helper);
+        // The leash uses three-dimensional distance. Escape vertically within the chunk that GameTest
+        // already keeps entity ticking, so this callback test needs no cold neighboring chunks to load.
+        BlockPos escaped = f.at(14, 10).block(f.level).above(65);
+        helper.startSequence()
+            .thenWaitUntil(() -> helper.assertTrue(f.level.isPositionEntityTicking(escaped),
+                "the escaped target's chunk must keep its entity sections loaded"))
+            .thenExecute(() -> assertEscapedTargetRefusal(helper, f, escaped));
+    }
+
+    private static void assertEscapedTargetRefusal(GameTestHelper helper, Fixture f, BlockPos escaped) {
         List<Body> people = f.people(2);
         Zombie enemy = f.enemy(14, 10);
         UnitGroup group = f.groups.attackSelection(people, enemy, f.player);
@@ -184,8 +196,6 @@ public final class SquadExecutionGameTests {
         // Keep the target loaded and inside the player bound, but beyond its attack-origin leash.
         // Deliver the real runner completion callback before the periodic command scan can release
         // the handles. Both orders now have Status.FAILED together with AttackEnd.OUT_OF_RANGE.
-        BlockPos escaped = enemy.blockPosition().offset(65, 0, 0);
-        f.level.getChunkAt(escaped);
         enemy.moveTo(escaped.getX() + .5, escaped.getY(), escaped.getZ() + .5);
         try {
             var ended = ResidentCommands.class.getDeclaredMethod("ended", ResidentCommands.Order.class, Ending.class);
@@ -522,7 +532,7 @@ public final class SquadExecutionGameTests {
                 BlockPos cell = at(2, 7 + n * 2).block(level);
                 body.mob().moveTo(cell.getX() + .5, cell.getY(), cell.getZ() + .5);
                 level.addFreshEntity(body.mob());
-                colony.hold(PersonContent.ID, Held.Entity.of(body.mob())).orElseThrow();
+                colony.hold(PersonContent.ID, Claimed.Entity.of(body.mob())).orElseThrow();
                 body.joinColony(colony.id());
                 arm(colony, body, "Melee", ItemSpec.of(Tags.Items.MELEE_WEAPON_TOOLS));
                 body.pack().insert(new ItemStack(Items.IRON_SWORD));
@@ -565,6 +575,33 @@ public final class SquadExecutionGameTests {
             .filter(one -> one.name().equals(name))
             .findFirst()
             .orElseGet(() -> profiles.add(profiles.create(name).id(), LoadoutProfile.Entry.weapon(weapon)));
+        profiles.assign(List.of(body.id()), Optional.of(profile.id()));
+    }
+
+    private static void assignLoadout(
+        PatrolSupplies supplies,
+        Body body, String name) {
+        var profiles = supplies.profiles();
+        var profile = profiles.all().stream().filter(value -> value.name().equals(name)).findFirst()
+            .orElseGet(() -> {
+                var created = profiles.create(name);
+                var weapon = switch (name) {
+                    case "melee" -> ItemSpec.of(
+                        Tags.Items.MELEE_WEAPON_TOOLS);
+                    case "bow" -> ItemSpec.of(Items.BOW);
+                    case "crossbow" -> ItemSpec.of(Items.CROSSBOW);
+                    default -> throw new IllegalArgumentException(name);
+                };
+                var entries = new ArrayList<LoadoutProfile.Entry>();
+                entries.add(LoadoutProfile.Entry.weapon(weapon));
+                if (!name.equals("melee")) {
+                    entries.add(LoadoutProfile.Entry.supply(
+                        ItemSpec.of(ItemTags.ARROWS), 8, 8));
+                }
+                profiles.replace(new LoadoutProfile(
+                    created.id(), created.name(), entries));
+                return profiles.get(created.id()).orElseThrow();
+            });
         profiles.assign(List.of(body.id()), Optional.of(profile.id()));
     }
 }

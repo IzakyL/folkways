@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.front.api;
 
-import io.github.izakyl.folkways.core.api.colony.Colony;
+import io.github.izakyl.folkways.core.colony.api.Colony;
 import io.github.izakyl.folkways.front.api.notice.Attempt;
 import java.util.UUID;
 import net.minecraft.server.level.ServerLevel;

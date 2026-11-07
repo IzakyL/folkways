@@ -1,12 +1,13 @@
 package io.github.izakyl.folkways.plugins.person.ride;
 
-import io.github.izakyl.folkways.core.api.resident.Conveyance;
-import io.github.izakyl.folkways.core.api.resident.Going;
-import io.github.izakyl.folkways.core.api.resident.body.Bodies;
-import io.github.izakyl.folkways.core.api.terms.Reach;
-import io.github.izakyl.folkways.core.api.terms.RefusalKind;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
+import io.github.izakyl.folkways.core.colony.api.ClaimRelease;
+import io.github.izakyl.folkways.core.resident.api.Bodies;
+import io.github.izakyl.folkways.core.resident.api.Conveyance;
+import io.github.izakyl.folkways.core.resident.api.Going;
+import io.github.izakyl.folkways.core.resident.api.RefusalKind;
+import io.github.izakyl.folkways.core.world.api.Reach;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
+import io.github.izakyl.folkways.core.world.api.WorldSpaces;
 import io.github.izakyl.folkways.plugins.combat.weapon.ResidentMounts;
 import io.github.izakyl.folkways.plugins.patrol.PatrolContent;
 import io.github.izakyl.folkways.plugins.person.walk.OnFoot;
@@ -81,7 +82,7 @@ final class OnHorse implements Conveyance {
             // Reaching a cell beside the horse is enough to get on; no second check of the distance.
             Going fetching = walking.step(level, body, around(level));
             if (fetching instanceof Going.Arrived) {
-                // Once boarded, Mob.getNavigation forwards to the horse. Release the rider's actual FETCH
+                // Once boarded, Mob.getNavigation forwards to the horse. ClaimRelease the rider's actual FETCH
                 // path first, or its native tick keeps sending the horse back toward the old boarding cell.
                 walking.release(level, body);
                 walking = null;

@@ -1,9 +1,9 @@
 package io.github.izakyl.folkways.plugins.build;
 
-import io.github.izakyl.folkways.core.api.structure.StructureCompat;
-import io.github.izakyl.folkways.core.api.structure.StructurePayload;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
-import io.github.izakyl.folkways.core.api.work.Need;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
+import io.github.izakyl.folkways.core.work.api.Need;
+import io.github.izakyl.folkways.core.work.api.StructureCompat;
+import io.github.izakyl.folkways.core.world.api.StructurePayload;
 import io.github.izakyl.folkways.front.api.Ghost;
 import io.github.izakyl.folkways.plugins.build.draft.Joint;
 import java.util.ArrayList;
@@ -65,7 +65,9 @@ public record BuildOrderView(UUID id, BlockPos min, BlockPos max, int placed, in
     static List<Ghost> pending(ServerLevel level, BuildTarget target, Set<BlockPos> met, Set<Joint> joined,
             int most, BlockPos near, int payloadBytes) {
         List<Ghost> owed = new ArrayList<>();
-        if (most <= 0) return List.of();
+        if (most <= 0) {
+            return List.of();
+        }
         var candidates = target.cells().entrySet().stream()
             .filter(cell -> !met.contains(cell.getKey()) && !cell.getValue().isAir() && level.hasChunkAt(cell.getKey()))
             .sorted(Comparator.comparingDouble(cell -> cell.getKey().distSqr(near))).limit(most).toList();

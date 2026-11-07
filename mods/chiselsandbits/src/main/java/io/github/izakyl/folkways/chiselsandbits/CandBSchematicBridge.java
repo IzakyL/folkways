@@ -1,9 +1,9 @@
 package io.github.izakyl.folkways.chiselsandbits;
 
-import io.github.izakyl.folkways.core.api.structure.StructureCompat;
-import io.github.izakyl.folkways.core.api.structure.StructurePayload;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
-import io.github.izakyl.folkways.core.api.work.Need;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
+import io.github.izakyl.folkways.core.work.api.Need;
+import io.github.izakyl.folkways.core.work.api.StructureCompat;
+import io.github.izakyl.folkways.core.world.api.StructurePayload;
 import java.util.List;
 import java.util.Optional;
 import mod.chiselsandbits.block.entities.ChiseledBlockEntity;

@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.front.engine.item;
 
-import io.github.izakyl.folkways.core.api.terms.ItemFilter;
+import io.github.izakyl.folkways.core.item.api.ItemFilter;
 import io.github.izakyl.folkways.front.engine.registry.FolkwaysDataComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;

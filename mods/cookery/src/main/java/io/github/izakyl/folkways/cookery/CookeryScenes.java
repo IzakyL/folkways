@@ -1,7 +1,7 @@
 package io.github.izakyl.folkways.cookery;
 
-import io.github.izakyl.folkways.front.api.ponder.PonderScenery;
 import io.github.izakyl.folkways.cookery.stove.HeatScene;
+import io.github.izakyl.folkways.front.api.ponder.PonderScenery;
 import io.github.izakyl.folkways.front.api.ponder.Scenes;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import net.createmod.catnip.math.Pointing;

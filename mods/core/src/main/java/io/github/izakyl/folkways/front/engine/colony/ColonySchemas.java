@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.front.engine.colony;
 
-import io.github.izakyl.folkways.core.api.vocation.Vocations;
+import io.github.izakyl.folkways.core.vocation.api.Vocations;
 import io.github.izakyl.folkways.front.api.CoreSettings;
 import io.github.izakyl.folkways.front.api.Delegation;
 import io.github.izakyl.folkways.front.api.Enrollment;
@@ -40,10 +40,18 @@ public final class ColonySchemas {
         return Enrollments.delegation(delegation).map(Delegation::schema).orElseGet(Schema::none);
     }
 
+    // Schemas come from installed plugins and their resource/configuration-dependent declarations (such as
+    // crop choices and tool kits). New fields, changed types, ranges and choices therefore need defaults even
+    // for data a previous writer produced correctly. Unknown keys survive an absent plugin; omitted tool
+    // overrides keep inheriting the current kit. Persisted value shapes are validated before this boundary.
     static ColonySettings conform(ResourceLocation scope, ColonySettings settings) {
         return settings.conformedTo(of(scope),
             Vocations.of(scope).isPresent()
                 ? Set.of(CoreSettings.TOOL_KEY) : Set.of());
+    }
+
+    static ColonySettings conformDelegation(ResourceLocation delegation, ColonySettings settings) {
+        return settings.conformedTo(ofDelegation(delegation));
     }
 
     static Map<ResourceLocation, ColonySettings> fresh() {

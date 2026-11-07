@@ -51,7 +51,7 @@ public final class StructureNbtGameTests {
         Blueprint resolved = new Blueprint(UUID.randomUUID(), "flow", java.util.List.of(
             new BlueprintBlock(BlockPos.ZERO, flowing)), BlueprintVolume.of(1, 1, 1).orElseThrow(), 0L).confirm(level);
         helper.assertTrue(resolved.blocks().isEmpty(), "resolution excludes flow cells from construction targets");
-        BuildTarget target = new BuildTarget(io.github.izakyl.folkways.core.api.terms.WorldPos.of(level, pos).realm(),
+        BuildTarget target = new BuildTarget(io.github.izakyl.folkways.core.world.api.WorldPos.of(level, pos).realm(),
             java.util.Map.of());
         SiteRig rig = SiteRig.start(level, target);
         helper.assertTrue(rig.site.complete(), "an unconstrained flow cell needs no construction");

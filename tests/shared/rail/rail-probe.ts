@@ -13,7 +13,7 @@ const TRAIN = defineTask<{ carriage: string }, Record<string, any>>({
   source: javaTask({
     imports: [
       "com.simibubi.create.content.trains.entity.CarriageContraptionEntity",
-      "io.github.izakyl.folkways.core.api.resident.body.Bodies",
+      "io.github.izakyl.folkways.core.resident.api.Bodies",
     ],
     body: `
 var level = ctx.server().overworld();

@@ -1,23 +1,23 @@
 package io.github.izakyl.folkways.plugins.patrol;
 
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.colony.Release;
-import io.github.izakyl.folkways.front.api.notice.Attempt;
-import io.github.izakyl.folkways.front.api.notice.Notice;
-import io.github.izakyl.folkways.core.api.colony.ColonyView;
-import io.github.izakyl.folkways.core.api.colony.Held;
-import io.github.izakyl.folkways.core.api.terms.Footing;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
-import io.github.izakyl.folkways.core.api.vocation.Vocations;
-import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.Urge;
-import io.github.izakyl.folkways.core.api.work.Worker;
+import io.github.izakyl.folkways.core.colony.api.ClaimRelease;
+import io.github.izakyl.folkways.core.colony.api.Claimed;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.colony.api.ColonyView;
+import io.github.izakyl.folkways.core.vocation.api.Vocations;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.work.api.Urge;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.world.api.Footing;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
+import io.github.izakyl.folkways.core.world.api.WorldSpaces;
 import io.github.izakyl.folkways.front.api.Facing;
 import io.github.izakyl.folkways.front.api.Fronts;
 import io.github.izakyl.folkways.front.api.ZoneRing;
 import io.github.izakyl.folkways.front.api.ZoneView;
+import io.github.izakyl.folkways.front.api.notice.Attempt;
 import io.github.izakyl.folkways.front.api.notice.Line;
+import io.github.izakyl.folkways.front.api.notice.Notice;
 import io.github.izakyl.folkways.front.api.panel.Board;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
 import io.github.izakyl.folkways.plugins.combat.DefenseControl;
@@ -66,7 +66,7 @@ public final class SentryPosts implements Facing {
 
     public boolean assigned(UUID resident) {
         return PatrolStaffing.of(colony).targetOf(resident)
-            .flatMap(colony::holding).filter(holding -> post(holding.owner())).isPresent();
+            .flatMap(colony::claim).filter(holding -> post(holding.owner())).isPresent();
     }
 
     public static boolean post(ResourceLocation owner) {
@@ -74,7 +74,7 @@ public final class SentryPosts implements Facing {
     }
 
     public List<UUID> stationPosts() {
-        return colony.holdings().stream().filter(holding -> holding.owner().equals(STATION))
+        return colony.claims().stream().filter(holding -> holding.owner().equals(STATION))
             .map(holding -> holding.id()).toList();
     }
 
@@ -87,8 +87,8 @@ public final class SentryPosts implements Facing {
     }
 
     public Optional<ZoneView> zone(ServerLevel level, UUID id) {
-        var holding = colony.holding(id).filter(value -> value.owner().equals(STATION));
-        if (holding.isPresent() && holding.get().what() instanceof Held.Entity held) {
+        var holding = colony.claim(id).filter(value -> value.owner().equals(STATION));
+        if (holding.isPresent() && holding.get().what() instanceof Claimed.Entity held) {
             var entity = level.getEntity(held.entity());
             if (entity != null && entity.isAlive() && !entity.isRemoved()) {
                 return Optional.of(StationPost.of(id, entity, Fronts.of(colony).settings(PatrolContent.ID)));
@@ -141,7 +141,7 @@ public final class SentryPosts implements Facing {
 
     private Optional<UUID> assignment(UUID resident) {
         return PatrolStaffing.of(colony).targetOf(resident)
-            .filter(target -> colony.holding(target).filter(holding -> post(holding.owner())).isPresent());
+            .filter(target -> colony.claim(target).filter(holding -> post(holding.owner())).isPresent());
     }
 
     private int stanceIndex(UUID zone, UUID resident) {
@@ -237,7 +237,7 @@ public final class SentryPosts implements Facing {
         ResourceLocation intent = ResourceLocation.fromNamespaceAndPath("folkways",
             "sentry/" + assigned + "/" + (zone instanceof StationPost post ? post.anchor().cell() : cell).asLong()
                 + "/" + slot(assigned, resident)
-                .map(UUID::toString).orElse("legacy"));
+                .map(UUID::toString).orElseThrow());
         boolean fighting = SpottedTargets.of(colony).observe(worker.body()).stream()
             .anyMatch(target -> worker.body().distanceTo(target) <= Weapons.rangedRange(worker, target));
         SentryNode running = active.get(resident);
@@ -360,9 +360,9 @@ public final class SentryPosts implements Facing {
                 PatrolStaffing.of(colony).summary(zone.id())));
         }
         for (UUID id : stationPosts().stream().sorted().toList()) {
-            var holding = colony.holding(id).orElseThrow();
+            var holding = colony.claim(id).orElseThrow();
             Component title = Component.translatable("folkways.delegation.folkways.weapon_station");
-            if (holding.what() instanceof Held.Entity held && view.level().getEntity(held.entity()) != null) {
+            if (holding.what() instanceof Claimed.Entity held && view.level().getEntity(held.entity()) != null) {
                 var entity = view.level().getEntity(held.entity());
                 title = entity.getDisplayName().copy().append(" · " + entity.blockPosition().toShortString());
             }
@@ -388,8 +388,8 @@ public final class SentryPosts implements Facing {
         if (page.equals(ID) && action.startsWith("withdraw/")) {
             try {
                 UUID target = UUID.fromString(action.substring("withdraw/".length()));
-                if (colony.holding(target).filter(holding -> holding.owner().equals(STATION)).isPresent()) {
-                    colony.release(target, Release.LET_GO);
+                if (colony.claim(target).filter(holding -> holding.owner().equals(STATION)).isPresent()) {
+                    colony.release(target, ClaimRelease.LET_GO);
                     PatrolStaffing.of(colony).tick(view.level().getServer());
                     tick(view.level().getServer());
                     return Attempt.went();

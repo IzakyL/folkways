@@ -11,7 +11,7 @@ public final class GlobalPerks {
 
     public static final String BRISK = "global_brisk";
 
-    public static final String PACKMULE = "global_packmule";
+    public static final String GOLEM_PACK_ROOM = "golem_pack_room";
 
     public static final String ASCETIC = "global_ascetic";
 
@@ -26,7 +26,7 @@ public final class GlobalPerks {
 
     // The ascetic's ladder is the server's to set: one entry per rank, times the rate food is worn down at.
     public static void install(Supplier<? extends List<? extends Number>> asceticAppetite) {
-        PerkPool.legacy(new Perk(PACKMULE, 3, Grant.multiplied(Stats.PACK_ROOM, () -> ROOM_BY_RANK)));
+        PerkPool.fixedGlobal(new Perk(GOLEM_PACK_ROOM, 3, Grant.multiplied(Stats.PACK_ROOM, () -> ROOM_BY_RANK)));
         PerkPool.install(
             new Perk(PerkPool.STOIC, 1, Grant.flag(Stats.PATIENT)),
             new Perk(LONGARM, 3, Grant.added(Stats.REACH, () -> REACH_BY_RANK)),

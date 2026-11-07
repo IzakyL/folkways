@@ -1,7 +1,7 @@
 package io.github.izakyl.folkways.plugins.combat.weapon;
 
-import io.github.izakyl.folkways.core.api.colony.Colonies;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
+import io.github.izakyl.folkways.core.colony.api.Colonies;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
 import java.util.List;
 import java.util.UUID;
@@ -25,6 +25,32 @@ public final class LoadoutRegistryGameTests {
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) {
         event.register(LoadoutRegistryGameTests.class);
+    }
+
+    @GameTest(template = "empty")
+    public static void danglingAssignmentsFailInsteadOfDisappearing(GameTestHelper helper) {
+        var colony = Colonies.mint(helper.getLevel().getServer());
+        try {
+            LoadoutProfiles current = new LoadoutProfiles(colony, ignored -> { });
+            current.create("Current");
+            CompoundTag saved = colony.kept(LoadoutProfiles.SAVED).copy();
+            CompoundTag assignment = new CompoundTag();
+            assignment.putUUID("resident", UUID.randomUUID());
+            assignment.putUUID("profile", UUID.randomUUID());
+            saved.getList("assignments", Tag.TAG_COMPOUND).add(assignment);
+            colony.keep(LoadoutProfiles.SAVED, saved);
+            boolean rejected = false;
+            try {
+                new LoadoutProfiles(colony, ignored -> { });
+            } catch (IllegalArgumentException expected) {
+                rejected = true;
+            }
+            helper.assertTrue(rejected, "a dangling assignment must fail the profile load");
+            helper.assertValueEqual(colony.kept(LoadoutProfiles.SAVED), saved, "failed loading preserves the source");
+        } finally {
+            colony.raze();
+        }
+        helper.succeed();
     }
 
     @GameTest(template = "empty")
@@ -70,6 +96,7 @@ public final class LoadoutRegistryGameTests {
             CompoundTag saved = new CompoundTag();
             saved.putInt("version", 4);
             saved.put("profiles", profiles);
+            saved.put("assignments", new ListTag());
             colony.keep(LoadoutProfiles.SAVED, saved);
             var loadouts = new PatrolSupplies(colony).profiles();
             var loaded = loadouts.all().getFirst();
@@ -96,25 +123,4 @@ public final class LoadoutRegistryGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
-    public static void requestedGunKeepsItsModelButNotHeldAttachments(GameTestHelper helper) {
-        CompoundTag typed = ItemSpec.of(Items.STICK).save(helper.getLevel().registryAccess());
-        CompoundTag identity = new CompoundTag();
-        identity.putString("GunId", "tacz:m1911");
-        identity.putString("AttachmentSCOPE", "old held attachment");
-        CompoundTag typedValues = new CompoundTag(), typedComponents = new CompoundTag();
-        typedValues.put("minecraft:custom_data", identity);
-        typedComponents.put("values", typedValues);
-        typed.put("components", typedComponents);
-        CompoundTag converted = LoadoutProfiles.withoutPins(typed);
-        CompoundTag actual = converted.getCompound("components").getCompound("values")
-            .getCompound("minecraft:custom_data");
-        helper.assertValueEqual(actual.getString("GunId"), "tacz:m1911", "typed gun identity survives");
-        helper.assertFalse(actual.contains("AttachmentSCOPE"), "held attachments do not constrain");
-        identity.remove("GunId");
-        identity.remove("AttachmentSCOPE");
-        identity.putString("AmmoId", "tacz:45acp");
-        helper.assertValueEqual(LoadoutProfiles.withoutPins(typed), typed, "typed ammunition is unchanged");
-        helper.succeed();
-    }
 }

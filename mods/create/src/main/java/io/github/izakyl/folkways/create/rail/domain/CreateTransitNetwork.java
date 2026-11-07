@@ -19,7 +19,7 @@ import com.simibubi.create.content.trains.schedule.destination.ChangeTitleInstru
 import com.simibubi.create.content.trains.schedule.destination.DestinationInstruction;
 import com.simibubi.create.content.trains.schedule.destination.ScheduleInstruction;
 import com.simibubi.create.content.trains.station.GlobalStation;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.create.CreateMod;
 import io.github.izakyl.folkways.create.transport.ContraptionSeats;
 import java.util.ArrayList;

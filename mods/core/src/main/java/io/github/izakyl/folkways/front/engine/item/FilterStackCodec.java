@@ -1,7 +1,7 @@
 package io.github.izakyl.folkways.front.engine.item;
 
-import io.github.izakyl.folkways.core.api.terms.ItemFilter;
-import io.github.izakyl.folkways.core.api.terms.ItemQuery;
+import io.github.izakyl.folkways.core.item.api.ItemFilter;
+import io.github.izakyl.folkways.core.item.api.ItemQuery;
 import io.github.izakyl.folkways.front.api.ui.FilterStacks;
 import io.github.izakyl.folkways.front.engine.registry.FolkwaysDataComponents;
 import io.github.izakyl.folkways.front.engine.registry.FolkwaysItems;

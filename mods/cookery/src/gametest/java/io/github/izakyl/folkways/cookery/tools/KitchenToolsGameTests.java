@@ -1,13 +1,15 @@
 package io.github.izakyl.folkways.cookery.tools;
 
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.terms.Goods;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
+import io.github.izakyl.folkways.core.item.api.Goods;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -26,6 +28,43 @@ public final class KitchenToolsGameTests {
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) {
         event.register(KitchenToolsGameTests.class);
+    }
+
+    @GameTest(template = "empty")
+    public static void malformedLoansFailInsteadOfDroppingOrDeduplicatingThem(GameTestHelper helper) {
+        KitchenTools pool = new KitchenTools();
+        UUID colony = UUID.randomUUID();
+        UUID task = UUID.randomUUID();
+        var inventory = new KitchenTools.Inventory(List.of(available()), Map.of());
+        pool.request(colony, task, family(), inventory);
+        pool.reserve(colony, task, family(), UUID.randomUUID(), inventory).orElseThrow();
+        for (int fault = 0; fault < 4; fault++) {
+            CompoundTag saved = pool.save(colony);
+            var loans = saved.getList("loans", Tag.TAG_COMPOUND);
+            switch (fault) {
+                case 0 -> loans.add(loans.getCompound(0).copy());
+                case 1 -> {
+                    CompoundTag duplicateTool = loans.getCompound(0).copy();
+                    duplicateTool.putUUID("id", UUID.randomUUID());
+                    loans.add(duplicateTool);
+                }
+                case 2 -> loans.getCompound(0).remove("resident");
+                case 3 -> saved.remove("loans");
+                default -> throw new AssertionError("unknown corruption");
+            }
+            if (fault == 3) {
+                saved.putString("items", "present bag");
+            }
+            boolean rejected = false;
+            try {
+                new KitchenTools().load(colony, saved);
+            } catch (RuntimeException expected) {
+                rejected = true;
+            }
+            helper.assertTrue(rejected, "malformed tool loans must fail loading, fault " + fault);
+        }
+        new KitchenTools().load(colony, new CompoundTag());
+        helper.succeed();
     }
 
     @GameTest(template = "empty")

@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.core.shell.mixin;
 
-import io.github.izakyl.folkways.core.engine.colony.ColonyMemberWrites;
+import io.github.izakyl.folkways.core.colony.internal.ColonyMemberWrites;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;

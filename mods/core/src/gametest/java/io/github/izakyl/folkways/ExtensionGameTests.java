@@ -1,24 +1,24 @@
 package io.github.izakyl.folkways;
 
 import com.lowdragmc.lowdraglib2.gui.ui.UIElement;
-import io.github.izakyl.folkways.core.api.Declaring;
-import io.github.izakyl.folkways.core.api.colony.Colonies;
-import io.github.izakyl.folkways.core.api.colony.ColonyContext;
-import io.github.izakyl.folkways.core.api.colony.ColonyLifecycle;
-import io.github.izakyl.folkways.core.api.colony.Contributions;
-import io.github.izakyl.folkways.core.api.colony.Held;
-import io.github.izakyl.folkways.core.api.participation.Participation;
-import io.github.izakyl.folkways.core.api.participation.Participations;
-import io.github.izakyl.folkways.core.api.participation.Stake;
-import io.github.izakyl.folkways.core.api.passage.Hop;
-import io.github.izakyl.folkways.core.api.passage.Passage;
-import io.github.izakyl.folkways.core.api.resident.Conveyance;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.vocation.VocationSpec;
-import io.github.izakyl.folkways.core.api.work.Grown;
-import io.github.izakyl.folkways.core.api.work.Urge;
-import io.github.izakyl.folkways.core.engine.colony.ColonyData;
+import io.github.izakyl.folkways.core.colony.api.Claimed;
+import io.github.izakyl.folkways.core.colony.api.Colonies;
+import io.github.izakyl.folkways.core.colony.api.ColonyContext;
+import io.github.izakyl.folkways.core.colony.api.ColonyLifecycle;
+import io.github.izakyl.folkways.core.colony.internal.ColonyData;
+import io.github.izakyl.folkways.core.colony.internal.Contributions;
+import io.github.izakyl.folkways.core.extension.api.Declaring;
+import io.github.izakyl.folkways.core.plan.api.Grown;
+import io.github.izakyl.folkways.core.resident.api.Conveyance;
+import io.github.izakyl.folkways.core.resident.api.Participation;
+import io.github.izakyl.folkways.core.resident.api.Participations;
+import io.github.izakyl.folkways.core.resident.api.Stake;
 import io.github.izakyl.folkways.core.testing.Proxies;
+import io.github.izakyl.folkways.core.travel.api.Hop;
+import io.github.izakyl.folkways.core.travel.api.Passage;
+import io.github.izakyl.folkways.core.vocation.api.VocationSpec;
+import io.github.izakyl.folkways.core.work.api.Urge;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.front.api.Delegation;
 import io.github.izakyl.folkways.front.api.Enrollment;
 import io.github.izakyl.folkways.front.api.Facing;
@@ -111,7 +111,7 @@ public final class ExtensionGameTests {
         event.facing(FRONT, colony -> Optional.of(new Facing() {
             @Override
             public Optional<Board> board(ResourceLocation page,
-                    io.github.izakyl.folkways.core.api.colony.ColonyView view) {
+                    io.github.izakyl.folkways.core.colony.api.ColonyView view) {
                 return page.equals(FRONT) ? Optional.of(Board.of(List.of())) : Optional.empty();
             }
         }));
@@ -177,14 +177,14 @@ public final class ExtensionGameTests {
         BlockPos next = helper.absolutePos(new BlockPos(3, 1, 1));
         level.setBlockAndUpdate(old, Blocks.CHEST.defaultBlockState());
         level.setBlockAndUpdate(next, Blocks.CHEST.defaultBlockState());
-        colony.hold(WaresContent.STORE, new Held.Block(WorldPos.of(level, old)));
+        colony.hold(WaresContent.STORE, new Claimed.Block(WorldPos.of(level, old)));
         ColonyFront previous = ColonyFront.of(colony);
         UUID zone = previous.addZone(level, ZONE.id(), Set.of(old), ColonySettings.empty()).orElseThrow().id();
         boolean[] remapped = {false};
         Runnable remove = ColonyLifecycle.listen(new ColonyLifecycle.Listener() {
             @Override
             public Runnable relocating(net.minecraft.server.MinecraftServer host,
-                    io.github.izakyl.folkways.core.api.colony.Colony moving,
+                    io.github.izakyl.folkways.core.colony.api.Colony moving,
                     Map<WorldPos, WorldPos> moved) {
                 if (!moving.id().equals(colony.id())) {
                     return () -> { };
@@ -216,23 +216,23 @@ public final class ExtensionGameTests {
             var data = ColonyData.find(level.getServer(), colony.id()).orElseThrow();
             Urge urge = new Urge(SOURCES, Urge.NOW, true, () -> { throw new AssertionError("not executing"); });
             URGES.put(colony.id(), List.of(urge));
-            var spec = io.github.izakyl.folkways.core.api.work.NodeSpec.of(UUID.randomUUID(), SOURCES,
-                io.github.izakyl.folkways.core.api.work.WorkSite.at(level, helper.absolutePos(BlockPos.ZERO)),
-                io.github.izakyl.folkways.core.api.work.Stances.WHEREVER,
-                io.github.izakyl.folkways.core.api.work.Workload.Once.of(0)).done();
-            var node = new io.github.izakyl.folkways.core.api.work.Node() {
-                public io.github.izakyl.folkways.core.api.work.NodeSpec spec() { return spec; }
-                public io.github.izakyl.folkways.core.api.work.Outcome commit(
+            var spec = io.github.izakyl.folkways.core.work.api.NodeSpec.of(UUID.randomUUID(), SOURCES,
+                io.github.izakyl.folkways.core.work.api.WorkSite.at(level, helper.absolutePos(BlockPos.ZERO)),
+                io.github.izakyl.folkways.core.work.api.Stances.WHEREVER,
+                io.github.izakyl.folkways.core.work.api.Workload.Once.of(0)).done();
+            var node = new io.github.izakyl.folkways.core.work.api.Node() {
+                public io.github.izakyl.folkways.core.work.api.NodeSpec spec() { return spec; }
+                public io.github.izakyl.folkways.core.work.api.Outcome commit(
                         net.minecraft.server.level.ServerLevel at,
-                        io.github.izakyl.folkways.core.api.work.Worker who) {
-                    return io.github.izakyl.folkways.core.api.work.Outcome.done();
+                        io.github.izakyl.folkways.core.work.api.Worker who) {
+                    return io.github.izakyl.folkways.core.work.api.Outcome.done();
                 }
             };
             Grown work = Grown.of(node);
-            List<io.github.izakyl.folkways.core.api.work.Ending> ended = new java.util.ArrayList<>();
+            List<io.github.izakyl.folkways.core.work.api.Ending> ended = new java.util.ArrayList<>();
             colony.submit(SOURCES, level.dimension(), work, (any, how) -> ended.add(how));
             helper.assertTrue(ended.isEmpty(), "submitted work must stand without a state hierarchy");
-            var worker = Proxies.of(io.github.izakyl.folkways.core.api.work.Worker.class, (proxy, method, args) -> switch (method.getName()) {
+            var worker = Proxies.of(io.github.izakyl.folkways.core.work.api.Worker.class, (proxy, method, args) -> switch (method.getName()) {
                 case "resident" -> body.resident();
                 case "body" -> body;
                 case "pack" -> body.pack();

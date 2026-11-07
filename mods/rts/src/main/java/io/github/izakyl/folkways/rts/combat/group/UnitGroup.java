@@ -1,11 +1,11 @@
 package io.github.izakyl.folkways.rts.combat.group;
 
-import io.github.izakyl.folkways.core.api.resident.body.Body;
-import io.github.izakyl.folkways.core.api.terms.Footing;
-import io.github.izakyl.folkways.core.api.terms.Reach;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
-import io.github.izakyl.folkways.core.api.work.Stances;
+import io.github.izakyl.folkways.core.resident.api.Body;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.work.support.WorkStances;
+import io.github.izakyl.folkways.core.world.api.Footing;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
+import io.github.izakyl.folkways.core.world.api.WorldSpaces;
 import io.github.izakyl.folkways.rts.combat.command.ResidentCommands;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -207,7 +207,7 @@ public final class UnitGroup {
                     transit
                     ? atPointSlot(body, n == 0 ? POINT_REFERENCE_REACH : POINT_COHESION)
                     : order.status() == ResidentCommands.Status.HOLDING
-                    && Reach.standingIn(body.mob(), Stances.at(order.destination()));
+                    && WorkStances.standingIn(body.mob(), Stances.at(order.destination()));
             }
             if (!ready) {
                 waiting++;
@@ -811,7 +811,7 @@ public final class UnitGroup {
                         return order == null
                             || !order.boundTo(body)
                             || order.status() != ResidentCommands.Status.HOLDING
-                            || !Reach.standingIn(body.mob(), Stances.at(order.destination()));
+                            || !WorkStances.standingIn(body.mob(), Stances.at(order.destination()));
                     })
                     .forEach(body -> failedMembers.add(body.id()));
                 if (failedMembers.isEmpty()) {
@@ -920,7 +920,7 @@ public final class UnitGroup {
                 blocked.add(body.id());
                 continue;
             }
-            if (Reach.standingIn(body.mob(), Stances.at(order.destination()))) {
+            if (WorkStances.standingIn(body.mob(), Stances.at(order.destination()))) {
                 pointStalled.remove(body.id());
                 pointClosest.remove(body.id());
                 continue;
@@ -1012,7 +1012,7 @@ public final class UnitGroup {
                 return order != null
                     && order.boundTo(body)
                     && order.status() == ResidentCommands.Status.HOLDING
-                    && Reach.standingIn(body.mob(), Stances.at(order.destination()));
+                    && WorkStances.standingIn(body.mob(), Stances.at(order.destination()));
             });
     }
 

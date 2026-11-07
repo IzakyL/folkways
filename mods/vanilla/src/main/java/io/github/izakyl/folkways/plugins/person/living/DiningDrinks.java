@@ -1,14 +1,14 @@
 package io.github.izakyl.folkways.plugins.person.living;
 
-import io.github.izakyl.folkways.core.api.terms.Containers;
-import io.github.izakyl.folkways.core.api.terms.ItemDrops;
+import io.github.izakyl.folkways.core.item.api.Containers;
+import io.github.izakyl.folkways.core.item.api.ItemDrops;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.core.BlockPos;
 import java.util.Optional;
+import net.minecraft.core.BlockPos;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
 import net.minecraft.world.entity.Mob;
@@ -32,6 +32,11 @@ public final class DiningDrinks {
     public static synchronized void registerSupply(ResourceLocation id, Supply supply) {
         if (SUPPLIES.putIfAbsent(id, supply) != null) { throw new IllegalArgumentException("duplicate dining drink supply: " + id); }
     }
+
+    static boolean hasSupply(ServerLevel level, BlockPos at) {
+        return level.isLoaded(at) && SUPPLIES.values().stream().anyMatch(supply -> supply.matches(level, at));
+    }
+
     static Optional<Container> supply(ServerLevel level, BlockPos at) {
         if (!level.isLoaded(at)) { return Optional.empty(); }
         return SUPPLIES.values().stream().filter(supply -> supply.matches(level, at))

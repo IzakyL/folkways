@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.plugins.person.living;
 
-import io.github.izakyl.folkways.core.api.work.Worker;
+import io.github.izakyl.folkways.core.work.api.Worker;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;

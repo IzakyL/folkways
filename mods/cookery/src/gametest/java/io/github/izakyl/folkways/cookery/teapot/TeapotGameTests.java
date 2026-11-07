@@ -1,39 +1,36 @@
 package io.github.izakyl.folkways.cookery.teapot;
 
-import io.github.izakyl.folkways.core.testing.TestWorker;
 import com.github.ysbbbbbb.kaleidoscopecookery.api.blockentity.ITeapot;
 import com.github.ysbbbbbb.kaleidoscopecookery.blockentity.kitchen.TeapotBlockEntity;
-import com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks;
-import com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems;
 import com.github.ysbbbbbb.kaleidoscopecookery.crafting.recipe.TeapotRecipe;
 import com.github.ysbbbbbb.kaleidoscopecookery.crafting.serializer.TeapotRecipeSerializer;
+import com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks;
+import com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.registry.TeacupRegistry;
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.terms.Containers;
-import io.github.izakyl.folkways.core.api.terms.Goods;
-import io.github.izakyl.folkways.core.api.terms.Footing;
-import io.github.izakyl.folkways.core.api.terms.Reach;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.work.Amount;
-import io.github.izakyl.folkways.core.api.work.Leaves;
-import io.github.izakyl.folkways.core.api.work.Ending;
-import io.github.izakyl.folkways.core.api.work.Grown;
-import io.github.izakyl.folkways.core.api.work.Hold;
-import io.github.izakyl.folkways.core.api.work.Node;
-import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Produce;
-import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.WorkSite;
-import io.github.izakyl.folkways.core.api.work.Worker;
-import io.github.izakyl.folkways.core.api.work.Workload;
-import io.github.izakyl.folkways.core.engine.labor.Commit;
 import io.github.izakyl.folkways.cookery.CookeryContent;
-import io.github.izakyl.folkways.cookery.testing.KitchenRecoveryWanted;
-import io.github.izakyl.folkways.cookery.testing.NativeCookingMatrix;
-import io.github.izakyl.folkways.cookery.CookeryRefusal;
 import io.github.izakyl.folkways.cookery.KitchenBookings;
+import io.github.izakyl.folkways.cookery.testing.KitchenRecoveryWanted;
 import io.github.izakyl.folkways.cookery.tray.TrayStation;
+import io.github.izakyl.folkways.core.item.api.Containers;
+import io.github.izakyl.folkways.core.item.api.Goods;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
+import io.github.izakyl.folkways.core.plan.api.Grown;
+import io.github.izakyl.folkways.core.plan.api.Produce;
+import io.github.izakyl.folkways.core.runtime.HoldingFixture;
+import io.github.izakyl.folkways.core.testing.TestWorker;
+import io.github.izakyl.folkways.core.work.api.Amount;
+import io.github.izakyl.folkways.core.work.api.Ending;
+import io.github.izakyl.folkways.core.work.api.Hold;
+import io.github.izakyl.folkways.core.work.api.Node;
+import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.work.api.WorkSite;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.work.support.Leaves;
+import io.github.izakyl.folkways.core.world.api.Footing;
+import io.github.izakyl.folkways.core.world.api.Reach;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import io.github.izakyl.folkways.plugins.person.ResidentEntity;
 import java.util.ArrayList;
@@ -45,9 +42,7 @@ import java.util.function.Consumer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTest;
-import net.minecraft.gametest.framework.GameTestGenerator;
 import net.minecraft.gametest.framework.GameTestHelper;
-import net.minecraft.gametest.framework.TestFunction;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.InteractionHand;
@@ -82,10 +77,40 @@ public final class TeapotGameTests {
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) { event.register(TeapotGameTests.class); }
 
-    @GameTestGenerator
-    public static List<TestFunction> nativeTeas() {
-        return NativeCookingMatrix.recipes("teapot", 7, 900, (helper, id) -> brew(helper, id.getPath().substring("teapot/".length())));
+    @GameTest(template = "empty", timeoutTicks = 1000)
+    public static void hardUrgesPreserveFluidIngredientAndAllServedCups(GameTestHelper helper) {
+        Rig rig = new Rig(helper, "barley_tea");
+        TeapotWork work = rig.plan();
+        HoldingFixture holding = rig.holding(work).prepare().hardUrge();
+        helper.assertTrue(rig.step(work) instanceof Outcome.Done, "the original fluid is accepted");
+        holding.hardUrge();
+        helper.assertTrue(rig.step(work) instanceof Outcome.Done, "the original ingredient is accepted");
+        holding.hardUrge();
+        helper.runAfterDelay(40, holding::hardUrge);
+        afterBrewing(
+            rig,
+            ready -> {
+            holding.prepare().hardUrge();
+            helper.assertTrue(ready.step(work) instanceof Outcome.Done, "all original cups are served once");
+            holding.hardUrge();
+            ready.assertServed();
+            });
     }
+
+    @GameTest(template = "empty", timeoutTicks = 900)
+    public static void nativeFlowerTea(GameTestHelper helper) { brew(helper, "flower_tea"); }
+    @GameTest(template = "empty", timeoutTicks = 900)
+    public static void nativeBarleyTea(GameTestHelper helper) { brew(helper, "barley_tea"); }
+    @GameTest(template = "empty", timeoutTicks = 900)
+    public static void nativeTieguanyin(GameTestHelper helper) { brew(helper, "tieguanyin"); }
+    @GameTest(template = "empty", timeoutTicks = 900)
+    public static void nativeBiluochun(GameTestHelper helper) { brew(helper, "biluochun"); }
+    @GameTest(template = "empty", timeoutTicks = 900)
+    public static void nativeOolong(GameTestHelper helper) { brew(helper, "oolong"); }
+    @GameTest(template = "empty", timeoutTicks = 900)
+    public static void nativeSakuraFubuki(GameTestHelper helper) { brew(helper, "sakura_fubuki"); }
+    @GameTest(template = "empty", timeoutTicks = 900)
+    public static void nativeButterTea(GameTestHelper helper) { brew(helper, "butter_tea"); }
 
     private static void brew(GameTestHelper helper, String recipe) {
         Rig rig = new Rig(helper, recipe);
@@ -97,10 +122,14 @@ public final class TeapotGameTests {
             "a teapot take with no consumer still reserves the full twelve-cup output");
         afterBrewing(rig, ready -> {
             helper.assertTrue(ready.level.getGameTime() - started >= 200 + ready.job.time(), "both native ingredient grace and brewing clocks really elapsed");
-            ItemStack old = new ItemStack(Items.APPLE, 5); ready.actor.setItemInHand(InteractionHand.MAIN_HAND, old);
+            ItemStack old = new ItemStack(Items.APPLE, 5);
+            ready.actor.presentHeldItem(old);
+            ready.holding(work).preservesHand();
             helper.assertTrue(ready.step(work) instanceof Outcome.Done, "actual native tea is poured through twelve physical cup blocks");
             ready.assertServed();
-            helper.assertTrue(ready.actor.getMainHandItem() == old, "the precise previous main hand is restored after pouring");
+            // preservesHand checks exact restoration inside settlement, before the holding clears its display.
+            helper.assertTrue(ready.actor.getMainHandItem().isEmpty(),
+                "the completed serving action clears its hand presentation");
             helper.assertTrue(work.commit(ready.level, ready.worker) instanceof Outcome.Done, "the original production promise settles after physical serving");
         });
     }
@@ -112,7 +141,7 @@ public final class TeapotGameTests {
         int before = rig.pot().getCurrentTick();
         helper.runAfterDelay(60, () -> {
             helper.assertValueEqual(rig.pot().getCurrentTick(), before, "a physically cold teapot does not advance its native ingredient clock");
-            helper.assertTrue(work.next(rig.level, rig.worker) instanceof Workload.Within.Turn.Wait, "unfinished raw tea cannot be served");
+            helper.assertTrue(rig.holding(work).running(), "unfinished raw tea cannot be served");
             rig.level.setBlockAndUpdate(rig.cell.below(), Blocks.MAGMA_BLOCK.defaultBlockState());
             helper.assertTrue(work.refusal(rig.level).isEmpty(), "native base/chain appearance updates do not invalidate the actual tea batch");
         });
@@ -150,9 +179,9 @@ public final class TeapotGameTests {
     public static void withdrawalRejectsAnAlreadyPlannedFluidInteraction(GameTestHelper helper) {
         try (Rig rig = new Rig(helper, "barley_tea")) {
             TeapotWork work = rig.plan();
-            var turn = work.next(rig.level, rig.worker); helper.assertTrue(turn instanceof Workload.Within.Turn.Piece, "the native filling action is planned");
+            HoldingFixture fill = rig.holding(work).prepare();
             rig.bookings.withdraw(rig.at);
-            helper.assertTrue(Commit.run(rig.level, ((Workload.Within.Turn.Piece) turn).node(), rig.worker) instanceof Outcome.Failed, "the withdrawn generation refuses the old fill");
+            helper.assertTrue(fill.step() instanceof Outcome.Failed, "the withdrawn generation refuses the old fill");
             helper.assertValueEqual(rig.count(rig.job.bucket().getItem()), 1L, "the unaccepted full bucket remains real stock");
             helper.assertValueEqual(rig.count(Items.BUCKET), 0L, "no empty bucket is manufactured by a rejected interaction");
             helper.assertTrue(TeapotStation.empty(rig.pot()), "the actual teapot stays completely empty");
@@ -177,7 +206,8 @@ public final class TeapotGameTests {
         Rig rig = new Rig(helper, "barley_tea"); TeapotWork work = rig.load();
         for (Direction side : Direction.Plane.HORIZONTAL) { rig.level.setBlockAndUpdate(rig.cell.relative(side), ModBlocks.EMPTY_CUP.get().defaultBlockState()); }
         afterBrewing(rig, ready -> {
-            helper.assertTrue(work.next(ready.level, ready.worker) instanceof Workload.Within.Turn.Wait,
+            helper.assertTrue(
+                ready.holding(work).running(),
                 "with all player cup positions occupied, the actual finished batch waits without issuing a destructive action");
             for (Direction side : Direction.Plane.HORIZONTAL) { helper.assertTrue(ready.level.getBlockState(ready.cell.relative(side)).is(ModBlocks.EMPTY_CUP.get()), "each player's real cup is preserved"); }
             helper.assertValueEqual(ready.count(ModItems.EMPTY_CUP.get()), 12L, "the task's own cups return after refusal");
@@ -185,8 +215,10 @@ public final class TeapotGameTests {
             ready.level.setBlockAndUpdate(ready.cell.west(), Blocks.AIR.defaultBlockState());
             ready.level.setBlockAndUpdate(ready.cell.south(), Blocks.AIR.defaultBlockState());
             helper.assertTrue(ready.step(work) instanceof Outcome.Done, "freeing the cup position and adjacent operator cell resumes the same native finished batch");
-            for (Direction side : List.of(Direction.NORTH, Direction.EAST))
-                helper.assertTrue(ready.level.getBlockState(ready.cell.relative(side)).is(ModBlocks.EMPTY_CUP.get()), "remaining player cups are never overwritten");
+            for (Direction side : List.of(Direction.NORTH, Direction.EAST)) {
+                helper.assertTrue(ready.level.getBlockState(ready.cell.relative(side)).is(ModBlocks.EMPTY_CUP.get()),
+                    "remaining player cups are never overwritten");
+            }
             ready.assertServed();
         });
     }
@@ -422,7 +454,8 @@ public final class TeapotGameTests {
             ready.level.setBlockAndUpdate(ready.cell.south().below(), Blocks.STONE.defaultBlockState());
             ready.actor.setPos(Vec3.atBottomCenterOf(ready.cell.offset(4, 0, 2)));
             var before = ready.pot().saveWithoutMetadata(ready.level.registryAccess());
-            helper.assertTrue(work.next(ready.level, ready.worker) instanceof Workload.Within.Turn.Leave,
+            helper.assertTrue(
+                ready.holding(work).finished(),
                 "the changed cup layout and handle counter release the now unsuitable old stance for recovery");
             helper.assertTrue(work.commit(ready.level, ready.worker) instanceof Outcome.Failed,
                 "repositioning never pretends the unserved original tea was delivered");
@@ -455,8 +488,12 @@ public final class TeapotGameTests {
 
     private static Stances edgeGeometry(Rig rig) {
         BlockPos bad = rig.cell.offset(4, 0, 2), safe = rig.cell.south().below(), cup = rig.cell.west();
-        for (Direction side : Direction.Plane.HORIZONTAL) rig.level.setBlockAndUpdate(rig.cell.relative(side).below(), Blocks.AIR.defaultBlockState());
-        for (BlockPos support : List.of(bad.below(), safe.below(), cup.below())) rig.level.setBlockAndUpdate(support, Blocks.STONE.defaultBlockState());
+        for (Direction side : Direction.Plane.HORIZONTAL) {
+            rig.level.setBlockAndUpdate(rig.cell.relative(side).below(), Blocks.AIR.defaultBlockState());
+        }
+        for (BlockPos support : List.of(bad.below(), safe.below(), cup.below())) {
+            rig.level.setBlockAndUpdate(support, Blocks.STONE.defaultBlockState());
+        }
         rig.actor.setPos(Vec3.atBottomCenterOf(bad));
         rig.helper.assertTrue(Footing.withFeetAt(rig.level, bad) && Footing.withFeetAt(rig.level, safe), "both candidates are actual standable footings");
         rig.helper.assertTrue(Reach.withinReach(bad, rig.cell) && Reach.inSight(rig.level, bad, rig.cell), "the old edge truly reaches and sees the actual pot");
@@ -484,6 +521,13 @@ public final class TeapotGameTests {
     }
     private static final class Rig implements AutoCloseable {
         final Worker worker;
+        private final java.util.Map<Node, HoldingFixture> claims =
+                new java.util.IdentityHashMap<>();
+
+        HoldingFixture holding(Node node) {
+            return claims.computeIfAbsent(node, next -> new HoldingFixture(level, next, worker));
+        }
+
         final GameTestHelper helper;
         final ServerLevel level;
         final UUID colony = UUID.randomUUID();
@@ -532,14 +576,11 @@ public final class TeapotGameTests {
             current = (TeapotWork) recovered.getFirst().nodes().getFirst(); helper.assertTrue(current.planned(level).isEmpty(), "the recovery acquires the current native station turn"); return current;
         }
         Outcome step(Node work) {
-            var within = (Workload.Within) work.spec().workload(); var turn = within.next(level, worker);
-            if (!(turn instanceof Workload.Within.Turn.Piece)) {
-                helper.fail("expected native appliance action, got " + turn + "; refusal=" + work.refusal(level) + "; pot=" + pot().getStatus()
-                    + "; time=" + pot().getCurrentTick() + "; input=" + pot().getInput() + "; result=" + pot().getResult());
-                return Outcome.failed(CookeryRefusal.STATION_CHANGED);
+            Outcome outcome = holding(work).step();
+            if (outcome instanceof Outcome.Done done) {
+                done.made().forEach(stack -> helper.assertTrue(Containers.insert(pack, stack).isEmpty(),
+                    "actual native products fit"));
             }
-            Node piece = ((Workload.Within.Turn.Piece) turn).node(); Outcome outcome = Commit.run(level, piece, worker);
-            if (outcome instanceof Outcome.Done done) { done.made().forEach(stack -> helper.assertTrue(Containers.insert(pack, stack).isEmpty(), "actual native goods fit")); within.ended(level, piece, Ending.DONE); }
             return outcome;
         }
         void reload() { reload(TeapotBlockEntity::new); }

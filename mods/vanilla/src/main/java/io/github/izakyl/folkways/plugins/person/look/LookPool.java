@@ -1,9 +1,9 @@
 package io.github.izakyl.folkways.plugins.person.look;
 
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.base.persist.Reader;
 import io.github.izakyl.folkways.base.persist.Writer;
+import io.github.izakyl.folkways.core.colony.api.Colony;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashSet;
@@ -35,12 +35,15 @@ public record LookPool(
     }
 
     public static LookPool from(CompoundTag kept) {
+        if (kept.isEmpty()) {
+            return UNTOUCHED;
+        }
         Reader reader = Reader.of(kept);
-        Optional<Set<ResourceLocation>> only = reader.flag(TAG_REPLACED).orElse(false)
-            ? Optional.of(new LinkedHashSet<>(reader.ids(TAG_ONLY)))
+        Optional<Set<ResourceLocation>> only = reader.flag(TAG_REPLACED).orElseThrow()
+            ? Optional.of(new LinkedHashSet<>(reader.requiredIds(TAG_ONLY)))
             : Optional.empty();
-        return new LookPool(only, new LinkedHashSet<>(reader.ids(TAG_EXCLUDED)),
-            new LinkedHashSet<>(reader.ids(TAG_INCLUDED)));
+        return new LookPool(only, new LinkedHashSet<>(reader.requiredIds(TAG_EXCLUDED)),
+            new LinkedHashSet<>(reader.requiredIds(TAG_INCLUDED)));
     }
 
     public static LookPool of(Colony colony) {

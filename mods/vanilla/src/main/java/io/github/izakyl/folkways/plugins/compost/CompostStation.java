@@ -1,29 +1,30 @@
 package io.github.izakyl.folkways.plugins.compost;
 
-import io.github.izakyl.folkways.core.api.colony.Closing;
-import io.github.izakyl.folkways.core.api.terms.ItemDrops;
-import io.github.izakyl.folkways.core.api.terms.Reach;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
-import io.github.izakyl.folkways.core.api.work.Ending;
-import io.github.izakyl.folkways.core.api.work.Grown;
-import io.github.izakyl.folkways.core.api.work.Hold;
-import io.github.izakyl.folkways.core.api.work.Leaves;
-import io.github.izakyl.folkways.core.api.work.Need;
-import io.github.izakyl.folkways.core.api.work.Node;
-import io.github.izakyl.folkways.core.api.work.NodeSpec;
-import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.WorkSite;
-import io.github.izakyl.folkways.core.api.work.Worker;
-import io.github.izakyl.folkways.core.api.work.Workload;
+import io.github.izakyl.folkways.core.colony.api.Closing;
+import io.github.izakyl.folkways.core.item.api.ItemDrops;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
+import io.github.izakyl.folkways.core.plan.api.Grown;
+import io.github.izakyl.folkways.core.work.api.Ending;
+import io.github.izakyl.folkways.core.work.api.Hold;
+import io.github.izakyl.folkways.core.work.api.Need;
+import io.github.izakyl.folkways.core.work.api.Node;
+import io.github.izakyl.folkways.core.work.api.NodeSpec;
+import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.work.api.WorkSite;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.work.api.Workload;
+import io.github.izakyl.folkways.core.work.support.Leaves;
+import io.github.izakyl.folkways.core.work.support.WorkStances;
+import io.github.izakyl.folkways.core.world.api.Reach;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
+import io.github.izakyl.folkways.core.world.api.WorldSpaces;
 import io.github.izakyl.folkways.plugins.farming.FarmingContent;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import java.nio.charset.StandardCharsets;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
-import java.util.Map;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -36,8 +37,8 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.ComposterBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.gameevent.GameEvent;
@@ -188,22 +189,22 @@ public final class CompostStation {
         }
 
         public NodeSpec spec() { return spec; }
-        public Optional<io.github.izakyl.folkways.core.api.terms.RefusalKind> planned(ServerLevel level) {
+        public Optional<io.github.izakyl.folkways.core.resident.api.RefusalKind> planned(ServerLevel level) {
             var refused = hold.take();
             if (refused.isEmpty()) active.put(site, this);
             return refused;
         }
         public boolean ready(ServerLevel level) { return bookings.first(at, id()); }
-        public Optional<io.github.izakyl.folkways.core.api.terms.RefusalKind> refusal(ServerLevel level) {
+        public Optional<io.github.izakyl.folkways.core.resident.api.RefusalKind> refusal(ServerLevel level) {
             return bookings.cancelled(at, id(), generation) ? Optional.of(CompostRefusal.STATION_CHANGED) : Optional.empty();
         }
         public void ended(ServerLevel level, Ending how) { active.remove(site, this); hold.release(how); nudge(); }
 
         public Outcome commit(ServerLevel level, Worker who) {
             if (!at.in(level) || bookings.cancelled(at, id(), generation) || !bookings.first(at, id())
-                    || io.github.izakyl.folkways.core.api.resident.body.Bodies.of(who.body())
+                    || io.github.izakyl.folkways.core.resident.api.Bodies.of(who.body())
                         .filter(body -> body.licences().of(FarmingContent.trade()).isPresent()).isEmpty()
-                    || !Reach.stanceHolding(who.body(), spec.stances())
+                    || !WorkStances.stanceHolding(who.body(), spec.stances())
                         .flatMap(feet -> WorldSpaces.storage(level, new WorldPos(at.realm(), feet)))
                         .filter(feet -> Reach.withinReach(feet, at.block(level))
                             && Reach.inSight(level, feet, at.block(level))).isPresent()) {

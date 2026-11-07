@@ -1,11 +1,11 @@
 package io.github.izakyl.folkways.front.api;
 
-import io.github.izakyl.folkways.core.api.colony.ColonyView;
 import io.github.izakyl.folkways.base.persist.Reader;
 import io.github.izakyl.folkways.base.persist.Writer;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.work.NodeSpec;
-import io.github.izakyl.folkways.core.api.work.Outcome;
+import io.github.izakyl.folkways.core.colony.api.ColonyView;
+import io.github.izakyl.folkways.core.work.api.NodeSpec;
+import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.front.api.notice.Line;
 import io.github.izakyl.folkways.front.api.notice.Notice;
 import io.github.izakyl.folkways.front.api.notice.Sentence;
@@ -175,7 +175,7 @@ public final class PastDay {
 
     public synchronized void load(Reader reader) {
         counts.clear();
-        for (Reader entry : reader.children(TAG_ENTRIES)) {
+        for (Reader entry : reader.requiredChildren(TAG_ENTRIES)) {
             Optional<WorldPos> at = entry.child(TAG_AT).flatMap(WorldPos::load);
             Optional<ResourceLocation> item = entry.id(TAG_ITEM);
             Optional<Long> bucket = entry.longValue(TAG_BUCKET);

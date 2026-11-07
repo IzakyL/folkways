@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.plugins.build.draft;
 
-import io.github.izakyl.folkways.core.api.terms.RefusalKind;
+import io.github.izakyl.folkways.core.resident.api.RefusalKind;
 import java.util.Locale;
 
 public enum DraftRefusal implements RefusalKind {

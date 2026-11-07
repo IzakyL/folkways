@@ -1,15 +1,15 @@
 package io.github.izakyl.folkways.rts.combat.ui;
 
-import io.github.izakyl.folkways.plugins.combat.WeaponStations;
-import io.github.izakyl.folkways.plugins.combat.weapon.ResidentMounts;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.resident.body.Bodies;
-import io.github.izakyl.folkways.core.api.resident.body.Body;
-import io.github.izakyl.folkways.core.api.terms.Footing;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.resident.api.Bodies;
+import io.github.izakyl.folkways.core.resident.api.Body;
+import io.github.izakyl.folkways.core.world.api.Footing;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
+import io.github.izakyl.folkways.core.world.api.WorldSpaces;
 import io.github.izakyl.folkways.front.api.ui.Pages;
+import io.github.izakyl.folkways.plugins.combat.WeaponStations;
 import io.github.izakyl.folkways.plugins.combat.weapon.PatrolSupplies;
+import io.github.izakyl.folkways.plugins.combat.weapon.ResidentMounts;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import io.github.izakyl.folkways.plugins.person.ResidentEntity;
 import io.github.izakyl.folkways.rts.combat.command.ResidentCommands;
@@ -198,7 +198,7 @@ public final class CombatDesk {
                         resident.id().equals(member)
                             && resident.kind()
                             .equals(PersonBody.ID))
-                    && colony.holdingOf(member).isPresent()),
+                    && colony.claimOf(member).isPresent()),
             "group");
         require(
             group.members().stream()
@@ -219,7 +219,7 @@ public final class CombatDesk {
             && (!body.mob().isPassenger() || WeaponStations.ownsSeat(body.mob())
                 || ResidentMounts.riding(body.mob()))
             && body.colonyId().filter(colony.id()::equals).isPresent()
-            && colony.holdingOf(id).isPresent()
+            && colony.claimOf(id).isPresent()
             && WorldSpaces.at(body.mob()).sameRealm(WorldSpaces.at(player)),
             "members");
         require(CombatSelectionOwnership.of(colony).availableOnPage(player, id), "members");

@@ -21,7 +21,7 @@ const INSTALL = defineTask<{ colony_id: string; path: string }, Record<string, a
       "net.neoforged.bus.api.EventPriority",
       "net.neoforged.neoforge.common.NeoForge",
       "net.neoforged.neoforge.event.tick.ServerTickEvent",
-      "io.github.izakyl.folkways.core.engine.labor.LaborCensus",
+      "io.github.izakyl.folkways.core.runtime.LaborCensus",
     ],
     body: `
 var props = System.getProperties();

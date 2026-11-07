@@ -3,7 +3,7 @@ package io.github.izakyl.folkways.chiselsandbits.mixin;
 import io.github.izakyl.folkways.chiselsandbits.CandBStructureCodec;
 import io.github.izakyl.folkways.chiselsandbits.SchematicBits;
 import io.github.izakyl.folkways.chiselsandbits.SchematicStatistics;
-import io.github.izakyl.folkways.core.api.structure.StructureCompat;
+import io.github.izakyl.folkways.core.work.api.StructureCompat;
 import java.util.Map;
 import mod.chiselsandbits.api.block.storage.StateEntryStorage;
 import mod.chiselsandbits.api.blockinformation.BlockInformation;
@@ -89,7 +89,9 @@ abstract class ChiseledBlockEntityMixin extends BlockEntity implements Schematic
             lastTag = tag.get("data").copy();
             folkways$valid = true;
         } catch (RuntimeException invalid) {
-            if (invalid instanceof StructureCompat.Failure budget) throw budget;
+            if (invalid instanceof StructureCompat.Failure budget) {
+                throw budget;
+            }
             // Keep invalid data so placement cannot silently turn it into an empty, free block.
             lastTag = tag.get("data");
         }

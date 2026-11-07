@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.plugins.patrol;
 
-import io.github.izakyl.folkways.core.api.Declaring;
+import io.github.izakyl.folkways.core.extension.api.Declaring;
 import io.github.izakyl.folkways.front.api.Registering;
 import io.github.izakyl.folkways.front.api.ui.RegisteringUi;
 import io.github.izakyl.folkways.plugins.combat.WeaponStations;

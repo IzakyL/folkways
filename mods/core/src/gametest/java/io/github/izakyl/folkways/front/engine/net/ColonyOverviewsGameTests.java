@@ -2,7 +2,7 @@ package io.github.izakyl.folkways.front.engine.net;
 
 import com.mojang.authlib.GameProfile;
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.colony.Colonies;
+import io.github.izakyl.folkways.core.colony.api.Colonies;
 import java.util.UUID;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;

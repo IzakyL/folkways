@@ -1,12 +1,12 @@
 package io.github.izakyl.folkways.modulargolems.resident;
 
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.colony.Colonies;
-import io.github.izakyl.folkways.core.api.colony.Held;
-import io.github.izakyl.folkways.core.api.resident.body.Bodies;
-import io.github.izakyl.folkways.core.api.resident.body.Keenness;
-import io.github.izakyl.folkways.core.api.vocation.Vocations;
-import io.github.izakyl.folkways.core.engine.colony.WorkDefaults;
+import io.github.izakyl.folkways.core.colony.api.Claimed;
+import io.github.izakyl.folkways.core.colony.api.Colonies;
+import io.github.izakyl.folkways.core.colony.api.WorkDefaults;
+import io.github.izakyl.folkways.core.resident.api.Bodies;
+import io.github.izakyl.folkways.core.vocation.api.Keenness;
+import io.github.izakyl.folkways.core.vocation.api.Vocations;
 import io.github.izakyl.folkways.modulargolems.domain.GolemContent;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -46,7 +46,7 @@ public final class GolemWorkDefaultsGameTests {
                         .findFirst().orElseThrow();
                     var known = body.licences().trade(trade).orElseThrow();
                     body.licences().setKeenness(known, Keenness.SECOND);
-                    helper.assertTrue(colony.hold(GolemContent.BODY, Held.Entity.of(mob)).isPresent(), "the golem joins");
+                    helper.assertTrue(colony.hold(GolemContent.BODY, Claimed.Entity.of(mob)).isPresent(), "the golem joins");
                     helper.assertTrue(body.licences().allows(known) && body.licences().keennessOf(known) == Keenness.SECOND,
                         "joining keeps golem work settings");
                     for (var vocation : Vocations.all()) {

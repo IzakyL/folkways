@@ -60,10 +60,10 @@ const PREPARE = defineTask<Record<string, any>, Record<string, any>>({
     "com.github.ysbbbbbb.kaleidoscopetavern.block.brew.BarrelBlock",
     "com.github.ysbbbbbb.kaleidoscopetavern.block.brew.TapBlock",
     "com.github.ysbbbbbb.kaleidoscopetavern.api.blockentity.IBarrel",
-    "io.github.izakyl.folkways.core.api.resident.body.Bodies",
-    "io.github.izakyl.folkways.core.api.resident.body.Keenness",
+    "io.github.izakyl.folkways.core.resident.api.Bodies",
+    "io.github.izakyl.folkways.core.vocation.api.Keenness",
     "io.github.izakyl.folkways.plugins.wares.WaresContent",
-    "io.github.izakyl.folkways.core.api.vocation.Vocations",
+    "io.github.izakyl.folkways.core.vocation.api.Vocations",
     "net.minecraft.core.Direction", "net.minecraft.world.item.ItemStack", "net.minecraft.world.item.Items",
     "net.minecraft.world.level.block.state.properties.AttachFace",
   ], body: `
@@ -101,7 +101,7 @@ const READ = defineTask<Record<string, any>, Record<string, any>>({
     "com.github.ysbbbbbb.kaleidoscopetavern.api.blockentity.IPressingTub",
     "com.github.ysbbbbbb.kaleidoscopetavern.api.blockentity.IBarrel",
     "com.github.ysbbbbbb.kaleidoscopetavern.block.brew.TapBlock",
-    "io.github.izakyl.folkways.core.api.resident.body.Bodies",
+    "io.github.izakyl.folkways.core.resident.api.Bodies",
     "net.minecraft.core.BlockPos", "net.minecraft.core.registries.BuiltInRegistries",
     "net.minecraft.world.Container", "net.minecraft.world.item.ItemStack", "net.minecraft.server.level.ServerLevel",
   ], body: `

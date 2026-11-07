@@ -2,27 +2,27 @@ package io.github.izakyl.folkways.plugins.person.living;
 
 import io.github.izakyl.folkways.base.persist.Reader;
 import io.github.izakyl.folkways.base.persist.Writer;
-import io.github.izakyl.folkways.core.api.colony.Closing;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.colony.ColonyView;
-import io.github.izakyl.folkways.core.api.colony.Sweep;
-import io.github.izakyl.folkways.core.api.resident.Resident;
-import io.github.izakyl.folkways.core.api.inventory.InventorySnapshot;
-import io.github.izakyl.folkways.core.api.inventory.SlotSnapshot;
-import io.github.izakyl.folkways.core.api.resident.body.Body;
-import io.github.izakyl.folkways.core.api.terms.Goods;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
-import io.github.izakyl.folkways.core.api.vocation.Vocations;
-import io.github.izakyl.folkways.core.api.work.Delivery;
-import io.github.izakyl.folkways.core.api.work.Doings;
-import io.github.izakyl.folkways.core.api.work.Grown;
-import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.Urge;
-import io.github.izakyl.folkways.core.api.work.WorkExertion;
-import io.github.izakyl.folkways.core.api.work.WorkSite;
-import io.github.izakyl.folkways.core.api.work.Worker;
+import io.github.izakyl.folkways.core.colony.api.Closing;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.colony.api.ColonyView;
+import io.github.izakyl.folkways.core.colony.api.Sweep;
+import io.github.izakyl.folkways.core.inventory.api.InventorySnapshot;
+import io.github.izakyl.folkways.core.inventory.api.SlotSnapshot;
+import io.github.izakyl.folkways.core.item.api.Goods;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
+import io.github.izakyl.folkways.core.plan.api.Delivery;
+import io.github.izakyl.folkways.core.plan.api.Grown;
+import io.github.izakyl.folkways.core.resident.api.Body;
+import io.github.izakyl.folkways.core.resident.api.Doings;
+import io.github.izakyl.folkways.core.resident.api.Resident;
+import io.github.izakyl.folkways.core.vocation.api.Vocations;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.work.api.Urge;
+import io.github.izakyl.folkways.core.work.api.WorkExertion;
+import io.github.izakyl.folkways.core.work.api.WorkSite;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
+import io.github.izakyl.folkways.core.world.api.WorldSpaces;
 import io.github.izakyl.folkways.effect.Effects;
 import io.github.izakyl.folkways.effect.Modifier;
 import io.github.izakyl.folkways.effect.Stats;
@@ -78,7 +78,6 @@ final class LivingPresence implements Facing {
     // this many days' worth: one walk to the pantry in a couple of days, not one after every meal.
     static final int RATION_DAYS = 3;
     static final int RESTOCK_DAYS = 1;
-
 
     static final ResourceLocation EAT = ResourceLocation.fromNamespaceAndPath("folkways", "eat");
 
@@ -819,7 +818,7 @@ final class LivingPresence implements Facing {
         colony.keep(LivingContent.ID, save());
     }
 
-    private CompoundTag save() {
+    CompoundTag save() {
         return Writer.of(beds.save())
             .blob("pets", pets.save())
             .children("nameplates", nameplates.entrySet(), entry -> Writer.of()
@@ -840,29 +839,32 @@ final class LivingPresence implements Facing {
     }
 
     private void load(Reader reader) {
+        if (reader.keys().isEmpty()) {
+            return;
+        }
         beds.load(reader);
-        reader.child("pets").ifPresent(pets::load);
-        for (Reader saved : reader.children("nameplates")) {
-            List<String> lines = saved.children("lines").stream().map(line -> line.string("text").orElse("")).toList();
+        pets.load(reader.child("pets").orElseThrow());
+        for (Reader saved : reader.requiredChildren("nameplates")) {
+            List<String> lines = saved.requiredChildren("lines").stream().map(line -> line.string("text").orElseThrow()).toList();
             Set<WorldPos> members = new LinkedHashSet<>();
-            for (Reader bed : saved.children("beds")) { WorldPos.load(bed).ifPresent(members::add); }
+            for (Reader bed : saved.requiredChildren("beds")) { WorldPos.load(bed).ifPresent(members::add); }
             if (lines.size() == 8) {
                 saved.child("sign").flatMap(WorldPos::load)
                     .ifPresent(at -> nameplates.put(at, new Nameplate(lines, Set.copyOf(members))));
             }
         }
-        for (Reader saved : reader.children("edited_signs")) { WorldPos.load(saved).ifPresent(editedSigns::add); }
-        for (Reader saved : reader.children("moods")) {
+        for (Reader saved : reader.requiredChildren("edited_signs")) { WorldPos.load(saved).ifPresent(editedSigns::add); }
+        for (Reader saved : reader.requiredChildren("moods")) {
             saved.uuid("resident").ifPresent(id -> { Mood mood = new Mood(); mood.load(saved); moods.put(id, mood); });
         }
-        for (Reader belly : reader.children("hunger")) {
+        for (Reader belly : reader.requiredChildren("hunger")) {
             belly.uuid("resident").ifPresent(resident -> {
                 Hunger his = new Hunger();
                 his.load(belly);
                 bellies.put(resident, his);
             });
         }
-        for (Reader spent : reader.children("rest")) {
+        for (Reader spent : reader.requiredChildren("rest")) {
             spent.uuid("resident").ifPresent(resident -> {
                 Rest tired = new Rest();
                 tired.load(spent);

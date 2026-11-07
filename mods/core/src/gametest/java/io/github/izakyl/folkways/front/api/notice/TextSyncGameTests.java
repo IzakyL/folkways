@@ -1,32 +1,33 @@
 package io.github.izakyl.folkways.front.api.notice;
 
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.colony.Colonies;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.resident.body.Body;
+import io.github.izakyl.folkways.core.colony.api.Colonies;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.resident.api.Body;
 import io.github.izakyl.folkways.front.api.ui.Pages;
 import io.github.izakyl.folkways.front.engine.colony.ColonyLooks;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import io.netty.buffer.Unpooled;
+import io.netty.handler.codec.DecoderException;
 import java.util.List;
 import net.minecraft.ChatFormatting;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.contents.TranslatableContents;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.item.component.CustomData;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
-import net.minecraft.core.component.DataComponents;
-import net.minecraft.nbt.CompoundTag;
-import net.minecraft.nbt.ListTag;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
-import net.minecraft.world.item.component.CustomData;
 
 @EventBusSubscriber(modid = FolkwaysMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
 @GameTestHolder(FolkwaysMod.MOD_ID)
@@ -41,6 +42,28 @@ public final class TextSyncGameTests {
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) {
         event.register(TextSyncGameTests.class);
+    }
+
+    @GameTest(template = TEMPLATE)
+    public static void unknownLineNumbersFailDecoding(GameTestHelper helper) {
+        for (int type : new int[]{-1, 9, 127}) {
+            var buffer = new RegistryFriendlyByteBuf(Unpooled.buffer(), helper.getLevel().registryAccess());
+            try {
+                buffer.writeVarInt(1);
+                buffer.writeVarInt(type);
+                new Notice("folkways.test.notice", List.of()).encode(buffer);
+                boolean rejected = false;
+                try {
+                    Line.decodeAll(buffer, 8);
+                } catch (DecoderException expected) {
+                    rejected = true;
+                }
+                helper.assertTrue(rejected, "unknown line numbers must fail: " + type);
+            } finally {
+                buffer.release();
+            }
+        }
+        helper.succeed();
     }
 
     @GameTest(template = TEMPLATE, timeoutTicks = 40)
@@ -68,15 +91,15 @@ public final class TextSyncGameTests {
         } finally {
             buffer.release();
         }
-        var old = new CompoundTag();
-        old.putString("ware", "minecraft:paper");
-        old.putLong("count", 3);
-        var legacy = new ListTag();
-        legacy.add(old);
+        var picture = new CompoundTag();
+        picture.putString("ware", "minecraft:paper");
+        picture.putLong("count", 3);
+        var withoutComponents = new ListTag();
+        withoutComponents.add(picture);
         helper.assertTrue(
-            Sentence.load(legacy)
+            Sentence.load(withoutComponents)
             .equals(Sentence.of(Sentence.ware(ResourceLocation.withDefaultNamespace("paper"), 3))),
-            "old goods pictures still load without component data");
+            "goods pictures load with optional component data omitted");
         helper.succeed();
     }
 

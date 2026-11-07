@@ -2,12 +2,12 @@ package io.github.izakyl.folkways.rts.combat.ui;
 
 import com.mojang.authlib.GameProfile;
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.colony.Colonies;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.colony.Held;
-import io.github.izakyl.folkways.core.api.resident.body.Body;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
-import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
+import io.github.izakyl.folkways.core.colony.api.Claimed;
+import io.github.izakyl.folkways.core.colony.api.Colonies;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
+import io.github.izakyl.folkways.core.resident.api.Body;
+import io.github.izakyl.folkways.core.world.api.WorldSpaces;
 import io.github.izakyl.folkways.front.engine.charter.Charter;
 import io.github.izakyl.folkways.front.engine.charter.Charters;
 import io.github.izakyl.folkways.front.engine.registry.FolkwaysPlayerAttachments;
@@ -27,6 +27,7 @@ import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.Tag;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -98,7 +99,7 @@ public final class CombatDeskGameTests {
         Body outsider = PersonBody.RESIDENT.get().create(helper.getLevel());
         outsider.mob().moveTo(f.player.getX(), f.player.getY(), f.player.getZ());
         helper.getLevel().addFreshEntity(outsider.mob());
-        foreign.hold(PersonContent.ID, Held.Entity.of(outsider.mob())).orElseThrow();
+        foreign.hold(PersonContent.ID, Claimed.Entity.of(outsider.mob())).orElseThrow();
         outsider.joinColony(foreign.id());
         try {
             helper.assertFalse(
@@ -215,7 +216,7 @@ public final class CombatDeskGameTests {
                 BlockPos feet = helper.absolutePos(new BlockPos(2 + n % 3 * 2, 1, 2 + n / 3 * 2));
                 body.mob().moveTo(feet.getX() + .5, feet.getY(), feet.getZ() + .5);
                 level.addFreshEntity(body.mob());
-                colony.hold(PersonContent.ID, Held.Entity.of(body.mob())).orElseThrow();
+                colony.hold(PersonContent.ID, Claimed.Entity.of(body.mob())).orElseThrow();
                 body.joinColony(colony.id());
                 arm(colony, body, "Melee", ItemSpec.of(Tags.Items.MELEE_WEAPON_TOOLS));
                 people.add(body);

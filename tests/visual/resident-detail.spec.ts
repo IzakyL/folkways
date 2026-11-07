@@ -16,7 +16,7 @@ const GROW = defineTask<{ uuid: string }, { ok: boolean }>({
   side: "server",
   source: javaTask({
     imports: ["net.minecraft.server.MinecraftServer", "net.minecraft.resources.ResourceLocation", "net.minecraft.util.RandomSource",
-      "io.github.izakyl.folkways.core.api.resident.body.Body", "io.github.izakyl.folkways.core.api.colony.Colonies",
+      "io.github.izakyl.folkways.core.resident.api.Body", "io.github.izakyl.folkways.core.colony.api.Colonies",
       "io.github.izakyl.folkways.plugins.person.living.LivingContent", "io.github.izakyl.folkways.front.api.Facing"],
     body: `
 var level = ((MinecraftServer)ctx.server()).overworld();

@@ -1,10 +1,10 @@
 package io.github.izakyl.folkways.cookery.pot;
 
 import java.util.ArrayList;
-import java.util.function.Predicate;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Predicate;
 import net.minecraft.world.item.ItemStack;
 
 // Matches all slots before anything is put in the pot. Broad tags must not consume a later slot's only choice.

@@ -2,24 +2,24 @@ package io.github.izakyl.folkways.plugins.person.living;
 
 import com.mojang.authlib.GameProfile;
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.colony.Colonies;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.colony.Held;
-import io.github.izakyl.folkways.core.testing.TestWorker;
-import io.github.izakyl.folkways.effect.perk.PerkPool;
 import io.github.izakyl.folkways.base.persist.Writer;
-import io.github.izakyl.folkways.core.api.resident.body.Body;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.work.Worker;
-import io.github.izakyl.folkways.rts.FolkwaysRtsMod;
-import io.github.izakyl.folkways.plugins.person.PersonBody;
-import io.github.izakyl.folkways.plugins.person.PersonContent;
-import io.github.izakyl.folkways.rts.combat.command.ResidentCommands;
-import io.github.izakyl.folkways.rts.combat.control.CombatSelectionOwnership;
+import io.github.izakyl.folkways.core.colony.api.Claimed;
+import io.github.izakyl.folkways.core.colony.api.Colonies;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.resident.api.Body;
+import io.github.izakyl.folkways.core.testing.TestWorker;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
+import io.github.izakyl.folkways.effect.perk.PerkPool;
 import io.github.izakyl.folkways.front.engine.charter.Charter;
 import io.github.izakyl.folkways.front.engine.charter.Charters;
 import io.github.izakyl.folkways.front.engine.registry.FolkwaysItems;
 import io.github.izakyl.folkways.front.engine.registry.FolkwaysPlayerAttachments;
+import io.github.izakyl.folkways.plugins.person.PersonBody;
+import io.github.izakyl.folkways.plugins.person.PersonContent;
+import io.github.izakyl.folkways.rts.FolkwaysRtsMod;
+import io.github.izakyl.folkways.rts.combat.command.ResidentCommands;
+import io.github.izakyl.folkways.rts.combat.control.CombatSelectionOwnership;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -35,10 +35,10 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.common.util.FakePlayerFactory;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
-import net.neoforged.neoforge.common.util.FakePlayerFactory;
 
 @EventBusSubscriber(modid = FolkwaysRtsMod.MOD_ID, bus = EventBusSubscriber.Bus.MOD)
 @GameTestHolder(FolkwaysMod.MOD_ID)
@@ -60,7 +60,7 @@ public final class RtsLivingGameTests {
             helper.setBlock(new BlockPos(2, 0, 2), Blocks.STONE);
             body.mob().moveTo(feet.getX() + .5, feet.getY(), feet.getZ() + .5);
             level.addFreshEntity(body.mob());
-            colony.hold(PersonContent.ID, Held.Entity.of(body.mob())).orElseThrow();
+            colony.hold(PersonContent.ID, Claimed.Entity.of(body.mob())).orElseThrow();
             body.joinColony(colony.id());
             player.moveTo(body.mob().position());
             Charters.keep(colony, Charter.founded("rest control test", player.getUUID()));
@@ -69,15 +69,15 @@ public final class RtsLivingGameTests {
             WorldPos bed = WorldPos.of(level, feet);
             colony.keep(
                 LivingContent.ID,
-                Writer.of()
+                Writer.of(new LivingPresence(colony).save())
                 .children(
                 "hunger",
                 List.of(body.id()),
-                id -> Writer.of().uuid("resident", id).integer("FoodLevel", 20).tag())
+                id -> Writer.of().uuid("resident", id).integer("FoodLevel", 20).decimal("Saturation", 0).decimal("Exhaustion", 0).tag())
                 .children(
                 "rest",
                 List.of(body.id()),
-                id -> Writer.of().uuid("resident", id).integer("Tired", Rest.SPENT).tag())
+                id -> Writer.of().uuid("resident", id).decimal("Tired", Rest.SPENT).tag())
                 .children(
                 "claims",
                 List.of(body.id()),

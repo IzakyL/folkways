@@ -1,7 +1,7 @@
 package io.github.izakyl.folkways.plugins.supply;
 
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.Declaring;
+import io.github.izakyl.folkways.core.extension.api.Declaring;
 import io.github.izakyl.folkways.front.api.Delegation;
 import io.github.izakyl.folkways.front.api.Enrollment;
 import io.github.izakyl.folkways.front.api.Registering;

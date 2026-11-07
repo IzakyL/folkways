@@ -1,11 +1,10 @@
 package io.github.izakyl.folkways.front.engine.colony;
 
-import io.github.izakyl.folkways.base.persist.Entries;
 import io.github.izakyl.folkways.base.persist.Reader;
 import io.github.izakyl.folkways.base.persist.Writer;
-import io.github.izakyl.folkways.core.api.terms.ItemFilter;
-import io.github.izakyl.folkways.core.api.terms.ItemQuery;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
+import io.github.izakyl.folkways.core.item.api.ItemFilter;
+import io.github.izakyl.folkways.core.item.api.ItemQuery;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import io.github.izakyl.folkways.front.api.Schema;
 import io.github.izakyl.folkways.front.api.Settings;
 import java.util.ArrayList;
@@ -155,37 +154,36 @@ public final class ColonySettings implements Settings {
     public static ColonySettings load(Reader reader) {
         Map<String, Value> values = new LinkedHashMap<>();
         for (String key : reader.keys()) {
-            reader.child(key).flatMap(ColonySettings::loadValue).ifPresent(value -> values.put(key, value));
+            values.put(key, loadValue(reader.child(key).orElseThrow()));
         }
         return new ColonySettings(values);
     }
 
-    private static Optional<Value> loadValue(Reader reader) {
-        Optional<Value> flag = reader.flag("flag").map(Value.Flag::new);
-        if (flag.isPresent()) {
-            return flag;
+    private static Value loadValue(Reader reader) {
+        // Schema changes can invalidate a well-formed choice or count, but cannot produce malformed NBT.
+        if (reader.keys().size() != 1) {
+            throw new IllegalArgumentException("A persisted setting must have exactly one value");
         }
-        Optional<Value> count = reader.integer("count").map(Value.Count::new);
-        if (count.isPresent()) {
-            return count;
-        }
-        Optional<Value> choice = reader.id("choice").map(Value.Choice::new);
-        if (choice.isPresent()) {
-            return choice;
-        }
-        List<ItemFilter> entries = Entries.of(reader, "items", ColonySettings::readEntry);
-        return entries.isEmpty() && !reader.keys().contains("items")
-            ? Optional.empty()
-            : Optional.of(new Value.Items(entries));
+        return switch (reader.keys().iterator().next()) {
+            case "flag" -> new Value.Flag(reader.flag("flag").orElseThrow());
+            case "count" -> new Value.Count(reader.integer("count").orElseThrow());
+            case "choice" -> new Value.Choice(reader.id("choice").orElseThrow());
+            case "items" -> new Value.Items(reader.requiredChildren("items").stream()
+                .map(ColonySettings::readEntry).toList());
+            default -> throw new IllegalArgumentException("Unknown persisted setting value");
+        };
     }
 
-    private static Optional<ItemFilter> readEntry(Reader entry) {
-        Optional<ItemFilter> tag = entry.id("tag").map(ItemFilter::tag);
-        if (tag.isPresent()) {
-            return tag;
+    private static ItemFilter readEntry(Reader entry) {
+        if (entry.keys().size() != 1) {
+            throw new IllegalArgumentException("A persisted item filter must have exactly one value");
         }
-        Optional<ItemFilter> query = entry.string("query").flatMap(ItemFilter::query);
-        return query.isPresent() ? query : entry.id("item").map(ItemFilter::item);
+        return switch (entry.keys().iterator().next()) {
+            case "tag" -> ItemFilter.tag(entry.id("tag").orElseThrow());
+            case "query" -> ItemFilter.query(entry.string("query").orElseThrow()).orElseThrow();
+            case "item" -> ItemFilter.item(entry.id("item").orElseThrow());
+            default -> throw new IllegalArgumentException("Unknown persisted item filter");
+        };
     }
 
     private static Value defaultOf(Schema.Setting declared) {

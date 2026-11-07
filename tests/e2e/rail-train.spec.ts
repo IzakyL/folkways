@@ -13,6 +13,7 @@ import {
 import { readDoing } from "../shared/colony/resident-probe";
 import { sampleWhileSprinting } from "../shared/harness/tick-tools";
 import { buildRailLine, conductorAboard, seatedAt } from "../shared/rail/rail-fixture";
+import { platformOf, platformStrips } from "../shared/rail/rail-footprint";
 import { handOffSchematic, schematicSpec } from "../shared/ui/schematic-tools";
 import { screen, tick, world } from "@izakyl/blockwright-minecraft";
 import { launchPair, type E2EPair } from "../shared/harness/pair";
@@ -29,7 +30,6 @@ type Vec = { x: number; y: number; z: number };
 
 const BLUEPRINT_ASSET = "tests/shared/assets/oak-post.nbt";
 
-const BESIDE_TRAIN = 8;
 const ALPHA_STOP_RADIUS = 8;
 
 const STUCK_SAMPLES = 3;
@@ -123,6 +123,14 @@ test("a real Create train, assembled on real track, between two named stations",
     expect(rail.ok, `the line should run under the colony: ${rail.error} ${JSON.stringify(rail.steps).slice(0, 400)}`).toBe(true);
     const carriageUuid = rail.carriageUuid!;
 
+    // Alpha faces out past this double-ended car. Check the physical platform the fixture laid: a circle around
+    // the carriage's entity origin cuts off its far end, even when someone is standing on the platform there.
+    const alpha = { name: "Alpha", position: rail.stationA, reverse: true };
+    const strips = platformStrips(alpha, platformOf(alpha, [alpha], rail.passengerSeats!, gy));
+    const onPlatform = (c: Vec) => [strips.kerb, strips.walk].some(strip =>
+      c.x >= strip.min.x && c.x < strip.max.x + 1 && c.z >= strip.min.z && c.z < strip.max.z + 1
+        && Math.abs(c.y - (strip.max.y + 1)) < 0.01);
+
     const supplyChest: Vec = { x: origin.x + 4, y: origin.y, z: origin.z + 6 };
     const worksite: Vec = { x: x + 6, y: gy, z: z0 - LINE_LENGTH + 2 };
 
@@ -177,9 +185,9 @@ test("a real Create train, assembled on real track, between two named stations",
       return (await world.entities(server)).entities
         .filter((e: any) => entityTypeMatches(e.type, RESIDENT_TYPE))
         .map((e: any) => ({
-          x: Math.round(e.position.x * 10) / 10,
-          y: Math.round(e.position.y * 10) / 10,
-          z: Math.round(e.position.z * 10) / 10,
+          x: e.position.x,
+          y: e.position.y,
+          z: e.position.z,
           uuid: e.uuid,
           riding: seated.includes(e.uuid),
         }));
@@ -272,7 +280,10 @@ test("a real Create train, assembled on real track, between two named stations",
 
     let rode = 0;
     let rideTicks = 0;
-    const approach: Record<string, { closest: number; samples: number }> = {};
+    const approach: Record<string, {
+      closest: number; samples: number;
+      last: { position: Vec; carriage: Vec | undefined; onPlatform: boolean; insideCarriage: boolean };
+    }> = {};
     insideRun = 0;
     let step = 5;
     let atStation = true;
@@ -290,6 +301,10 @@ test("a real Create train, assembled on real track, between two named stations",
         approach[c.uuid] = {
           closest: Math.min(was?.closest ?? Infinity, besideCarriage(c, w.carriage)),
           samples: (was?.samples ?? 0) + 1,
+          last: {
+            position: { x: c.x, y: c.y, z: c.z }, carriage: w.carriage,
+            onPlatform: onPlatform(c), insideCarriage: insideCarriageLocal(c, w.carriage),
+          },
         };
       }
       const drift = Math.hypot(
@@ -323,17 +338,20 @@ test("a real Create train, assembled on real track, between two named stations",
     expect(passengerUuid, "the second person aboard (not the conductor) should be identifiable").toBeTruthy();
 
     const walkedUp = approach[passengerUuid];
+    await testInfo.attach("boarding-approach", {
+      body: JSON.stringify({ passenger: passengerUuid, platform: strips, approach: walkedUp }, null, 2),
+      contentType: "application/json",
+    });
     expect(
       walkedUp,
       "the passenger should be sampled on foot at least once before sitting - never means they did not walk to the train, "
         + "they appeared in the seat out of nowhere",
     ).toBeTruthy();
     expect(
-      walkedUp?.closest ?? Infinity,
-      `before sitting the passenger must be seen standing **beside the train** (within ${BESIDE_TRAIN} blocks of the carriage center, outside it): `
-        + `they only got within ${(walkedUp?.closest ?? Infinity).toFixed(1)} blocks. Boarding no longer means walking into the carriage, `
-        + "but reaching the platform still takes walking; sitting down from half a colony away is something else.",
-    ).toBeLessThan(BESIDE_TRAIN);
+      walkedUp?.last.onPlatform,
+      `the passenger's last on-foot sample before sitting must be on Alpha's physical platform: ${JSON.stringify(walkedUp)}`,
+    ).toBe(true);
+    expect(walkedUp.last.insideCarriage, "the passenger must board from the platform outside the carriage").toBe(false);
 
     const boardingPosition = (await carriagePos())!;
     const destination = await tryCommand(server,

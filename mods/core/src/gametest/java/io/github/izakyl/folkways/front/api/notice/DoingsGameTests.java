@@ -1,7 +1,7 @@
 package io.github.izakyl.folkways.front.api.notice;
 
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.work.Doing;
+import io.github.izakyl.folkways.core.resident.api.Doing;
 import java.util.Optional;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;

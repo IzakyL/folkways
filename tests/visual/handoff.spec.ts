@@ -93,7 +93,7 @@ test("the hand-off entry in Create's row of schematic tools", async ({}, testInf
     const idle = await hudTexts(client);
     run.note("row_unfocused", { texts: idle });
     await run.shot(client, "01-tool-row", {
-      subject: "Holding a placed schematic: Create's tool row is drawn above the bottom of the screen, with the folkways entry last",
+      subject: "Claim a placed schematic: Create's tool row is drawn above the bottom of the screen, with the folkways entry last",
       worldState: { gui_scale: 1, schematic_file: SCHEMATIC_FILE, schematic_file_on_disk: false, drawn: idle },
       hard: true,
     });
@@ -103,7 +103,7 @@ test("the hand-off entry in Create's row of schematic tools", async ({}, testInf
       whileFocused: async () => {
         focused = await hudTexts(client);
         await run.shot(client, "02-tool-row-focused", {
-          subject: "Holding the tool menu key and scrolling to the folkways entry: it is selected, its name under the icon and its description below the row",
+          subject: "Claim the tool menu key and scrolling to the folkways entry: it is selected, its name under the icon and its description below the row",
           worldState: { selected: LABEL, drawn: focused },
           hard: true,
         });

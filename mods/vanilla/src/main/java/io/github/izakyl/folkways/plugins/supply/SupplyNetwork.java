@@ -1,8 +1,8 @@
 package io.github.izakyl.folkways.plugins.supply;
 
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.terms.ItemFilter;
-import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
+import io.github.izakyl.folkways.core.item.api.ItemFilter;
+import io.github.izakyl.folkways.core.world.api.WorldSpaces;
 import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.core.BlockPos;

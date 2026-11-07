@@ -2,7 +2,7 @@ package io.github.izakyl.folkways.plugins.wares;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import io.github.izakyl.folkways.core.api.work.Worker;
+import io.github.izakyl.folkways.core.work.api.Worker;
 import java.io.IOException;
 import java.util.List;
 import net.minecraft.core.registries.BuiltInRegistries;

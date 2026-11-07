@@ -1,14 +1,14 @@
 package io.github.izakyl.folkways.plugins.person;
 
-import io.github.izakyl.folkways.core.api.colony.Cadence;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.colony.ColonyView;
-import io.github.izakyl.folkways.core.api.resident.Resident;
-import io.github.izakyl.folkways.core.api.resident.body.WorkPriorities;
-import io.github.izakyl.folkways.core.api.vocation.Vocations;
-import io.github.izakyl.folkways.core.engine.colony.WorkDefaults;
-import io.github.izakyl.folkways.front.api.Facing;
+import io.github.izakyl.folkways.core.colony.api.Cadence;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.colony.api.ColonyView;
+import io.github.izakyl.folkways.core.colony.api.WorkDefaults;
+import io.github.izakyl.folkways.core.resident.api.Resident;
+import io.github.izakyl.folkways.core.resident.api.WorkPriorities;
+import io.github.izakyl.folkways.core.vocation.api.Vocations;
 import io.github.izakyl.folkways.front.api.Endorsement;
+import io.github.izakyl.folkways.front.api.Facing;
 import io.github.izakyl.folkways.front.api.panel.Board;
 import io.github.izakyl.folkways.front.engine.colony.Endorsements;
 import io.github.izakyl.folkways.plugins.person.look.LookPool;

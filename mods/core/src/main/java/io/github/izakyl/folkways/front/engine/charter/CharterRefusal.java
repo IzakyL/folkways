@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.front.engine.charter;
 
-import io.github.izakyl.folkways.core.api.terms.RefusalKind;
+import io.github.izakyl.folkways.core.resident.api.RefusalKind;
 
 // Why a change to who keeps a colony was turned down.
 public enum CharterRefusal implements RefusalKind.Named {

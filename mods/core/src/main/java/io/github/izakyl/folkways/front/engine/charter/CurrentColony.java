@@ -1,8 +1,8 @@
 package io.github.izakyl.folkways.front.engine.charter;
 
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.colony.Colonies;
-import io.github.izakyl.folkways.core.api.colony.Colony;
+import io.github.izakyl.folkways.core.colony.api.Colonies;
+import io.github.izakyl.folkways.core.colony.api.Colony;
 import io.github.izakyl.folkways.front.engine.net.CurrentColonyPacket;
 import io.github.izakyl.folkways.front.engine.registry.FolkwaysPlayerAttachments;
 import java.util.Collection;
@@ -107,7 +107,6 @@ public final class CurrentColony {
     public static void onLoggedIn(PlayerEvent.PlayerLoggedInEvent event) {
         if (event.getEntity() instanceof ServerPlayer player) {
             TOLD.remove(player);
-            LegacyBooks.takeUpCarried(player);
             refresh(player);
             Invitations.tellPending(player);
         }

@@ -1,11 +1,10 @@
 package io.github.izakyl.folkways.front.client;
 
 import com.mojang.blaze3d.vertex.PoseStack;
-import io.github.izakyl.folkways.front.api.ui.ModeOverlays;
-import io.github.izakyl.folkways.front.api.ui.OverheadTools;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import io.github.izakyl.folkways.FolkwaysClientConfig;
 import io.github.izakyl.folkways.front.api.Shape;
+import io.github.izakyl.folkways.front.api.ui.ModeOverlays;
 import io.github.izakyl.folkways.front.api.ui.OverheadTools;
 import io.github.izakyl.folkways.front.api.ui.PathOffers;
 import io.github.izakyl.folkways.front.engine.item.HeldBook;

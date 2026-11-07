@@ -34,7 +34,9 @@ public final class NativeRecipeAuditGameTests {
             helper.assertTrue(holder != null, "the pinned native recipe is loaded: " + id);
             var type = BuiltInRegistries.RECIPE_TYPE.getKey(holder.value().getType());
             // Cookery registers its serializers but uses RecipeType.simple without a type-registry entry.
-            if (type == null) type = ResourceLocation.tryParse(holder.value().getType().toString());
+            if (type == null) {
+                type = ResourceLocation.tryParse(holder.value().getType().toString());
+            }
             helper.assertTrue(type != null, "every native Cookery recipe names its actual production type: " + id);
             types.add(type);
         }

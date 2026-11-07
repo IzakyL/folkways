@@ -1,21 +1,21 @@
 package io.github.izakyl.folkways.plugins.damagecontrol;
 
-import io.github.izakyl.folkways.core.api.resident.Conveyance;
-import io.github.izakyl.folkways.core.api.resident.Going;
-import io.github.izakyl.folkways.core.api.resident.body.Bodies;
-import io.github.izakyl.folkways.core.api.terms.Reach;
-import io.github.izakyl.folkways.core.api.terms.RefusalKind;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.work.Ending;
-import io.github.izakyl.folkways.core.api.work.Node;
-import io.github.izakyl.folkways.core.api.work.NodeSpec;
-import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Recourse;
-import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.WorkGesture;
-import io.github.izakyl.folkways.core.api.work.WorkSite;
-import io.github.izakyl.folkways.core.api.work.Worker;
-import io.github.izakyl.folkways.core.api.work.Workload;
+import io.github.izakyl.folkways.core.resident.api.Bodies;
+import io.github.izakyl.folkways.core.resident.api.Conveyance;
+import io.github.izakyl.folkways.core.resident.api.Going;
+import io.github.izakyl.folkways.core.resident.api.RefusalKind;
+import io.github.izakyl.folkways.core.work.api.Ending;
+import io.github.izakyl.folkways.core.work.api.Node;
+import io.github.izakyl.folkways.core.work.api.NodeSpec;
+import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Recourse;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.work.api.WorkGesture;
+import io.github.izakyl.folkways.core.work.api.WorkSite;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.work.api.Workload;
+import io.github.izakyl.folkways.core.work.support.WorkStances;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
 import java.util.Optional;
 import java.util.Set;
@@ -114,7 +114,7 @@ final class ExtinguishNode implements Node {
             return false;
         }
         if (session == null) {
-            if (!Reach.standingIn(who.body(), spec.stances())) {
+            if (!WorkStances.standingIn(who.body(), spec.stances())) {
                 result = Outcome.failed(DamageControlRefusal.NO_REACH);
                 return false;
             }
@@ -132,7 +132,7 @@ final class ExtinguishNode implements Node {
             close();
             return false;
         }
-        if (!destinations.isEmpty() && !Reach.standingIn(who.body(), new Stances.Cells(destinations))) {
+        if (!destinations.isEmpty() && !WorkStances.standingIn(who.body(), new Stances.Cells(destinations))) {
             if (walking == null) {
                 var body = Bodies.of(who.body()).orElseThrow();
                 walking = body.locomotion().along(1, DamageControlRefusal.NO_REACH);
@@ -170,8 +170,8 @@ final class ExtinguishNode implements Node {
         if (!FireSurvey.fire(level.getBlockState(at))) {
             return Outcome.done();
         }
-        if (!Reach.standingIn(who.body(), spec.stances()) || !destinations.isEmpty()
-            && !Reach.standingIn(who.body(), new Stances.Cells(destinations))) {
+        if (!WorkStances.standingIn(who.body(), spec.stances()) || !destinations.isEmpty()
+            && !WorkStances.standingIn(who.body(), new Stances.Cells(destinations))) {
             return Outcome.failed(DamageControlRefusal.NO_REACH);
         }
         interaction = 10;

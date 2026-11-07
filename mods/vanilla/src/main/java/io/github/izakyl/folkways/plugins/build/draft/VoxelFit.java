@@ -1,7 +1,7 @@
 package io.github.izakyl.folkways.plugins.build.draft;
 
-import io.github.izakyl.folkways.core.api.structure.StructurePayload;
-import io.github.izakyl.folkways.core.api.structure.Voxelizer;
+import io.github.izakyl.folkways.core.work.api.Voxelizer;
+import io.github.izakyl.folkways.core.world.api.StructurePayload;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.BitSet;

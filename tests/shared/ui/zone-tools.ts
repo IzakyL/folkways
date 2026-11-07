@@ -306,10 +306,10 @@ export async function releaseHeldZone(client: MinecraftClient) {
   return closed;
 }
 
-const COLONY_REGISTRY = "io.github.izakyl.folkways.core.engine.colony.ColonyRegistry";
+const COLONY_REGISTRY = "io.github.izakyl.folkways.core.colony.internal.ColonyRegistry";
 
 const COLONY_FRONT = "io.github.izakyl.folkways.front.engine.colony.ColonyFront";
-const COLONY_INTERFACE = "io.github.izakyl.folkways.core.api.colony.Colony";
+const COLONY_INTERFACE = "io.github.izakyl.folkways.core.colony.api.Colony";
 
 export async function colonyRegistry(server: MinecraftServer): Promise<string> {
   const players = await world.players(server);
@@ -391,14 +391,14 @@ export async function zoneCount(server: MinecraftServer, registry: string): Prom
 export async function memberCellCount(server: MinecraftServer, registry: string): Promise<number> {
   const result = await reflect.invoke(server, {
     target: { kind: "handle", handle: registry },
-    path: "colonies()[0].holdings()",
+    path: "colonies()[0].claims()",
     method: "blocks",
     limits: { maxDepth: 1, maxItems: 1, maxNodes: 256 },
   });
   const tree: any = result.returned;
   const length = listLength(tree);
   if (length === undefined) {
-    throw new Error(`Holdings.blocks() did not return a set: ${JSON.stringify(tree).slice(0, 300)}`);
+    throw new Error(`Claims.blocks() did not return a set: ${JSON.stringify(tree).slice(0, 300)}`);
   }
   return length;
 }

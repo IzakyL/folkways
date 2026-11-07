@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.rts.combat.group;
 
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.plugins.combat.group.GroupDeployment;
 import java.util.List;
 import net.minecraft.world.phys.Vec3;

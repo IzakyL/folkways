@@ -1,10 +1,10 @@
 package io.github.izakyl.folkways.plugins.person.walk;
 
-import io.github.izakyl.folkways.core.api.colony.Colonies;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.colony.Held;
-import io.github.izakyl.folkways.core.api.terms.RefusalKind;
-import io.github.izakyl.folkways.core.engine.labor.LaborFixture;
+import io.github.izakyl.folkways.core.colony.api.Claimed;
+import io.github.izakyl.folkways.core.colony.api.Colonies;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.resident.api.RefusalKind;
+import io.github.izakyl.folkways.core.runtime.LaborFixture;
 import io.github.izakyl.folkways.core.testing.Cleanup;
 import io.github.izakyl.folkways.plugins.person.PersonContent;
 import io.github.izakyl.folkways.plugins.person.ResidentEntity;
@@ -25,7 +25,7 @@ final class WaterLabor {
     // A colony of one whose labour runs each tick until the body is removed or the test ends.
     static Enlisted enlist(GameTestHelper helper, ResidentEntity body) {
         var colony = Colonies.mint(helper.getLevel().getServer());
-        colony.hold(PersonContent.ID, Held.Entity.of(body)).orElseThrow();
+        colony.hold(PersonContent.ID, Claimed.Entity.of(body)).orElseThrow();
         body.joinColony(colony.id());
         colony.entered(body);
         LaborFixture labor = new LaborFixture(colony, helper.getLevel());

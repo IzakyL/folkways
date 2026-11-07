@@ -7,7 +7,7 @@ import com.lowdragmc.lowdraglib2.gui.ui.elements.Button;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Label;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.TextField;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
-import io.github.izakyl.folkways.core.api.colony.Colony;
+import io.github.izakyl.folkways.core.colony.api.Colony;
 import io.github.izakyl.folkways.front.api.Fronts;
 import io.github.izakyl.folkways.front.api.ui.Picker;
 import io.github.izakyl.folkways.front.api.ui.Pages;
@@ -156,7 +156,7 @@ final class StaffingPanel {
             tag.putLong("revision", staffing.revision(target));
             tag.putInt("count", staffing.count(target));
             tag.putInt("selected", staffing.allowed(target).size());
-            boolean route = colony.holding(target).orElseThrow().owner().equals(PatrolContent.BEAT);
+            boolean route = colony.claim(target).orElseThrow().owner().equals(PatrolContent.BEAT);
             tag.putBoolean("route", route);
             Component status = staffing.summary(target);
             if (route) {

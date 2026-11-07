@@ -2,12 +2,12 @@ package io.github.izakyl.folkways.chiselsandbits;
 
 import io.github.izakyl.folkways.front.api.StructureModels;
 import java.util.LinkedHashMap;
-import mod.chiselsandbits.utils.MultiStateSnapshotUtils;
 import mod.chiselsandbits.block.ChiseledBlock;
 import mod.chiselsandbits.client.model.baked.chiseled.ChiselRenderType;
 import mod.chiselsandbits.client.model.baked.chiseled.ChiseledBlockBakedModelManager;
 import mod.chiselsandbits.client.model.baked.simple.CombinedModel;
 import mod.chiselsandbits.client.util.BlockInformationUtils;
+import mod.chiselsandbits.utils.MultiStateSnapshotUtils;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.resources.model.BakedModel;
 import net.minecraft.core.registries.BuiltInRegistries;

@@ -2,9 +2,9 @@ package io.github.izakyl.folkways.front.engine.colony;
 
 import com.mojang.authlib.GameProfile;
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.colony.Colonies;
-import io.github.izakyl.folkways.core.api.colony.Held;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
+import io.github.izakyl.folkways.core.colony.api.Claimed;
+import io.github.izakyl.folkways.core.colony.api.Colonies;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.front.api.Delegation;
 import io.github.izakyl.folkways.front.api.Enrollment;
 import io.github.izakyl.folkways.front.api.Registering;
@@ -79,7 +79,9 @@ public final class BlockSweepGameTests {
         var level = helper.getLevel();
         BlockPos first = helper.absolutePos(new BlockPos(1, 1, 1));
         List<BlockPos> points = List.of(first, first.east(2), first.east(4));
-        for (BlockPos point : points) level.setBlockAndUpdate(point, Blocks.COMPOSTER.defaultBlockState());
+        for (BlockPos point : points) {
+            level.setBlockAndUpdate(point, Blocks.COMPOSTER.defaultBlockState());
+        }
         var found = BlockSweep.found(level, first, points.getLast());
         helper.assertTrue(sites(found, COMPOST).equals(points), "every native Point is retained with its own immutable anchor");
         helper.assertValueEqual(found.size(), 1, "a pure Point sweep needs no Block delegation");
@@ -130,9 +132,9 @@ public final class BlockSweepGameTests {
         try {
             var player = observer(helper);
             helper.assertTrue(!BlockSweep.take(level, colony, min, max, Set.of(STORE), player).refused(), "take accepts the double chest");
-            helper.assertValueEqual(colony.holdings().size(), 1, "take registers exactly the previewed member");
-            helper.assertTrue(colony.holdingAt(WorldPos.of(level, anchor)).orElseThrow().what() instanceof Held.Block,
-                "container registration still uses Held.Block");
+            helper.assertValueEqual(colony.claims().size(), 1, "take registers exactly the previewed member");
+            helper.assertTrue(colony.claimAt(WorldPos.of(level, anchor)).orElseThrow().what() instanceof Claimed.Block,
+                "container registration still uses Claimed.Block");
             helper.assertTrue(BlockSweep.take(level, colony, min, max, Set.of(STORE), player).refused(),
                 "a repeated sweep cannot toggle or duplicate the double chest");
         } finally {
@@ -157,19 +159,19 @@ public final class BlockSweepGameTests {
             var player = observer(helper);
             helper.assertTrue(!BlockSweep.take(level, colony, first, chest, Set.of(COMPOST), player).refused(),
                 "a Point-only selection works inside a mixed box");
-            var holding = colony.holdingAt(WorldPos.of(level, first)).orElseThrow();
-            helper.assertTrue(holding.owner().equals(COMPOST) && holding.what() instanceof Held.Point,
-                "the native composter is really registered as Held.Point");
-            helper.assertTrue(colony.holdingAt(WorldPos.of(level, chest)).isEmpty(), "unselected container kinds are not taken");
-            helper.assertTrue(colony.holdingAt(WorldPos.of(level, foreign)).isEmpty()
-                && other.holding(existing.id()).isPresent(), "a foreign Point keeps its original colony and identity");
+            var holding = colony.claimAt(WorldPos.of(level, first)).orElseThrow();
+            helper.assertTrue(holding.owner().equals(COMPOST) && holding.what() instanceof Claimed.Point,
+                "the native composter is really registered as Claimed.Point");
+            helper.assertTrue(colony.claimAt(WorldPos.of(level, chest)).isEmpty(), "unselected container kinds are not taken");
+            helper.assertTrue(colony.claimAt(WorldPos.of(level, foreign)).isEmpty()
+                && other.claim(existing.id()).isPresent(), "a foreign Point keeps its original colony and identity");
             helper.assertTrue(BlockSweep.take(level, colony, first, foreign, Set.of(COMPOST), player).refused(),
                 "repeating a sweep of already held points makes no change");
-            helper.assertTrue(colony.holding(holding.id()).isPresent(), "a repeated take never toggles off the existing point");
+            helper.assertTrue(colony.claim(holding.id()).isPresent(), "a repeated take never toggles off the existing point");
             helper.assertTrue(BlockSweep.take(level, other, first, first, Set.of(COMPOST), player).refused(),
                 "the other colony cannot steal the newly registered point either");
-            helper.assertValueEqual(colony.holdings().size(), 1, "there is only one new member");
-            helper.assertValueEqual(other.holdings().size(), 1, "foreign registration was neither duplicated nor moved");
+            helper.assertValueEqual(colony.claims().size(), 1, "there is only one new member");
+            helper.assertValueEqual(other.claims().size(), 1, "foreign registration was neither duplicated nor moved");
         } finally {
             colony.raze();
             other.raze();
@@ -201,7 +203,7 @@ public final class BlockSweepGameTests {
             var result = BlockSweep.take(level, colony, first, last, Set.of(COMPOST), observer(helper));
             helper.assertTrue(result.refusal().orElseThrow().key().equals(BlockSweep.SweepRefusal.TOO_LARGE.translationKey()),
                 "server take reports the size limit before attempting a Point");
-            helper.assertTrue(colony.holdings().isEmpty(), "size rejection leaves no partial enrollment");
+            helper.assertTrue(colony.claims().isEmpty(), "size rejection leaves no partial enrollment");
         } finally {
             colony.raze();
         }

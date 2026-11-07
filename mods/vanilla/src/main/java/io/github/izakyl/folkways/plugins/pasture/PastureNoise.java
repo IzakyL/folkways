@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.plugins.pasture;
 
-import io.github.izakyl.folkways.core.api.work.WorkNoise;
+import io.github.izakyl.folkways.core.work.api.WorkNoise;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 

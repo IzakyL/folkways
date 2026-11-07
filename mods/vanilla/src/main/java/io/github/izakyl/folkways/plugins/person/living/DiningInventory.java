@@ -1,8 +1,9 @@
 package io.github.izakyl.folkways.plugins.person.living;
 
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.inventory.InventoryProviders;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.inventory.api.InventoryDiscovery;
+import io.github.izakyl.folkways.core.inventory.api.InventoryProviders;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -32,13 +33,13 @@ final class DiningInventory implements InventoryProviders.Provider {
     }
 
     @Override
-    public long revision(Colony colony, ServerLevel level) {
+    public long revision(InventoryDiscovery colony, ServerLevel level) {
         Membership membership = MEMBERS.get(new Key(colony.id(), level.dimension()));
         return membership == null ? 0 : membership.revision;
     }
 
     @Override
-    public InventoryProviders.Page discover(Colony colony, ServerLevel level, String cursor, int limit) {
+    public InventoryProviders.Page discover(InventoryDiscovery colony, ServerLevel level, String cursor, int limit) {
         Membership membership = MEMBERS.get(new Key(colony.id(), level.dimension()));
         List<WorldPos> positions = membership == null ? List.of() : membership.positions;
         int start = cursor == null ? 0 : Integer.parseInt(cursor);

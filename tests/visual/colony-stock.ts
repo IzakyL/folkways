@@ -249,13 +249,13 @@ const STOCK_COLONY = defineTask<Record<string, any>, Record<string, any>>({
   timeoutMs: 30_000,
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.core.api.colony.Colony",
-      "io.github.izakyl.folkways.core.api.resident.Resident",
-      "io.github.izakyl.folkways.core.api.resident.body.Bodies",
-      "io.github.izakyl.folkways.core.api.resident.body.Body",
-      "io.github.izakyl.folkways.core.api.resident.body.Keenness",
-      "io.github.izakyl.folkways.core.api.terms.ItemFilter",
-      "io.github.izakyl.folkways.core.api.vocation.Vocations",
+      "io.github.izakyl.folkways.core.colony.api.Colony",
+      "io.github.izakyl.folkways.core.resident.api.Resident",
+      "io.github.izakyl.folkways.core.resident.api.Bodies",
+      "io.github.izakyl.folkways.core.resident.api.Body",
+      "io.github.izakyl.folkways.core.vocation.api.Keenness",
+      "io.github.izakyl.folkways.core.item.api.ItemFilter",
+      "io.github.izakyl.folkways.core.vocation.api.Vocations",
       "io.github.izakyl.folkways.front.engine.colony.ColonyBoards",
       "io.github.izakyl.folkways.front.engine.colony.ColonyFront",
       "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
@@ -362,7 +362,7 @@ for (Object raw : args.list("sites")) {
 out.put("sites", sites);
 
 // BodyPerks is package-private; its xpForLevel is what a level costs.
-Method xpForLevel = Class.forName("io.github.izakyl.folkways.core.api.resident.body.BodyPerks")
+Method xpForLevel = Class.forName("io.github.izakyl.folkways.core.resident.internal.BodyPerks")
     .getDeclaredMethod("xpForLevel", int.class);
 xpForLevel.setAccessible(true);
 // Spread priorities and levels, so the residents table is not one column of 3s and every growth track at 0.

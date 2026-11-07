@@ -1,24 +1,24 @@
 package io.github.izakyl.folkways.plugins.supply;
 
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.terms.Containers;
-import io.github.izakyl.folkways.core.api.terms.Goods;
-import io.github.izakyl.folkways.core.api.terms.Reach;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.work.Amount;
-import io.github.izakyl.folkways.core.api.work.Grown;
-import io.github.izakyl.folkways.core.api.work.Intent;
-import io.github.izakyl.folkways.core.api.work.Leaves;
-import io.github.izakyl.folkways.core.api.work.Node;
-import io.github.izakyl.folkways.core.api.work.NodeSpec;
-import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Produce;
-import io.github.izakyl.folkways.core.api.work.Refinement;
-import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.WorkSite;
-import io.github.izakyl.folkways.core.api.work.Worker;
-import io.github.izakyl.folkways.core.api.work.Workload;
-import io.github.izakyl.folkways.core.api.work.Workshop;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.item.api.Containers;
+import io.github.izakyl.folkways.core.item.api.Goods;
+import io.github.izakyl.folkways.core.plan.api.Grown;
+import io.github.izakyl.folkways.core.plan.api.Intent;
+import io.github.izakyl.folkways.core.plan.api.Produce;
+import io.github.izakyl.folkways.core.plan.api.Refinement;
+import io.github.izakyl.folkways.core.plan.api.Workshop;
+import io.github.izakyl.folkways.core.work.api.Amount;
+import io.github.izakyl.folkways.core.work.api.Node;
+import io.github.izakyl.folkways.core.work.api.NodeSpec;
+import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.work.api.WorkSite;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.work.api.Workload;
+import io.github.izakyl.folkways.core.work.support.Leaves;
+import io.github.izakyl.folkways.core.work.support.WorkStances;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
@@ -66,17 +66,17 @@ record SupplyWorkshop(UUID key, Colony colony, WorldPos at, Stances stances, Sup
         private boolean valid(ServerLevel level) {
             return !used && at.in(level) && level.isLoaded(at.block(level)) && !source.isRemoved()
                 && level.getBlockEntity(at.block(level)) == source && source.revision() == revision
-                && source.allows(goods.getItem()) && colony.holdingAt(at)
+                && source.allows(goods.getItem()) && colony.claimAt(at)
                     .filter(holding -> holding.owner().equals(SupplyContent.SOURCE)).isPresent();
         }
 
-        public Optional<io.github.izakyl.folkways.core.api.terms.RefusalKind> refusal(ServerLevel level) {
+        public Optional<io.github.izakyl.folkways.core.resident.api.RefusalKind> refusal(ServerLevel level) {
             return used || valid(level) ? Optional.empty() : Optional.of(SupplyRefusal.SOURCE_CHANGED);
         }
 
         public Outcome commit(ServerLevel level, Worker who) {
             if (!valid(level)) return Outcome.failed(SupplyRefusal.SOURCE_CHANGED);
-            if (who.body().level() != level || !Reach.standingIn(who.body(), stances)) {
+            if (who.body().level() != level || !WorkStances.standingIn(who.body(), stances)) {
                 return Outcome.failed(SupplyRefusal.OUT_OF_REACH);
             }
             if (room(who.pack(), goods) < goods.getCount()) return Outcome.failed(SupplyRefusal.NO_ROOM);

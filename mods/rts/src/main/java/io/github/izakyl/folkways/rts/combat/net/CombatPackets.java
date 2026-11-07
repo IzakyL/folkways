@@ -1,8 +1,8 @@
 package io.github.izakyl.folkways.rts.combat.net;
 
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
+import io.github.izakyl.folkways.core.world.api.WorldSpaces;
 import io.github.izakyl.folkways.front.engine.charter.CurrentColony;
 import io.github.izakyl.folkways.rts.FolkwaysRtsMod;
 import io.github.izakyl.folkways.rts.combat.control.CombatSelectionOwnership;
@@ -31,7 +31,7 @@ public final class CombatPackets {
     public static final int MAX_POINTS = 16;
     // Selection leases, shortcut operations and immediate waypoint acknowledgements must match on
     // both sides.
-    private static final String NETWORK_VERSION = "6";
+    private static final String NETWORK_VERSION = FolkwaysMod.NETWORK_VERSION;
 
     private record Snapshot(UUID colony, WorldPos at, Set<UUID> residents) {
     }
@@ -53,14 +53,6 @@ public final class CombatPackets {
     }
 
     /** True means sent; server acceptance is carried by the authoritative reply. */
-    public static boolean submit(List<UUID> residents, List<WorldPos> points, boolean patrol) {
-        return submit(residents, points, patrol ? 0 : -1);
-    }
-
-    public static boolean submit(List<UUID> residents, List<WorldPos> points, int cycleStart) {
-        return submit(residents, points, cycleStart, false);
-    }
-
     public static boolean submit(List<UUID> residents, List<WorldPos> points, int cycleStart, boolean attackMove) {
         Snapshot current = snapshot;
         if (current == null
@@ -91,10 +83,6 @@ public final class CombatPackets {
         }
         PacketDistributor.sendToServer(new CombatAttackPacket(current.colony(), residents, target, ++requestedRoute));
         return true;
-    }
-
-    public static boolean append(List<UUID> residents, WorldPos point) {
-        return append(residents, point, false);
     }
 
     public static boolean append(List<UUID> residents, WorldPos point, boolean attackMove) {
@@ -556,10 +544,6 @@ public final class CombatPackets {
 
         public RosterReply {
             residents = Set.copyOf(residents);
-        }
-
-        public RosterReply(long request, UUID colony, WorldPos at, Set<UUID> residents) {
-            this(request, colony, at, residents, CombatOrderState.NONE);
         }
 
         @Override

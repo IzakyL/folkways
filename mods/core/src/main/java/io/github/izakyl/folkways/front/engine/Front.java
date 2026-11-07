@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.front.engine;
 
-import io.github.izakyl.folkways.core.api.vocation.KitRules;
+import io.github.izakyl.folkways.core.colony.api.KitRules;
 import io.github.izakyl.folkways.front.api.Fronts;
 import io.github.izakyl.folkways.front.api.ui.FilterStacks;
 import io.github.izakyl.folkways.front.api.ui.Pages;

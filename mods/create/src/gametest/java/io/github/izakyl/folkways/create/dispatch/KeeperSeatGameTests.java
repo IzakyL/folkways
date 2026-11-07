@@ -1,10 +1,10 @@
 package io.github.izakyl.folkways.create.dispatch;
 
-import io.github.izakyl.folkways.create.FolkwaysCreateMod;
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.resident.body.Body;
-import io.github.izakyl.folkways.core.api.terms.Footing;
-import io.github.izakyl.folkways.core.api.work.WorkGesture;
+import io.github.izakyl.folkways.core.resident.api.Body;
+import io.github.izakyl.folkways.core.work.api.WorkGesture;
+import io.github.izakyl.folkways.core.world.api.Footing;
+import io.github.izakyl.folkways.create.FolkwaysCreateMod;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;

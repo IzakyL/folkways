@@ -1,27 +1,27 @@
 package io.github.izakyl.folkways.plugins.build;
 
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.colony.Colonies;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.colony.Held;
-import io.github.izakyl.folkways.core.api.terms.Containers;
-import io.github.izakyl.folkways.core.api.terms.Goods;
-import io.github.izakyl.folkways.core.api.terms.Stash;
-import io.github.izakyl.folkways.core.api.terms.StoreRule;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.work.Delivery;
-import io.github.izakyl.folkways.core.api.work.Ending;
-import io.github.izakyl.folkways.core.api.work.Grown;
-import io.github.izakyl.folkways.core.api.work.Node;
-import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.engine.inventory.InventoryObservations;
-import io.github.izakyl.folkways.core.engine.labor.Commit;
-import io.github.izakyl.folkways.core.engine.plan.Crew;
-import io.github.izakyl.folkways.core.engine.plan.Message;
-import io.github.izakyl.folkways.core.engine.plan.PlanningFixture;
-import io.github.izakyl.folkways.core.engine.plan.Stock;
-import io.github.izakyl.folkways.core.engine.plan.haul.TransferNode;
+import io.github.izakyl.folkways.core.colony.api.Claimed;
+import io.github.izakyl.folkways.core.colony.api.Colonies;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.inventory.api.Stash;
+import io.github.izakyl.folkways.core.inventory.api.StoreRule;
+import io.github.izakyl.folkways.core.inventory.internal.InventoryObservations;
+import io.github.izakyl.folkways.core.item.api.Containers;
+import io.github.izakyl.folkways.core.item.api.Goods;
+import io.github.izakyl.folkways.core.plan.api.Delivery;
+import io.github.izakyl.folkways.core.plan.api.Grown;
+import io.github.izakyl.folkways.core.plan.internal.Crew;
+import io.github.izakyl.folkways.core.plan.internal.Message;
+import io.github.izakyl.folkways.core.plan.internal.PlanningFixture;
+import io.github.izakyl.folkways.core.plan.internal.Stock;
 import io.github.izakyl.folkways.core.testing.Proxies;
+import io.github.izakyl.folkways.core.work.api.Ending;
+import io.github.izakyl.folkways.core.work.api.Node;
+import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.internal.Commit;
+import io.github.izakyl.folkways.core.work.internal.TransferNode;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.front.api.panel.Board;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
 import io.github.izakyl.folkways.plugins.wares.WaresContent;
@@ -65,8 +65,8 @@ public final class ContainerConstructionGameTests {
 
     @SubscribeEvent
     public static void capabilities(RegisterCapabilitiesEvent event) {
-        event.registerBlockEntity(Capabilities.ItemHandler.BLOCK, BlockEntityType.BARREL,
-            (barrel, side) -> HANDLERS.get(barrel.getBlockPos()));
+        event.registerBlockEntity(Capabilities.ItemHandler.BLOCK, BlockEntityType.BEACON,
+            (beacon, side) -> HANDLERS.get(beacon.getBlockPos()));
     }
 
     @SubscribeEvent
@@ -125,13 +125,14 @@ public final class ContainerConstructionGameTests {
             f.place(f.at, Blocks.BARREL.defaultBlockState());
             f.contents(f.at).setItem(0, new ItemStack(Items.DIAMOND, 7));
             WorldPos at = WorldPos.of(f.level, f.at);
-            UUID holding = f.real.hold(WaresContent.STORE, new Held.Block(at)).orElseThrow().id();
+            UUID holding = f.real.hold(WaresContent.STORE, new Claimed.Block(at)).orElseThrow().id();
             f.file(Map.of(f.at, Blocks.AIR.defaultBlockState()));
-            helper.assertTrue(f.real.holding(holding).isPresent(), "the store is still held before its block goes");
-            helper.assertFalse(StoreRule.takes(f.real.storeRules(at)), "ordinary work cannot draw from the retiring store");
+            helper.assertTrue(f.real.claim(holding).isPresent(), "the store is still held before its block goes");
+            helper.assertFalse(StoreRule.takes(f.real.storeRules(at)),
+                "ordinary work cannot draw from the retiring store");
             helper.assertFalse(StoreRule.stores(f.real.storeRules(at)), "goods cannot be routed back into it");
             f.finish();
-            helper.assertTrue(f.real.holding(holding).isEmpty(), "removal releases the holding");
+            helper.assertTrue(f.real.claim(holding).isEmpty(), "removal releases the holding");
             helper.assertFalse(f.real.storesIn(f.level.dimension()).contains(at), "its owner withdraws the store");
             f.stored(Items.DIAMOND, 7);
         }
@@ -149,9 +150,10 @@ public final class ContainerConstructionGameTests {
             f.file(Map.of(f.at, Blocks.AIR.defaultBlockState()));
             f.blocked(BuildRefusal.NO_ROOM_TO_EMPTY);
             helper.assertTrue(f.deliveries().isEmpty(), "nothing is lifted without somewhere to put it");
-            helper.assertTrue(f.real.holdingAt(WorldPos.of(f.level, f.at)).isEmpty(), "an outside chest need not be joined");
+            helper.assertTrue(f.real.claimAt(WorldPos.of(f.level, f.at)).isEmpty(),
+                "an outside chest need not be joined");
             for (int turn = 0; turn < 3; turn++) {
-                helper.assertTrue(Commit.run(f.level, f.site().pieces().getFirst().node(), f.plan.worker)
+                helper.assertTrue(Commit.run(f.level, f.site().pieces().getFirst().action(), f.plan.worker)
                     instanceof Outcome.Failed failed && failed.why() == BuildRefusal.NO_ROOM_TO_EMPTY,
                     "even a direct commit cannot spill the full chest");
             }
@@ -188,9 +190,9 @@ public final class ContainerConstructionGameTests {
     @GameTest(template = "empty_large", timeoutTicks = 100)
     public static void noStoreLeavesTheContainerUntouched(GameTestHelper helper) {
         try (Fixture f = new Fixture(helper)) {
-            f.real.holdingAt(WorldPos.of(f.level, f.storeAt)).ifPresent(holding ->
-                f.real.release(holding.id(), io.github.izakyl.folkways.core.api.colony.Release.LET_GO));
-            f.real.hold(BuildContent.ID, new Held.Block(WorldPos.of(f.level, f.storeAt))).orElseThrow();
+            f.real.claimAt(WorldPos.of(f.level, f.storeAt)).ifPresent(holding ->
+                f.real.release(holding.id(), io.github.izakyl.folkways.core.colony.api.ClaimRelease.LET_GO));
+            f.real.hold(BuildContent.ID, new Claimed.Block(WorldPos.of(f.level, f.storeAt))).orElseThrow();
             f.place(f.at, Blocks.CHEST.defaultBlockState());
             f.contents(f.at).setItem(0, new ItemStack(Items.DIAMOND, 7));
             f.file(Map.of(f.at, Blocks.AIR.defaultBlockState()));
@@ -215,7 +217,7 @@ public final class ContainerConstructionGameTests {
     @GameTest(template = "empty_large", timeoutTicks = 100)
     public static void capabilityOnlyContentsAreCarriedWithTheirComponents(GameTestHelper helper) {
         try (Fixture f = new Fixture(helper)) {
-            f.place(f.at, Blocks.BARREL.defaultBlockState());
+            f.place(f.at, Blocks.BEACON.defaultBlockState());
             ItemStackHandler handler = new ItemStackHandler(1);
             ItemStack named = new ItemStack(Items.DIAMOND, 7);
             named.set(net.minecraft.core.component.DataComponents.CUSTOM_NAME,
@@ -223,6 +225,8 @@ public final class ContainerConstructionGameTests {
             handler.setStackInSlot(0, named);
             HANDLERS.put(f.at, handler);
             f.level.invalidateCapabilities(f.at);
+            helper.assertTrue(f.level.getCapability(Capabilities.ItemHandler.BLOCK, f.at, null) == handler,
+                "the fixture exposes only the supplied capability, without a vanilla container fallback");
             f.file(Map.of(f.at, Blocks.AIR.defaultBlockState()));
             f.finish();
             helper.assertTrue(handler.getStackInSlot(0).isEmpty(), "the capability's own contents were extracted");
@@ -235,7 +239,7 @@ public final class ContainerConstructionGameTests {
     @GameTest(template = "empty_large", timeoutTicks = 100)
     public static void anUnextractableCapabilityWaitsSafely(GameTestHelper helper) {
         try (Fixture f = new Fixture(helper)) {
-            f.place(f.at, Blocks.BARREL.defaultBlockState());
+            f.place(f.at, Blocks.BEACON.defaultBlockState());
             ItemStackHandler handler = new ItemStackHandler(1) {
                 @Override public ItemStack extractItem(int slot, int amount, boolean simulate) {
                     return ItemStack.EMPTY;
@@ -244,6 +248,8 @@ public final class ContainerConstructionGameTests {
             handler.setStackInSlot(0, new ItemStack(Items.DIAMOND, 7));
             HANDLERS.put(f.at, handler);
             f.level.invalidateCapabilities(f.at);
+            helper.assertTrue(f.level.getCapability(Capabilities.ItemHandler.BLOCK, f.at, null) == handler,
+                "the fixture exposes only the supplied capability, without a vanilla container fallback");
             f.file(Map.of(f.at, Blocks.AIR.defaultBlockState()));
             f.blocked(BuildRefusal.UNREADABLE_CONTAINER);
             helper.assertTrue(f.deliveries().isEmpty(), "nothing tries to force inaccessible contents out");
@@ -300,13 +306,13 @@ public final class ContainerConstructionGameTests {
             Container original = f.contents(f.at);
             original.setItem(0, new ItemStack(Items.DIAMOND, 7));
             WorldPos at = WorldPos.of(f.level, f.at);
-            UUID holding = f.real.hold(WaresContent.STORE, new Held.Block(at)).orElseThrow().id();
+            UUID holding = f.real.hold(WaresContent.STORE, new Claimed.Block(at)).orElseThrow().id();
             f.file(Map.of(f.at, Blocks.CHEST.defaultBlockState(), f.at.east(2), Blocks.DIRT.defaultBlockState()));
             helper.assertTrue(f.deliveries().isEmpty(), "completed cells produce no collection work");
             f.finish();
             helper.assertTrue(f.level.getBlockEntity(f.at) == original, "the completed block entity is untouched");
             helper.assertValueEqual(original.getItem(0).getCount(), 7, "completed contents stay where they were");
-            helper.assertTrue(f.real.holding(holding).isPresent(), "the completed holding is kept");
+            helper.assertTrue(f.real.claim(holding).isPresent(), "the completed holding is kept");
             helper.assertTrue(StoreRule.stores(f.real.storeRules(at)), "the completed store stays available");
         }
         helper.succeed();
@@ -319,7 +325,7 @@ public final class ContainerConstructionGameTests {
             f.contents(f.at).setItem(0, new ItemStack(Items.DIAMOND, 7));
             f.file(Map.of(f.at, Blocks.CHEST.defaultBlockState()));
             Delivery delivery = (Delivery) f.deliveries().getFirst().nodes().getFirst();
-            Grown trip = io.github.izakyl.folkways.core.engine.plan.haul.Haul.DELIVERIES.expand(delivery).orElseThrow();
+            Grown trip = io.github.izakyl.folkways.core.plan.internal.Haul.DELIVERIES.expand(delivery).orElseThrow();
             f.contents(f.at).clearContent();
             f.place(f.at, Blocks.CHEST.defaultBlockState());
             Container correct = f.contents(f.at);
@@ -362,7 +368,7 @@ public final class ContainerConstructionGameTests {
             place(storeAt, Blocks.BARREL.defaultBlockState());
             store = contents(storeAt);
             real = Colonies.mint(level.getServer());
-            real.hold(WaresContent.STORE, new Held.Block(WorldPos.of(level, storeAt))).orElseThrow();
+            real.hold(WaresContent.STORE, new Claimed.Block(WorldPos.of(level, storeAt))).orElseThrow();
             Colony colony = Proxies.of(Colony.class, (proxy, method, args) -> {
                 if (method.getName().equals("submit")) {
                     Grown work = (Grown) args[2];
@@ -405,7 +411,8 @@ public final class ContainerConstructionGameTests {
         BuildSite site() { return presence.site(order).orElseThrow(); }
 
         List<Grown> deliveries() {
-            return asked.values().stream().distinct().filter(work -> work.nodes().getFirst() instanceof Delivery).toList();
+            return asked.values().stream().distinct().filter(work -> work.nodes().getFirst() instanceof Delivery)
+                .toList();
         }
 
         void blocked(BuildRefusal why) {
@@ -421,7 +428,8 @@ public final class ContainerConstructionGameTests {
             UUID id = goal.nodes().getFirst().id();
             PlanningFixture.Rounds solver = new PlanningFixture.Rounds();
             try {
-                var solved = solver.solve(plan.situation(new Stock(List.of(), Map.of(new Stash(WorldPos.of(level, storeAt)), 27)),
+                var solved = solver.solve(plan.situation(new Stock(List.of(), Map.of(new Stash(WorldPos.of(level,
+                    storeAt)), 27)),
                     List.of()), plan.crew, List.of(goal), List.of(), 0);
                 var tour = solved.schedule().tours().get(plan.worker.resident().id());
                 helper.assertTrue(tour != null && tour.nodes().size() == 2,
@@ -431,17 +439,20 @@ public final class ContainerConstructionGameTests {
                 Node put = solved.weave().vertices().get(nodes.getLast()).node();
                 helper.assertTrue(take instanceof TransferNode && put instanceof TransferNode,
                     "both steps use the existing hauling machinery");
-                helper.assertTrue(Commit.run(level, take, plan.worker) instanceof Outcome.Done, "the resident collects the stack");
+                helper.assertTrue(Commit.run(level, take, plan.worker) instanceof Outcome.Done,
+                    "the resident collects the stack");
                 take.ended(level, Ending.DONE);
                 // Replan after pickup: the remaining put must survive without another withdrawal.
                 Crew.Hand hand = plan.crew.hands().getFirst();
                 List<ItemStack> carried = new java.util.ArrayList<>();
                 for (int slot = 0; slot < plan.worker.pack().getContainerSize(); slot++) {
-                    if (!plan.worker.pack().getItem(slot).isEmpty()) carried.add(plan.worker.pack().getItem(slot).copy());
+                    if (!plan.worker.pack().getItem(slot).isEmpty()) carried.add(plan.worker.pack().getItem(slot)
+                        .copy());
                 }
                 Crew carrying = new Crew(List.of(new Crew.Hand(hand.who(), hand.at(), 6 - carried.size(), 6,
                     hand.pace(), hand.licences(), hand.tools(), Optional.empty(), carried)));
-                var remaining = solver.solve(plan.situation(new Stock(List.of(), Map.of(new Stash(WorldPos.of(level, storeAt)), 27)),
+                var remaining = solver.solve(plan.situation(new Stock(List.of(), Map.of(new Stash(WorldPos.of(level,
+                    storeAt)), 27)),
                     List.of()), carrying, List.of(goal), List.of(new Message.Finished(take.id())), 1);
                 helper.assertTrue(remaining.weave().vertices().size() == 1
                     && remaining.weave().vertices().containsKey(put.id()), "pickup is never repeated after replanning");
@@ -459,7 +470,8 @@ public final class ContainerConstructionGameTests {
                     noSpills();
                     store.setItem(0, ItemStack.EMPTY);
                 }
-                helper.assertTrue(Commit.run(level, put, plan.worker) instanceof Outcome.Done, "the resident stores the exact stack");
+                helper.assertTrue(Commit.run(level, put, plan.worker) instanceof Outcome.Done,
+                    "the resident stores the exact stack");
                 put.ended(level, Ending.DONE);
                 hear.get(id).accept(id, Ending.DONE);
                 asked.remove(id);
@@ -479,13 +491,14 @@ public final class ContainerConstructionGameTests {
                     continue;
                 }
                 for (BuildSite.Piece piece : site().pieces()) {
-                    Outcome outcome = Commit.run(level, piece.node(), plan.worker);
+                    Outcome outcome = Commit.run(level, piece.action(), plan.worker);
                     if (outcome instanceof Outcome.Failed failed && failed.why() == BuildRefusal.EMPTYING_CONTAINER) {
-                        helper.assertTrue(!deliveries().isEmpty(), "a late container requests collection at commit time");
+                        helper.assertTrue(!deliveries().isEmpty(),
+                            "a late container requests collection at commit time");
                         continue;
                     }
                     helper.assertTrue(outcome instanceof Outcome.Done, "the build proceeds after delivery: " + outcome);
-                    site().ended(piece.node().id(), Ending.DONE);
+                    site().ended(piece.id(), Ending.DONE);
                 }
                 presence.settle(level.getServer());
             }
@@ -494,8 +507,9 @@ public final class ContainerConstructionGameTests {
         }
 
         void stored(net.minecraft.world.item.Item item, int count) {
-            helper.assertValueEqual((int) Goods.countIn(store, io.github.izakyl.folkways.core.api.terms.ItemSpec.of(
-                net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(item))), count, "every item reaches the colony store");
+            helper.assertValueEqual((int) Goods.countIn(store, io.github.izakyl.folkways.core.item.api.ItemSpec.of(
+                net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(item))), count,
+                    "every item reaches the colony store");
             noSpills();
         }
 
@@ -506,7 +520,7 @@ public final class ContainerConstructionGameTests {
         }
 
         public void close() {
-            presence.closed(io.github.izakyl.folkways.core.api.colony.Closing.SHUTDOWN);
+            presence.closed(io.github.izakyl.folkways.core.colony.api.Closing.SHUTDOWN);
             store.clearContent();
             HANDLERS.remove(at);
             level.invalidateCapabilities(at);

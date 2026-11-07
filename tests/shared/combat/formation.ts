@@ -23,12 +23,12 @@ export type SquadReading = {
 const IMPORTS = [
   "net.minecraft.server.MinecraftServer", "net.minecraft.core.BlockPos", "net.minecraft.world.phys.Vec3",
   "net.minecraft.world.entity.Mob", "net.minecraft.world.item.ItemStack", "net.minecraft.world.item.Items",
-  "io.github.izakyl.folkways.core.api.colony.Colonies", "io.github.izakyl.folkways.core.api.colony.Held",
-  "io.github.izakyl.folkways.core.api.resident.body.Body", "io.github.izakyl.folkways.core.api.terms.WorldPos",
-  "io.github.izakyl.folkways.core.api.terms.Reach", "io.github.izakyl.folkways.plugins.person.PersonBody",
+  "io.github.izakyl.folkways.core.colony.api.Colonies", "io.github.izakyl.folkways.core.colony.api.Claimed",
+  "io.github.izakyl.folkways.core.resident.api.Body", "io.github.izakyl.folkways.core.world.api.WorldPos",
+  "io.github.izakyl.folkways.core.world.api.Reach", "io.github.izakyl.folkways.plugins.person.PersonBody",
   "io.github.izakyl.folkways.plugins.person.PersonContent", "io.github.izakyl.folkways.plugins.person.ResidentEntity",
   "io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfiles", "io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfile",
-  "io.github.izakyl.folkways.core.api.terms.ItemSpec", "net.neoforged.neoforge.common.Tags",
+  "io.github.izakyl.folkways.core.item.api.ItemSpec", "net.neoforged.neoforge.common.Tags",
   "io.github.izakyl.folkways.rts.combat.command.ResidentCommands",
   "io.github.izakyl.folkways.rts.combat.group.UnitGroups", "io.github.izakyl.folkways.rts.combat.group.Deployment",
 ];
@@ -53,7 +53,7 @@ for (int n = 0; n < 4; n++) {
   resident.moveTo(x + 2.5, y, z + 7.5 + n * 2);
   resident.pack().insert(new ItemStack(n % 2 == 0 ? Items.IRON_SWORD : Items.IRON_AXE));
   level.addFreshEntity(resident);
-  colony.hold(PersonContent.ID, Held.Entity.of(resident)).orElseThrow();
+  colony.hold(PersonContent.ID, Claimed.Entity.of(resident)).orElseThrow();
   resident.joinColony(colony.id());
   if (melee.isPresent()) profiles.assign(List.of(resident.id()), melee);
   bodies.add(resident);

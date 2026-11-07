@@ -1,7 +1,7 @@
 package io.github.izakyl.folkways.create.rail.passage;
 
-import io.github.izakyl.folkways.core.api.colony.Colonies;
-import io.github.izakyl.folkways.core.api.resident.body.Bodies;
+import io.github.izakyl.folkways.core.colony.api.Colonies;
+import io.github.izakyl.folkways.core.resident.api.Bodies;
 import io.github.izakyl.folkways.create.rail.domain.SeatRef;
 import io.github.izakyl.folkways.create.rail.domain.TransitNetwork;
 import java.util.ArrayList;

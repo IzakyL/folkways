@@ -1,9 +1,8 @@
 package io.github.izakyl.folkways.cookery.tools;
 
-import io.github.izakyl.folkways.base.persist.Entries;
 import io.github.izakyl.folkways.base.persist.Reader;
-import io.github.izakyl.folkways.core.api.terms.Goods;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
+import io.github.izakyl.folkways.core.item.api.Goods;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -214,21 +213,21 @@ public final class KitchenTools {
     public synchronized void load(UUID colony, CompoundTag saved, HolderLookup.Provider registries) {
         queues.keySet().removeIf(family -> family.colony().equals(colony));
         leases(colony).forEach(this::remove);
-        List<Lease> recovered = Entries.of(Reader.of(saved), "loans", entry -> {
-            Optional<UUID> id = entry.uuid("id");
-            Optional<UUID> node = entry.uuid("node");
-            Optional<ItemSpec> tools = entry.child("tools").flatMap(reader -> ItemSpec.load(reader, registries));
-            Optional<UUID> tool = entry.uuid("tool");
-            Optional<UUID> resident = entry.uuid("resident");
-            return id.isPresent() && node.isPresent() && tools.isPresent() && tool.isPresent() && resident.isPresent()
-                ? Optional.of(new Lease(id.get(), new Request(colony, node.get(), tools.get()), tool.get(),
-                    resident.get(), Phase.RETURNING)) : Optional.empty();
-        });
-        for (Lease lease : recovered) {
-            if (!leases.containsKey(lease.id()) && !byTool.containsKey(lease.tool())) {
-                leases.put(lease.id(), lease);
-                byTool.put(lease.tool(), lease.id());
+        if (saved.isEmpty()) {
+            return;
+        }
+        for (Reader entry : Reader.of(saved).requiredChildren("loans")) {
+            UUID id = entry.uuid("id").orElseThrow();
+            UUID node = entry.uuid("node").orElseThrow();
+            ItemSpec tools = entry.child("tools").flatMap(reader -> ItemSpec.load(reader, registries)).orElseThrow();
+            UUID tool = entry.uuid("tool").orElseThrow();
+            UUID resident = entry.uuid("resident").orElseThrow();
+            Lease lease = new Lease(id, new Request(colony, node, tools), tool, resident, Phase.RETURNING);
+            if (leases.containsKey(id) || byTool.containsKey(tool)) {
+                throw new IllegalArgumentException("Duplicate persisted kitchen loan or tool: " + id + "/" + tool);
             }
+            leases.put(id, lease);
+            byTool.put(tool, id);
         }
     }
 

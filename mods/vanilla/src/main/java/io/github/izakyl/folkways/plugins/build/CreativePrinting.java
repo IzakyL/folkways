@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.plugins.build;
 
-import io.github.izakyl.folkways.core.api.structure.StructureCompat;
+import io.github.izakyl.folkways.core.work.api.StructureCompat;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
 import java.util.ArrayDeque;
 import java.util.IdentityHashMap;

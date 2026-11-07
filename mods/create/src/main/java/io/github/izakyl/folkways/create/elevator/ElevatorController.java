@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.create.elevator;
 
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.create.transport.PassengerLanding;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;

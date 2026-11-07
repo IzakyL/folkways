@@ -63,8 +63,7 @@ function layoutBase(town: Town, scale: Scale) {
   const furnaces = p.cookers.map((c) => c.pos);
   const tables = p.tables.map((t) => t.pos);
   const beds = p.beds.map((b) => b.foot);
-  // A town saved before chests were doubled has neither list.
-  const chestHalves = p.chestHalves ?? [], spareChests = p.spareChests ?? [];
+  const { chestHalves, spareChests } = p;
   const taken = new Set([...chests, ...chestHalves.map((c) => c.other), ...spareChests, ...furnaces, ...tables, ...p.stonecutters,
     ...beds, ...p.beds.map((b) => b.head)]
     .map((c) => `${c.x},${c.y},${c.z}`));

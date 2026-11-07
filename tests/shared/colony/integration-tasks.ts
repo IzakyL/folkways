@@ -16,8 +16,8 @@ const NETWORK_IMPORTS = [
   "io.github.izakyl.folkways.create.dispatch.DispatchContent",
   "io.github.izakyl.folkways.create.dispatch.DispatchPresence",
   "io.github.izakyl.folkways.create.dispatch.PackageNetworks",
-  "io.github.izakyl.folkways.core.api.vocation.Vocations",
-  "io.github.izakyl.folkways.core.api.resident.body.Bodies",
+  "io.github.izakyl.folkways.core.vocation.api.Vocations",
+  "io.github.izakyl.folkways.core.resident.api.Bodies",
   "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
   "net.minecraft.core.BlockPos",
   "net.minecraft.core.GlobalPos",
@@ -41,10 +41,10 @@ export const GOLEM_CAST = defineTask<Answer, Answer>({
   source: javaTask({
     imports: [
       "dev.xkmc.modulargolems.content.item.golem.GolemHolder",
-      "io.github.izakyl.folkways.core.api.resident.body.Bodies",
+      "io.github.izakyl.folkways.core.resident.api.Bodies",
       "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
       "io.github.izakyl.folkways.front.engine.colony.Endorsements",
-      "io.github.izakyl.folkways.core.api.vocation.Vocations",
+      "io.github.izakyl.folkways.core.vocation.api.Vocations",
       "net.minecraft.core.registries.BuiltInRegistries",
       "net.minecraft.resources.ResourceLocation",
       "net.minecraft.server.MinecraftServer",
@@ -63,7 +63,7 @@ double z = ((Number) origin.get("z")).doubleValue();
 boolean golemsOnly = !Boolean.FALSE.equals(args.value("freeze_humans"));
 var trades = args.value("trades") instanceof List<?> named ? named.stream().map(String::valueOf).toList()
     : golemsOnly ? List.of("hauling", "crafting") : null;
-for (var resident : golemsOnly ? colony.residents() : List.<io.github.izakyl.folkways.core.api.resident.Resident>of()) {
+for (var resident : golemsOnly ? colony.residents() : List.<io.github.izakyl.folkways.core.resident.api.Resident>of()) {
     var entity = level.getEntity(resident.id());
     if (entity instanceof net.minecraft.world.entity.Mob mob) { mob.setNoAi(true); mob.teleportTo(x, y, z - 14); }
     var body = Bodies.of(entity).orElseThrow();
@@ -158,7 +158,7 @@ export const GOLEM_WORK = defineTask<Answer, Answer>({
   timeoutMs: 20_000,
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.core.api.resident.body.Bodies",
+      "io.github.izakyl.folkways.core.resident.api.Bodies",
       "net.minecraft.core.BlockPos",
       "net.minecraft.server.MinecraftServer",
       "net.minecraft.world.Container",
@@ -254,7 +254,7 @@ var colony = ColonyGround.of(server, UUID.fromString(args.string("colony_id"))).
 var desk = pos(args.value("ticker"));
 int crew = 0;
 int builders = args.has("builders") ? (int) args.integer("builders") : 0;
-for (var resident : Boolean.FALSE.equals(args.value("assign_crew")) ? List.<io.github.izakyl.folkways.core.api.resident.Resident>of() : colony.residents()) {
+for (var resident : Boolean.FALSE.equals(args.value("assign_crew")) ? List.<io.github.izakyl.folkways.core.resident.api.Resident>of() : colony.residents()) {
     var body = Bodies.of(level.getEntity(resident.id())).orElseThrow();
     body.pack().insert(new net.minecraft.world.item.ItemStack(Items.BREAD, 16));
     boolean keeper = crew == 0;
@@ -317,7 +317,7 @@ for (int i = 0; i < chest.getContainerSize(); i++) {
 }
 var colony = ColonyGround.of(server, UUID.fromString(args.string("colony_id"))).orElseThrow();
 int seated = 0;
-for (var resident : Boolean.FALSE.equals(args.value("assign_crew")) ? List.<io.github.izakyl.folkways.core.api.resident.Resident>of() : colony.residents()) {
+for (var resident : Boolean.FALSE.equals(args.value("assign_crew")) ? List.<io.github.izakyl.folkways.core.resident.api.Resident>of() : colony.residents()) {
     var entity = level.getEntity(resident.id());
     if (entity != null && entity.isPassenger()) seated++;
 }
@@ -338,7 +338,7 @@ export const COLONY_PACKS = defineTask<Answer, Answer>({
   timeoutMs: 20_000,
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.core.api.resident.body.Bodies",
+      "io.github.izakyl.folkways.core.resident.api.Bodies",
       "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
       "net.minecraft.core.registries.BuiltInRegistries",
       "net.minecraft.server.MinecraftServer",

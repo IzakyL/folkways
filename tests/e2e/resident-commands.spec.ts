@@ -94,9 +94,9 @@ test("resident commands and a four-person formation survive a real world restart
 const IMPORTS = [
   "net.minecraft.server.MinecraftServer", "net.minecraft.core.BlockPos", "net.minecraft.world.phys.Vec3",
   "net.minecraft.world.item.ItemStack", "net.minecraft.world.item.Items",
-  "io.github.izakyl.folkways.core.api.colony.Colonies", "io.github.izakyl.folkways.core.api.colony.Held",
-  "io.github.izakyl.folkways.core.api.resident.body.Body", "io.github.izakyl.folkways.core.api.terms.WorldPos",
-  "io.github.izakyl.folkways.core.api.terms.Reach", "io.github.izakyl.folkways.plugins.person.PersonBody",
+  "io.github.izakyl.folkways.core.colony.api.Colonies", "io.github.izakyl.folkways.core.colony.api.Claimed",
+  "io.github.izakyl.folkways.core.resident.api.Body", "io.github.izakyl.folkways.core.world.api.WorldPos",
+  "io.github.izakyl.folkways.core.world.api.Reach", "io.github.izakyl.folkways.plugins.person.PersonBody",
   "io.github.izakyl.folkways.plugins.person.PersonContent",
   "io.github.izakyl.folkways.rts.combat.command.ResidentCommands",
   "io.github.izakyl.folkways.rts.combat.group.UnitGroups", "io.github.izakyl.folkways.rts.combat.group.Deployment",
@@ -115,7 +115,7 @@ for (int n = 0; n < 4; n++) {
   body.pack().insert(new ItemStack(Items.IRON_INGOT, 8));
   var axe = new ItemStack(Items.IRON_AXE); axe.setDamageValue(7); body.pack().insert(axe);
   level.addFreshEntity(body);
-  colony.hold(PersonContent.ID, Held.Entity.of(body)).orElseThrow();
+  colony.hold(PersonContent.ID, Claimed.Entity.of(body)).orElseThrow();
   body.joinColony(colony.id());
 }
 return Map.of("colony", colony.id().toString(), "group", "", "x", args.string("x"), "y", args.string("y"), "z", args.string("z"));

@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.plugins.damagecontrol;
 
-import io.github.izakyl.folkways.core.shell.structure.StructureSnapshots;
+import io.github.izakyl.folkways.core.world.api.StructureSnapshots;
 import io.github.izakyl.folkways.front.api.ZoneView;
 import io.github.izakyl.folkways.plugins.build.MaintenanceOrders;
 import net.minecraft.core.registries.BuiltInRegistries;

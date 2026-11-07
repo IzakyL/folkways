@@ -1,17 +1,12 @@
 package io.github.izakyl.folkways.plugins.build;
 
-import static io.github.izakyl.folkways.plugins.build.SiteRig.floor;
-import static io.github.izakyl.folkways.plugins.build.SiteRig.worker;
-
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.work.Ending;
-import io.github.izakyl.folkways.core.api.work.Node;
-import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.Worker;
-import io.github.izakyl.folkways.core.api.work.Workload;
-import io.github.izakyl.folkways.core.engine.labor.Commit;
+import io.github.izakyl.folkways.core.work.api.Ending;
+import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.work.internal.Commit;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import java.util.ArrayList;
@@ -33,6 +28,8 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
+import static io.github.izakyl.folkways.plugins.build.SiteRig.floor;
+import static io.github.izakyl.folkways.plugins.build.SiteRig.worker;
 
 @EventBusSubscriber(modid = FolkwaysVanillaMod.ID, bus = EventBusSubscriber.Bus.MOD)
 @GameTestHolder(FolkwaysMod.MOD_ID)
@@ -63,8 +60,9 @@ public final class BuildScaffoldCleanupGameTests {
         Mob body = PersonBody.RESIDENT.get().create(level);
         body.setPos(Vec3.atBottomCenterOf(at(helper, 10, 1, 8)));
         Worker worker = worker(body);
-        helper.assertTrue(Commit.run(level, raising.node(), worker) instanceof Outcome.Done, "dynamic access is raised");
-        rig.end(raising.node(), Ending.DONE);
+        helper.assertTrue(Commit.run(level, raising.action(), worker) instanceof Outcome.Done,
+            "dynamic access is raised");
+        rig.end(raising.action(), Ending.DONE);
         rig.site.tick(level);
         helper.assertTrue(rig.work(helper, goal, worker) instanceof Outcome.Done, "the last target finishes");
         helper.assertTrue(!temporary.isEmpty(), "the access column still stands before the next access scan");
@@ -131,7 +129,7 @@ public final class BuildScaffoldCleanupGameTests {
         ServerLevel level = helper.getLevel();
         BlockPos base = at(helper, 9, 1, 9);
         List<BlockPos> column = java.util.stream.IntStream.range(0, 4).mapToObj(base::above).toList();
-        column.forEach(cell -> level.setBlock(cell, ScaffoldNode.state(), 3));
+        column.forEach(cell -> level.setBlock(cell, ScaffoldAction.state(), 3));
         TemporaryScaffolds temporary = new TemporaryScaffolds(() -> { });
         temporary.added(column.stream().map(cell -> WorldPos.of(level, cell)).toList());
         Mob occupant = PersonBody.RESIDENT.get().create(level);
@@ -140,11 +138,11 @@ public final class BuildScaffoldCleanupGameTests {
         level.addFreshEntity(occupant);
         Worker worker = worker(occupant);
         column.forEach(cell -> level.setBlock(cell, Blocks.AIR.defaultBlockState(), 3));
-        helper.assertTrue(ScaffoldNode.neededForReturn(level, occupant, column),
+        helper.assertTrue(ScaffoldAction.neededForReturn(level, occupant, column),
             "a still-unbuilt access request is needed for the enclosed resident's return");
-        column.forEach(cell -> level.setBlock(cell, ScaffoldNode.state(), 3));
-        Node lower = BuildNode.of(Step.lower(column).job(level, target(level, base.east(4)), Stances.WHEREVER),
-            (ended, how) -> { }, temporary);
+        column.forEach(cell -> level.setBlock(cell, ScaffoldAction.state(), 3));
+        BuildAction lower = BuildAction.of(Step.lower(column).job(level, target(level, base.east(4)), Stances.WHEREVER),
+            temporary);
         helper.assertTrue(Commit.run(level, lower, worker) instanceof Outcome.Failed,
             "the pit floor is not a safe place to remove its only route to permanent upper ground");
         boolean[] removed = {false};
@@ -169,7 +167,7 @@ public final class BuildScaffoldCleanupGameTests {
                 helper.assertTrue(temporary.isEmpty(), "the entire temporary column is recovered");
             }).thenExecuteAfter(20, () -> {
                 helper.assertTrue(occupant.isAlive(), "a completed native return remains safe during later goal ticks");
-                column.forEach(cell -> level.setBlock(cell, ScaffoldNode.state(), 3));
+                column.forEach(cell -> level.setBlock(cell, ScaffoldAction.state(), 3));
                 temporary.added(column.stream().map(cell -> WorldPos.of(level, cell)).toList());
                 occupant.setPos(Vec3.atBottomCenterOf(at(helper, 10, 1, 10)));
                 helper.assertTrue(Commit.run(level, lower, worker) instanceof Outcome.Failed,
@@ -186,7 +184,7 @@ public final class BuildScaffoldCleanupGameTests {
         ServerLevel level = helper.getLevel();
         BlockPos base = at(helper, 9, 1, 9);
         List<BlockPos> column = java.util.stream.IntStream.range(0, 4).mapToObj(base::above).toList();
-        column.forEach(cell -> level.setBlock(cell, ScaffoldNode.state(), 3));
+        column.forEach(cell -> level.setBlock(cell, ScaffoldAction.state(), 3));
         TemporaryScaffolds temporary = new TemporaryScaffolds(() -> { });
         temporary.added(column.stream().map(cell -> WorldPos.of(level, cell)).toList());
         SiteRig rig = SiteRig.start(level, target(level, base.below()), temporary, Set.of());
@@ -196,40 +194,29 @@ public final class BuildScaffoldCleanupGameTests {
         level.addFreshEntity(body);
         Worker worker = worker(body);
         worker.pack().setItem(1, ItemStack.EMPTY);
-        Workload.Within shift = (Workload.Within) rig.asked.getFirst().nodes().getFirst().spec().workload();
-        var turn = shift.next(level, worker);
-        helper.assertTrue(turn instanceof Workload.Within.Turn.Piece,
-            "a real site stay offers its remaining cleanup operation");
-        Node operation = ((Workload.Within.Turn.Piece) turn).node();
-        Outcome[] lastOutcome = {Commit.run(level, operation, worker)};
-        helper.assertTrue(lastOutcome[0] instanceof Outcome.Failed,
+        SiteRig.Shift shift = rig.shift();
+        helper.assertTrue(shift.step(level, worker) instanceof Outcome.Failed,
             "the stay first requests a physical return to permanent upper ground");
         boolean[] removed = {false};
-        int[] ticks = {0};
         helper.onEachTick(() -> {
             shift.tick(level, worker);
-            if (!removed[0] && ++ticks[0] % 20 == 0) {
-                lastOutcome[0] = Commit.run(level, operation, worker);
-                if (lastOutcome[0] instanceof Outcome.Done) {
-                    removed[0] = true;
-                    shift.ended(level, operation, Ending.DONE);
-                    rig.site.tick(level);
-                }
-            }
+            rig.site.tick(level);
+            removed[0] = temporary.isEmpty();
         });
         helper.startSequence().thenWaitUntil(() -> helper.assertTrue(removed[0],
                 "the cleanup stay permits its resident to finish the native return: y=" + body.getY()
                     + " pos=" + body.blockPosition() + " nav=" + body.getNavigation().getTargetPos()
                     + " wanted=" + body.getMoveControl().getWantedX() + "," + body.getMoveControl().getWantedY()
-                    + "," + body.getMoveControl().getWantedZ() + " last=" + lastOutcome[0]))
+                    + "," + body.getMoveControl().getWantedZ() + " last=" + shift.outcome))
             .thenExecute(() -> helper.assertTrue(body.getY() >= at(helper, 0, 4, 0).getY(),
                 "the cleanup operation finishes on permanent upper ground"))
             .thenExecuteAfter(20, () -> {
                 helper.assertTrue(body.isAlive() && body.getY() >= at(helper, 0, 4, 0).getY(),
-                    "later presentation ticks do not guide the resident back down the obsolete cleanup route");
+                    "later approach ticks do not guide the resident back down the obsolete cleanup route");
                 helper.assertTrue(!level.getBlockState(body.blockPosition().below()).is(Blocks.SCAFFOLDING),
                     "the resident remains supported by permanent ground after its column is recovered");
-                helper.assertTrue(temporary.isEmpty() && rig.site.complete(), "the site has fully recovered its access");
+                helper.assertTrue(temporary.isEmpty() && rig.site.complete(),
+                    "the site has fully recovered its access");
                 body.discard();
                 rig.site.close();
             }).thenSucceed();
@@ -241,15 +228,15 @@ public final class BuildScaffoldCleanupGameTests {
         ServerLevel level = helper.getLevel();
         BlockPos base = at(helper, 10, 1, 10);
         List<BlockPos> column = java.util.stream.IntStream.range(0, 7).mapToObj(base::above).toList();
-        column.forEach(cell -> level.setBlock(cell, ScaffoldNode.state(), 3));
+        column.forEach(cell -> level.setBlock(cell, ScaffoldAction.state(), 3));
         TemporaryScaffolds temporary = new TemporaryScaffolds(() -> { });
         temporary.added(column.stream().map(cell -> WorldPos.of(level, cell)).toList());
         Mob body = PersonBody.RESIDENT.get().create(level);
         body.setPos(Vec3.atBottomCenterOf(base.south(2)));
         body.setOnGround(true);
         level.addFreshEntity(body);
-        Node lower = BuildNode.of(Step.lower(column).job(level, target(level, base.east(4)), Stances.WHEREVER),
-            (ended, how) -> { }, temporary);
+        BuildAction lower = BuildAction.of(Step.lower(column).job(level, target(level, base.east(4)), Stances.WHEREVER),
+            temporary);
         helper.assertTrue(Commit.run(level, lower, worker(body)) instanceof Outcome.Done,
             "a resident already able to walk away on the ground does not delay tower cleanup");
         helper.assertTrue(body.getY() == base.getY(), "cleanup has not moved the ground resident upwards");
@@ -264,11 +251,11 @@ public final class BuildScaffoldCleanupGameTests {
         BlockPos base = at(helper, 10, 1, 10);
         List<BlockPos> column = new ArrayList<>(java.util.stream.IntStream.range(0, 7).mapToObj(base::above).toList());
         BlockPos top = column.getLast();
-        column.forEach(cell -> level.setBlock(cell, ScaffoldNode.state(), 3));
+        column.forEach(cell -> level.setBlock(cell, ScaffoldAction.state(), 3));
         if (horizontal) {
             for (int distance = 1; distance <= 3; distance++) {
                 BlockPos cell = top.east(distance);
-                level.setBlock(cell, ScaffoldNode.state().setValue(ScaffoldingBlock.DISTANCE, distance)
+                level.setBlock(cell, ScaffoldAction.state().setValue(ScaffoldingBlock.DISTANCE, distance)
                     .setValue(ScaffoldingBlock.BOTTOM, true), 3);
                 column.add(cell);
             }
@@ -292,8 +279,9 @@ public final class BuildScaffoldCleanupGameTests {
         }
         Worker worker = worker(hand);
         float health = occupant.getHealth();
-        Node lower = BuildNode.of(Step.lower(column).job(level, target(level, base.offset(4, 0, 0)), Stances.WHEREVER),
-            (ended, how) -> { }, temporary);
+        BuildAction lower = BuildAction.of(Step.lower(column).job(level, target(level, base.offset(4, 0, 0)),
+            Stances.WHEREVER),
+            temporary);
         helper.assertTrue(Commit.run(level, lower, worker) instanceof Outcome.Failed,
             "cleanup initially waits rather than removing a column supporting a resident");
         helper.assertTrue(column.stream().allMatch(cell -> level.getBlockState(cell).is(Blocks.SCAFFOLDING)),
@@ -330,7 +318,8 @@ public final class BuildScaffoldCleanupGameTests {
                 helper.assertTrue(temporary.isEmpty(), "cleanup removes the owned structure");
                 helper.assertTrue(column.stream().noneMatch(cell -> level.getBlockState(cell).is(Blocks.SCAFFOLDING)),
                     "cleanup removes every vertical and horizontal scaffold cell");
-                helper.assertValueEqual(recovered[0], column.size(), "cleanup refunds every scaffold cell exactly once");
+                helper.assertValueEqual(recovered[0], column.size(),
+                    "cleanup refunds every scaffold cell exactly once");
             }).thenExecuteAfter(20, () -> {
                 helper.assertTrue(occupant.isAlive(), "a completed descent remains safe during later goal ticks");
                 occupant.discard();

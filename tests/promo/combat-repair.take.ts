@@ -203,7 +203,7 @@ test("combat: on-camera TNT breach and physical-store baseline repair", async ({
 });
 
 const REPAIR_IMPORTS = [
-  "io.github.izakyl.folkways.core.api.resident.body.Bodies",
+  "io.github.izakyl.folkways.core.resident.api.Bodies",
   "net.minecraft.core.BlockPos",
   "net.minecraft.world.Container",
   "net.minecraft.world.item.ItemStack",
@@ -369,12 +369,12 @@ const REPAIR_DIAGNOSTIC = defineTask<Record<string, any>, any>({
   side: "server",
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.core.api.colony.Colonies",
+      "io.github.izakyl.folkways.core.colony.api.Colonies",
       "io.github.izakyl.folkways.plugins.damagecontrol.DamageControlContent",
-      "io.github.izakyl.folkways.core.api.terms.Footing",
-      "io.github.izakyl.folkways.core.api.terms.Reach",
-      "io.github.izakyl.folkways.core.api.work.Node",
-      "io.github.izakyl.folkways.core.api.work.WorkSite",
+      "io.github.izakyl.folkways.core.world.api.Footing",
+      "io.github.izakyl.folkways.core.world.api.Reach",
+      "io.github.izakyl.folkways.core.work.api.Node",
+      "io.github.izakyl.folkways.core.work.api.WorkSite",
     ],
     body: `
 var level = ctx.server().overworld();

@@ -1,9 +1,9 @@
 package io.github.izakyl.folkways.front.ui.screen;
 
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.front.api.Facing;
+import io.github.izakyl.folkways.core.colony.api.Colony;
 import io.github.izakyl.folkways.front.api.Enrollment;
+import io.github.izakyl.folkways.front.api.Facing;
 import io.github.izakyl.folkways.front.api.panel.PageKind;
 import io.github.izakyl.folkways.front.api.ui.RegisteringUi;
 import io.github.izakyl.folkways.front.engine.Enrollments;

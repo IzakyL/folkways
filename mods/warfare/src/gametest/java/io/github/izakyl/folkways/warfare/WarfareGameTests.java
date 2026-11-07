@@ -14,28 +14,27 @@ import com.atsuishio.superbwarfare.perk.ammo.HEBullet;
 import com.atsuishio.superbwarfare.tools.CustomExplosion;
 import com.mojang.authlib.GameProfile;
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.colony.Colonies;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.colony.Held;
-import io.github.izakyl.folkways.core.api.resident.body.Bodies;
-import io.github.izakyl.folkways.core.api.terms.Containers;
-import io.github.izakyl.folkways.core.api.terms.Goods;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
-import io.github.izakyl.folkways.core.api.terms.Reach;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.vocation.Vocations;
-import io.github.izakyl.folkways.core.api.work.Node;
-import io.github.izakyl.folkways.core.api.work.Worker;
-import io.github.izakyl.folkways.core.api.work.Workload;
-import io.github.izakyl.folkways.core.engine.labor.LaborFixture;
-import io.github.izakyl.folkways.core.engine.labor.LaborRefusal;
+import io.github.izakyl.folkways.core.colony.api.Claimed;
+import io.github.izakyl.folkways.core.colony.api.Colonies;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.item.api.Containers;
+import io.github.izakyl.folkways.core.item.api.Goods;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
+import io.github.izakyl.folkways.core.resident.api.Bodies;
+import io.github.izakyl.folkways.core.runtime.LaborFixture;
 import io.github.izakyl.folkways.core.testing.Cleanup;
 import io.github.izakyl.folkways.core.testing.TestWorker;
+import io.github.izakyl.folkways.core.vocation.api.Vocations;
+import io.github.izakyl.folkways.core.work.api.LaborRefusal;
+import io.github.izakyl.folkways.core.work.api.Node;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.work.api.Workload;
+import io.github.izakyl.folkways.core.world.api.Reach;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.front.engine.authority.ColonyAuthority;
 import io.github.izakyl.folkways.front.engine.charter.Charter;
 import io.github.izakyl.folkways.front.engine.charter.Charters;
 import io.github.izakyl.folkways.front.engine.colony.MemberToggle;
-import io.github.izakyl.folkways.front.engine.registry.FolkwaysItems;
 import io.github.izakyl.folkways.front.engine.registry.FolkwaysPlayerAttachments;
 import io.github.izakyl.folkways.plugins.combat.SpottedTargets;
 import io.github.izakyl.folkways.plugins.combat.WeaponStations;
@@ -80,6 +79,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.ai.attributes.Attributes;
+import net.minecraft.world.entity.animal.Wolf;
 import net.minecraft.world.entity.monster.Zombie;
 import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraft.world.item.Item;
@@ -553,15 +553,31 @@ public final class WarfareGameTests {
         f.body.pack().insert(new ItemStack(ModItems.MORTAR_SHELL.get(), 3));
         f.postStation();
         Zombie target = f.enemy(80, 10);
-        f.spot(target);
         var ally = EntityType.WOLF.create(f.level);
         ally.setNoAi(true);
         f.place(ally, 80, 23);
         f.level.addFreshEntity(ally);
         f.entities.add(ally);
         Node node = f.node();
-        helper.onEachTick(() -> f.tick(node));
         helper.startSequence()
+            // Block chunks can be present before their entities become visible to safety queries.
+            .thenWaitUntil(() -> helper.assertTrue(f.level.getEntity(ally.getUUID()) == ally
+                && f.level.getEntity(target.getUUID()) == target
+                && f.level.getEntity(mortar.getUUID()) == mortar
+                && f.level.getEntity(f.body.id()) == f.body,
+                "the ticketed arena exposes the ally, target, mortar and operator before engagement"))
+            .thenExecute(() -> {
+                f.spot(target);
+                helper.onEachTick(() -> {
+                    f.tick(node);
+                    helper.assertTrue(SpottedTargets.of(f.colony).get(f.body, target.getUUID()).isPresent(),
+                        "the report remains fresh throughout both unsafe impact holds");
+                    helper.assertValueEqual(mortar.getEntityData().get(MortarEntity.FIRE_TIME), 0,
+                        "an unsafe predicted impact never starts preparation");
+                    helper.assertValueEqual(f.body.pack().count(ModItems.MORTAR_SHELL.get()), 3,
+                        "an unsafe predicted impact never consumes ammunition");
+                });
+            })
             .thenIdle(45)
             .thenExecute(
             () -> {
@@ -569,6 +585,10 @@ public final class WarfareGameTests {
                     mortar.getEntityData().get(MortarEntity.FIRE_TIME),
                     0,
                     "an ally inside twice the configured radius blocks preparation");
+                double radius = mortar.getGunData("Main").get(GunProp.EXPLOSION_RADIUS);
+                helper.assertTrue(f.level.getEntitiesOfClass(Wolf.class,
+                    target.getBoundingBox().inflate(radius * 2)).contains(ally),
+                    "the living ally remains visible inside twice the configured radius");
                 ally.discard();
                 f.block(new BlockPos(80, 1, 13), Blocks.BARREL);
                 f.colony.stores(WarfareStations.ID, f.level.dimension(), List.of(f.at(80, 1, 13)));
@@ -670,7 +690,7 @@ public final class WarfareGameTests {
         f.place(scout, 40, 10);
         scout.setNoAi(true);
         f.level.addFreshEntity(scout);
-        f.colony.hold(PersonContent.ID, Held.Entity.of(scout)).orElseThrow();
+        f.colony.hold(PersonContent.ID, Claimed.Entity.of(scout)).orElseThrow();
         scout.joinColony(f.colony.id());
         f.entities.add(scout);
         var profiles = LoadoutProfiles.of(f.colony);
@@ -710,13 +730,13 @@ public final class WarfareGameTests {
         SentryPosts.of(f.colony).tick(f.level.getServer());
         helper.assertFalse(node.ready(f.level), "unloading the exact station revokes the old duty");
         helper.assertTrue(replacement.getPassengers().isEmpty(), "the replacement cannot inherit the old lease");
-        helper.assertTrue(f.colony.holding(f.zone).isPresent()
+        helper.assertTrue(f.colony.claim(f.zone).isPresent()
             && new PatrolStaffing(f.colony).positions(f.zone).getFirst().member()
                 .filter(f.body.id()::equals).isPresent(),
             "unloading preserves the explicit holding and incumbent");
         helper.assertFalse(SentryPosts.of(f.colony).act(SentryPosts.ID, "withdraw/" + f.zone,
             Optional.empty(), f.colony.view(f.level)).refused(), "withdraw an absent enrolled station");
-        helper.assertTrue(f.colony.holding(f.zone).isEmpty() && PatrolStaffing.of(f.colony).positions(f.zone).isEmpty(),
+        helper.assertTrue(f.colony.claim(f.zone).isEmpty() && PatrolStaffing.of(f.colony).positions(f.zone).isEmpty(),
             "withdrawal removes the holding and its composition");
         helper.succeed();
     }
@@ -743,10 +763,10 @@ public final class WarfareGameTests {
         } finally {
             foreign.raze();
         }
-        helper.assertTrue(f.colony.holdingOf(station.getUUID())
+        helper.assertTrue(f.colony.claimOf(station.getUUID())
             .filter(holding -> holding.owner().equals(SentryPosts.STATION)).isPresent(),
             "inclusion creates an independent entity holding");
-        UUID holding = f.colony.holdingOf(station.getUUID()).orElseThrow().id();
+        UUID holding = f.colony.claimOf(station.getUUID()).orElseThrow().id();
         PatrolStaffing.of(f.colony).tick(f.level.getServer());
         helper.assertTrue(PatrolStaffing.of(f.colony).configured(holding), "enrollment derives automatic staffing");
         helper.assertValueEqual(PatrolStaffing.of(f.colony).members(holding), List.of(f.body.id()),
@@ -1278,7 +1298,7 @@ public final class WarfareGameTests {
             .thenWaitUntil(() -> helper.assertTrue(f.level.getEntity(scout.id()) == scout,
                 "the observer's freshly ticketed chunk exposes its resident"))
             .thenExecute(() -> {
-                helper.assertTrue(f.colony.hold(PersonContent.ID, Held.Entity.of(scout)).isPresent(),
+                helper.assertTrue(f.colony.hold(PersonContent.ID, Claimed.Entity.of(scout)).isPresent(),
                     "the loaded forward observer joins the colony");
                 scout.joinColony(f.colony.id());
             });
@@ -1406,7 +1426,7 @@ public final class WarfareGameTests {
         }
 
         void joinBody() {
-            colony.hold(PersonContent.ID, Held.Entity.of(body)).orElseThrow();
+            colony.hold(PersonContent.ID, Claimed.Entity.of(body)).orElseThrow();
             body.joinColony(colony.id());
         }
 
@@ -1470,13 +1490,13 @@ public final class WarfareGameTests {
                 .map(VehicleEntity.class::cast)
                 .filter(vehicle -> vehicle.blockPosition().equals(at(6, 1, 10).block(level)))
                 .findFirst().orElseThrow();
-            zone = colony.hold(SentryPosts.STATION, Held.Entity.of(station)).orElseThrow().id();
+            zone = colony.hold(SentryPosts.STATION, Claimed.Entity.of(station)).orElseThrow().id();
             PatrolStaffing.of(colony).tick(level.getServer());
         }
 
         void unpost() {
-            if (colony.holding(zone).filter(held -> held.owner().equals(SentryPosts.STATION)).isPresent()) {
-                colony.release(zone, io.github.izakyl.folkways.core.api.colony.Release.LET_GO);
+            if (colony.claim(zone).filter(held -> held.owner().equals(SentryPosts.STATION)).isPresent()) {
+                colony.release(zone, io.github.izakyl.folkways.core.colony.api.ClaimRelease.LET_GO);
                 PatrolStaffing.of(colony).tick(level.getServer());
             } else {
                 PatrolStaffing.of(colony).configure(level, zone, Set.of(), 0);
@@ -1495,7 +1515,7 @@ public final class WarfareGameTests {
                     cells.add(at(x, 1, z));
                 }
             }
-            zone = colony.hold(SentryPosts.ZONE, new Held.Area(cells)).orElseThrow().id();
+            zone = colony.hold(SentryPosts.ZONE, new Claimed.Area(cells)).orElseThrow().id();
             PatrolStaffing.of(colony).configure(level, zone,
                 Set.of(LoadoutProfiles.of(colony).assigned(body.id()).orElseThrow().id()), 1);
         }
@@ -1518,11 +1538,11 @@ public final class WarfareGameTests {
             place(scout, (int) (target.getX() - origin.getX()) - 8, 10);
             scout.setNoAi(true);
             level.addFreshEntity(scout);
-            colony.hold(PersonContent.ID, Held.Entity.of(scout)).orElseThrow();
+            colony.hold(PersonContent.ID, Claimed.Entity.of(scout)).orElseThrow();
             scout.joinColony(colony.id());
             entities.add(scout);
             int x = (int) (scout.getX() - origin.getX());
-            colony.hold(PatrolContent.BEAT, new Held.Line(List.of(at(3, 0, 20), at(5, 0, 20)))).orElseThrow();
+            colony.hold(PatrolContent.BEAT, new Claimed.Line(List.of(at(3, 0, 20), at(5, 0, 20)))).orElseThrow();
             WarfarePatrolFixture.observe(colony, level, route -> worker(scout, route));
             helper.assertTrue(
                 SpottedTargets.of(colony).get(body, target.getUUID()).isPresent(),
@@ -1534,7 +1554,7 @@ public final class WarfareGameTests {
         Node node() {
             Node node = SentryPosts.of(colony).urges(worker(body), colony.view(level)).getFirst().take().get();
             nodes.add(node);
-            if (labor == null && colony.holding(zone).orElseThrow().owner().equals(SentryPosts.STATION)) {
+            if (labor == null && colony.claim(zone).orElseThrow().owner().equals(SentryPosts.STATION)) {
                 BlockPos stance = node.spec().stances().cells().iterator().next().block(level);
                 body.moveTo(stance.getX() + .5, stance.getY(), stance.getZ() + .5, -90, 0);
             }

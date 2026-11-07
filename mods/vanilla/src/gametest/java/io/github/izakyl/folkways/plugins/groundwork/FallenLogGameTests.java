@@ -1,14 +1,14 @@
 package io.github.izakyl.folkways.plugins.groundwork;
 
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.colony.Colonies;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.colony.Held;
-import io.github.izakyl.folkways.core.api.colony.PointSites;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.work.Node;
-import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.engine.plan.PlanningFixture;
+import io.github.izakyl.folkways.core.colony.api.Claimed;
+import io.github.izakyl.folkways.core.colony.api.Colonies;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.colony.internal.PointSites;
+import io.github.izakyl.folkways.core.plan.internal.PlanningFixture;
+import io.github.izakyl.folkways.core.work.api.Node;
+import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.front.engine.colony.ColonyFront;
 import io.github.izakyl.folkways.front.engine.colony.ColonySettings;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
@@ -66,7 +66,9 @@ public final class FallenLogGameTests {
         for (int x = 0; x < length; x++) {
             BlockPos cell = log.east(x);
             marked.add(cell);
-            if (clearing) marked.add(cell.above());
+            if (clearing) {
+                marked.add(cell.above());
+            }
             place(level, cell, horizontal(block));
             place(level, cell.above(), Blocks.MOSS_CARPET.defaultBlockState());
         }
@@ -77,7 +79,7 @@ public final class FallenLogGameTests {
         ColonyFront.of(colony).addZone(level, GroundworkContent.ZONE, marked, ColonySettings.empty()
             .with(GroundworkContent.CLEAR, new ColonySettings.Value.Flag(clearing))
             .with(GroundworkContent.FELL, new ColonySettings.Value.Flag(!clearing))).orElseThrow();
-        colony.hold(GroundworkContent.ID, new Held.Block(WorldPos.of(level, chest))).orElseThrow();
+        colony.hold(GroundworkContent.ID, new Claimed.Block(WorldPos.of(level, chest))).orElseThrow();
         colony.stores(GroundworkContent.ID, level.dimension(), List.of(WorldPos.of(level, chest)));
         var person = PersonBody.RESIDENT.get().create(level);
         ColonyStorageRun.until(helper, colony, person, log, () -> {
@@ -99,7 +101,9 @@ public final class FallenLogGameTests {
     public static void standingTreesAndTheirHorizontalBranchesAreNotDebris(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         BlockPos trunk = ground(helper);
-        for (int y = 0; y < 4; y++) place(level, trunk.above(y), Blocks.OAK_LOG.defaultBlockState());
+        for (int y = 0; y < 4; y++) {
+            place(level, trunk.above(y), Blocks.OAK_LOG.defaultBlockState());
+        }
         place(level, trunk.above(3).east(), Blocks.OAK_LEAVES.defaultBlockState()
             .setValue(LeavesBlock.PERSISTENT, false).setValue(LeavesBlock.DISTANCE, 1));
         BlockPos branch = trunk.east();
@@ -154,7 +158,7 @@ public final class FallenLogGameTests {
             helper.assertTrue(node.commit(level, fixture.worker) instanceof Outcome.Failed,
                 "a trunk joined after discovery prevents cutting");
             place(level, log.east(), Blocks.AIR.defaultBlockState());
-            colony.hold(POINTS, new Held.Point(WorldPos.of(level, log.above()))).orElseThrow();
+            colony.hold(POINTS, new Claimed.Point(WorldPos.of(level, log.above()))).orElseThrow();
             helper.assertTrue(node.commit(level, fixture.worker) instanceof Outcome.Failed,
                 "newly registered decoration prevents removing its support");
             helper.assertTrue(level.getBlockState(log).is(Blocks.OAK_LOG), "the log stayed through both refusals");
@@ -181,12 +185,12 @@ public final class FallenLogGameTests {
             Node node = presence.goals(colony.view(level)).getFirst().nodes().getFirst();
             node.planned(level);
             place(level, log.above(), Blocks.MOSS_CARPET.defaultBlockState());
-            var held = colony.hold(POINTS, new Held.Point(WorldPos.of(level, log.above()))).orElseThrow();
+            var held = colony.hold(POINTS, new Claimed.Point(WorldPos.of(level, log.above()))).orElseThrow();
             helper.assertTrue(node.commit(level, fixture.worker) instanceof Outcome.Failed,
                 "a protected decoration absent from the plan prevents cutting its support");
             helper.assertTrue(level.getBlockState(log).is(Blocks.OAK_LOG)
                 && level.getBlockState(log.above()).is(Blocks.MOSS_CARPET), "the log and new decoration stay");
-            colony.release(held.id(), io.github.izakyl.folkways.core.api.colony.Release.LET_GO);
+            colony.release(held.id(), io.github.izakyl.folkways.core.colony.api.ClaimRelease.LET_GO);
             Outcome.Done done = (Outcome.Done) node.commit(level, fixture.worker);
             helper.assertTrue(level.getBlockState(log).isAir() && level.getBlockState(log.above()).isAir(),
                 "unprotected current decorations are removed before the log");
@@ -251,7 +255,9 @@ public final class FallenLogGameTests {
         BlockPos log = helper.absolutePos(new BlockPos(4, 1, 4));
         for (BlockPos cell : BlockPos.betweenClosed(log.offset(-3, -1, -3), log.offset(4, -1, 3))) {
             place(helper.getLevel(), cell, Blocks.DIRT.defaultBlockState());
-            for (int y = 1; y <= 5; y++) place(helper.getLevel(), cell.above(y), Blocks.AIR.defaultBlockState());
+            for (int y = 1; y <= 5; y++) {
+                place(helper.getLevel(), cell.above(y), Blocks.AIR.defaultBlockState());
+            }
         }
         return log;
     }

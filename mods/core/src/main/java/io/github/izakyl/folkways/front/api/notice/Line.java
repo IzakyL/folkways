@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.front.api.notice;
 
-import io.github.izakyl.folkways.core.api.work.Doing;
+import io.github.izakyl.folkways.core.resident.api.Doing;
 import io.netty.handler.codec.DecoderException;
 import java.util.ArrayList;
 import java.util.List;
@@ -172,7 +172,9 @@ public sealed interface Line {
         int count = buffer.readVarInt();
         List<Line> lines = new ArrayList<>();
         for (int i = 0; i < count; i++) {
-            Line line = switch (buffer.readVarInt()) {
+            int type = buffer.readVarInt();
+            Line line = switch (type) {
+                case 0 -> said(Notice.decode(buffer));
                 case 1 -> literal(buffer.readUtf(Notice.MAX_ARG));
                 case 2 -> new Blocked(Notice.decode(buffer), buffer.readOptional(Sentence::decode));
                 case 3 -> busy(Doing.decode(buffer));
@@ -181,7 +183,7 @@ public sealed interface Line {
                 case 6 -> goods(decodeStacks(buffer));
                 case 7 -> told(Sentence.decode(buffer));
                 case 8 -> new Text(ComponentSerialization.STREAM_CODEC.decode(buffer), Sentence.decode(buffer));
-                default -> said(Notice.decode(buffer));
+                default -> throw new DecoderException("Unknown line type: " + type);
             };
             if (i < max) {
                 lines.add(line);

@@ -2,10 +2,10 @@ package io.github.izakyl.folkways.plugins.person.living;
 
 import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.base.persist.Reader;
-import io.github.izakyl.folkways.core.api.colony.Colonies;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.colony.Held;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
+import io.github.izakyl.folkways.core.colony.api.Claimed;
+import io.github.izakyl.folkways.core.colony.api.Colonies;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import io.github.izakyl.folkways.plugins.person.PersonContent;
@@ -162,7 +162,7 @@ public final class ColonyPetsGameTests {
                 BlockPos bed = origin.offset(x, 0, 1 + row * 4);
                 level.setBlockAndUpdate(bed, Blocks.RED_BED.defaultBlockState().setValue(BedBlock.FACING, Direction.SOUTH).setValue(BedBlock.PART, BedPart.FOOT));
                 level.setBlockAndUpdate(bed.south(), Blocks.RED_BED.defaultBlockState().setValue(BedBlock.FACING, Direction.SOUTH).setValue(BedBlock.PART, BedPart.HEAD));
-                colony.hold(LivingContent.BED, new Held.Block(WorldPos.of(level, bed))).orElseThrow();
+                colony.hold(LivingContent.BED, new Claimed.Block(WorldPos.of(level, bed))).orElseThrow();
                 beds.add(bed);
             }
             pets = new ColonyPets(colony, rooms);
@@ -181,7 +181,7 @@ public final class ColonyPetsGameTests {
                 person.setNoAi(true);
                 person.moveTo(origin.getX() + 4.5, origin.getY(), origin.getZ() + 4.5);
                 level.addFreshEntity(person);
-                colony.hold(PersonContent.ID, Held.Entity.of(person)).orElseThrow();
+                colony.hold(PersonContent.ID, Claimed.Entity.of(person)).orElseThrow();
                 person.joinColony(colony.id()); colony.entered(person); residents.add(person);
             }
         }

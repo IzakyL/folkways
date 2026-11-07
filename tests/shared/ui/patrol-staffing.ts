@@ -21,13 +21,13 @@ const PREPARE = defineTask<{ player: string }, string>({
       "io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfiles",
       "io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfile",
       "io.github.izakyl.folkways.plugins.patrol.PatrolContent",
-      "io.github.izakyl.folkways.core.api.terms.ItemSpec", "net.minecraft.world.item.Items"],
+      "io.github.izakyl.folkways.core.item.api.ItemSpec", "net.minecraft.world.item.Items"],
     body: `var player=ctx.server().getPlayerList().getPlayerByName(Args.of(ctx).string("player"));
 var colony=Pages.colonyOf(player).orElseThrow();var profiles=LoadoutProfiles.of(colony);
 var profile=profiles.create("Route guard");
 profiles.add(profile.id(),LoadoutProfile.Entry.weapon(ItemSpec.of(Items.STONE_SWORD)));
 profiles.assign(colony.residents().stream().map(resident->resident.id()).toList(),Optional.of(profile.id()));
-var route=colony.holdings().stream().filter(holding->holding.owner().equals(PatrolContent.BEAT))
+var route=colony.claims().stream().filter(holding->holding.owner().equals(PatrolContent.BEAT))
  .findFirst().orElseThrow();
 ColonyShell.editSelection(player,route.id());return profile.id().toString();`,
   }),

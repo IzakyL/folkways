@@ -1,9 +1,9 @@
 package io.github.izakyl.folkways.create.elevator;
 
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.passage.Hop;
-import io.github.izakyl.folkways.core.api.passage.Passage;
-import io.github.izakyl.folkways.core.api.resident.Conveyance;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.resident.api.Conveyance;
+import io.github.izakyl.folkways.core.travel.api.Hop;
+import io.github.izakyl.folkways.core.travel.api.Passage;
 import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.resources.ResourceLocation;

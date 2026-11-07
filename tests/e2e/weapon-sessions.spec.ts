@@ -119,12 +119,12 @@ const IMPORTS = [
   "net.minecraft.world.entity.EntityType", "net.minecraft.world.entity.Mob", "net.minecraft.world.entity.EquipmentSlot",
   "net.minecraft.world.entity.ai.attributes.Attributes", "net.minecraft.world.entity.projectile.AbstractArrow",
   "net.minecraft.world.item.ItemStack", "net.minecraft.world.item.Items", "net.minecraft.core.component.DataComponents",
-  "net.minecraft.network.chat.Component", "io.github.izakyl.folkways.core.api.colony.Colonies",
-  "io.github.izakyl.folkways.core.api.colony.Held", "io.github.izakyl.folkways.core.api.terms.WorldPos",
+  "net.minecraft.network.chat.Component", "io.github.izakyl.folkways.core.colony.api.Colonies",
+  "io.github.izakyl.folkways.core.colony.api.Claimed", "io.github.izakyl.folkways.core.world.api.WorldPos",
   "io.github.izakyl.folkways.plugins.person.PersonBody", "io.github.izakyl.folkways.plugins.person.PersonContent",
   "io.github.izakyl.folkways.plugins.person.ResidentEntity",
   "io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfiles", "io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfile",
-  "io.github.izakyl.folkways.core.api.terms.ItemSpec",
+  "io.github.izakyl.folkways.core.item.api.ItemSpec",
   "io.github.izakyl.folkways.rts.combat.command.ResidentCommands",
 ];
 
@@ -143,7 +143,7 @@ weapon.set(DataComponents.CUSTOM_NAME, Component.literal("actual GUARD weapon"))
 body.pack().insert(weapon);
 body.pack().insert(new ItemStack(Items.ARROW, 8));
 level.addFreshEntity(body);
-colony.hold(PersonContent.ID, Held.Entity.of(body)).orElseThrow();
+colony.hold(PersonContent.ID, Claimed.Entity.of(body)).orElseThrow();
 body.joinColony(colony.id());
 var profiles = LoadoutProfiles.of(colony);
 var armed = profiles.add(profiles.create("Guard").id(), LoadoutProfile.Entry.weapon(ItemSpec.of(weapon.getItem())));

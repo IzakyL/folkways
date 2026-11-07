@@ -1,13 +1,13 @@
 package io.github.izakyl.folkways.plugins.pasture;
 
-import io.github.izakyl.folkways.core.api.colony.Closing;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.colony.ColonyView;
-import io.github.izakyl.folkways.core.api.colony.Sweep;
 import io.github.izakyl.folkways.base.persist.Reader;
 import io.github.izakyl.folkways.base.persist.Writer;
-import io.github.izakyl.folkways.core.api.work.Grown;
-import io.github.izakyl.folkways.core.api.work.Workshop;
+import io.github.izakyl.folkways.core.colony.api.Closing;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.colony.api.ColonyView;
+import io.github.izakyl.folkways.core.colony.api.Sweep;
+import io.github.izakyl.folkways.core.plan.api.Grown;
+import io.github.izakyl.folkways.core.plan.api.Workshop;
 import io.github.izakyl.folkways.front.api.Facing;
 import io.github.izakyl.folkways.front.api.FrontView;
 import io.github.izakyl.folkways.front.api.Fronts;
@@ -56,8 +56,10 @@ final class PasturePresence implements Facing {
         this.herd = new Herd(this::remember, made);
         this.apiaries = new Apiaries(colony, made, sweep::nudge);
         Reader kept = Reader.of(colony.kept(PastureContent.ID));
-        herd.load(kept);
-        kept.child(TAG_MADE).ifPresent(made::load);
+        if (!kept.keys().isEmpty()) {
+            herd.load(kept);
+            made.load(kept.child(TAG_MADE).orElseThrow());
+        }
     }
 
     @Override
@@ -137,7 +139,7 @@ final class PasturePresence implements Facing {
         Optional<UUID> nurturer = view.residents().stream().filter(resident -> {
             var entity = view.level().getEntity(resident.id());
             return entity instanceof net.minecraft.world.entity.LivingEntity living
-                && io.github.izakyl.folkways.core.api.resident.body.Bodies.of(living)
+                && io.github.izakyl.folkways.core.resident.api.Bodies.of(living)
                     .map(body -> body.perks().rank(PastureContent.NURTURE) > 0).orElse(false);
         }).map(resident -> resident.id()).findFirst();
         for (Map<Herd.Job, PenChores> pen : pens.values()) {

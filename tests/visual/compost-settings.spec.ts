@@ -17,7 +17,7 @@ const WILD_RICE = "kaleidoscope_cookery:wild_rice";
 
 const DISCOVERED = defineTask<void, string[]>({
   name: "folkways.compost-shots.discovered", side: "server",
-  source: javaTask({ imports: ["io.github.izakyl.folkways.core.api.colony.Colonies", "io.github.izakyl.folkways.plugins.compost.CompostSettings", "net.minecraft.core.registries.BuiltInRegistries"], body: `
+  source: javaTask({ imports: ["io.github.izakyl.folkways.core.colony.api.Colonies", "io.github.izakyl.folkways.plugins.compost.CompostSettings", "net.minecraft.core.registries.BuiltInRegistries"], body: `
 return CompostSettings.discovered(Colonies.all(ctx.server()).getFirst(), ctx.server()).stream().map(item -> BuiltInRegistries.ITEM.getKey(item).toString()).toList();
 ` }),
 });

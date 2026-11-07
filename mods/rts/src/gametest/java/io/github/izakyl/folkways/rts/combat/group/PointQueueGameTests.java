@@ -1,17 +1,18 @@
 package io.github.izakyl.folkways.rts.combat.group;
 
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.colony.Colonies;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.colony.Held;
-import io.github.izakyl.folkways.core.api.resident.body.Body;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
-import io.github.izakyl.folkways.core.api.terms.Reach;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.engine.labor.LaborFixture;
+import io.github.izakyl.folkways.core.colony.api.Claimed;
+import io.github.izakyl.folkways.core.colony.api.Colonies;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
+import io.github.izakyl.folkways.core.resident.api.Body;
+import io.github.izakyl.folkways.core.runtime.LaborFixture;
 import io.github.izakyl.folkways.core.testing.Cleanup;
+import io.github.izakyl.folkways.core.world.api.Reach;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfile;
 import io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfiles;
+import io.github.izakyl.folkways.plugins.combat.weapon.PatrolSupplies;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import io.github.izakyl.folkways.plugins.person.PersonContent;
 import io.github.izakyl.folkways.rts.FolkwaysRtsMod;
@@ -26,6 +27,8 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.tags.ItemTags;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -47,7 +50,7 @@ public final class PointQueueGameTests {
     public static void clicksAppendDuringTravelWithoutRewindingAndCloseOnlyTheChosenSuffix(GameTestHelper helper) {
         Scene scene = new Scene(helper);
         List<WorldPos> route = List.of(scene.at(12, 8), scene.at(18, 8), scene.at(18, 16), scene.at(8, 16));
-        scene.groups.appendSelectionPoint(scene.people, route.getFirst());
+        scene.groups.appendSelectionPoint(scene.people, route.getFirst(), false);
         UnitGroup group = scene.group();
         WorldPos initialCaptain = group.captain().orElseThrow();
         helper.assertTrue(
@@ -82,10 +85,10 @@ public final class PointQueueGameTests {
                 WorldPos movingCaptain = group.captain().orElseThrow();
                 List<ResidentCommands.Order> handles = scene.handles();
                 for (WorldPos point : route.subList(1, route.size())) {
-                    scene.groups.appendSelectionPoint(scene.people.reversed(), point);
+                    scene.groups.appendSelectionPoint(scene.people.reversed(), point, false);
                     scene.assertUnchanged(group, handles, movingCaptain, 0);
                 }
-                scene.groups.appendSelectionPoint(scene.people, route.get(1));
+                scene.groups.appendSelectionPoint(scene.people, route.get(1), false);
                 scene.assertUnchanged(group, handles, movingCaptain, 0);
                 helper.assertTrue(
                     group.pointRoute().equals(route)
@@ -132,7 +135,7 @@ public final class PointQueueGameTests {
         Scene scene = new Scene(helper);
         WorldPos first = scene.at(8, 10);
         WorldPos second = scene.at(16, 10);
-        scene.groups.appendSelectionPoint(scene.people, first);
+        scene.groups.appendSelectionPoint(scene.people, first, false);
         UnitGroup group = scene.group();
         var generation = group.pointCommandId();
         AtomicLong assembledAt = new AtomicLong(Long.MIN_VALUE);
@@ -169,7 +172,7 @@ public final class PointQueueGameTests {
                     "the open endpoint finishes its dwell and retains its complete squad and queue while waiting");
                 scene.assertAssembled(group);
                 List<ResidentCommands.Order> handles = scene.handles();
-                scene.groups.appendSelectionPoint(scene.people, second);
+                scene.groups.appendSelectionPoint(scene.people, second, false);
                 scene.assertUnchanged(group, handles, first, 0);
                 helper.assertFalse(
                     group.routeComplete(), "an accepted next point clears terminal completion immediately");
@@ -302,35 +305,35 @@ public final class PointQueueGameTests {
     @GameTest(template = "empty_large")
     public static void invalidAppendsPreserveTheLiveQueueAndSixteenPointsCanStillClose(GameTestHelper helper) {
         Scene scene = new Scene(helper);
-        scene.groups.appendSelectionPoint(scene.people, scene.at(5, 14));
+        scene.groups.appendSelectionPoint(scene.people, scene.at(5, 14), false);
         UnitGroup group = scene.group();
         List<ResidentCommands.Order> handles = scene.handles();
         WorldPos captain = group.captain().orElseThrow();
         helper.setBlock(new BlockPos(18, 1, 18), Blocks.STONE);
         for (WorldPos invalid : List.of(scene.at(18, 18), scene.at(150, 10))) {
-            scene.assertRejected(() -> scene.groups.appendSelectionPoint(scene.people, invalid));
+            scene.assertRejected(() -> scene.groups.appendSelectionPoint(scene.people, invalid, false));
             scene.assertUnchanged(group, handles, captain, 0);
             helper.assertTrue(
                 group.pointRoute().equals(List.of(scene.at(5, 14))) && group.pointQueueOpen(),
                 "unsafe and distant appends preserve the accepted open queue before capacity is reached");
         }
         for (int x = 6; x <= 20; x++) {
-            scene.groups.appendSelectionPoint(scene.people, scene.at(x, 14));
+            scene.groups.appendSelectionPoint(scene.people, scene.at(x, 14), false);
         }
         List<WorldPos> points = group.pointRoute();
         helper.assertValueEqual(points.size(), 16, "sixteen distinct accepted clicks remain bounded");
         for (WorldPos invalid : List.of(scene.at(20, 14), scene.at(20, 17))) {
-            scene.assertRejected(() -> scene.groups.appendSelectionPoint(scene.people, invalid));
+            scene.assertRejected(() -> scene.groups.appendSelectionPoint(scene.people, invalid, false));
             scene.assertUnchanged(group, handles, captain, 0);
             helper.assertTrue(
                 group.pointRoute().equals(points) && group.cycleStart() == -1 && group.pointQueueOpen(),
                 "duplicate-tail and over-capacity clicks cannot alter accepted intent");
         }
-        scene.groups.appendSelectionPoint(scene.people, points.get(1));
+        scene.groups.appendSelectionPoint(scene.people, points.get(1), false);
         helper.assertTrue(
             group.cycleStart() == 1 && !group.pointQueueOpen() && group.pointRoute().equals(points),
             "closing an existing point does not consume a seventeenth slot");
-        scene.assertRejected(() -> scene.groups.appendSelectionPoint(scene.people, scene.at(10, 18)));
+        scene.assertRejected(() -> scene.groups.appendSelectionPoint(scene.people, scene.at(10, 18), false));
         scene.assertUnchanged(group, handles, captain, 0);
         helper.assertValueEqual(group.cycleStart(), 1, "a closed route rejects further intent without reopening");
         helper.succeed();
@@ -341,23 +344,23 @@ public final class PointQueueGameTests {
         GameTestHelper helper) {
         Scene scene = new Scene(helper);
         WorldPos first = scene.at(10, 10);
-        scene.groups.commandSelectionPoints(scene.people, List.of(first), -1);
+        scene.groups.commandSelectionPoints(scene.people, List.of(first), -1, false);
         UnitGroup original = scene.group();
         List<ResidentCommands.Order> handles = scene.handles();
         WorldPos captain = original.captain().orElseThrow();
         helper.setBlock(new BlockPos(18, 1, 18), Blocks.STONE);
-        scene.assertRejected(() -> scene.groups.appendSelectionPoint(scene.people, scene.at(18, 18)));
+        scene.assertRejected(() -> scene.groups.appendSelectionPoint(scene.people, scene.at(18, 18), false));
         scene.assertUnchanged(original, handles, captain, 0);
         helper.assertTrue(
             !original.pointQueueOpen() && original.pointRoute().equals(List.of(first)),
             "an invalid first append cannot convert or release a normal move");
-        scene.groups.appendSelectionPoint(scene.people, scene.at(16, 10));
+        scene.groups.appendSelectionPoint(scene.people, scene.at(16, 10), false);
         scene.assertUnchanged(original, handles, captain, 0);
         helper.assertTrue(
             original.pointQueueOpen() && original.pointRoute().size() == 2,
             "a valid normal target can become the prefix of the first appended queue");
         WorldPos replacement = scene.at(8, 16);
-        scene.groups.commandSelectionPoints(scene.people, List.of(replacement), -1);
+        scene.groups.commandSelectionPoints(scene.people, List.of(replacement), -1, false);
         UnitGroup next = scene.group();
         helper.assertTrue(
             next != original
@@ -397,7 +400,7 @@ public final class PointQueueGameTests {
                 BlockPos cell = at(2, 7 + n * 2).block(level);
                 body.mob().moveTo(cell.getX() + .5, cell.getY(), cell.getZ() + .5);
                 level.addFreshEntity(body.mob());
-                colony.hold(PersonContent.ID, Held.Entity.of(body.mob())).orElseThrow();
+                colony.hold(PersonContent.ID, Claimed.Entity.of(body.mob())).orElseThrow();
                 body.joinColony(colony.id());
                 arm(colony, body, "Melee", ItemSpec.of(Tags.Items.MELEE_WEAPON_TOOLS));
                 people.add(body);
@@ -472,6 +475,33 @@ public final class PointQueueGameTests {
             .filter(one -> one.name().equals(name))
             .findFirst()
             .orElseGet(() -> profiles.add(profiles.create(name).id(), LoadoutProfile.Entry.weapon(weapon)));
+        profiles.assign(List.of(body.id()), Optional.of(profile.id()));
+    }
+
+    private static void assignLoadout(
+        PatrolSupplies supplies,
+        Body body, String name) {
+        var profiles = supplies.profiles();
+        var profile = profiles.all().stream().filter(value -> value.name().equals(name)).findFirst()
+            .orElseGet(() -> {
+                var created = profiles.create(name);
+                var weapon = switch (name) {
+                    case "melee" -> ItemSpec.of(
+                        Tags.Items.MELEE_WEAPON_TOOLS);
+                    case "bow" -> ItemSpec.of(Items.BOW);
+                    case "crossbow" -> ItemSpec.of(Items.CROSSBOW);
+                    default -> throw new IllegalArgumentException(name);
+                };
+                var entries = new ArrayList<LoadoutProfile.Entry>();
+                entries.add(LoadoutProfile.Entry.weapon(weapon));
+                if (!name.equals("melee")) {
+                    entries.add(LoadoutProfile.Entry.supply(
+                        ItemSpec.of(ItemTags.ARROWS), 8, 8));
+                }
+                profiles.replace(new LoadoutProfile(
+                    created.id(), created.name(), entries));
+                return profiles.get(created.id()).orElseThrow();
+            });
         profiles.assign(List.of(body.id()), Optional.of(profile.id()));
     }
 }

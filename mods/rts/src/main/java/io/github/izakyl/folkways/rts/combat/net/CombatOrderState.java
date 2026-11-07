@@ -22,18 +22,6 @@ public record CombatOrderState(
     public static final CombatOrderState NONE =
         new CombatOrderState(null, null, "none", "idle", "none", 0, 0, -1, false, false, 0);
 
-    public CombatOrderState(
-        UUID groupId,
-        String command,
-        String phase,
-        String result,
-        int members,
-        int missing,
-        int stop,
-        boolean attackMove) {
-        this(groupId, null, command, phase, result, members, missing, stop, attackMove, false, 0);
-    }
-
     public CombatOrderState {
         Objects.requireNonNull(command);
         Objects.requireNonNull(phase);

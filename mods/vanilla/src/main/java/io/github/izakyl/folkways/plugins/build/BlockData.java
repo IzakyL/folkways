@@ -1,9 +1,10 @@
 package io.github.izakyl.folkways.plugins.build;
 
 import io.github.izakyl.folkways.base.persist.Reader;
+import io.github.izakyl.folkways.base.persist.Required;
 import io.github.izakyl.folkways.base.persist.Writer;
-import io.github.izakyl.folkways.core.api.structure.StructureCompat;
-import io.github.izakyl.folkways.core.api.structure.StructurePayload;
+import io.github.izakyl.folkways.core.work.api.StructureCompat;
+import io.github.izakyl.folkways.core.world.api.StructurePayload;
 import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.core.BlockPos;
@@ -98,6 +99,6 @@ public record BlockData(CompoundTag tag, List<UnloadedBlock.Turn> turns) {
     }
 
     static BlockData load(CompoundTag tag) {
-        return new BlockData(tag.getCompound("nbt"), UnloadedBlock.turnsOf(Reader.of(tag)));
+        return new BlockData(Required.compound(tag, "nbt"), UnloadedBlock.turnsOf(Reader.of(tag)));
     }
 }

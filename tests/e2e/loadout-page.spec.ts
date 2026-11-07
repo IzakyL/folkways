@@ -16,7 +16,7 @@ const PROFILE = "Archers of the northern river watch";
 const READ = defineTask<void, { profiles: string[]; assignments: string[]; target: number; threshold: number }>({
   name: "folkways.loadout-ux.read", side: "server",
   source: javaTask({ imports: [
-    "io.github.izakyl.folkways.core.api.colony.Colonies",
+    "io.github.izakyl.folkways.core.colony.api.Colonies",
     "io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfiles",
     "io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfile",
   ], body: `

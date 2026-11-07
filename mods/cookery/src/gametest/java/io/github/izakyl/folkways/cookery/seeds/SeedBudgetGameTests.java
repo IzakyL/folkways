@@ -2,14 +2,13 @@ package io.github.izakyl.folkways.cookery.seeds;
 
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems;
 import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.item.api.Goods;
 import io.github.izakyl.folkways.plugins.compost.SeedBudget;
-import io.github.izakyl.folkways.core.api.terms.Goods;
 import io.github.izakyl.folkways.plugins.farming.CropSeeds;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicReference;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
@@ -76,7 +75,7 @@ public final class SeedBudgetGameTests {
     public static void alternativeTargetsProtectTheirTotalOnceAndReuseThePurposeReserve(GameTestHelper helper) {
         Item wild = ModItems.WILD_RICE_SEED.get();
         Item rice = ModItems.RICE_SEED.get();
-        var alternatives = io.github.izakyl.folkways.core.api.terms.ItemSpec.anyOf(List.of(
+        var alternatives = io.github.izakyl.folkways.core.item.api.ItemSpec.anyOf(List.of(
             Goods.specOf(wild.getDefaultInstance()), Goods.specOf(rice.getDefaultInstance())));
         var snapshot = new SeedBudget.Snapshot(List.of(new SeedBudget.Stock("nursery", SeedBudget.Location.pack(UUID.randomUUID()),
             List.of(new ItemStack(wild, 64), new ItemStack(rice, 64)))), List.of(), List.of(), Map.of(),

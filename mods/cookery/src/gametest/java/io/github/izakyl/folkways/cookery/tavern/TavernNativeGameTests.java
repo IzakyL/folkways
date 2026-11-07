@@ -2,21 +2,34 @@ package io.github.izakyl.folkways.cookery.tavern;
 
 import com.github.ysbbbbbb.kaleidoscopetavern.block.brew.TapBlock;
 import com.github.ysbbbbbb.kaleidoscopetavern.block.deco.StepladderBlock;
+import com.github.ysbbbbbb.kaleidoscopetavern.blockentity.brew.BarCabinetBlockEntity;
 import com.github.ysbbbbbb.kaleidoscopetavern.blockentity.brew.BarrelBlockEntity;
 import com.github.ysbbbbbb.kaleidoscopetavern.blockentity.brew.PressingTubBlockEntity;
-import com.github.ysbbbbbb.kaleidoscopetavern.blockentity.brew.BarCabinetBlockEntity;
 import com.github.ysbbbbbb.kaleidoscopetavern.init.ModBlocks;
 import com.github.ysbbbbbb.kaleidoscopetavern.init.ModItems;
 import com.github.ysbbbbbb.kaleidoscopetavern.item.BottleBlockItem;
-import io.github.izakyl.folkways.core.api.terms.*;
-import io.github.izakyl.folkways.core.api.work.*;
-import io.github.izakyl.folkways.core.api.work.Worker;
-import io.github.izakyl.folkways.core.engine.labor.Commit;
-import io.github.izakyl.folkways.cookery.*;
+import io.github.izakyl.folkways.cookery.CookeryContent;
+import io.github.izakyl.folkways.cookery.KitchenBookings;
+import io.github.izakyl.folkways.core.item.api.Containers;
+import io.github.izakyl.folkways.core.item.api.Goods;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
+import io.github.izakyl.folkways.core.plan.api.Grown;
+import io.github.izakyl.folkways.core.plan.api.Produce;
+import io.github.izakyl.folkways.core.runtime.HoldingFixture;
 import io.github.izakyl.folkways.core.testing.TestWorker;
+import io.github.izakyl.folkways.core.work.api.Ending;
+import io.github.izakyl.folkways.core.work.api.Hold;
+import io.github.izakyl.folkways.core.work.api.Node;
+import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.work.api.WorkSite;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.world.api.ClimbableBlocks;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import io.github.izakyl.folkways.plugins.person.ResidentEntity;
-import java.util.*;
+import java.util.List;
+import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTest;
@@ -33,6 +46,53 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
 @PrefixGameTestTemplate(false)
 public final class TavernNativeGameTests {
+    @GameTest(template = "empty_large", templateNamespace = "folkways", timeoutTicks = 3000)
+    public static void hardUrgesPreserveFermentationAndEveryPartialBottle(GameTestHelper helper) {
+        Rig rig = new Rig(helper, true);
+        TavernWork work = rig.plan();
+        rig.standAt(rig.cell.above(3));
+        HoldingFixture holding = rig.holding(work).prepare().hardUrge();
+        helper.assertTrue(rig.step(work) instanceof Outcome.Done, "the original grape buckets are accepted");
+        holding.hardUrge();
+        helper.runAfterDelay(40, holding::hardUrge);
+        helper.startSequence()
+                .thenWaitUntil(
+                    () ->
+                    helper.assertTrue(
+                        rig.barrel().getBrewLevel() >= 2,
+                        "the original native barrel finishes fermentation"))
+                .thenExecute(
+                    () -> {
+                    try {
+                    rig.standAt(rig.cell.north(3));
+                    for (int bottle = 0; bottle < 16; bottle++) {
+                        for (int action = 0; action < 3; action++) {
+                            holding.prepare().hardUrge();
+                            helper.assertTrue(
+                                rig.step(work) instanceof Outcome.Done,
+                                "placing, filling and taking each original bottle"
+                                + " succeeds once");
+                            holding.hardUrge();
+                        }
+                    }
+                    helper.assertValueEqual(
+                        rig.count(ModItems.WINE.get()),
+                        16L,
+                        "all sixteen original wines survive");
+                    helper.assertValueEqual(
+                        rig.count(ModItems.EMPTY_BOTTLE.get()),
+                        0L,
+                        "each real carrier is spent once");
+                    helper.assertTrue(
+                        rig.barrel().getOutput().getStackInSlot(0).isEmpty(),
+                        "no duplicate wine remains");
+                    } finally {
+                    rig.close();
+                    }
+                    })
+                .thenSucceed();
+    }
+
     @GameTest(template = "empty_large", templateNamespace = "folkways")
     public static void counterStockPreservesComponentsAcrossSaveSyncStateChangesAndDropsOnce(GameTestHelper helper) {
         var level = helper.getLevel(); var pos = helper.absolutePos(new BlockPos(3, 2, 3));
@@ -106,16 +166,16 @@ public final class TavernNativeGameTests {
         TavernWork work = r.plan();
         helper.assertTrue(r.step(work) instanceof Outcome.Done, "the actual native tub accepts eight real grapes");
         helper.assertValueEqual(r.count(ModItems.GRAPE.get()), 0L, "accepted grapes are removed from the real pack once");
-        var turn = work.next(r.level, r.worker);
-        Node press = ((Workload.Within.Turn.Piece)turn).node();
-        var continuous = (Workload.Continuous)press.spec().workload();
+        HoldingFixture press = r.holding(work).prepare();
         helper.onEachTick(() -> {
-            if (r.tub().getFluidAmount() < 1000) continuous.holds(r.level, r.worker);
-        });
+            if (r.tub().getFluidAmount() < 1000) {
+                press.running();
+            }
+            });
         helper.startSequence().thenWaitUntil(() -> {
             helper.assertValueEqual(r.tub().getFluidAmount(), 1000, "normal physical jumps invoke the native tub fallOn eight times");
         }).thenExecute(() -> {
-            helper.assertTrue(press.commit(r.level, r.worker) instanceof Outcome.Done, "pressing really completed");
+            helper.assertTrue(press.step() instanceof Outcome.Done, "pressing really completed");
             helper.assertTrue(r.step(work) instanceof Outcome.Done, "a real empty bucket takes the native juice");
             helper.assertValueEqual(r.count(ModItems.GRAPE_BUCKET.get()), 1L, "one actual grape juice bucket is produced");
             helper.assertValueEqual(r.count(Items.BUCKET), 0L, "one real empty bucket is consumed");
@@ -151,7 +211,11 @@ public final class TavernNativeGameTests {
             .thenExecute(() -> {
                 var path = r.actor.getNavigation().createPath(goal, 0);
                 var trace = new StringBuilder();
-                if (path != null) for (int i = 0; i < path.getNodeCount(); i++) trace.append(path.getNode(i).asBlockPos().subtract(r.cell).toShortString()).append("; ");
+                if (path != null) {
+                    for (int i = 0; i < path.getNodeCount(); i++) {
+                        trace.append(path.getNode(i).asBlockPos().subtract(r.cell).toShortString()).append("; ");
+                    }
+                }
                 helper.assertTrue(path != null && path.canReach() && r.actor.getNavigation().moveTo(path, 1.0),
                     "a path climbs the stepladder to the lid: " + trace);
             })
@@ -167,6 +231,9 @@ public final class TavernNativeGameTests {
         helper.assertTrue(TavernStation.lid(r.level, r.at).filter(top -> !top.cells().contains(WorldPos.of(r.level, r.cell.north(3)))).isPresent(),
             "the barrel's lid is loaded from its top, not from the ground before the tap");
         helper.assertTrue(!(r.step(old) instanceof Outcome.Done), "juice is never poured in from the ground beside the barrel");
+        r.holding(old).end(Ending.REVOKED);
+        r.hold.release(Ending.REVOKED);
+        old = r.plan();
         r.standAt(r.cell.above(3));
         helper.assertTrue(r.step(old) instanceof Outcome.Done, "the native barrel accepts four real juice buckets from its top and closes its lid");
         r.standAt(r.cell.north(3));
@@ -195,22 +262,39 @@ public final class TavernNativeGameTests {
                     helper.assertTrue(r.level.getBlockState(r.cell.north(2)).getBlock().asItem() == ModItems.EMPTY_BOTTLE.get(), "empty bottle remains visible between actions");
                     helper.assertValueEqual(r.count(ModItems.EMPTY_BOTTLE.get()), 15L - i, "placement consumes exactly one carrier");
                     helper.assertValueEqual(r.barrel().getOutput().getStackInSlot(0).getCount(), 16 - i, "placement does not extract wine early");
-                    if (i == 0) active = r.recover(active);
-                    helper.assertTrue(r.step(active) instanceof Outcome.Done, "native tap fills the displayed bottle");
+                if (i == 0) {
+                    active = r.recover(active);
+                }
+                helper.assertTrue(r.step(active) instanceof Outcome.Done, "native tap fills the displayed bottle");
                     helper.assertTrue(r.level.getBlockState(r.cell.north(2)).getBlock().asItem() == ModItems.WINE.get(), "filled bottle remains visible until the separate pickup");
                     helper.assertValueEqual(r.count(ModItems.WINE.get()), (long)i, "wine is not added to the pack before pickup");
-                    if (i == 0 || i == 15) active = r.recover(active);
-                    var next = ((Workload.Within.Turn.Piece)active.next(r.level, r.worker)).node();
-                    helper.assertTrue(next.spec().workload() instanceof Workload.Once once && once.baseTicks() >= 20, "pickup gives the filled bottle at least a second of screen time");
-                    helper.assertTrue(r.step(active) instanceof Outcome.Done, "resident takes the actual bottle");
+                if (i == 0 || i == 15) {
+                    active = r.recover(active);
+                }
+                HoldingFixture pickup = r.holding(active).prepare();
+                for (int tick = 0; tick < 19; tick++) {
+                    pickup.tick();
+                    helper.assertTrue(
+                        r.level
+                        .getBlockState(r.cell.north(2))
+                        .getBlock().asItem()
+                        == ModItems.WINE.get(),
+                        "pickup keeps the real filled bottle visible during its"
+                        + " wind-up");
+                }
+                helper.assertTrue(r.step(active) instanceof Outcome.Done, "resident takes the actual bottle");
                     helper.assertTrue(r.level.getBlockState(r.cell.north(2)).isAir(), "only pickup removes the displayed wine");
                 }
                 helper.assertTrue(active.commit(r.level, r.worker) instanceof Outcome.Done, "resumed bottling completes");
                 active.ended(r.level, Ending.DONE);
                 helper.assertValueEqual(r.count(ModItems.WINE.get()), 16L, "sixteen actual wine bottles enter the pack");
                 helper.assertValueEqual(r.count(ModItems.EMPTY_BOTTLE.get()), 0L, "sixteen empty bottles are truly consumed");
-                for (int i = 0; i < r.pack.getContainerSize(); i++) if (r.pack.getItem(i).is(ModItems.WINE.get()))
-                    helper.assertTrue(BottleBlockItem.getBrewLevel(r.pack.getItem(i)) >= 2, "native quality components survive physical bottling and transfer");
+                for (int i = 0; i < r.pack.getContainerSize(); i++) {
+                    if (r.pack.getItem(i).is(ModItems.WINE.get())) {
+                        helper.assertTrue(BottleBlockItem.getBrewLevel(r.pack.getItem(i)) >= 2,
+                            "native quality components survive physical bottling and transfer");
+                    }
+                }
                 helper.assertTrue(r.barrel().getOutput().getStackInSlot(0).isEmpty(), "no second output remains in the real barrel");
                 r.close();
             }).thenSucceed();
@@ -238,11 +322,12 @@ public final class TavernNativeGameTests {
         try (Rig r = new Rig(helper, false)) {
             var grape = new TavernGrapes();
             var plot = new java.util.LinkedHashSet<BlockPos>();
-            for (int x = 1; x <= 4; x++) for (int z = 1; z <= 3; z++) {
-                BlockPos ground = helper.absolutePos(new BlockPos(x, 1, z));
-                r.level.setBlockAndUpdate(ground, Blocks.DIRT.defaultBlockState());
-                plot.add(ground);
-            }
+            for (int x = 1; x <= 4; x++) {
+                for (int z = 1; z <= 3; z++) {
+                    BlockPos ground = helper.absolutePos(new BlockPos(x, 1, z));
+                    r.level.setBlockAndUpdate(ground, Blocks.DIRT.defaultBlockState());
+                    plot.add(ground);
+            } }
             var corners = plot.stream().filter(ground -> grape.sowsAt(ground, 0, 0, plot)).toList();
             helper.assertValueEqual(corners.size(), 4, "a post stands at each corner of the plot");
             helper.assertFalse(grape.canPlant(r.level, corners.get(0).above()), "no vine is planted before its post stands");
@@ -269,7 +354,10 @@ public final class TavernNativeGameTests {
             for (int tick = 0; tick < 40; tick++) {
                 for (BlockPos cell : BlockPos.betweenClosed(helper.absolutePos(new BlockPos(1, 2, 1)), helper.absolutePos(new BlockPos(4, 6, 3)))) {
                     var state = r.level.getBlockState(cell);
-                    if (state.getBlock() instanceof com.github.ysbbbbbb.kaleidoscopetavern.block.plant.GrapevineTrellisBlock vine) vine.doGrow(r.level, cell.immutable(), state);
+                    if (state.getBlock()
+                        instanceof com.github.ysbbbbbb.kaleidoscopetavern.block.plant.GrapevineTrellisBlock vine) {
+                        vine.doGrow(r.level, cell.immutable(), state);
+                    }
                 }
             }
             BlockPos fruit = middle.above(3);
@@ -301,7 +389,9 @@ public final class TavernNativeGameTests {
         int recovered = 0;
         for (BlockPos cell : canopy) {
             var state = level.getBlockState(cell);
-            if (!io.github.izakyl.folkways.plugins.farming.Felling.attachment(state)) continue;
+            if (!io.github.izakyl.folkways.plugins.farming.Felling.attachment(state)) {
+                continue;
+            }
             recovered += net.minecraft.world.level.block.Block.getDrops(state, level, cell, null).stream().filter(stack -> stack.is(ModItems.GRAPEVINE.get())).mapToInt(ItemStack::getCount).sum();
             level.removeBlock(cell, false);
         }
@@ -311,6 +401,13 @@ public final class TavernNativeGameTests {
 
     private static final class Rig implements AutoCloseable {
         final Worker worker;
+        private final java.util.Map<Node, HoldingFixture> claims =
+                new java.util.IdentityHashMap<>();
+
+        HoldingFixture holding(Node node) {
+            return claims.computeIfAbsent(node, next -> new HoldingFixture(level, next, worker));
+        }
+
         final GameTestHelper helper;
         final ServerLevel level;
         final UUID colony = UUID.randomUUID();
@@ -324,7 +421,10 @@ public final class TavernNativeGameTests {
         Hold hold;
         Rig(GameTestHelper helper, boolean barrel) {
             this.helper = helper; this.barrel = barrel; level = helper.getLevel(); cell = helper.absolutePos(new BlockPos(5, 2, 5)); at = WorldPos.of(level, cell);
-            for (BlockPos p : BlockPos.betweenClosed(cell.offset(-4, -1, -4), cell.offset(4, 4, 4))) level.setBlockAndUpdate(p, p.getY() == cell.getY() - 1 ? Blocks.STONE.defaultBlockState() : Blocks.AIR.defaultBlockState());
+            for (BlockPos p : BlockPos.betweenClosed(cell.offset(-4, -1, -4), cell.offset(4, 4, 4))) {
+                level.setBlockAndUpdate(p, p.getY() == cell.getY() - 1 ? Blocks.STONE.defaultBlockState()
+                    : Blocks.AIR.defaultBlockState());
+            }
             level.setBlockAndUpdate(cell, (barrel ? ModBlocks.BARREL : ModBlocks.PRESSING_TUB).get().defaultBlockState());
             if (barrel) {
                 ModBlocks.BARREL.get().setPlacedBy(level, cell, level.getBlockState(cell), null, new ItemStack(ModItems.BARREL.get()));
@@ -363,11 +463,10 @@ public final class TavernNativeGameTests {
             return result;
         }
         Outcome step(TavernWork work) {
-            var turn = work.next(level, worker);
-            helper.assertTrue(turn instanceof Workload.Within.Turn.Piece, "expected a native interaction, got " + turn + "; refusal=" + work.refusal(level));
-            Node piece = ((Workload.Within.Turn.Piece)turn).node();
-            var outcome = Commit.run(level, piece, worker);
-            if (outcome instanceof Outcome.Done done) { done.made().forEach(s -> helper.assertTrue(Containers.insert(pack, s).isEmpty(), "real outputs fit")); work.ended(level, piece, Ending.DONE); }
+            Outcome outcome = holding(work).step();
+            if (outcome instanceof Outcome.Done done) { done.made().forEach(
+                stack -> helper.assertTrue(Containers.insert(pack, stack).isEmpty(),
+                    "actual native products fit")); }
             return outcome;
         }
 

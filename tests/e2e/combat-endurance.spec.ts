@@ -169,12 +169,12 @@ const IMPORTS = [
   "net.minecraft.world.entity.EntityType", "net.minecraft.world.entity.Mob",
   "net.minecraft.world.entity.ai.attributes.Attributes", "net.minecraft.world.item.ItemStack", "net.minecraft.world.item.Items",
   "net.minecraft.world.phys.Vec3",
-  "io.github.izakyl.folkways.core.api.colony.Colonies", "io.github.izakyl.folkways.core.api.colony.Held",
-  "io.github.izakyl.folkways.core.api.resident.body.Body", "io.github.izakyl.folkways.core.api.terms.WorldSpaces",
+  "io.github.izakyl.folkways.core.colony.api.Colonies", "io.github.izakyl.folkways.core.colony.api.Claimed",
+  "io.github.izakyl.folkways.core.resident.api.Body", "io.github.izakyl.folkways.core.world.api.WorldSpaces",
   "io.github.izakyl.folkways.plugins.person.PersonBody", "io.github.izakyl.folkways.plugins.person.PersonContent",
   "io.github.izakyl.folkways.plugins.person.ResidentEntity",
   "io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfiles", "io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfile",
-  "io.github.izakyl.folkways.core.api.terms.ItemSpec", "net.neoforged.neoforge.common.Tags",
+  "io.github.izakyl.folkways.core.item.api.ItemSpec", "net.neoforged.neoforge.common.Tags",
   "io.github.izakyl.folkways.rts.combat.command.ResidentCommands",
   "io.github.izakyl.folkways.front.engine.colony.ColonyFront", "io.github.izakyl.folkways.front.engine.colony.ColonySchemas",
   "io.github.izakyl.folkways.front.engine.colony.ColonySettings",
@@ -195,7 +195,7 @@ body.setHealth(1024.0F);
 body.pack().insert(new ItemStack(Items.IRON_SWORD));
 body.setPersistenceRequired();
 level.addFreshEntity(body);
-colony.hold(PersonContent.ID, Held.Entity.of(body)).orElseThrow();
+colony.hold(PersonContent.ID, Claimed.Entity.of(body)).orElseThrow();
 body.joinColony(colony.id());
 var profiles = LoadoutProfiles.of(colony);
 var melee = profiles.add(profiles.create("Melee").id(), LoadoutProfile.Entry.weapon(ItemSpec.of(Tags.Items.MELEE_WEAPON_TOOLS)));

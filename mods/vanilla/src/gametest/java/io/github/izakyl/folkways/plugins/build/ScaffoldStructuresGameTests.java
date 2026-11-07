@@ -2,11 +2,11 @@ package io.github.izakyl.folkways.plugins.build;
 
 import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.base.persist.Reader;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.Worker;
 import io.github.izakyl.folkways.core.testing.Proxies;
+import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
 import java.util.ArrayList;
 import java.util.List;
@@ -79,7 +79,8 @@ public final class ScaffoldStructuresGameTests {
         TemporaryScaffolds temporary = new TemporaryScaffolds(() -> { });
         helper.assertTrue(node(level, Step.raise(cells), temporary).work(level, worker()) instanceof Outcome.Failed,
             "a new obstruction invalidates the entire access structure");
-        helper.assertTrue(level.getBlockState(obstacle).is(Blocks.CHEST) && level.getBlockState(cells.getFirst()).isAir(),
+        helper.assertTrue(level.getBlockState(obstacle).is(Blocks.CHEST) && level.getBlockState(cells.getFirst())
+            .isAir(),
             "the chest and all earlier unbuilt cells remain untouched");
         helper.succeed();
     }
@@ -123,7 +124,7 @@ public final class ScaffoldStructuresGameTests {
         List<BlockPos> cells = deck(helper, 3);
         TemporaryScaffolds temporary = new TemporaryScaffolds(() -> { });
         Worker worker = worker();
-        ScaffoldNode raise = node(level, Step.raise(cells), temporary);
+        ScaffoldAction raise = node(level, Step.raise(cells), temporary);
         helper.assertTrue(raise.commit(level, worker) instanceof Outcome.Done, "the first raise builds the deck");
         helper.assertTrue(level.getBlockState(cells.getLast()).getValue(ScaffoldingBlock.DISTANCE) == 3,
             "the final horizontal cell has its actual physics distance");
@@ -159,9 +160,9 @@ public final class ScaffoldStructuresGameTests {
         return List.copyOf(cells);
     }
 
-    private static ScaffoldNode node(ServerLevel level, Step step, TemporaryScaffolds temporary) {
+    private static ScaffoldAction node(ServerLevel level, Step step, TemporaryScaffolds temporary) {
         BuildTarget target = new BuildTarget(WorldPos.of(level, step.focus()).realm(), Map.of());
-        return new ScaffoldNode(step.job(level, target, Stances.WHEREVER), (ended, how) -> { }, temporary);
+        return new ScaffoldAction(step.job(level, target, Stances.WHEREVER), temporary);
     }
 
     private static Worker worker() {

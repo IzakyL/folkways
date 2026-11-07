@@ -2,12 +2,12 @@ import { defineTask, javaTask } from "@izakyl/blockwright-minecraft";
 
 const IMPORTS = [
   "java.util.Random",
-  "io.github.izakyl.folkways.core.api.colony.Colonies",
+  "io.github.izakyl.folkways.core.colony.api.Colonies",
   "io.github.izakyl.folkways.front.engine.colony.ZoneDrafts",
   "io.github.izakyl.folkways.front.engine.colony.ColonySettings",
   "io.github.izakyl.folkways.front.engine.colony.ColonyFront",
   "io.github.izakyl.folkways.plugins.damagecontrol.DamageControlContent",
-  "io.github.izakyl.folkways.core.api.resident.body.Bodies",
+  "io.github.izakyl.folkways.core.resident.api.Bodies",
   "net.minecraft.core.BlockPos",
   "net.minecraft.world.level.block.Blocks",
   "net.minecraft.world.item.ItemStack",
@@ -75,7 +75,7 @@ for (var raw : a.list("residents")) {
     body.pack().insert(new ItemStack(Items.OAK_PLANKS, 64));
     body.pack().insert(new ItemStack(Items.COOKED_BEEF, 16));
     var trade = body.licences().trade(DamageControlContent.trade()).orElseThrow();
-    body.licences().setKeenness(trade, io.github.izakyl.folkways.core.api.resident.body.Keenness.FIRST);
+    body.licences().setKeenness(trade, io.github.izakyl.folkways.core.vocation.api.Keenness.FIRST);
 }
 return Map.of("extinguisherWater", FireExtinguisherItem.CAPACITY, "hydrantWater", cabinet.getFluid().getAmount(),
     "nozzle", "Finite cone nozzle stored in barrel until the hose phase; no forced session or spray",
@@ -264,7 +264,7 @@ for (var raw : a.list("residents")) {
     var body = Bodies.of(level.getEntity(UUID.fromString(raw.toString()))).orElseThrow();
     boolean respond = phase.equals("repair") || (phase.equals("extinguisher") ? index == 0 : index == 1);
     index++;
-    for (var vocation : io.github.izakyl.folkways.core.api.vocation.Vocations.all()) {
+    for (var vocation : io.github.izakyl.folkways.core.vocation.api.Vocations.all()) {
         body.licences().trade(vocation).ifPresent(trade -> body.licences().allow(trade,
             respond && (vocation.id().equals(DamageControlContent.ID)
                 || phase.equals("repair") && vocation.id().getPath().equals("building"))));
@@ -416,7 +416,7 @@ var responses = presence.getClass().getDeclaredField("responding");
 responses.setAccessible(true);
 var targets = new ArrayList<Object>();
 for (var entry : ((Map<?, ?>) responses.get(presence)).entrySet()) {
-    var node = (io.github.izakyl.folkways.core.api.work.Node) entry.getValue();
+    var node = (io.github.izakyl.folkways.core.work.api.Node) entry.getValue();
     var body = Bodies.of(ctx.server().overworld().getEntity((UUID) entry.getKey())).orElseThrow();
     var status = new LinkedHashMap<String, Object>();
     status.put("worker", entry.getKey().toString());

@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.modulargolems;
 
-import io.github.izakyl.folkways.core.api.Declaring;
+import io.github.izakyl.folkways.core.extension.api.Declaring;
 import io.github.izakyl.folkways.front.api.Registering;
 import io.github.izakyl.folkways.modulargolems.domain.GolemContent;
 import io.github.izakyl.folkways.modulargolems.resident.GolemKinds;

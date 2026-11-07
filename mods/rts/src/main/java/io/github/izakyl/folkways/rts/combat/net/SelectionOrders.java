@@ -1,21 +1,21 @@
 package io.github.izakyl.folkways.rts.combat.net;
 
-import io.github.izakyl.folkways.plugins.combat.WeaponStations;
-import io.github.izakyl.folkways.plugins.combat.weapon.ResidentMounts;
-import io.github.izakyl.folkways.core.api.colony.Books;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.resident.body.Bodies;
-import io.github.izakyl.folkways.core.api.resident.body.Body;
-import io.github.izakyl.folkways.core.api.terms.Footing;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.resident.api.Bodies;
+import io.github.izakyl.folkways.core.resident.api.Body;
+import io.github.izakyl.folkways.core.world.api.Footing;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
+import io.github.izakyl.folkways.core.world.api.WorldSpaces;
+import io.github.izakyl.folkways.front.api.Books;
 import io.github.izakyl.folkways.front.api.ui.Pages;
 import io.github.izakyl.folkways.front.engine.charter.CurrentColony;
 import io.github.izakyl.folkways.plugins.combat.Threats;
+import io.github.izakyl.folkways.plugins.combat.WeaponStations;
+import io.github.izakyl.folkways.plugins.combat.weapon.ResidentMounts;
+import io.github.izakyl.folkways.plugins.person.PersonBody;
 import io.github.izakyl.folkways.rts.combat.control.CombatSelectionOwnership;
 import io.github.izakyl.folkways.rts.combat.group.UnitGroup;
 import io.github.izakyl.folkways.rts.combat.group.UnitGroups;
-import io.github.izakyl.folkways.plugins.person.PersonBody;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
@@ -52,18 +52,8 @@ public final class SelectionOrders {
         return CurrentColony.of(player).filter(colony -> colony.id().equals(expected));
     }
 
-    public static boolean submit(
-        ServerPlayer player, UUID colonyId, List<UUID> residents, List<WorldPos> points, boolean patrol) {
-        return submit(player, colonyId, residents, points, patrol ? 0 : -1);
-    }
-
     public static boolean validCycle(int count, int cycleStart) {
         return cycleStart == -1 ? count == 1 : cycleStart >= 0 && cycleStart < count - 1;
-    }
-
-    public static boolean submit(
-        ServerPlayer player, UUID colonyId, List<UUID> residents, List<WorldPos> points, int cycleStart) {
-        return submit(player, colonyId, residents, points, cycleStart, false);
     }
 
     public static boolean submit(
@@ -98,10 +88,6 @@ public final class SelectionOrders {
     }
 
     /** Each click commits one waypoint without restarting any already accepted part of the route. */
-    public static boolean append(ServerPlayer player, UUID colonyId, List<UUID> residents, WorldPos point) {
-        return append(player, colonyId, residents, point, false);
-    }
-
     public static boolean append(
         ServerPlayer player, UUID colonyId, List<UUID> residents, WorldPos point, boolean attackMove) {
         try {
@@ -223,7 +209,7 @@ public final class SelectionOrders {
                     && (!body.mob().isPassenger() || WeaponStations.ownsSeat(body.mob())
                         || ResidentMounts.riding(body.mob()))
                     && body.colonyId().filter(colony.id()::equals).isPresent()
-                    && colony.holdingOf(id).isPresent()
+                    && colony.claimOf(id).isPresent()
                     && WorldSpaces.at(body.mob()).sameRealm(WorldSpaces.at(player)));
     }
 

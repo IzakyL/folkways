@@ -3,36 +3,36 @@ package io.github.izakyl.folkways.cookery.seeds;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.tag.TagMod;
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.engine.inventory.InventoryObservations;
+import io.github.izakyl.folkways.core.colony.api.ClaimRelease;
+import io.github.izakyl.folkways.core.colony.api.Claimed;
+import io.github.izakyl.folkways.core.colony.api.Closing;
+import io.github.izakyl.folkways.core.colony.api.Colonies;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.inventory.internal.InventoryObservations;
+import io.github.izakyl.folkways.core.item.api.Goods;
+import io.github.izakyl.folkways.core.runtime.HoldingFixture;
 import io.github.izakyl.folkways.core.testing.TestWorker;
-import io.github.izakyl.folkways.plugins.compost.SeedBudget;
+import io.github.izakyl.folkways.core.work.api.Ending;
+import io.github.izakyl.folkways.core.work.api.Need;
+import io.github.izakyl.folkways.core.work.api.Node;
+import io.github.izakyl.folkways.core.work.api.NodeSpec;
+import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.work.api.WorkSite;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.work.api.Workload;
+import io.github.izakyl.folkways.core.work.internal.Commit;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.effect.Effects;
-import io.github.izakyl.folkways.core.api.colony.Closing;
-import io.github.izakyl.folkways.core.api.colony.Colonies;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.colony.Held;
-import io.github.izakyl.folkways.core.api.colony.Release;
-import io.github.izakyl.folkways.core.api.terms.Goods;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.work.Ending;
-import io.github.izakyl.folkways.core.api.work.Need;
-import io.github.izakyl.folkways.core.api.work.Node;
-import io.github.izakyl.folkways.core.api.work.NodeSpec;
-import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.WorkSite;
-import io.github.izakyl.folkways.core.api.work.Worker;
-import io.github.izakyl.folkways.core.api.work.Workload;
-import io.github.izakyl.folkways.core.engine.labor.Commit;
 import io.github.izakyl.folkways.front.engine.colony.ColonyFront;
 import io.github.izakyl.folkways.front.engine.colony.ColonySettings;
+import io.github.izakyl.folkways.plugins.compost.SeedBudget;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import io.github.izakyl.folkways.plugins.person.PersonContent;
 import io.github.izakyl.folkways.plugins.person.ResidentEntity;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
@@ -75,7 +75,9 @@ public final class GrassSourcesGameTests {
                 rig.level.setBlock(ground.above(), Blocks.SHORT_GRASS.defaultBlockState(), Block.UPDATE_ALL);
                 Outcome.Done done = (Outcome.Done) GrassSources.gather(rig.level, rig.worker, ground.above(), rig.allowed);
                 modSeeds += done.made().stream().filter(stack -> stack.is(TagMod.COOKERY_MOD_SEEDS)).mapToInt(ItemStack::getCount).sum();
-                if (++harvested >= 128) break;
+                if (++harvested >= 128) {
+                    break;
+                }
             }
             helper.assertTrue(modSeeds > 0, "full native short-grass loot and GLM actually produce Cookery seeds");
             helper.assertTrue(rig.body.getItemBySlot(EquipmentSlot.HEAD).is(TagMod.STRAW_HAT)
@@ -152,7 +154,7 @@ public final class GrassSourcesGameTests {
             rig.presence.refresh(rig.level.getServer());
             Node old = rig.source();
             helper.assertTrue(old.planned(rig.level).isEmpty(), "the old source turn is planned");
-            rig.colony.release(zone, Release.LET_GO);
+            rig.colony.release(zone, ClaimRelease.LET_GO);
             rig.mark(false);
             rig.presence.refresh(rig.level.getServer());
             helper.assertTrue(Commit.run(rig.level, old, rig.worker) instanceof Outcome.Failed, "real unmarking rejects the old action after remarking");
@@ -209,18 +211,20 @@ public final class GrassSourcesGameTests {
                 try (Fixture rig = new Fixture(helper)) {
                     rig.mark(restore); rig.wearHat();
                     InventoryObservations.publish(rig.colony, rig.level);
-                    if (restore) rig.body.pack().setItem(1, new ItemStack(Items.BONE_MEAL));
+                    if (restore) {
+                        rig.body.pack().setItem(1, new ItemStack(Items.BONE_MEAL));
+                    }
                     else rig.level.setBlock(rig.center.above(), Blocks.SHORT_GRASS.defaultBlockState(), Block.UPDATE_ALL);
                     rig.presence.refresh(rig.level.getServer());
                     var submitted = new java.util.ArrayList<Node>();
                     var withdrawn = new java.util.ArrayList<UUID>();
-                    var colony = (io.github.izakyl.folkways.core.engine.colony.ColonyWorks) rig.colony;
-                    colony.listen(rig.level.dimension(), new io.github.izakyl.folkways.core.engine.colony.ColonyWorks.Listening() {
-                        public void submitted(net.minecraft.resources.ResourceLocation owner, io.github.izakyl.folkways.core.api.work.Grown work) { submitted.addAll(work.nodes()); }
+                    var colony = (io.github.izakyl.folkways.core.colony.internal.ColonyWorks) rig.colony;
+                    colony.listen(rig.level.dimension(), new io.github.izakyl.folkways.core.colony.api.WorkListener() {
+                        public void submitted(net.minecraft.resources.ResourceLocation owner, io.github.izakyl.folkways.core.plan.api.Grown work) { submitted.addAll(work.nodes()); }
                         public void withdrawn(net.minecraft.resources.ResourceLocation owner, UUID node) { withdrawn.add(node); }
                         public void offered() { }
                     });
-                    var asking = new io.github.izakyl.folkways.core.api.colony.Asking(rig.colony, SeedPresence.ID, () -> { });
+                    var asking = new io.github.izakyl.folkways.core.colony.api.Asking(rig.colony, SeedPresence.ID, () -> { });
                     var offered = rig.presence.goals(rig.colony.view(rig.level));
                     Node source = offered.getFirst().nodes().getFirst();
                     asking.offer(Map.of(rig.level.dimension(), offered));
@@ -257,7 +261,9 @@ public final class GrassSourcesGameTests {
             }
             helper.succeed();
         } finally {
-            if (forced) level.setChunkForced(travellingChunk.x, travellingChunk.z, false);
+            if (forced) {
+                level.setChunkForced(travellingChunk.x, travellingChunk.z, false);
+            }
         }
     }
 
@@ -324,14 +330,16 @@ public final class GrassSourcesGameTests {
                 level.setBlock(at, Blocks.GRASS_BLOCK.defaultBlockState(), Block.UPDATE_ALL);
                 level.setBlock(at.above(), Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
                 level.setBlock(at.above(2), Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
-                if (Math.abs(dx) <= 7 && Math.abs(dz) <= 7) allowed.add(at);
+                if (Math.abs(dx) <= 7 && Math.abs(dz) <= 7) {
+                    allowed.add(at);
+                }
             }
             colony = Colonies.mint(level.getServer());
             body = PersonBody.RESIDENT.get().create(level);
             body.setNoAi(true);
             body.setPos(center.getX() + 1.5, center.getY() + 1, center.getZ() + 0.5);
             level.addFreshEntity(body);
-            colony.hold(PersonContent.ID, Held.Entity.of(body)).orElseThrow();
+            colony.hold(PersonContent.ID, Claimed.Entity.of(body)).orElseThrow();
             body.joinColony(colony.id());
             colony.entered(body);
             SeedBudget budget = new SeedBudget(() -> new SeedBudget.Snapshot(List.of(new SeedBudget.Stock("real source pack",
@@ -362,26 +370,32 @@ public final class GrassSourcesGameTests {
             };
         }
         void finish(Node node) {
-            if (node.spec().workload() instanceof Workload.Within within) {
-                boolean complete = false;
-                for (int step = 0; step < 16; step++) {
-                    InventoryObservations.publish(colony, level);
-                    var turn = within.next(level, worker);
-                    if (turn instanceof Workload.Within.Turn.Leave) {
-                        complete = true;
-                        break;
-                    }
-                    if (!(turn instanceof Workload.Within.Turn.Piece piece)) throw new AssertionError("the arrived real source makes progress: " + turn);
-                    if (piece.node().planned(level).isPresent()) throw new AssertionError("the retained action can be planned");
-                    finish(piece.node());
-                    within.ended(level, piece.node(), Ending.DONE);
+            HoldingFixture holding = new HoldingFixture(level, node, worker).walking();
+            for (int step = 0; step < 16; step++) {
+                InventoryObservations.publish(colony, level);
+                if (holding.finished()) {
+                    node.released(level, worker, Ending.DONE);
+                    node.ended(level, Ending.DONE);
+                    return;
                 }
-                if (!complete) throw new AssertionError("the retained decorated source must finish its native action and returns");
+                Outcome result = holding.step();
+                if (!(result instanceof Outcome.Done done)) {
+                    throw new AssertionError("the adopted source holding makes progress: " + result);
+                }
+                for (ItemStack made : done.made()) {
+                    if (!io.github.izakyl.folkways.core.item.api.Containers.insert(body.pack(), made).isEmpty()) {
+                        throw new AssertionError("native seed output fits real cargo");
+                    }
+                }
             }
             Outcome result = Commit.run(level, node, worker);
-            if (!(result instanceof Outcome.Done done)) throw new AssertionError("the original adopted source commits after arrival: " + result);
+            if (!(result instanceof Outcome.Done done)) {
+                throw new AssertionError("the original adopted source commits after arrival: " + result);
+            }
             for (ItemStack made : done.made()) {
-                if (!io.github.izakyl.folkways.core.api.terms.Containers.insert(body.pack(), made).isEmpty()) throw new AssertionError("native seed output fits real cargo");
+                if (!io.github.izakyl.folkways.core.item.api.Containers.insert(body.pack(), made).isEmpty()) {
+                    throw new AssertionError("native seed output fits real cargo");
+                }
             }
             node.released(level, worker, Ending.DONE);
             node.ended(level, Ending.DONE);

@@ -4,7 +4,7 @@ import com.github.ysbbbbbb.kaleidoscopecookery.blockentity.decoration.TableBlock
 import com.github.ysbbbbbb.kaleidoscopecookery.entity.SitEntity;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks;
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.terms.Containers;
+import io.github.izakyl.folkways.core.item.api.Containers;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import io.github.izakyl.folkways.plugins.person.ResidentEntity;
 import io.github.izakyl.folkways.plugins.person.living.DiningTables;

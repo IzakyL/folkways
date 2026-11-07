@@ -1,10 +1,10 @@
 package io.github.izakyl.folkways.plugins.build;
 
-import io.github.izakyl.folkways.core.api.structure.StructureCompat;
-import io.github.izakyl.folkways.core.api.structure.StructurePayload;
-import io.github.izakyl.folkways.core.api.terms.Goods;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
-import io.github.izakyl.folkways.core.api.work.Need;
+import io.github.izakyl.folkways.core.item.api.Goods;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
+import io.github.izakyl.folkways.core.work.api.Need;
+import io.github.izakyl.folkways.core.work.api.StructureCompat;
+import io.github.izakyl.folkways.core.world.api.StructurePayload;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -322,11 +322,15 @@ public final class SchematicPlacement {
         }
         CompoundTag prepared = adapter.prepare(level, state, stored);
         if (StructureCompat.of(state).isPresent()) {
-            if (prepared == null) throw StructureCompat.invalid();
+            if (prepared == null) {
+                throw StructureCompat.invalid();
+            }
             return BlockData.of(prepared).entity(level, pos, state);
         }
         BlockEntity fresh = BlockData.EMPTY.entity(level, pos, state);
-        if (fresh != null && prepared != null) fresh.loadWithComponents(prepared, level.registryAccess());
+        if (fresh != null && prepared != null) {
+            fresh.loadWithComponents(prepared, level.registryAccess());
+        }
         return fresh;
     }
 

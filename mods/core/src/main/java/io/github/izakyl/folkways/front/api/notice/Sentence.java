@@ -1,7 +1,7 @@
 package io.github.izakyl.folkways.front.api.notice;
 
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.work.Doing;
+import io.github.izakyl.folkways.core.resident.api.Doing;
 import io.netty.handler.codec.DecoderException;
 import java.util.ArrayList;
 import java.util.List;

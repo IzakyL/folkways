@@ -1,11 +1,16 @@
 package io.github.izakyl.folkways.front.engine.colony;
 
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.engine.labor.LaborSnapshot;
-import io.github.izakyl.folkways.core.engine.labor.LaborIncident;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.plan.internal.Claim;
+import io.github.izakyl.folkways.core.plan.internal.Resource;
+import io.github.izakyl.folkways.core.runtime.LaborSnapshot;
+import io.github.izakyl.folkways.core.work.api.ReservedInput;
+import io.github.izakyl.folkways.core.work.internal.LaborIncident;
 import io.github.izakyl.folkways.front.api.ui.Pages;
 import io.github.izakyl.folkways.front.engine.charter.Charters;
 import java.util.HashMap;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -28,10 +33,13 @@ public final class LaborDebug {
         long next;
         final IncidentFeed incidents = new IncidentFeed();
 
-        Watch(UUID colony) { this.colony = colony; }
+        Watch(UUID colony) {
+            this.colony = colony;
+        }
     }
 
-    private LaborDebug() { }
+    private LaborDebug() {
+    }
 
     public static void install() {
         NeoForge.EVENT_BUS.addListener(LaborDebug::tick);
@@ -50,7 +58,9 @@ public final class LaborDebug {
     }
 
     public static void set(Player player, boolean on) {
-        if (!(player instanceof ServerPlayer reader)) return;
+        if (!(player instanceof ServerPlayer reader)) {
+            return;
+        }
         if (!on) {
             if (WATCHING.remove(reader.getUUID()) != null) {
                 subscriptions();
@@ -69,7 +79,9 @@ public final class LaborDebug {
     }
 
     private static void forget(UUID player) {
-        if (WATCHING.remove(player) != null) subscriptions();
+        if (WATCHING.remove(player) != null) {
+            subscriptions();
+        }
     }
 
     private static void subscriptions() {
@@ -77,22 +89,30 @@ public final class LaborDebug {
     }
 
     private static void tick(ServerTickEvent.Post event) {
-        if (WATCHING.isEmpty()) return;
+        if (WATCHING.isEmpty()) {
+            return;
+        }
         var server = event.getServer();
         long now = server.getTickCount();
         if (WATCHING.entrySet().removeIf(entry -> {
             ServerPlayer reader = server.getPlayerList().getPlayer(entry.getKey());
             Colony colony = ColonyGround.of(server, entry.getValue().colony).orElse(null);
-            if (reader == null || colony == null || !Charters.member(server, colony, reader.getUUID())) return true;
+            if (reader == null || colony == null || !Charters.member(server, colony, reader.getUUID())) {
+                return true;
+            }
             Watch watch = entry.getValue();
             watch.incidents.flush(now, (message, count) -> sendIncident(reader, message, count));
-            if (now < watch.next) return false;
+            if (now < watch.next) {
+                return false;
+            }
             watch.next = now + INTERVAL;
             LaborSnapshot.of(reader.serverLevel(), colony.id()).ifPresentOrElse(snapshot -> report(reader, snapshot),
                 () -> reader.sendSystemMessage(Component.translatable("folkways.debug.waiting",
                     reader.serverLevel().dimension().location().toString())));
             return false;
-        })) subscriptions();
+        })) {
+            subscriptions();
+        }
     }
 
     private static void incident(LaborIncident event) {
@@ -100,12 +120,18 @@ public final class LaborDebug {
         boolean logged = false;
         for (var entry : WATCHING.entrySet()) {
             Watch watch = entry.getValue();
-            if (!watch.colony.equals(event.colony())) continue;
+            if (!watch.colony.equals(event.colony())) {
+                continue;
+            }
             var server = net.neoforged.neoforge.server.ServerLifecycleHooks.getCurrentServer();
-            if (server == null) return;
+            if (server == null) {
+                return;
+            }
             ServerPlayer reader = server.getPlayerList().getPlayer(entry.getKey());
             Colony colony = ColonyGround.of(server, watch.colony).orElse(null);
-            if (reader == null || colony == null || !Charters.member(server, colony, reader.getUUID())) continue;
+            if (reader == null || colony == null || !Charters.member(server, colony, reader.getUUID())) {
+                continue;
+            }
             if (!logged) {
                 org.slf4j.LoggerFactory.getLogger("folkways-debug").info("incident colony={} key={} {}",
                     event.colony(), event.key(), event.message().getString());
@@ -134,6 +160,67 @@ public final class LaborDebug {
         if (!snapshot.examples().isEmpty()) {
             reader.sendSystemMessage(Component.translatable("folkways.debug.examples", String.join("; ", snapshot.examples())));
         }
+        for (LaborSnapshot.Suspended suspended : snapshot.suspended()) {
+            reader.sendSystemMessage(suspendedLine(suspended));
+        }
+    }
+
+    private static Component suspendedLine(LaborSnapshot.Suspended suspended) {
+        var work = suspended.work();
+        Component reason = Component.translatable("folkways.debug.suspended.reason."
+            + work.reason().name().toLowerCase(Locale.ROOT));
+        return Component.translatable("folkways.debug.suspended", work.node().toString(), work.owner().toString(),
+            work.lastResident().toString(), work.sinceTick(), reason, reservations(suspended));
+    }
+
+    private static Component reservations(LaborSnapshot.Suspended suspended) {
+        if (suspended.claims().isEmpty()) {
+            return inputs(suspended.inputs());
+        }
+        var result = Component.empty();
+        for (Claim claim : suspended.claims()) {
+            if (!result.getSiblings().isEmpty()) {
+                result.append(", ");
+            }
+            Component entry = switch (claim.on()) {
+                case Resource.Transport(var resource, var unit) -> Component.translatable(
+                    "folkways.debug.suspended.claim.transport", resource.toString(), claim.amount(), unit.toString());
+                case Resource.Lot(var stash, var goods) -> Component.translatable("folkways.debug.suspended.claim.lot",
+                    goods.describe(), claim.amount(), stash.toString());
+                case Resource.Space(var stash, var goods) -> Component.translatable("folkways.debug.suspended.claim.space",
+                    goods.describe(), claim.amount(), stash.toString());
+                case Resource.Cargo(var resident, var goods) -> Component.translatable("folkways.debug.suspended.claim.cargo",
+                    goods.describe(), claim.amount(), resident.toString());
+                case Resource.Handed(var producer, var goods) -> Component.translatable("folkways.debug.suspended.claim.handed",
+                    goods.describe(), claim.amount(), producer.toString());
+            };
+            result.append(entry);
+        }
+        return result;
+    }
+
+    private static Component inputs(List<ReservedInput> inputs) {
+        if (inputs.isEmpty()) {
+            return Component.translatable("folkways.debug.suspended.inputs.none");
+        }
+        var result = Component.empty();
+        for (ReservedInput input : inputs) {
+            if (!result.getSiblings().isEmpty()) {
+                result.append(", ");
+            }
+            Component location = input.store()
+                .<Component>map(store -> Component.translatable("folkways.debug.suspended.inputs.store", store.toString()))
+                .orElseGet(() -> input.resident()
+                    .<Component>map(resident -> Component.translatable("folkways.debug.suspended.inputs.resident",
+                        resident.toString()))
+                    .orElseGet(() -> input.producer()
+                        .<Component>map(producer -> Component.translatable("folkways.debug.suspended.inputs.pending",
+                            producer.toString()))
+                        .orElseGet(() -> Component.translatable("folkways.debug.suspended.inputs.unlocated"))));
+            result.append(Component.translatable("folkways.debug.suspended.input", input.goods().describe(),
+                input.count(), location));
+        }
+        return result;
     }
 
     private static String summary(Map<String, ? extends Number> counts) {

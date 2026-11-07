@@ -116,7 +116,7 @@ const PREPARE = defineTask<Scene, boolean>({
   side: "server",
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.core.api.colony.Colonies",
+      "io.github.izakyl.folkways.core.colony.api.Colonies",
       "io.github.izakyl.folkways.front.api.Facing",
       "io.github.izakyl.folkways.front.engine.colony.ColonySettings",
       "io.github.izakyl.folkways.front.engine.colony.ZoneDrafts",

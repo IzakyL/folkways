@@ -1,27 +1,24 @@
 package io.github.izakyl.folkways.rts.combat.command;
 
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.colony.Colonies;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.colony.Held;
-import io.github.izakyl.folkways.core.api.resident.body.Body;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
+import io.github.izakyl.folkways.core.colony.api.Claimed;
+import io.github.izakyl.folkways.core.colony.api.Colonies;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
+import io.github.izakyl.folkways.core.resident.api.Body;
+import io.github.izakyl.folkways.core.runtime.LaborFixture;
 import io.github.izakyl.folkways.core.testing.Cleanup;
 import io.github.izakyl.folkways.core.testing.TestWorker;
-import io.github.izakyl.folkways.plugins.combat.WeaponStations;
-import io.github.izakyl.folkways.plugins.combat.SpottedTargets;
-import io.github.izakyl.folkways.core.api.terms.Reach;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.work.Urge;
-import io.github.izakyl.folkways.core.api.work.Worker;
-import io.github.izakyl.folkways.core.engine.labor.LaborFixture;
-import io.github.izakyl.folkways.effect.Effects;
+import io.github.izakyl.folkways.core.work.api.Urge;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.world.api.Reach;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.front.engine.colony.ColonyFront;
 import io.github.izakyl.folkways.front.engine.colony.ColonySettings;
 import io.github.izakyl.folkways.plugins.combat.SpottedTargets;
 import io.github.izakyl.folkways.plugins.combat.WeaponStations;
 import io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfile;
-import io.github.izakyl.folkways.plugins.combat.weapon.LoadoutRegistry;
+import io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfiles;
 import io.github.izakyl.folkways.plugins.combat.weapon.PatrolSupplies;
 import io.github.izakyl.folkways.plugins.combat.weapon.WeaponSession;
 import io.github.izakyl.folkways.plugins.combat.weapon.Weapons;
@@ -34,7 +31,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -43,6 +39,7 @@ import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.tags.ItemTags;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EquipmentSlot;
@@ -54,13 +51,10 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.common.Tags;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
-import io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfile;
-import io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfiles;
-import java.util.Optional;
-import net.neoforged.neoforge.common.Tags;
 
 @EventBusSubscriber(modid = FolkwaysRtsMod.MOD_ID, bus = EventBusSubscriber.Bus.MOD)
 @GameTestHolder(FolkwaysMod.MOD_ID)
@@ -72,7 +66,7 @@ public final class ResidentCommandGameTests {
     }
 
     @GameTest(batch = "rts_command_handoff", template = "empty_large", timeoutTicks = 800)
-    public static void ordersInterruptWorkKeepCargoAndToolsAndResumeTheLatestPlan(GameTestHelper helper) {
+    public static void ordersEndWorkKeepCargoAndToolsAndReplanTheLatestWork(GameTestHelper helper) {
         Fixture f = new Fixture(helper);
         Body body = f.resident(new BlockPos(2, 1, 2));
         body.pack().insert(new ItemStack(Items.IRON_INGOT, 8));
@@ -115,7 +109,7 @@ public final class ResidentCommandGameTests {
                 order.get().close();
             })
             .thenWaitUntil(
-            () -> helper.assertTrue(replacement.working.get(), "release resumes the latest work plan"))
+            () -> helper.assertTrue(replacement.working.get(), "release lets normal planning assign the latest work"))
             .thenExecute(
             () -> {
                 helper.assertValueEqual(
@@ -686,7 +680,7 @@ public final class ResidentCommandGameTests {
             BlockPos absolute = helper.absolutePos(at);
             body.mob().moveTo(absolute.getX() + .5, absolute.getY(), absolute.getZ() + .5);
             level.addFreshEntity(body.mob());
-            colony.hold(PersonContent.ID, Held.Entity.of(body.mob())).orElseThrow();
+            colony.hold(PersonContent.ID, Claimed.Entity.of(body.mob())).orElseThrow();
             body.joinColony(colony.id());
             arm(colony, body, "Melee", ItemSpec.of(Tags.Items.MELEE_WEAPON_TOOLS));
             bodies.add(body);
@@ -708,6 +702,33 @@ public final class ResidentCommandGameTests {
             .filter(one -> one.name().equals(name))
             .findFirst()
             .orElseGet(() -> profiles.add(profiles.create(name).id(), LoadoutProfile.Entry.weapon(weapon)));
+        profiles.assign(List.of(body.id()), Optional.of(profile.id()));
+    }
+
+    private static void assignLoadout(
+        PatrolSupplies supplies,
+        Body body, String name) {
+        var profiles = supplies.profiles();
+        var profile = profiles.all().stream().filter(value -> value.name().equals(name)).findFirst()
+            .orElseGet(() -> {
+                var created = profiles.create(name);
+                var weapon = switch (name) {
+                    case "melee" -> ItemSpec.of(
+                        Tags.Items.MELEE_WEAPON_TOOLS);
+                    case "bow" -> ItemSpec.of(Items.BOW);
+                    case "crossbow" -> ItemSpec.of(Items.CROSSBOW);
+                    default -> throw new IllegalArgumentException(name);
+                };
+                var entries = new ArrayList<LoadoutProfile.Entry>();
+                entries.add(LoadoutProfile.Entry.weapon(weapon));
+                if (!name.equals("melee")) {
+                    entries.add(LoadoutProfile.Entry.supply(
+                        ItemSpec.of(ItemTags.ARROWS), 8, 8));
+                }
+                profiles.replace(new LoadoutProfile(
+                    created.id(), created.name(), entries));
+                return profiles.get(created.id()).orElseThrow();
+            });
         profiles.assign(List.of(body.id()), Optional.of(profile.id()));
     }
 }

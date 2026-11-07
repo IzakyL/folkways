@@ -3,9 +3,9 @@ package io.github.izakyl.folkways.carts;
 import com.jusipat.astikorcartsredux.entity.AbstractCargoCart;
 import com.jusipat.astikorcartsredux.entity.HandCartEntity;
 import com.jusipat.astikorcartsredux.entity.SupplyCartEntity;
-import io.github.izakyl.folkways.core.api.colony.Colonies;
-import io.github.izakyl.folkways.core.api.resident.Locomotions;
-import io.github.izakyl.folkways.core.api.resident.body.Bodies;
+import io.github.izakyl.folkways.core.colony.api.Colonies;
+import io.github.izakyl.folkways.core.resident.api.Bodies;
+import io.github.izakyl.folkways.core.resident.api.Locomotions;
 import java.lang.ref.WeakReference;
 import java.util.Map;
 import java.util.Optional;
@@ -59,7 +59,7 @@ public final class CartLinks {
         if (puller instanceof Mob mob && Bodies.of(mob).isPresent()) {
             boolean admitted = cart.level() instanceof ServerLevel level && Bodies.of(mob)
                 .flatMap(body -> body.colonyId()).flatMap(id -> Colonies.of(level.getServer(), id))
-                .flatMap(colony -> colony.holdingOf(cart.getUUID()))
+                .flatMap(colony -> colony.claimOf(cart.getUUID()))
                 .filter(holding -> holding.owner().equals(FolkwaysCartsMod.OWNER)).isPresent();
             if (!admitted || !residentDrawn(cart) || !residentPuller(mob)
                     || pulling(mob).filter(other -> other != cart).isPresent()) {

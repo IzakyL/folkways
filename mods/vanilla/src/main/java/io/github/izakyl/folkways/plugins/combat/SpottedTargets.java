@@ -1,7 +1,7 @@
 package io.github.izakyl.folkways.plugins.combat;
 
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.resident.body.Bodies;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.resident.api.Bodies;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
 import io.github.izakyl.folkways.plugins.combat.weapon.ObservationGear;
 import io.github.izakyl.folkways.plugins.patrol.PatrolContent;
@@ -111,7 +111,7 @@ public final class SpottedTargets {
 
     private boolean member(Mob observer) {
         return Bodies.of(observer).flatMap(body -> body.colonyId()).filter(colony.id()::equals).isPresent()
-            && colony.holdingOf(observer.getUUID()).isPresent();
+            && colony.claimOf(observer.getUUID()).isPresent();
     }
 
     public List<Mob> observe(Mob observer) {

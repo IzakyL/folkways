@@ -2,7 +2,7 @@ package io.github.izakyl.folkways.create.transport;
 
 import com.simibubi.create.content.contraptions.AbstractContraptionEntity;
 import com.simibubi.create.content.contraptions.Contraption;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;

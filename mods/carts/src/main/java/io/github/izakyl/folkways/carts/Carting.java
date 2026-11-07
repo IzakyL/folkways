@@ -1,11 +1,11 @@
 package io.github.izakyl.folkways.carts;
 
 import com.jusipat.astikorcartsredux.entity.AbstractCargoCart;
-import io.github.izakyl.folkways.core.api.resident.Conveyance;
-import io.github.izakyl.folkways.core.api.resident.Locomotion;
-import io.github.izakyl.folkways.core.api.resident.MobControls;
-import io.github.izakyl.folkways.core.api.resident.Search;
-import io.github.izakyl.folkways.core.api.terms.RefusalKind;
+import io.github.izakyl.folkways.core.resident.api.Conveyance;
+import io.github.izakyl.folkways.core.resident.api.Locomotion;
+import io.github.izakyl.folkways.core.resident.api.MobControls;
+import io.github.izakyl.folkways.core.resident.api.RefusalKind;
+import io.github.izakyl.folkways.core.resident.api.Search;
 import io.github.izakyl.folkways.plugins.person.walk.OnFoot;
 import io.github.izakyl.folkways.plugins.person.walk.ResidentMoveControl;
 import io.github.izakyl.folkways.plugins.person.walk.ResidentNodeEvaluator;

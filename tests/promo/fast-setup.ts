@@ -50,7 +50,7 @@ const MAINTAIN_DEMANDS = defineTask<Record<string, any>, Record<string, any>>({
   timeoutMs: 20_000,
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.core.api.terms.ItemFilter",
+      "io.github.izakyl.folkways.core.item.api.ItemFilter",
       "io.github.izakyl.folkways.plugins.orders.OrdersContent",
       "io.github.izakyl.folkways.front.engine.colony.ColonyBoards",
       "io.github.izakyl.folkways.front.engine.colony.ColonyFront",
@@ -116,8 +116,8 @@ const LICENSE_CREW = defineTask<Record<string, any>, Record<string, any>>({
   timeoutMs: 20_000,
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.core.api.resident.body.Bodies",
-      "io.github.izakyl.folkways.core.api.vocation.Vocations",
+      "io.github.izakyl.folkways.core.resident.api.Bodies",
+      "io.github.izakyl.folkways.core.vocation.api.Vocations",
       "java.util.ArrayList",
       "java.util.List",
       "java.util.Map",

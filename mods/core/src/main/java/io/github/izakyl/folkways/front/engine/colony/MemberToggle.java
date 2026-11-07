@@ -1,11 +1,11 @@
 package io.github.izakyl.folkways.front.engine.colony;
 
-import io.github.izakyl.folkways.core.api.colony.Colonies;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.colony.ColonyView;
-import io.github.izakyl.folkways.core.api.colony.Held;
-import io.github.izakyl.folkways.core.api.colony.Release;
-import io.github.izakyl.folkways.core.api.terms.RefusalKind;
+import io.github.izakyl.folkways.core.colony.api.ClaimRelease;
+import io.github.izakyl.folkways.core.colony.api.Claimed;
+import io.github.izakyl.folkways.core.colony.api.Colonies;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.colony.api.ColonyView;
+import io.github.izakyl.folkways.core.resident.api.RefusalKind;
 import io.github.izakyl.folkways.front.api.Delegation;
 import io.github.izakyl.folkways.front.api.Facing;
 import io.github.izakyl.folkways.front.api.Shape;
@@ -57,21 +57,22 @@ public final class MemberToggle {
         var delegation = Enrollments.delegations().stream()
             .filter(value -> value.shape() instanceof Shape.Body body && body.accepts().test(entity.getType()))
             .findFirst();
+        var held = colony.claimOf(entity.getUUID());
+        if (held.isPresent()) {
+            colony.release(held.get().id(), ClaimRelease.LET_GO);
+            player.displayClientMessage(delegation.map(value -> ((Shape.Body) value.shape()).withdrawn())
+                .orElseGet(() -> Notice.of(Moved.LEFT).component()), true);
+            return Attempt.went();
+        }
+        if (Colonies.all(player.getServer()).stream()
+            .anyMatch(other -> other.claimOf(entity.getUUID()).isPresent())) {
+            return told(player, Attempt.refused(Refusal.ANOTHER_COLONY));
+        }
         if (delegation.isEmpty()) {
             return told(player, Attempt.refused(Refusal.NOT_ENROLLABLE));
         }
         Shape.Body shape = (Shape.Body) delegation.get().shape();
-        var held = colony.holdingOf(entity.getUUID());
-        if (held.isPresent()) {
-            colony.release(held.get().id(), Release.LET_GO);
-            player.displayClientMessage(shape.withdrawn(), true);
-            return Attempt.went();
-        }
-        if (Colonies.all(player.getServer()).stream()
-            .anyMatch(other -> other.holdingOf(entity.getUUID()).isPresent())) {
-            return told(player, Attempt.refused(Refusal.ANOTHER_COLONY));
-        }
-        if (colony.hold(delegation.get().id(), Held.Entity.of(entity)).isEmpty()) {
+        if (colony.hold(delegation.get().id(), Claimed.Entity.of(entity)).isEmpty()) {
             return told(player, Attempt.refused(Refusal.ANOTHER_COLONY));
         }
         player.displayClientMessage(shape.admitted(), true);

@@ -94,8 +94,8 @@ const IMPORTS = [
   "net.minecraft.world.item.ItemStack", "net.minecraft.world.item.Items", "net.minecraft.world.level.block.Blocks",
   "com.atsuishio.superbwarfare.data.gun.GunData",
   "com.tacz.guns.api.item.IGun", "com.tacz.guns.api.item.IAmmo", "com.tacz.guns.api.item.gun.FireMode",
-  "com.tacz.guns.init.ModItems", "io.github.izakyl.folkways.core.api.colony.Colonies",
-  "io.github.izakyl.folkways.core.api.colony.Held", "io.github.izakyl.folkways.core.api.terms.WorldPos",
+  "com.tacz.guns.init.ModItems", "io.github.izakyl.folkways.core.colony.api.Colonies",
+  "io.github.izakyl.folkways.core.colony.api.Claimed", "io.github.izakyl.folkways.core.world.api.WorldPos",
   "io.github.izakyl.folkways.plugins.person.PersonBody", "io.github.izakyl.folkways.plugins.person.PersonContent",
   "io.github.izakyl.folkways.plugins.person.ResidentEntity",
   "io.github.izakyl.folkways.plugins.person.look.ResidentLooks",
@@ -139,7 +139,7 @@ for (int n = 0; n < weapons.length; n++) {
     body.moveTo(origin.getX() + .5, origin.getY(), origin.getZ() + n * 12 + .5);
     body.setLookId(ResourceKey.create(ResidentLooks.REGISTRY, ResourceLocation.parse("folkways:test_skin_fallback")));
     level.addFreshEntity(body);
-    colony.hold(PersonContent.ID, Held.Entity.of(body)).orElseThrow();
+    colony.hold(PersonContent.ID, Claimed.Entity.of(body)).orElseThrow();
     body.joinColony(colony.id());
     ItemStack gun;
     ItemStack ammo;
@@ -191,7 +191,7 @@ for (var entity : level.getAllEntities()) {
             cells.add(WorldPos.of(level, body.blockPosition().below().offset(x, 0, z)));
         }
     }
-    var zone = colony.hold(SentryPosts.ZONE, new Held.Area(cells)).orElseThrow();
+    var zone = colony.hold(SentryPosts.ZONE, new Claimed.Area(cells)).orElseThrow();
     var staffing = PatrolStaffing.of(colony);
     staffing.configure(level, zone.id(), Set.of(profile.id()), 1);
     if (!staffing.members(zone.id()).equals(List.of(body.id()))) {

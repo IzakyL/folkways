@@ -1,7 +1,7 @@
 package io.github.izakyl.folkways.plugins.wares;
 
-import io.github.izakyl.folkways.core.api.terms.IngredientSpecs;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
+import io.github.izakyl.folkways.core.item.api.IngredientSpecs;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;

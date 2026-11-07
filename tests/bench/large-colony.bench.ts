@@ -251,8 +251,9 @@ test(`large colony: ${SCALE.residents} residents in a town on real terrain (refl
     const trains: Array<{ line: Line; rail: RailResult; first: Stop }> = [];
     if (net && net.lines.length) {
       report.setup.rail = { enabled: true, centre: net.centre, lines: [], refused: net.refused };
+      await runColonyTask(server, SELECT_TOWN, { player: playerName, colony: COLONY_ID });
       await tryCommand(server,
-        `item replace entity ${playerName} inventory.0 with folkways:colony_book[folkways:colony_id=${uuidToSnbt(COLONY_ID)}] 1`);
+        `item replace entity ${playerName} inventory.0 with folkways:colony_book 1`);
       for (const [index, line] of net.lines.entries()) {
         const haltBy = (stop: Stop) => {
           const halt = line.halts.find((h) => h.stop === stop.name)!.halt.box;
@@ -631,6 +632,23 @@ function stationViews(layout: Layout): Shot[] {
   }
   return shots;
 }
+
+const SELECT_TOWN = defineTask<{ player: string; colony: string }, boolean>({
+  name: "folkways.bench.select-town", side: "server",
+  source: javaTask({ imports: [
+    "io.github.izakyl.folkways.core.colony.api.Colonies",
+    "io.github.izakyl.folkways.front.engine.charter.Charters",
+    "io.github.izakyl.folkways.front.engine.charter.CurrentColony",
+  ], body: `
+var args = Args.of(ctx);
+var server = ctx.server();
+var player = server.getPlayerList().getPlayerByName(args.string("player"));
+var colony = Colonies.of(server, UUID.fromString(args.string("colony"))).orElseThrow();
+Charters.keep(colony, Charters.of(server, colony).foundedBy(player.getUUID()));
+CurrentColony.choose(player, colony);
+return true;
+` }),
+});
 
 async function forceReloadColony(server: MinecraftServer, playerUuid: string) {
   try {

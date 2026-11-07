@@ -3,23 +3,23 @@ package io.github.izakyl.folkways.plugins.damagecontrol;
 import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.base.persist.Reader;
 import io.github.izakyl.folkways.base.persist.Writer;
-import io.github.izakyl.folkways.core.api.colony.Colonies;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.colony.Held;
-import io.github.izakyl.folkways.core.api.resident.body.Bodies;
-import io.github.izakyl.folkways.core.api.resident.body.Keenness;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.work.Ending;
-import io.github.izakyl.folkways.core.api.work.Node;
-import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.WorkSite;
-import io.github.izakyl.folkways.core.api.work.Worker;
-import io.github.izakyl.folkways.core.api.work.Workload;
-import io.github.izakyl.folkways.core.engine.labor.Commit;
-import io.github.izakyl.folkways.core.shell.structure.StructureSnapshots;
+import io.github.izakyl.folkways.core.colony.api.Claimed;
+import io.github.izakyl.folkways.core.colony.api.Colonies;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.resident.api.Bodies;
 import io.github.izakyl.folkways.core.testing.Proxies;
 import io.github.izakyl.folkways.core.testing.TestWorker;
+import io.github.izakyl.folkways.core.vocation.api.Keenness;
+import io.github.izakyl.folkways.core.work.api.Ending;
+import io.github.izakyl.folkways.core.work.api.Node;
+import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.work.api.WorkSite;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.work.api.Workload;
+import io.github.izakyl.folkways.core.work.internal.Commit;
+import io.github.izakyl.folkways.core.world.api.StructureSnapshots;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.effect.Effects;
 import io.github.izakyl.folkways.front.api.Settings;
 import io.github.izakyl.folkways.front.api.ZoneView;
@@ -79,6 +79,21 @@ public final class DamageControlGameTests {
     }
 
     @GameTest(template = "empty")
+    public static void snapshotPaletteRequiresSavedNamesAndProperties(GameTestHelper helper) {
+        var origin = WorldPos.of(helper.getLevel(), helper.absolutePos(BlockPos.ZERO));
+        var snapshot = new StructureSnapshots.Snapshot(origin, Map.of(BlockPos.ZERO,
+            Blocks.OAK_STAIRS.defaultBlockState()), 0);
+        CompoundTag saved = snapshot.save();
+        helper.assertTrue(StructureSnapshots.load(saved).isPresent(), "complete palette reads");
+        saved.getList("palette", Tag.TAG_COMPOUND).getCompound(0).remove("Properties");
+        helper.assertTrue(StructureSnapshots.load(saved).isEmpty(), "missing saved properties reject the snapshot");
+        saved = snapshot.save();
+        saved.getList("palette", Tag.TAG_COMPOUND).getCompound(0).remove("Name");
+        helper.assertTrue(StructureSnapshots.load(saved).isEmpty(), "missing saved Name rejects the snapshot");
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
     public static void toolStateIgnoresWorkersAssignedInAnotherDimension(GameTestHelper helper)
         throws ReflectiveOperationException {
         Rig rig = new Rig(helper);
@@ -119,10 +134,14 @@ public final class DamageControlGameTests {
             var schema = Enrollments.delegation(DamageControlContent.ID).orElseThrow().schema();
             helper.assertValueEqual(schema.settings().stream().map(setting -> setting.key()).toList(),
                 List.of("extinguish", "repair", "refill"), "the panel exposes only the three supported flags");
-            var legacy = area.settings().with("enabled", new ColonySettings.Value.Flag(false));
-            front.setDrawn(area.id(), ColonySettings.load(Reader.of(legacy.save())).conformedTo(schema));
-            helper.assertFalse(front.zone(area.id()).orElseThrow().settings().flag("enabled"),
-                "old saves may retain the stale disabled flag without exposing it in the schema");
+            for (String key : List.of("extinguish", "repair", "refill")) {
+                var before = front.zone(area.id()).orElseThrow().settings();
+                front.setDrawn(area.id(), before.with(key, new ColonySettings.Value.Flag(!before.flag(key))));
+                var saved = front.zone(area.id()).orElseThrow().settings().save();
+                var restored = ColonySettings.load(Reader.of(saved)).conformedTo(schema);
+                helper.assertTrue(restored.flag(key) != before.flag(key), "zone settings persist " + key);
+                front.setDrawn(area.id(), before);
+            }
             var presence = colony.service(DamageControlContent.ID, DamageControlPresence.class).orElseThrow();
             rig.level.setBlock(rig.target, Blocks.AIR.defaultBlockState(), 2);
             presence.survey(List.of(colony.view(rig.level)), 100);
@@ -772,7 +791,7 @@ public final class DamageControlGameTests {
             var zone = ColonyFront.of(colony).addZone(rig.level, DamageControlContent.ID, cells,
                 ColonySettings.empty().with("repair", new ColonySettings.Value.Flag(true))).orElseThrow();
             var snapshot = new StructureSnapshots.Snapshot(WorldPos.of(rig.level, origin), recorded, 0);
-            colony.keep(DamageControlContent.ID, Writer.of().integer("schemaVersion", 1)
+            colony.keep(DamageControlContent.ID, Writer.of()
                 .children("baselines", List.of(zone.id()), id -> Writer.of().uuid("zone", id)
                     .longValue("revision", 1)
                     .blob("snapshot", snapshot.save())
@@ -919,7 +938,7 @@ public final class DamageControlGameTests {
     public static void aLicensedResidentStillRespondsAfterLongIdle(GameTestHelper helper) {
         Rig rig = new Rig(helper);
         Colony colony = Colonies.mint(rig.level.getServer());
-        colony.hold(PersonContent.ID, Held.Entity.of(rig.worker.body())).orElseThrow();
+        colony.hold(PersonContent.ID, Claimed.Entity.of(rig.worker.body())).orElseThrow();
         ColonyFront.of(colony).addZone(rig.level, DamageControlContent.ID,
             Set.of(rig.target), ColonySettings.empty()).orElseThrow();
         DamageControlPresence presence = new DamageControlPresence(colony);
@@ -996,7 +1015,7 @@ public final class DamageControlGameTests {
         Map<UUID, Node> heard = new LinkedHashMap<>();
         for (int i = 0; i < 100; i++) {
             Rig responder = new Rig(helper);
-            colony.hold(PersonContent.ID, Held.Entity.of(responder.worker.body())).orElseThrow();
+            colony.hold(PersonContent.ID, Claimed.Entity.of(responder.worker.body())).orElseThrow();
             responders.add(responder);
         }
         Rig rig = responders.getFirst();
@@ -1101,7 +1120,7 @@ public final class DamageControlGameTests {
 
     private static Node response(DamageControlPresence presence, Colony colony, Rig rig) {
         if (Bodies.of(rig.worker.body()).orElseThrow().colonyId().isEmpty()) {
-            colony.hold(PersonContent.ID, Held.Entity.of(rig.worker.body())).orElseThrow();
+            colony.hold(PersonContent.ID, Claimed.Entity.of(rig.worker.body())).orElseThrow();
         }
         return presence.plan(rig.worker, colony.view(rig.level)).orElseThrow();
     }

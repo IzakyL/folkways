@@ -1,7 +1,8 @@
 package io.github.izakyl.folkways.plugins.person.name;
 
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.colony.Colony;
+import io.github.izakyl.folkways.base.persist.Required;
+import io.github.izakyl.folkways.core.colony.api.Colony;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -79,7 +80,7 @@ public final class ColonyNames {
     }
 
     private static Optional<NamePool> read(CompoundTag kept) {
-        if (!kept.contains(TAG_NAMES, Tag.TAG_LIST)) {
+        if (kept.isEmpty()) {
             return Optional.empty();
         }
         return Optional.of(new NamePool(strings(kept, TAG_NAMES), strings(kept, TAG_SURNAMES)));
@@ -92,7 +93,7 @@ public final class ColonyNames {
     }
 
     private static List<String> strings(CompoundTag tag, String key) {
-        ListTag list = tag.getList(key, Tag.TAG_STRING);
+        ListTag list = Required.list(tag, key, Tag.TAG_STRING);
         List<String> values = new ArrayList<>(list.size());
         for (int index = 0; index < list.size(); index++) {
             values.add(list.getString(index));

@@ -19,11 +19,11 @@ const STORES = "folkways.sweep.kind.folkways.store";
 const STATIONS = "folkways.sweep.kind.folkways.station";
 const TAKE = "folkways.sweep.take";
 
-type SweepHolding = { colony: string; holding: string; owner: string; shape: string };
+type SweepClaim = { colony: string; claim: string; owner: string; shape: string };
 type SweepLedger = {
   current: string;
-  colonies: Array<{ id: string; holdings: number }>;
-  cells: Array<{ key: string; blockEntity: boolean; holdings: SweepHolding[] }>;
+  colonies: Array<{ id: string; claims: number }>;
+  cells: Array<{ key: string; blockEntity: boolean; claims: SweepClaim[] }>;
 };
 
 // Observation only: all enrollment in these regressions goes through the actual drawing and Take button.
@@ -32,9 +32,9 @@ const SWEEP_LEDGER = defineTask<{ player: string; cells: Vec[] }, SweepLedger>({
   side: "server",
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.core.api.colony.Colonies",
-      "io.github.izakyl.folkways.core.api.colony.Held",
-      "io.github.izakyl.folkways.core.api.terms.WorldPos",
+      "io.github.izakyl.folkways.core.colony.api.Colonies",
+      "io.github.izakyl.folkways.core.colony.api.Claimed",
+      "io.github.izakyl.folkways.core.world.api.WorldPos",
       "io.github.izakyl.folkways.front.engine.charter.CurrentColony",
       "net.minecraft.core.BlockPos",
     ],
@@ -44,18 +44,18 @@ var player=ctx.server().getPlayerList().getPlayerByName(args.string("player"));
 if(player==null)throw Fail.notFound("the sweep player is offline");
 var colonies=new ArrayList<Object>();
 for(var colony:Colonies.all(ctx.server()))
-  colonies.add(Map.of("id",colony.id().toString(),"holdings",colony.holdings().size()));
+  colonies.add(Map.of("id",colony.id().toString(),"claims",colony.claims().size()));
 var cells=new ArrayList<Object>();
 for(var raw:args.list("cells")){
   var cell=(Map<?,?>)raw;
   var at=new BlockPos(((Number)cell.get("x")).intValue(),((Number)cell.get("y")).intValue(),((Number)cell.get("z")).intValue());
   var held=new ArrayList<Object>();
   for(var colony:Colonies.all(ctx.server())){
-    var holding=colony.holdingAt(WorldPos.of(level,at)).orElse(null);
-    if(holding!=null)held.add(Map.of("colony",colony.id().toString(),"holding",holding.id().toString(),
-      "owner",holding.owner().toString(),"shape",holding.what() instanceof Held.Point?"point":holding.what() instanceof Held.Block?"block":"other"));
+    var claim=colony.claimAt(WorldPos.of(level,at)).orElse(null);
+    if(claim!=null)held.add(Map.of("colony",colony.id().toString(),"claim",claim.id().toString(),
+      "owner",claim.owner().toString(),"shape",claim.what() instanceof Claimed.Point?"point":claim.what() instanceof Claimed.Block?"block":"other"));
   }
-  cells.add(Map.of("key",at.getX()+","+at.getY()+","+at.getZ(),"blockEntity",level.getBlockEntity(at)!=null,"holdings",held));
+  cells.add(Map.of("key",at.getX()+","+at.getY()+","+at.getZ(),"blockEntity",level.getBlockEntity(at)!=null,"claims",held));
 }
 return Map.of("current",CurrentColony.id(player).map(UUID::toString).orElse(""),"colonies",colonies,"cells",cells);
 `,
@@ -66,7 +66,7 @@ const SWEEP_CLIENT_MEMBERS = defineTask<void, { colony: string; members: string[
   name: "folkways.block-sweep.client-members",
   side: "client",
   source: javaTask({
-    imports: ["net.minecraft.client.Minecraft", "io.github.izakyl.folkways.core.api.colony.Books",
+    imports: ["net.minecraft.client.Minecraft", "io.github.izakyl.folkways.front.api.Books",
       "io.github.izakyl.folkways.front.client.ColonyHighlightState"],
     body: `var player=Minecraft.getInstance().player;
 return Map.of("colony",player==null?"":Books.heldColony(player).map(UUID::toString).orElse(""),
@@ -155,7 +155,7 @@ for (const scene of MIXED_SWEEPS) test(scene.stage.title(`a mixed ${scene.name} 
     const firstColony = before.current;
     expect(firstColony).not.toBe("");
     expect(before.cells.map(cell => cell.blockEntity), "the point has no block entity; the chest does").toEqual([false, true]);
-    expect(before.cells.map(cell => cell.holdings)).toEqual([[], []]);
+    expect(before.cells.map(cell => cell.claims)).toEqual([[], []]);
 
     const pointToken = `folkways.sweep.kind.${scene.owner.replace(":", ".")}`;
     const open = async (corner: Vec, count: string, untick?: string) => {
@@ -186,8 +186,8 @@ for (const scene of MIXED_SWEEPS) test(scene.stage.title(`a mixed ${scene.name} 
     evidence.firstTake = await takeSweep(pair, "Took in 2 blocks");
     expect(await isColonyMember(server, pointB, stage), "the furnace, its kind unticked, stays out").toBe(false);
     const enrolled = evidence.enrolled = await read([pointA, chestA]);
-    expect(enrolled.cells[0].holdings).toEqual([expect.objectContaining({ colony: firstColony, owner: scene.owner, shape: "point" })]);
-    expect(enrolled.cells[1].holdings).toEqual([expect.objectContaining({ colony: firstColony, owner: "folkways:store", shape: "block" })]);
+    expect(enrolled.cells[0].claims).toEqual([expect.objectContaining({ colony: firstColony, owner: scene.owner, shape: "point" })]);
+    expect(enrolled.cells[1].claims).toEqual([expect.objectContaining({ colony: firstColony, owner: "folkways:store", shape: "block" })]);
 
     // A different current colony sees the original kinds too; only the two new cells may actually be taken.
     evidence.secondColony = await createColonyViaBook(server, client, playerName, origin, stage);
@@ -204,11 +204,11 @@ for (const scene of MIXED_SWEEPS) test(scene.stage.title(`a mixed ${scene.name} 
     evidence.secondOffer = await open(last, "2");
     evidence.secondTake = await takeSweep(pair, "Took in 2 blocks");
     const after = evidence.after = await read([pointA, chestA, pointB, chestB]);
-    expect(after.cells.slice(0, 2), "the first colony retains the exact holding identities").toEqual(enrolled.cells);
-    expect(after.cells[2].holdings).toEqual([expect.objectContaining({ colony: secondColony, owner: scene.owner, shape: "point" })]);
-    expect(after.cells[3].holdings).toEqual([expect.objectContaining({ colony: secondColony, owner: "folkways:store", shape: "block" })]);
-    expect(after.colonies.find(colony => colony.id === firstColony)?.holdings).toBe(2);
-    expect(after.colonies.find(colony => colony.id === secondColony)?.holdings).toBe(2);
+    expect(after.cells.slice(0, 2), "the first colony retains the exact claim identities").toEqual(enrolled.cells);
+    expect(after.cells[2].claims).toEqual([expect.objectContaining({ colony: secondColony, owner: scene.owner, shape: "point" })]);
+    expect(after.cells[3].claims).toEqual([expect.objectContaining({ colony: secondColony, owner: "folkways:store", shape: "block" })]);
+    expect(after.colonies.find(colony => colony.id === firstColony)?.claims).toBe(2);
+    expect(after.colonies.find(colony => colony.id === secondColony)?.claims).toBe(2);
 
     await expect.poll(async () => {
       await tick.sprint(server, 5);

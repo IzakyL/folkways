@@ -142,11 +142,11 @@ function watching(server: MinecraftServer, scene: Scene, seen: Reading[], invari
 const IMPORTS = [
   "net.minecraft.server.MinecraftServer", "net.minecraft.core.BlockPos", "net.minecraft.world.Container",
   "net.minecraft.world.entity.EntityType", "net.minecraft.world.entity.ai.attributes.Attributes", "net.minecraft.world.item.Items",
-  "net.minecraft.world.phys.Vec3", "io.github.izakyl.folkways.core.api.colony.Colonies", "io.github.izakyl.folkways.core.api.colony.Held",
-  "io.github.izakyl.folkways.core.api.terms.WorldSpaces", "io.github.izakyl.folkways.plugins.person.PersonContent",
+  "net.minecraft.world.phys.Vec3", "io.github.izakyl.folkways.core.colony.api.Colonies", "io.github.izakyl.folkways.core.colony.api.Claimed",
+  "io.github.izakyl.folkways.core.world.api.WorldSpaces", "io.github.izakyl.folkways.plugins.person.PersonContent",
   "io.github.izakyl.folkways.plugins.person.PersonBody", "io.github.izakyl.folkways.plugins.person.ResidentEntity",
   "io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfiles", "io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfile",
-  "io.github.izakyl.folkways.core.api.terms.ItemSpec", "net.neoforged.neoforge.common.Tags",
+  "io.github.izakyl.folkways.core.item.api.ItemSpec", "net.neoforged.neoforge.common.Tags",
   "io.github.izakyl.folkways.rts.combat.command.ResidentCommands", "io.github.izakyl.folkways.plugins.combat.weapon.PatrolSupplies",
 ];
 
@@ -159,7 +159,7 @@ var resident = PersonBody.RESIDENT.get().create(level);
 resident.moveTo(args.number("homeX"), args.number("stockY"), args.number("homeZ"));
 resident.setPersistenceRequired();
 level.addFreshEntity(resident);
-colony.hold(PersonContent.ID, Held.Entity.of(resident)).orElseThrow();
+colony.hold(PersonContent.ID, Claimed.Entity.of(resident)).orElseThrow();
 resident.joinColony(colony.id());
 if (args.flag("bow", false)) {
   var profiles = LoadoutProfiles.of(colony);
@@ -203,7 +203,7 @@ return Map.ofEntries(Map.entry("x", body.getX()), Map.entry("z", body.getZ()), M
  Map.entry("status", order.map(value -> value.status().name()).orElse("NONE")), Map.entry("supply", state.state().name()), Map.entry("reason", state.reason()),
  Map.entry("sourceDistance", body.position().distanceTo(Vec3.atCenterOf(stockAt))), Map.entry("targetHealth", target == null ? 100 : target.getHealth()),
  Map.entry("hitByResident", target != null && target.getLastHurtByMob() == body),
- Map.entry("bowAllowed", io.github.izakyl.folkways.core.api.vocation.KitRules.allows(colony, io.github.izakyl.folkways.core.api.vocation.Vocations.required(io.github.izakyl.folkways.plugins.patrol.PatrolContent.VOCATION), Items.BOW)),
+ Map.entry("bowAllowed", io.github.izakyl.folkways.core.colony.api.KitRules.allows(colony, io.github.izakyl.folkways.core.vocation.api.Vocations.required(io.github.izakyl.folkways.plugins.patrol.PatrolContent.VOCATION), Items.BOW)),
  Map.entry("stockSwords", stockSwords), Map.entry("carriedSwords", swords), Map.entry("swordDamage", swordDamage),
  Map.entry("reservedAtSource", colony.reservedInputs(level).stream().filter(claim -> claim.store()
   .filter(WorldSpaces.at(level, stockAt)::equals).isPresent()).mapToLong(claim -> claim.count()).sum()));

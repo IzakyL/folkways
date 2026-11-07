@@ -1,57 +1,60 @@
 package io.github.izakyl.folkways.create.dispatch;
 
-import java.util.Set;
-import io.github.izakyl.folkways.core.api.terms.Stand;
-import io.github.izakyl.folkways.core.engine.plan.Situation;
-import io.github.izakyl.folkways.core.engine.plan.Stands;
-import io.github.izakyl.folkways.core.api.transport.TransportPublication;
-import io.github.izakyl.folkways.core.api.transport.TransportSnapshot;
-import io.github.izakyl.folkways.core.api.transport.TransportTravel;
-import io.github.izakyl.folkways.core.engine.inventory.InventoryObservations;
-import io.github.izakyl.folkways.core.testing.Proxies;
-import io.github.izakyl.folkways.create.FolkwaysCreateMod;
 import com.simibubi.create.content.logistics.box.PackageItem;
 import com.simibubi.create.content.logistics.packagePort.PackagePortBlockEntity;
 import com.simibubi.create.content.logistics.stockTicker.PackageOrderWithCrafts;
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.colony.Colonies;
-import io.github.izakyl.folkways.core.api.colony.Held;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.inventory.InventorySnapshot;
-import io.github.izakyl.folkways.core.api.terms.Containers;
-import io.github.izakyl.folkways.core.api.terms.Goods;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
-import io.github.izakyl.folkways.core.api.terms.Stash;
-import io.github.izakyl.folkways.core.api.work.Ending;
-import io.github.izakyl.folkways.core.api.work.Grown;
-import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Produce;
-import io.github.izakyl.folkways.core.api.work.Refinement;
-import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.WorkSite;
-import io.github.izakyl.folkways.core.engine.colony.ColonyData;
+import io.github.izakyl.folkways.core.colony.api.Claimed;
+import io.github.izakyl.folkways.core.colony.api.Colonies;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.colony.internal.ColonyData;
+import io.github.izakyl.folkways.core.inventory.api.InventorySnapshot;
+import io.github.izakyl.folkways.core.inventory.api.Stash;
+import io.github.izakyl.folkways.core.inventory.internal.InventoryObservations;
+import io.github.izakyl.folkways.core.inventory.internal.Stands;
+import io.github.izakyl.folkways.core.item.api.Containers;
+import io.github.izakyl.folkways.core.item.api.Goods;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
+import io.github.izakyl.folkways.core.plan.api.Grown;
+import io.github.izakyl.folkways.core.plan.api.Produce;
+import io.github.izakyl.folkways.core.plan.api.Refinement;
+import io.github.izakyl.folkways.core.plan.internal.Crew;
+import io.github.izakyl.folkways.core.plan.internal.PlanningFixture.Owed;
+import io.github.izakyl.folkways.core.plan.internal.PlanningFixture;
+import io.github.izakyl.folkways.core.plan.internal.Situation;
+import io.github.izakyl.folkways.core.plan.internal.Stock;
+import io.github.izakyl.folkways.core.runtime.ColonyLabor;
+import io.github.izakyl.folkways.core.testing.Proxies;
+import io.github.izakyl.folkways.core.transport.api.TransportPublication;
+import io.github.izakyl.folkways.core.transport.api.TransportSnapshot;
+import io.github.izakyl.folkways.core.transport.api.TransportTravel;
+import io.github.izakyl.folkways.core.work.api.Ending;
+import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.work.api.WorkSite;
+import io.github.izakyl.folkways.core.work.internal.Commit;
+import io.github.izakyl.folkways.core.world.api.Stand;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
+import io.github.izakyl.folkways.create.FolkwaysCreateMod;
 import io.github.izakyl.folkways.front.engine.colony.ColonyStocks;
-import io.github.izakyl.folkways.core.engine.labor.ColonyLabor;
-import io.github.izakyl.folkways.core.engine.labor.Commit;
-import io.github.izakyl.folkways.core.engine.plan.Crew;
-import io.github.izakyl.folkways.core.engine.plan.PlanningFixture.Owed;
-import io.github.izakyl.folkways.core.engine.plan.PlanningFixture;
-import io.github.izakyl.folkways.core.engine.plan.Stock;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.component.DataComponentMap;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -61,9 +64,6 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
-import net.minecraft.core.component.DataComponentMap;
-import net.minecraft.core.component.DataComponents;
-import net.minecraft.network.chat.Component;
 
 @EventBusSubscriber(modid = FolkwaysCreateMod.ID, bus = EventBusSubscriber.Bus.MOD)
 @GameTestHolder(FolkwaysMod.MOD_ID)
@@ -83,7 +83,7 @@ public final class DispatchPlanningGameTests {
         var port = (PackagePortBlockEntity) level.getBlockEntity(at);
         Colony colony = Colonies.mint(level.getServer());
         colony.hold(DispatchContent.PORT,
-            new Held.Block(WorldPos.of(level, at))).orElseThrow();
+            new Claimed.Block(WorldPos.of(level, at))).orElseThrow();
         colony.service(DispatchContent.ID, DispatchPresence.class).orElseThrow().refresh(level.getServer());
         ItemStack parcel = PackageItem.containing(List.of(new ItemStack(Items.BREAD, 5)));
         ItemSpec goods = Goods.specOf(parcel);
@@ -132,17 +132,17 @@ public final class DispatchPlanningGameTests {
         Colony colony = Colonies.mint(level.getServer());
         try {
             colony.hold(DispatchContent.ID,
-                new Held.Block(WorldPos.of(level, chest))).orElseThrow();
+                new Claimed.Block(WorldPos.of(level, chest))).orElseThrow();
             DispatchPresence dispatch = colony.service(DispatchContent.ID, DispatchPresence.class).orElseThrow();
             dispatch.take(id);
             dispatch.refresh(level.getServer());
             ColonyData data = ColonyData.find(level.getServer(), colony.id()).orElseThrow();
-            data.inventory().advance(level, data, Map.of());
+            data.inventory().advance(level, data.works(), Map.of());
             ItemSpec iron = ItemSpec.of(Items.IRON_INGOT);
             helper.assertTrue(ColonyStocks.available(colony, level.getServer(), iron) == 12,
                 "a network container is counted without being registered as a store");
             colony.stores(DispatchContent.ID, level.dimension(), List.of(WorldPos.of(level, chest)));
-            data.inventory().advance(level, data, Map.of());
+            data.inventory().advance(level, data.works(), Map.of());
             ItemSpec concreteIron = Goods.specOf(new ItemStack(Items.IRON_INGOT));
             helper.assertTrue(ColonyStocks.available(colony, level.getServer(), iron) == 12
                     && ColonyStocks.tally(colony, level.getServer()).get(concreteIron) == 12,
@@ -150,7 +150,7 @@ public final class DispatchPlanningGameTests {
             dispatch.release(id);
             dispatch.refresh(level.getServer());
             colony.stores(DispatchContent.ID, level.dimension(), List.of());
-            data.inventory().advance(level, data, Map.of());
+            data.inventory().advance(level, data.works(), Map.of());
             InventoryObservations.work(data.inventory(), level.getServer(), 1_000);
             helper.assertTrue(ColonyStocks.available(colony, level.getServer(), iron) == 0,
                 "a returned network no longer contributes its containers");
@@ -679,8 +679,8 @@ public final class DispatchPlanningGameTests {
         var level = helper.getLevel();
         Mailroom kept = new Mailroom();
         Mailroom.Consignment one = new Mailroom.Consignment(UUID.randomUUID(), -7, UUID.randomUUID(),
-            io.github.izakyl.folkways.core.api.terms.WorldPos.of(level, new BlockPos(1, 2, 3)),
-            io.github.izakyl.folkways.core.api.terms.WorldPos.of(level, new BlockPos(4, 5, 6)),
+            io.github.izakyl.folkways.core.world.api.WorldPos.of(level, new BlockPos(1, 2, 3)),
+            io.github.izakyl.folkways.core.world.api.WorldPos.of(level, new BlockPos(4, 5, 6)),
             Optional.of(UUID.randomUUID()), "Alpha");
         kept.take(one);
         Mailroom loaded = new Mailroom();
@@ -719,7 +719,7 @@ public final class DispatchPlanningGameTests {
             .set(DataComponents.CUSTOM_NAME, Component.literal("Reserved")).build());
     }
 
-    private static List<io.github.izakyl.folkways.core.api.terms.WorldPos> taken(io.github.izakyl.folkways.core.engine.plan.Planned solved) {
+    private static List<io.github.izakyl.folkways.core.world.api.WorldPos> taken(io.github.izakyl.folkways.core.plan.internal.Planned solved) {
         return solved.weave().vertices().values().stream()
             .filter(vertex -> vertex.node() instanceof TakeNode)
             .map(vertex -> ((TakeNode) vertex.node()).container()).toList();

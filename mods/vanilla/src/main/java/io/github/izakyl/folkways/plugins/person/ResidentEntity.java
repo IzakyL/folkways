@@ -1,10 +1,10 @@
 package io.github.izakyl.folkways.plugins.person;
 
-import io.github.izakyl.folkways.core.api.colony.Colonies;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.resident.ResidentKind;
-import io.github.izakyl.folkways.core.api.resident.body.Body;
-import io.github.izakyl.folkways.core.api.terms.Reach;
+import io.github.izakyl.folkways.core.colony.api.Colonies;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.resident.api.Body;
+import io.github.izakyl.folkways.core.resident.api.ResidentKind;
+import io.github.izakyl.folkways.core.world.api.Reach;
 import io.github.izakyl.folkways.effect.Effects;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
 import io.github.izakyl.folkways.plugins.combat.weapon.WeaponSession;
@@ -384,7 +384,7 @@ public class ResidentEntity extends PathfinderMob implements Body {
             return;
         }
         closeWeaponSession();
-        io.github.izakyl.folkways.core.api.resident.body.Equipment.release(this);
+        io.github.izakyl.folkways.core.colony.api.Equipment.release(this);
         pack().dropContents(this);
         leaveColony();
         discard();

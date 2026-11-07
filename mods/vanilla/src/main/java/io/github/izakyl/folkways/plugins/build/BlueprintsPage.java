@@ -196,7 +196,7 @@ public final class BlueprintsPage implements Draw {
                     text.append(line);
                 }
                 return text;
-            } catch (io.github.izakyl.folkways.core.api.structure.StructureCompat.Failure failed) {
+            } catch (io.github.izakyl.folkways.core.work.api.StructureCompat.Failure failed) {
                 return failed.component();
             } catch (RuntimeException failed) {
                 return Component.translatable("folkways.refusal.build.micro_data_invalid");

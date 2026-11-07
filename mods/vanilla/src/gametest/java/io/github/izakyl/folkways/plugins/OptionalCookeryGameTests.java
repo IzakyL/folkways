@@ -1,7 +1,7 @@
 package io.github.izakyl.folkways.plugins;
 
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.colony.Colonies;
+import io.github.izakyl.folkways.core.colony.api.Colonies;
 import io.github.izakyl.folkways.front.api.Facing;
 import io.github.izakyl.folkways.front.engine.Enrollments;
 import net.minecraft.gametest.framework.GameTest;
@@ -29,12 +29,12 @@ public final class OptionalCookeryGameTests {
         var owner = ResourceLocation.fromNamespaceAndPath("folkways", "cookery");
         boolean installed = ModList.get().isLoaded("folkways_cookery");
         var knifeTag = ResourceLocation.fromNamespaceAndPath("kaleidoscope_cookery", "kitchen_knife");
-        var crafting = io.github.izakyl.folkways.core.api.vocation.Vocations.required(
+        var crafting = io.github.izakyl.folkways.core.vocation.api.Vocations.required(
             ResourceLocation.fromNamespaceAndPath("folkways", "crafting"));
         helper.assertFalse(crafting.kit().stream().anyMatch(tool -> tool.tag()
                 .map(tag -> tag.location().equals(knifeTag)).orElse(false)),
             "a kitchen knife is shared per task and never requested as every resident's career kit");
-        helper.assertTrue(io.github.izakyl.folkways.core.api.work.Tools.sharedGoods().stream().anyMatch(tool -> tool.tag()
+        helper.assertTrue(io.github.izakyl.folkways.core.work.support.Tools.sharedGoods().stream().anyMatch(tool -> tool.tag()
                 .map(tag -> tag.location().equals(knifeTag)).orElse(false)) == installed,
             "shared kitchen knife support is registered only when Cookery is present");
         try {

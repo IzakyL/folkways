@@ -1,10 +1,10 @@
 package io.github.izakyl.folkways.firefighting;
 
 import com.mikoalopex.createfirefightingadd.CreateFireFightingAdd;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.inventory.InventorySnapshot;
-import io.github.izakyl.folkways.core.api.inventory.SlotSnapshot;
-import io.github.izakyl.folkways.core.api.terms.Stash;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.inventory.api.InventorySnapshot;
+import io.github.izakyl.folkways.core.inventory.api.SlotSnapshot;
+import io.github.izakyl.folkways.core.inventory.api.Stash;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;

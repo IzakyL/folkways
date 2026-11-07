@@ -4,8 +4,8 @@ import com.github.ysbbbbbb.kaleidoscopecookery.api.blockentity.IStockpot;
 import com.github.ysbbbbbb.kaleidoscopecookery.blockentity.kitchen.StockpotBlockEntity;
 import java.util.Optional;
 import java.util.UUID;
-import net.minecraft.nbt.CompoundTag;
 import net.minecraft.core.NonNullList;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
@@ -56,8 +56,15 @@ record StockpotBatch(UUID colony, UUID id, StockpotPlan plan, CompoundTag inputs
             return Optional.empty();
         }
         CompoundTag tag = pot.getPersistentData().getCompound(KEY);
+        if (!tag.hasUUID("batch") || !tag.contains("definition") || !tag.contains("flexible", Tag.TAG_BYTE)
+                || !tag.contains("inputs", Tag.TAG_COMPOUND) || !tag.contains("lid", Tag.TAG_COMPOUND)
+                || !tag.contains("recipe", Tag.TAG_STRING) || !tag.contains("replace_lid", Tag.TAG_BYTE)) {
+            return Optional.empty();
+        }
         ResourceLocation recipe = ResourceLocation.tryParse(tag.getString("recipe"));
-        if (recipe == null || !tag.hasUUID("batch")) {
+        if (recipe == null || !tag.hasUUID("batch") || !tag.contains("flexible", Tag.TAG_BYTE)
+                || !tag.contains("replace_lid", Tag.TAG_BYTE) || !tag.contains("lid", Tag.TAG_COMPOUND)
+                || !tag.contains("inputs", Tag.TAG_COMPOUND)) {
             return Optional.empty();
         }
         var holder = StockpotPlan.find(level, recipe).orElse(null);

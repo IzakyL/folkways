@@ -1,7 +1,7 @@
 package io.github.izakyl.folkways.tacz;
 
 import com.tacz.guns.api.item.IAmmo;
-import io.github.izakyl.folkways.core.api.work.Worker;
+import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.plugins.combat.weapon.WeaponAdapter;
 import io.github.izakyl.folkways.plugins.combat.weapon.WeaponSession;
 import io.github.izakyl.folkways.plugins.person.ResidentEntity;

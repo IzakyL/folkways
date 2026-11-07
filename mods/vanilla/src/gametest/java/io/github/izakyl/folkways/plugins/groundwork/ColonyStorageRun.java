@@ -1,10 +1,10 @@
 package io.github.izakyl.folkways.plugins.groundwork;
 
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.colony.Held;
-import io.github.izakyl.folkways.core.api.resident.body.Bodies;
-import io.github.izakyl.folkways.core.api.resident.body.Body;
-import io.github.izakyl.folkways.core.engine.labor.LaborFixture;
+import io.github.izakyl.folkways.core.colony.api.Claimed;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.resident.api.Bodies;
+import io.github.izakyl.folkways.core.resident.api.Body;
+import io.github.izakyl.folkways.core.runtime.LaborFixture;
 import io.github.izakyl.folkways.core.testing.Cleanup;
 import io.github.izakyl.folkways.plugins.person.PersonContent;
 import java.util.HashSet;
@@ -26,7 +26,7 @@ final class ColonyStorageRun {
         ServerLevel level = helper.getLevel();
         person.moveTo(at.getX() + 2.5, at.getY(), at.getZ() + 1.5);
         level.addFreshEntity(person);
-        colony.hold(PersonContent.ID, Held.Entity.of(person)).orElseThrow();
+        colony.hold(PersonContent.ID, Claimed.Entity.of(person)).orElseThrow();
         Body body = Bodies.of(person).orElseThrow();
         body.joinColony(colony.id());
         colony.entered(body);
@@ -46,7 +46,9 @@ final class ColonyStorageRun {
             forced.forEach(chunk -> level.setChunkForced(ChunkPos.getX(chunk), ChunkPos.getZ(chunk), false));
         });
         helper.onEachTick(() -> {
-            if (closed[0]) return;
+            if (closed[0]) {
+                return;
+            }
             colony.service(GroundworkContent.ID, GroundPresence.class).orElseThrow().tick(level.getServer());
             labor.tick();
         });

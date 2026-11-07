@@ -1,9 +1,9 @@
 package io.github.izakyl.folkways.create.dispatch;
 
+import io.github.izakyl.folkways.create.CreateMod;
 import io.github.izakyl.folkways.front.api.Shape;
 import io.github.izakyl.folkways.front.api.ponder.PonderScenery.Body;
 import io.github.izakyl.folkways.front.api.ponder.PonderScenery;
-import io.github.izakyl.folkways.create.CreateMod;
 import io.github.izakyl.folkways.front.api.ponder.Scenes;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import net.createmod.catnip.math.Pointing;

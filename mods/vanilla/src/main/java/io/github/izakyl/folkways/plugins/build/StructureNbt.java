@@ -42,7 +42,7 @@ public final class StructureNbt {
         ListTag paletteTag = tag.getList(TAG_PALETTE, Tag.TAG_COMPOUND);
         List<Optional<BlockState>> palette = new ArrayList<>(paletteTag.size());
         for (int i = 0; i < paletteTag.size(); i++) {
-            palette.add(BlueprintBlock.read(blocks, paletteTag.getCompound(i)));
+            palette.add(BlueprintBlock.readImported(blocks, paletteTag.getCompound(i)));
         }
 
         List<BlueprintBlock> cells = new ArrayList<>();

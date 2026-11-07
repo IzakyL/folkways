@@ -2,7 +2,9 @@ package io.github.izakyl.folkways.plugins.person.living;
 
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks;
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.work.*;
+import io.github.izakyl.folkways.core.work.api.Node;
+import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Stances;
 import java.util.HashSet;
 import java.util.List;
 import net.minecraft.core.BlockPos;
@@ -64,7 +66,7 @@ public final class CookeryConnectedDiningGameTests {
             f.dining.refresh(f.level.getServer());
             Node supply = f.goals().stream().filter(node -> node.spec().focus().filter(f.at::equals).isPresent()).findFirst().orElseThrow();
             var stances = (Stances.Cells) supply.spec().stances();
-            helper.assertTrue(stances.cells().contains(io.github.izakyl.folkways.core.api.terms.WorldPos.of(f.level, end)),
+            helper.assertTrue(stances.cells().contains(io.github.izakyl.folkways.core.world.api.WorldPos.of(f.level, end)),
                 "the end without chairs is a real planned service stance for the opposite physical slot");
             f.person.setPos(net.minecraft.world.phys.Vec3.atBottomCenterOf(end));
             f.worker.supplied = List.of(new ItemStack(Items.MUSHROOM_STEW));

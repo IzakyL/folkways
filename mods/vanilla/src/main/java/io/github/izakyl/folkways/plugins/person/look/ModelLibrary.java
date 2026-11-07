@@ -24,6 +24,8 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.packs.resources.IoSupplier;
 import net.minecraft.server.packs.resources.ResourceManager;
 import net.minecraft.util.ExtraCodecs;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 // The looks a server carries to its players: models out of folders, and plain skins out of single pngs.
 public record ModelLibrary(
@@ -45,6 +47,8 @@ public record ModelLibrary(
 
     public static final String FOLDER = SHELF.folder();
     public static final String SKIN_FOLDER = SKINS.folder();
+
+    private static final Logger LOGGER = LoggerFactory.getLogger("folkways-models");
 
     private static final String GEOMETRY_FILE = "main.json";
     private static final String ANIMATION_FILE = "main.animation.json";
@@ -138,7 +142,7 @@ public record ModelLibrary(
             rejected.add(label + ": " + ANIMATION_FILE + " declares no animations");
             return;
         }
-        Manifest manifest = readManifest(contents, label, rejected);
+        Manifest manifest = readManifest(contents, model, rejected);
         if (manifest == null) {
             return;
         }
@@ -316,23 +320,30 @@ public record ModelLibrary(
         }
     }
 
-    private static Manifest readManifest(Map<String, IoSupplier<InputStream>> contents, String model,
+    private static Manifest readManifest(Map<String, IoSupplier<InputStream>> contents, ResourceLocation model,
             List<String> rejected) {
         if (!contents.containsKey(MANIFEST_FILE)) {
             return Manifest.DEFAULT;
         }
-        byte[] bytes = read(contents, MANIFEST_FILE, model, rejected);
+        byte[] bytes = read(contents, MANIFEST_FILE, model.toString(), rejected);
         if (bytes == null) {
             return null;
         }
+        ResourceLocation at = model.withPath(FOLDER + "/" + model.getPath() + "/" + MANIFEST_FILE);
+        return manifest(bytes, at, Manifest.CODEC, Manifest.DEFAULT, rejected);
+    }
+
+    // Resource authors can supply malformed JSON. Never adopt a partial manifest: keep the same defaults
+    // as an absent manifest, and report the full resource path so its author can correct it.
+    static <T> T manifest(byte[] bytes, ResourceLocation at, Codec<T> codec, T fallback, List<String> rejected) {
         try {
             JsonElement parsed = JsonParser.parseString(new String(bytes, StandardCharsets.UTF_8));
-            return Manifest.CODEC.parse(JsonOps.INSTANCE, parsed)
-                .resultOrPartial(error -> rejected.add(model + ": " + MANIFEST_FILE + " — " + error))
-                .orElse(null);
-        } catch (RuntimeException exception) {
-            rejected.add(model + ": " + MANIFEST_FILE + " — " + exception.getMessage());
-            return null;
+            return codec.parse(JsonOps.INSTANCE, parsed).getOrThrow();
+        } catch (RuntimeException invalid) {
+            String error = at + ": " + invalid.getMessage();
+            rejected.add(error);
+            LOGGER.error("[folkways-models] {}", error);
+            return fallback;
         }
     }
 
@@ -389,16 +400,6 @@ public record ModelLibrary(
             int weight,
             Optional<ResidentLook.Skin> fallback,
             Map<String, String> leisureAnimations) {
-
-        Manifest(Optional<String> idleAnimation, Optional<String> walkAnimation, Optional<String> workAnimation,
-                int weight, Optional<ResidentLook.Skin> fallback) {
-            this(idleAnimation, walkAnimation, workAnimation, Optional.empty(), weight, fallback, Map.of());
-        }
-
-        Manifest(Optional<String> idleAnimation, Optional<String> walkAnimation, Optional<String> workAnimation,
-                int weight, Optional<ResidentLook.Skin> fallback, Map<String, String> leisureAnimations) {
-            this(idleAnimation, walkAnimation, workAnimation, Optional.empty(), weight, fallback, leisureAnimations);
-        }
 
         Manifest(Optional<String> idleAnimation, Optional<String> walkAnimation, Optional<String> workAnimation,
                 Optional<String> seatedAnimation, int weight, Optional<ResidentLook.Skin> fallback) {

@@ -1,8 +1,5 @@
 package io.github.izakyl.folkways.plugins.build;
 
-import static io.github.izakyl.folkways.plugins.build.CandBTestData.sculpture;
-import static io.github.izakyl.folkways.plugins.build.CandBTestData.state;
-
 import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.base.persist.Reader;
 import io.github.izakyl.folkways.base.persist.Writer;
@@ -10,26 +7,26 @@ import io.github.izakyl.folkways.chiselsandbits.CandBConfig;
 import io.github.izakyl.folkways.chiselsandbits.CandBMaterials;
 import io.github.izakyl.folkways.chiselsandbits.CandBStructureCodec;
 import io.github.izakyl.folkways.chiselsandbits.FolkwaysChiselsAndBitsMod;
-import io.github.izakyl.folkways.core.api.colony.Cadence;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.colony.ColonyView;
-import io.github.izakyl.folkways.core.api.structure.StructureCompat;
-import io.github.izakyl.folkways.core.api.structure.StructurePayload;
-import io.github.izakyl.folkways.core.api.structure.Voxelizer;
-import io.github.izakyl.folkways.core.api.terms.Goods;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.work.Ending;
-import io.github.izakyl.folkways.core.api.work.Grown;
-import io.github.izakyl.folkways.core.api.work.Need;
-import io.github.izakyl.folkways.core.api.work.Node;
-import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.Worker;
-import io.github.izakyl.folkways.core.api.work.Workload;
-import io.github.izakyl.folkways.core.engine.labor.Commit;
-import io.github.izakyl.folkways.core.engine.plan.PlanningFixture;
+import io.github.izakyl.folkways.core.colony.api.Cadence;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.colony.api.ColonyView;
+import io.github.izakyl.folkways.core.item.api.Goods;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
+import io.github.izakyl.folkways.core.plan.api.Grown;
+import io.github.izakyl.folkways.core.plan.internal.PlanningFixture;
+import io.github.izakyl.folkways.core.runtime.HoldingFixture;
 import io.github.izakyl.folkways.core.testing.Proxies;
+import io.github.izakyl.folkways.core.work.api.Ending;
+import io.github.izakyl.folkways.core.work.api.Need;
+import io.github.izakyl.folkways.core.work.api.Node;
+import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.work.api.StructureCompat;
+import io.github.izakyl.folkways.core.work.api.Voxelizer;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.work.internal.Commit;
+import io.github.izakyl.folkways.core.world.api.StructurePayload;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.effect.Effects;
 import io.github.izakyl.folkways.front.api.Ghost;
 import io.github.izakyl.folkways.front.engine.net.ColonyOverviewPacket;
@@ -84,6 +81,8 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
+import static io.github.izakyl.folkways.plugins.build.CandBTestData.sculpture;
+import static io.github.izakyl.folkways.plugins.build.CandBTestData.state;
 
 @EventBusSubscriber(modid = FolkwaysChiselsAndBitsMod.ID, bus = EventBusSubscriber.Bus.MOD)
 @GameTestHolder(FolkwaysMod.MOD_ID)
@@ -288,7 +287,7 @@ public final class CandBGameTests {
             ((BlockItem) bits.getLast().getItem()).getBlock().defaultBlockState(), Optional.empty()), 4096);
         f.worker.pack().setItem(1, oldBits);
         int oldCount = f.worker.pack().getItem(1).getCount();
-        Node node = node(helper, at, blueprint(helper), Set.of());
+        BuildAction node = node(helper, at, blueprint(helper), Set.of());
         helper.assertTrue(Commit.run(level, node, f.worker) instanceof Outcome.Failed,
             "missing blocks refuse the commit");
         helper.assertTrue(level.getBlockState(at).isAir() && Goods.countIn(f.worker.pack(), identity)
@@ -336,13 +335,13 @@ public final class CandBGameTests {
         BlueprintBook book = new BlueprintBook();
         book.add(level, blueprint);
         BlueprintBook loaded = BlueprintBook.load(Reader.of(book.save(level.registryAccess())), level.registryAccess());
-        Blueprint restored = loaded.target(level, blueprint.id()).orElseThrow();
+        Blueprint restored = loaded.blueprint(blueprint.id()).orElseThrow();
         helper.assertTrue(restored.confirmed(), "the target survives without being resolved a second time");
         BuildTarget target = target(level, at, restored);
         helper.assertTrue(target.costs(level, target.launch(at).orElseThrow(), Set.of(at)).orElseThrow().isEmpty(),
             "the saved completed cell is not charged again even after it is broken");
         var f = new PlanningFixture(helper);
-        Node completed = node(helper, at, restored, Set.of(at));
+        BuildAction completed = node(helper, at, restored, Set.of(at));
         helper.assertTrue(completed.spec().needs().isEmpty() && Commit.run(level, completed, f.worker) instanceof Outcome.Done,
             "the restored completion needs no materials");
         helper.assertTrue(level.getBlockState(at).isAir(), "completion is latched instead of rebuilding a broken cell");
@@ -351,32 +350,13 @@ public final class CandBGameTests {
     }
 
     @GameTest(template = "empty", timeoutTicks = 40)
-    public static void preIntegrationOrdersExplicitlyReconfirmTheirCosts(GameTestHelper helper) {
+    public static void currentOrdersKeepTheirConfirmedVoxelCosts(GameTestHelper helper) {
         var registries = helper.getLevel().registryAccess();
         Blueprint source = blueprint(helper);
-        CompoundTag saved = source.save(registries);
-        saved.remove("payloadVersion");
-        Blueprint old = Blueprint.load(Reader.of(saved), registries).orElseThrow();
-        helper.assertTrue(!old.confirmed(), "older chiseled targets are migrated to pending confirmation");
-        Blueprint resolved = old.confirm(helper.getLevel());
-        helper.assertTrue(resolved.confirmed() && resolved.save(registries).getInt("payloadVersion") == 1,
-            "reconfirmation writes the material-aware version");
-        Blueprint plain = new Blueprint(UUID.randomUUID(), "plain", List.of(new BlueprintBlock(BlockPos.ZERO,
-            Blocks.STONE.defaultBlockState())), BlueprintVolume.of(1, 1, 1).orElseThrow(), 0).confirm(helper.getLevel());
-        CompoundTag ordinary = plain.save(registries);
-        ordinary.remove("payloadVersion");
-        helper.assertTrue(Blueprint.load(Reader.of(ordinary), registries).orElseThrow().confirmed(), "ordinary saves remain confirmed");
-        CompoundTag missing = NbtUtils.writeBlockState(state());
-        missing.putString("Name", "absent:chiseled");
-        Blueprint unloaded = new Blueprint(UUID.randomUUID(), "missing", List.of(), List.of(
-            new UnloadedBlock(BlockPos.ZERO, missing, List.of(), source.blocks().getFirst().data())), List.of(),
-            source.volume(), 0, true);
-        CompoundTag absent = unloaded.save(registries);
-        absent.remove("payloadVersion");
-        Blueprint waiting = Blueprint.load(Reader.of(absent), registries).orElseThrow();
-        helper.assertTrue(!waiting.confirmed(), "migration stays pending while the block mod is absent");
-        helper.assertTrue(!Blueprint.load(Reader.of(waiting.save(registries)), registries).orElseThrow().confirmed(),
-            "saving without the mod does not bypass later reconfirmation");
+        Blueprint restored = Blueprint.load(Reader.of(source.save(registries)), registries).orElseThrow();
+        helper.assertTrue(restored.confirmed(), "current targets retain their confirmation");
+        helper.assertValueEqual(restored.blocks().getFirst().data(), source.blocks().getFirst().data(),
+            "the exact voxel payload survives save/load without reconfirmation");
         helper.succeed();
     }
 
@@ -434,9 +414,14 @@ public final class CandBGameTests {
             state(), BlockData.of(broken))), List.of(), List.of(), BlueprintVolume.of(1, 1, 1).orElseThrow(), 0, true);
         BlueprintBuildOrder order = BlueprintBuildOrder.create(blueprint.id(), "damaged", WorldPos.of(level, at),
             Optional.empty(), "", 0);
-        CompoundTag book = Writer.of().children("blueprints", List.of(blueprint), value -> value.save(level.registryAccess()))
+        CompoundTag book = Writer.of().children("blueprints", List.of(blueprint),
+            value -> Writer.of(value.save(level.registryAccess())).flag("singleUse", false).tag())
             .children("buildOrders", List.of(order), value -> value.save(level.registryAccess())).tag();
-        var saved = new AtomicReference<>(Writer.of().blob("book", book).tag());
+        var saved = new AtomicReference<>(Writer.of().blob("book", book).integer("numbered", 0)
+            .children("temporary", List.<CompoundTag>of(), value -> value)
+            .children("drafted", List.<CompoundTag>of(), value -> value)
+            .children("met", List.<CompoundTag>of(), value -> value)
+            .children("carvingCaches", List.<CompoundTag>of(), value -> value).tag());
         Colony colony = colony(level, saved);
         ColonyView view = colony.views(level.getServer()).getFirst();
         BuildPresence presence = new BuildPresence(colony, level.getServer());
@@ -472,9 +457,13 @@ public final class CandBGameTests {
             Optional.empty(), "", 0);
         BlueprintBuildOrder cancelled = BlueprintBuildOrder.create(blueprint.id(), "cancelled",
             WorldPos.of(level, at.east(4)), Optional.empty(), "", 0);
-        CompoundTag book = Writer.of().children("blueprints", List.of(blueprint), value -> value.save(level.registryAccess()))
+        CompoundTag book = Writer.of().children("blueprints", List.of(blueprint),
+            value -> Writer.of(value.save(level.registryAccess())).flag("singleUse", false).tag())
             .children("buildOrders", List.of(finished, cancelled), value -> value.save(level.registryAccess())).tag();
-        var saved = new AtomicReference<>(Writer.of().blob("book", book)
+        var saved = new AtomicReference<>(Writer.of().blob("book", book).integer("numbered", 0)
+            .children("temporary", List.<CompoundTag>of(), value -> value)
+            .children("drafted", List.<CompoundTag>of(), value -> value)
+            .children("met", List.<CompoundTag>of(), value -> value)
             .children("carvingCaches", List.of(finished, cancelled), order -> Writer.of(cache.save())
                 .uuid("order", order.id()).tag()).tag());
         Colony colony = colony(level, saved);
@@ -574,7 +563,7 @@ public final class CandBGameTests {
     }
 
     @GameTest(template = "empty", timeoutTicks = 40)
-    public static void legacyWrappersDecodeAndMigrateWithoutUsingCachedCounts(GameTestHelper helper) throws Exception {
+    public static void externalWrappersDecodeWithoutUsingCachedCounts(GameTestHelper helper) throws Exception {
         CompoundTag payload = new CompoundTag();
         payload.put("chiseledData", legacyStorage(sculpture()));
         payload.put("statistics", new CompoundTag());
@@ -590,11 +579,10 @@ public final class CandBGameTests {
         Blueprint source = new Blueprint(UUID.randomUUID(), "legacy", List.of(new BlueprintBlock(BlockPos.ZERO, state(),
             BlockData.of(data))), List.of(), List.of(), BlueprintVolume.of(1, 1, 1).orElseThrow(), 0, true);
         CompoundTag old = source.save(helper.getLevel().registryAccess());
-        old.remove("payloadVersion");
-        Blueprint migrated = Blueprint.load(Reader.of(old), helper.getLevel().registryAccess()).orElseThrow().confirm(helper.getLevel());
-        var entity = migrated.blocks().getFirst().data().entity(helper.getLevel(), BlockPos.ZERO, state());
+        Blueprint restored = Blueprint.load(Reader.of(old), helper.getLevel().registryAccess()).orElseThrow().confirm(helper.getLevel());
+        var entity = restored.blocks().getFirst().data().entity(helper.getLevel(), BlockPos.ZERO, state());
         helper.assertValueEqual(new io.github.izakyl.folkways.chiselsandbits.CandBSchematicBridge().materials(entity)
-            .stream().mapToLong(Need::count).sum(), 2L, "legacy orders resume with the decoded voxel price");
+            .stream().mapToLong(Need::count).sum(), 2L, "external payloads retain their decoded voxel price");
         helper.succeed();
     }
 
@@ -703,7 +691,9 @@ public final class CandBGameTests {
                 try (var processing = StructureCompat.processing()) {
                     CandBStructureCodec.validated(data);
                     long until = System.nanoTime() + 25000000L;
-                    while (System.nanoTime() < until) Thread.onSpinWait();
+                    while (System.nanoTime() < until) {
+                        Thread.onSpinWait();
+                    }
                     CandBStructureCodec.validated(data);
                 }
             });
@@ -876,7 +866,7 @@ public final class CandBGameTests {
         for (Layering.Work work : plan.works()) {
             Step step = work.step().orElseThrow();
             BuildJob job = step.job(level, target, Stances.at(level, anchor.west(4)));
-            BuildNode node = BuildNode.of(job, (ended, how) -> { }, new TemporaryScaffolds(() -> { }));
+            BuildAction node = BuildAction.of(job, new TemporaryScaffolds(() -> { }));
             node.cache = cache;
             node.requote(level);
             int slot = 0;
@@ -1024,14 +1014,14 @@ public final class CandBGameTests {
         helper.startSequence().thenWaitUntil(() -> helper.assertValueEqual(active.size(), 6, "six independent turns"))
             .thenExecute(() -> {
                 for (Node stay : List.copyOf(active.values())) {
-                    Workload.Within shift = (Workload.Within) stay.spec().workload();
                     Worker worker = workers.stream().filter(who -> stay.spec().needs().stream()
                         .allMatch(need -> Goods.countIn(who.pack(), need.spec()) >= need.count()))
                         .findFirst().orElseThrow();
-                    var turn = shift.next(level, worker);
-                    helper.assertTrue(turn instanceof Workload.Within.Turn.Piece, "each worker receives its carving");
-                    Node piece = ((Workload.Within.Turn.Piece) turn).node();
-                    shift.ended(level, piece, Ending.DROPPED);
+                    HoldingFixture shift = new HoldingFixture(level, stay, worker);
+                    shift.tick();
+                    // A cancelled stay releases its private action before the order is staffed again.
+                    shift.release(Ending.DROPPED);
+                    stay.released(level, worker, Ending.DROPPED);
                     endings.get(stay.id()).accept(stay.id(), Ending.DONE);
                     active.remove(stay.id());
                 }
@@ -1042,15 +1032,12 @@ public final class CandBGameTests {
             }).thenExecuteAfter(210, () -> {
                 helper.assertValueEqual(active.size(), 6, "all six carvings are offered again on current ground");
                 for (Node stay : List.copyOf(active.values())) {
-                    Workload.Within shift = (Workload.Within) stay.spec().workload();
                     Worker worker = workers.stream().filter(who -> stay.spec().needs().stream()
                         .allMatch(need -> Goods.countIn(who.pack(), need.spec()) >= need.count()))
                         .findFirst().orElseThrow();
-                    var turn = shift.next(level, worker);
-                    helper.assertTrue(turn instanceof Workload.Within.Turn.Piece, "the reentered worker can build");
-                    Node piece = ((Workload.Within.Turn.Piece) turn).node();
-                    helper.assertTrue(Commit.run(level, piece, worker) instanceof Outcome.Done, "carving commits once");
-                    shift.ended(level, piece, Ending.DONE);
+                    HoldingFixture shift = new HoldingFixture(level, stay, worker);
+                    helper.assertTrue(shift.step() instanceof Outcome.Done,
+                        "the reentered worker commits its carving once");
                     endings.get(stay.id()).accept(stay.id(), Ending.DONE);
                     active.remove(stay.id());
                 }
@@ -1077,7 +1064,7 @@ public final class CandBGameTests {
             target.cells());
         var worker = new PlanningFixture(helper);
         worker.worker.body().setPos(at.getX() - 2.5, at.getY(), at.getZ() + 0.5);
-        BuildNode node = BuildNode.of(step.job(level, target, Stances.at(level, at.west(2))), (ended, how) -> { },
+        BuildAction node = BuildAction.of(step.job(level, target, Stances.at(level, at.west(2))),
             new TemporaryScaffolds(() -> { }));
         helper.assertValueEqual(node.spec().needs().stream().mapToLong(Need::count).sum(), 1L,
             "the original full block offsets new voxels in both cells before rounding");
@@ -1099,8 +1086,7 @@ public final class CandBGameTests {
         var wholeTarget = new BuildTarget(target.realm(), Map.of(at, Blocks.STONE.defaultBlockState(), next, state()),
             Set.of(), List.of(), BlockPos.ZERO, Map.of(next, payload(4095)));
         Step whole = new Step(BuildJob.Kind.CARVE, at, target.cells(), wholeTarget.cells());
-        BuildNode replacement = BuildNode.of(whole.job(level, wholeTarget, Stances.at(level, at.west(2))),
-            (ended, how) -> { }, new TemporaryScaffolds(() -> { }));
+        BuildAction replacement = BuildAction.of(whole.job(level, wholeTarget, Stances.at(level, at.west(2))), new TemporaryScaffolds(() -> { }));
         replacement.cache = node.cache;
         replacement.requote(level);
         helper.assertTrue(Commit.run(level, replacement, worker.worker) instanceof Outcome.Done,
@@ -1110,8 +1096,7 @@ public final class CandBGameTests {
         Step clear = new Step(BuildJob.Kind.CARVE, at, wholeTarget.cells(),
             Map.of(at, Blocks.AIR.defaultBlockState(), next, Blocks.AIR.defaultBlockState()));
         var cleared = new BuildTarget(target.realm(), clear.after());
-        BuildNode demolition = BuildNode.of(clear.job(level, cleared, Stances.at(level, at.west(2))),
-            (ended, how) -> { }, new TemporaryScaffolds(() -> { }));
+        BuildAction demolition = BuildAction.of(clear.job(level, cleared, Stances.at(level, at.west(2))), new TemporaryScaffolds(() -> { }));
         demolition.cache = replacement.cache;
         demolition.requote(level);
         helper.assertTrue(demolition.spec().leaves().isEmpty(), "excavation stays in the site cache");
@@ -1121,8 +1106,7 @@ public final class CandBGameTests {
         var restoredCache = new Carving.Cache(() -> { });
         restoredCache.load(Reader.of(demolition.cache.save()));
         helper.assertValueEqual(restoredCache.save(), demolition.cache.save(), "exact balances survive reload");
-        var rebuilt = BuildNode.of(step.job(level, target, Stances.at(level, at.west(2))),
-            (ended, how) -> { }, new TemporaryScaffolds(() -> { }));
+        var rebuilt = BuildAction.of(step.job(level, target, Stances.at(level, at.west(2))), new TemporaryScaffolds(() -> { }));
         rebuilt.cache = restoredCache;
         rebuilt.requote(level);
         helper.assertTrue(rebuilt.spec().needs().isEmpty(), "removed voxels offset another node after reload");
@@ -1135,15 +1119,14 @@ public final class CandBGameTests {
             new net.minecraft.world.phys.AABB(at).expandTowards(1, 0, 0).inflate(2)).isEmpty(),
             "carving and demolition never drop carving items or fragments into the world");
         var shared = new Carving.Cache(() -> { });
-        List<BuildNode> parallel = new java.util.ArrayList<>();
+        List<BuildAction> parallel = new java.util.ArrayList<>();
         for (int i = 0; i < 3; i++) {
             BlockPos cell = at.east(i);
             level.setBlock(cell, Blocks.AIR.defaultBlockState(), Rubble.SHOT);
             var half = new BuildTarget(target.realm(), Map.of(cell, state()), Set.of(), List.of(),
                 BlockPos.ZERO, Map.of(cell, payload(2048)));
             var piece = new Step(BuildJob.Kind.CARVE, cell, Map.of(cell, Blocks.AIR.defaultBlockState()), half.cells());
-            BuildNode candidate = BuildNode.of(piece.job(level, half, Stances.at(level, at.west(2))),
-                (ended, how) -> { }, new TemporaryScaffolds(() -> { }));
+            BuildAction candidate = BuildAction.of(piece.job(level, half, Stances.at(level, at.west(2))), new TemporaryScaffolds(() -> { }));
             candidate.cache = shared;
             parallel.add(candidate);
         }
@@ -1158,7 +1141,7 @@ public final class CandBGameTests {
         parallel.get(1).requote(level);
         parallel.get(2).requote(level);
         CompoundTag beforeExit = shared.save();
-        parallel.get(2).ended(level, Ending.DROPPED);
+        // Discarding a quote has no material side effects.
         helper.assertValueEqual(shared.save(), beforeExit, "quotes and worker exits do not reserve or spend voxels");
         helper.assertTrue(parallel.get(1).spec().needs().isEmpty() && parallel.get(2).spec().needs().isEmpty(),
             "two workers can receive quotes against the same available balance");
@@ -1255,15 +1238,15 @@ public final class CandBGameTests {
             .getOrDefault(ItemSpec.of(Items.TORCH), 0L), 1L, "preview charges the ordinary torch");
         var fixture = new PlanningFixture(helper);
         fixture.worker.body().setPos(at.getX() - 2.5, at.getY(), at.getZ() + 0.5);
-        var carve = site.pieces().stream().filter(piece -> piece.node() instanceof CarveNode)
+        var carve = site.pieces().stream().filter(piece -> piece.action() instanceof CarveAction)
             .findFirst().orElseThrow();
         var expected = new Carving.Cache(() -> { });
         expected.accept(Carving.quote(level, Map.of(at, Blocks.AIR.defaultBlockState()), cell -> BlockData.EMPTY));
         helper.assertTrue(!expected.save().getList("materials", CompoundTag.TAG_COMPOUND).isEmpty(),
             "demolition quotes the standing voxels");
-        helper.assertTrue(Commit.run(level, carve.node(), fixture.worker) instanceof Outcome.Done done
+        helper.assertTrue(Commit.run(level, carve.action(), fixture.worker) instanceof Outcome.Done done
             && done.made().isEmpty(), "carving credits the cache without drops");
-        site.ended(carve.node().id(), Ending.DONE);
+        site.ended(carve.id(), Ending.DONE);
         site.tick(level);
         helper.assertTrue(level.getBlockState(at).isAir() && site.met().isEmpty() && !site.complete(),
             "demolition alone does not latch the goal");
@@ -1272,9 +1255,9 @@ public final class CandBGameTests {
         var lay = site.pieces().stream().filter(piece -> piece.work().kind() == Layering.Kind.LAY)
             .findFirst().orElseThrow();
         fixture.worker.pack().setItem(0, new ItemStack(Items.TORCH));
-        helper.assertTrue(Commit.run(level, lay.node(), fixture.worker) instanceof Outcome.Done,
+        helper.assertTrue(Commit.run(level, lay.action(), fixture.worker) instanceof Outcome.Done,
             "ordinary placement commits after demolition");
-        site.ended(lay.node().id(), Ending.DONE);
+        site.ended(lay.id(), Ending.DONE);
         site.tick(level);
         helper.assertTrue(site.complete() && level.getBlockState(at).is(Blocks.TORCH)
             && level.getBlockEntity(at) == null, "supported torch replaces the chiseled block");
@@ -1310,11 +1293,11 @@ public final class CandBGameTests {
             Map.of(at, blueprint.blocks().getFirst().data()));
     }
 
-    private static Node node(GameTestHelper helper, BlockPos at, Blueprint blueprint, Set<BlockPos> met) {
+    private static BuildAction node(GameTestHelper helper, BlockPos at, Blueprint blueprint, Set<BlockPos> met) {
         var level = helper.getLevel();
         BuildTarget target = target(level, at, blueprint);
         Step step = new Step(BuildJob.Kind.CARVE, at, Map.of(at, level.getBlockState(at)), Map.of(at, state()));
-        return BuildNode.of(step.job(level, target, Stances.at(level, at.east(2)), met), (node, how) -> { },
+        return BuildAction.of(step.job(level, target, Stances.at(level, at.east(2)), met),
             new TemporaryScaffolds(() -> { }))
             .keeping(met::contains);
     }
@@ -1324,7 +1307,7 @@ public final class CandBGameTests {
         ColonyView view = Proxies.of(ColonyView.class, (proxy, method, args) -> switch (method.getName()) {
             case "level" -> level;
             case "dimension" -> level.dimension();
-            case "holdings", "residents" -> List.of();
+            case "claims", "residents" -> List.of();
             case "blocks" -> Set.of();
             case "effectsOf" -> Effects.NONE;
             default -> throw new AssertionError(method.getName());

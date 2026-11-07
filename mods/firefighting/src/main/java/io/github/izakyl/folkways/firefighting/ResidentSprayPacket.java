@@ -27,7 +27,7 @@ public record ResidentSprayPacket(int actor, UUID resident, BlockPos cabinet, UU
         StreamCodec.ofMember(ResidentSprayPacket::write, ResidentSprayPacket::read);
 
     public static void register(RegisterPayloadHandlersEvent event) {
-        event.registrar("2").playToClient(TYPE, STREAM_CODEC,
+        event.registrar(io.github.izakyl.folkways.FolkwaysMod.NETWORK_VERSION).playToClient(TYPE, STREAM_CODEC,
             (packet, context) -> context.enqueueWork(() -> ResidentSprayVisuals.accept(packet)));
     }
 

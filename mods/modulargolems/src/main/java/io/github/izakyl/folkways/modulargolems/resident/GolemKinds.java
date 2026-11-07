@@ -1,13 +1,13 @@
 package io.github.izakyl.folkways.modulargolems.resident;
 
 import dev.xkmc.modulargolems.content.entity.common.AbstractGolemEntity;
-import io.github.izakyl.folkways.core.api.Declaring;
-import io.github.izakyl.folkways.core.api.participation.Participation;
-import io.github.izakyl.folkways.core.api.participation.Stake;
+import io.github.izakyl.folkways.core.extension.api.Declaring;
+import io.github.izakyl.folkways.core.resident.api.Locomotions;
+import io.github.izakyl.folkways.core.resident.api.Participation;
+import io.github.izakyl.folkways.core.resident.api.ResidentKind.Growth;
+import io.github.izakyl.folkways.core.resident.api.ResidentKind;
+import io.github.izakyl.folkways.core.resident.api.Stake;
 import io.github.izakyl.folkways.effect.perk.GlobalPerks;
-import io.github.izakyl.folkways.core.api.resident.Locomotions;
-import io.github.izakyl.folkways.core.api.resident.ResidentKind.Growth;
-import io.github.izakyl.folkways.core.api.resident.ResidentKind;
 import io.github.izakyl.folkways.front.api.Registering;
 import io.github.izakyl.folkways.modulargolems.domain.GolemContent;
 import java.util.LinkedHashMap;
@@ -49,10 +49,10 @@ public final class GolemKinds {
         DOG, Set.of(PATROLLING));
 
     public static final ResidentKind METAL_GOLEM = golem(METAL,
-        new Growth.Built(Map.of(GlobalPerks.PACKMULE, 2, GlobalPerks.LONGARM, 2)));
+        new Growth.Built(Map.of(GlobalPerks.GOLEM_PACK_ROOM, 2, GlobalPerks.LONGARM, 2)));
 
     public static final ResidentKind HUMANOID_GOLEM = golem(HUMANOID,
-        new Growth.Built(Map.of(GlobalPerks.PACKMULE, 1)));
+        new Growth.Built(Map.of(GlobalPerks.GOLEM_PACK_ROOM, 1)));
 
     public static final ResidentKind DOG_GOLEM = golem(DOG,
         new Growth.Built(Map.of(GlobalPerks.BRISK, 3)));

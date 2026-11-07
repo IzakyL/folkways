@@ -1,8 +1,8 @@
 package io.github.izakyl.folkways.create.elevator;
 
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.work.Stances;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.create.FolkwaysCreateMod;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.Set;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
@@ -475,7 +476,7 @@ public final class ElevatorControllerGameTests {
         Network(GameTestHelper helper) {
             Stances.Cells platform = new Stances.Cells(java.util.Set.of(
                 WorldPos.of(helper.getLevel(), helper.absolutePos(new BlockPos(1, 1, 1)))));
-            floors = List.of(new Floor(0, platform), new Floor(10, platform), new Floor(20, platform));
+            floors = List.of(new Floor(0, platform, platform), new Floor(10, platform, platform), new Floor(20, platform, platform));
         }
 
         @Override
@@ -516,7 +517,7 @@ public final class ElevatorControllerGameTests {
         }
 
         @Override
-        public boolean disembark(MinecraftServer server, ElevatorRef lift, int place, Mob body) {
+        public boolean disembark(MinecraftServer server, ElevatorRef lift, int place, Mob body, Set<WorldPos> exits) {
             exitAttempts++;
             if (!exitComplete) { return false; }
             boolean boarded = occupants.remove(place, body.getUUID());

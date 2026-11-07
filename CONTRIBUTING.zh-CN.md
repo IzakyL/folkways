@@ -83,6 +83,8 @@ feat(draft): add a dock pattern
 
 ## 贡献约定
 
+修改持久化数据时，请遵循[存档兼容性](SAVE_COMPATIBILITY.zh-CN.md)。
+
 ### 代码与测试归属
 
 - 沿用周围代码的命名、注释密度和写法。

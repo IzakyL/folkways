@@ -48,7 +48,9 @@ public final class CandBTestData {
 
     private static ListTag ints(int... values) {
         ListTag tag = new ListTag();
-        for (int value : values) tag.add(IntTag.valueOf(value));
+        for (int value : values) {
+            tag.add(IntTag.valueOf(value));
+        }
         return tag;
     }
 

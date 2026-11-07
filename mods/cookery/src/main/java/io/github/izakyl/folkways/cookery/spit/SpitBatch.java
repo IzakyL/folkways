@@ -4,6 +4,7 @@ import com.github.ysbbbbbb.kaleidoscopecookery.blockentity.kitchen.ShawarmaSpitB
 import java.util.Optional;
 import java.util.UUID;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
@@ -24,8 +25,13 @@ final class SpitBatch {
     }
     static Optional<Batch> read(ShawarmaSpitBlockEntity spit, ServerLevel level) {
         CompoundTag tag = spit.getPersistentData().getCompound(KEY);
+        if (!tag.hasUUID("batch") || !tag.hasUUID("colony") || !tag.contains("input", Tag.TAG_COMPOUND)
+                || !tag.contains("output", Tag.TAG_COMPOUND) || !tag.contains("recipe", Tag.TAG_STRING)) {
+            return Optional.empty();
+        }
         ResourceLocation recipe = ResourceLocation.tryParse(tag.getString("recipe"));
-        if (!tag.hasUUID("colony") || !tag.hasUUID("batch") || recipe == null || spit.cookedItem.isEmpty()) {
+        if (!tag.hasUUID("colony") || !tag.hasUUID("batch") || recipe == null || spit.cookedItem.isEmpty()
+                || !tag.contains("input", Tag.TAG_COMPOUND) || !tag.contains("output", Tag.TAG_COMPOUND)) {
             return Optional.empty();
         }
         ItemStack input = ItemStack.parseOptional(level.registryAccess(), tag.getCompound("input"));

@@ -10,7 +10,7 @@ import com.simibubi.create.content.trains.schedule.Schedule;
 import com.simibubi.create.content.trains.schedule.ScheduleItem;
 import com.simibubi.create.content.trains.schedule.ScheduleRuntime;
 import com.simibubi.create.foundation.utility.CreateLang;
-import io.github.izakyl.folkways.core.api.colony.Books;
+import io.github.izakyl.folkways.front.api.Books;
 import java.util.Optional;
 import java.util.UUID;
 import net.minecraft.ChatFormatting;

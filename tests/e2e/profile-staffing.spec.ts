@@ -74,9 +74,9 @@ const IMPORTS = ["io.github.izakyl.folkways.front.api.ui.Pages",
   "io.github.izakyl.folkways.plugins.patrol.PatrolStaffing",
   "io.github.izakyl.folkways.plugins.patrol.PatrolContent",
   "io.github.izakyl.folkways.plugins.patrol.SentryPosts",
-  "io.github.izakyl.folkways.core.api.colony.Held",
-  "io.github.izakyl.folkways.core.api.terms.WorldPos",
-  "io.github.izakyl.folkways.core.api.terms.ItemSpec", "net.minecraft.world.item.Items"];
+  "io.github.izakyl.folkways.core.colony.api.Claimed",
+  "io.github.izakyl.folkways.core.world.api.WorldPos",
+  "io.github.izakyl.folkways.core.item.api.ItemSpec", "net.minecraft.world.item.Items"];
 const SETUP = defineTask<{ player: string }, Scene>({ name: "folkways.staffing.ui-setup", side: "server",
   source: javaTask({ imports: IMPORTS, body: `
 var player=ctx.server().getPlayerList().getPlayerByName(Args.of(ctx).string("player"));
@@ -89,11 +89,11 @@ var residents=colony.residents().stream().map(resident->resident.id()).sorted().
 profiles.assign(List.of(residents.get(0)),Optional.of(melee.id()));
 profiles.assign(List.of(residents.get(1)),Optional.of(ranged.id()));
 var at=player.blockPosition().offset(3,0,3);
-var route=colony.hold(PatrolContent.BEAT,new Held.Line(List.of(WorldPos.of(level,at),
+var route=colony.hold(PatrolContent.BEAT,new Claimed.Line(List.of(WorldPos.of(level,at),
  WorldPos.of(level,at.offset(8,0,0))))).orElseThrow();
 var cells=new LinkedHashSet<WorldPos>();
 for(int x=0;x<2;x++){for(int z=0;z<2;z++){cells.add(WorldPos.of(level,at.below().offset(x,0,z)));}}
-var zone=colony.hold(SentryPosts.ZONE,new Held.Area(cells)).orElseThrow();
+var zone=colony.hold(SentryPosts.ZONE,new Claimed.Area(cells)).orElseThrow();
 ColonyShell.editSelection(player,route.id());
 return Map.of("player",player.getGameProfile().getName(),"route",route.id().toString(),"zone",zone.id().toString(),
  "melee",melee.id().toString(),"ranged",ranged.id().toString());` }) });

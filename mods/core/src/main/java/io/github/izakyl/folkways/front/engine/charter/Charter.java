@@ -38,8 +38,8 @@ public record Charter(String name, Optional<UUID> founder, List<UUID> members, O
         static Optional<Invitation> load(Reader reader) {
             Optional<UUID> player = reader.uuid(TAG_PLAYER);
             Optional<UUID> by = reader.uuid(TAG_BY);
-            return player.isEmpty() || by.isEmpty() ? Optional.empty()
-                : Optional.of(new Invitation(player.get(), by.get(), reader.flag(TAG_TOLD).orElse(false)));
+            return player.isEmpty() || by.isEmpty() || reader.flag(TAG_TOLD).isEmpty() ? Optional.empty()
+                : Optional.of(new Invitation(player.get(), by.get(), reader.flag(TAG_TOLD).orElseThrow()));
         }
     }
 
@@ -50,11 +50,6 @@ public record Charter(String name, Optional<UUID> founder, List<UUID> members, O
 
     public static Charter founded(String name, UUID founder) {
         return new Charter(name, Optional.of(founder), List.of(founder), Optional.empty(), List.of());
-    }
-
-    // No founder and no members: the first player to use a book bound to it takes it up.
-    public boolean unclaimed() {
-        return founder.isEmpty() && members.isEmpty();
     }
 
     public boolean member(UUID player) {
@@ -138,9 +133,12 @@ public record Charter(String name, Optional<UUID> founder, List<UUID> members, O
     }
 
     public static Charter load(CompoundTag tag) {
+        if (tag.isEmpty()) {
+            return UNCLAIMED;
+        }
         Reader reader = Reader.of(tag);
-        return new Charter(reader.string(TAG_NAME).orElse(""), reader.uuid(TAG_FOUNDER),
-            reader.uuids(TAG_MEMBERS), reader.uuid(TAG_TEAM),
-            reader.children(TAG_INVITED).stream().flatMap(child -> Invitation.load(child).stream()).toList());
+        return new Charter(reader.string(TAG_NAME).orElseThrow(), reader.uuid(TAG_FOUNDER),
+            reader.requiredUuids(TAG_MEMBERS), reader.uuid(TAG_TEAM),
+            reader.requiredChildren(TAG_INVITED).stream().flatMap(child -> Invitation.load(child).stream()).toList());
     }
 }

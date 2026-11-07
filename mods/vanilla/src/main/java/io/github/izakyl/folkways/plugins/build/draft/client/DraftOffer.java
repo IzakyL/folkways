@@ -1,7 +1,7 @@
 package io.github.izakyl.folkways.plugins.build.draft.client;
 
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.colony.Books;
+import io.github.izakyl.folkways.front.api.Books;
 import io.github.izakyl.folkways.front.api.ui.BoxOffers;
 import io.github.izakyl.folkways.front.api.ui.PathOffers;
 import io.github.izakyl.folkways.plugins.build.BlueprintUploads;

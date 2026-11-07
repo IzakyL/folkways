@@ -409,7 +409,7 @@ const EMPTY_PACKS = defineTask<Record<string, any>, Record<string, any>>({
   timeoutMs: 20_000,
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.core.api.resident.body.Bodies",
+      "io.github.izakyl.folkways.core.resident.api.Bodies",
       "net.minecraft.core.registries.BuiltInRegistries",
       "net.minecraft.world.item.ItemStack",
     ],
@@ -434,7 +434,7 @@ const SET_VITALS = defineTask<Record<string, any>, Record<string, any>>({
   timeoutMs: 20_000,
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.core.api.colony.Colony",
+      "io.github.izakyl.folkways.core.colony.api.Colony",
       "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
       "io.github.izakyl.folkways.plugins.person.living.LivingContent",
       "java.lang.reflect.AccessibleObject",
@@ -488,8 +488,8 @@ const READ_CREW = defineTask<Record<string, any>, Record<string, any>>({
   timeoutMs: 20_000,
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.core.api.colony.Colony",
-      "io.github.izakyl.folkways.core.api.resident.body.Bodies",
+      "io.github.izakyl.folkways.core.colony.api.Colony",
+      "io.github.izakyl.folkways.core.resident.api.Bodies",
       "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
       "io.github.izakyl.folkways.plugins.person.living.LivingContent",
       "java.lang.reflect.AccessibleObject",
@@ -570,7 +570,7 @@ const HEARTBEAT = defineTask<Record<string, any>, Record<string, any>>({
   timeoutMs: 20_000,
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.core.api.resident.body.Bodies",
+      "io.github.izakyl.folkways.core.resident.api.Bodies",
       "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
       "net.minecraft.core.registries.BuiltInRegistries",
       "net.minecraft.resources.ResourceKey",
@@ -580,7 +580,7 @@ const HEARTBEAT = defineTask<Record<string, any>, Record<string, any>>({
 var server=ctx.server();var level=server.overworld();var args=Args.of(ctx);
 var id=UUID.fromString(args.string("colony_id"));
 var colony=ColonyGround.of(server,id).orElseThrow();
-var labor=Class.forName("io.github.izakyl.folkways.core.engine.labor.Labor");
+var labor=Class.forName("io.github.izakyl.folkways.core.runtime.Labor");
 var site=labor.getDeclaredMethod("site",UUID.class,ResourceKey.class);site.setAccessible(true);
 var found=(Optional<?>)site.invoke(null,id,Level.OVERWORLD);
 String beat="no labor site";

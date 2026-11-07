@@ -17,8 +17,13 @@ final class MillstoneBatch {
 
     static Optional<Batch> read(MillstoneBlockEntity mill, ServerLevel level) {
         CompoundTag tag = mill.getPersistentData().getCompound(KEY);
+        if (!tag.hasUUID("batch") || !tag.hasUUID("colony") || !tag.contains("fingerprint", Tag.TAG_COMPOUND)
+                || !tag.contains("ready", Tag.TAG_BYTE) || !tag.contains("recipe", Tag.TAG_STRING)) {
+            return Optional.empty();
+        }
         ResourceLocation recipe = ResourceLocation.tryParse(tag.getString("recipe"));
         if (!tag.hasUUID("colony") || !tag.hasUUID("batch") || recipe == null
+                || !tag.contains("ready", Tag.TAG_BYTE)
                 || !tag.getCompound("fingerprint").equals(fingerprint(mill, level))) {
             return Optional.empty();
         }

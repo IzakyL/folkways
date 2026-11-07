@@ -94,7 +94,7 @@ public final class CookeryDiningSchedulingGameTests {
                 }
                 helper.assertValueEqual(bowls, 1, "the real executor stows the soup's one native bowl");
                 helper.assertFalse(rig.person.isPassenger(), "completion releases the native seat");
-                helper.assertTrue(io.github.izakyl.folkways.core.api.terms.Footing.withFeetAt(rig.level, rig.person.blockPosition()),
+                helper.assertTrue(io.github.izakyl.folkways.core.world.api.Footing.withFeetAt(rig.level, rig.person.blockPosition()),
                     "the diner steps into a reachable aisle, ready to resume work");
                 helper.assertTrue(DiningTables.available(rig.level, rig.chair), "the next resident can claim that chair");
                 helper.assertTrue(rig.person.leisureMotion().isEmpty(), "completion releases the synchronized dining pose");

@@ -1,13 +1,13 @@
 package io.github.izakyl.folkways.effect;
 
-import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
 import io.github.izakyl.folkways.FolkwaysConfig;
 import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.resident.api.Bodies;
+import io.github.izakyl.folkways.core.resident.api.Body;
+import io.github.izakyl.folkways.core.resident.api.ResidentKinds;
 import io.github.izakyl.folkways.effect.perk.GlobalPerks;
 import io.github.izakyl.folkways.effect.perk.PerkPool;
-import io.github.izakyl.folkways.core.api.resident.ResidentKinds;
-import io.github.izakyl.folkways.core.api.resident.body.Bodies;
-import io.github.izakyl.folkways.core.api.resident.body.Body;
+import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
 import io.github.izakyl.folkways.plugins.build.BuildContent;
 import io.github.izakyl.folkways.plugins.farming.FarmingContent;
 import io.github.izakyl.folkways.plugins.pasture.PastureContent;
@@ -106,7 +106,7 @@ public final class EffectsGameTests {
         near(helper, hands.value(Stats.WORK_SPEED, BuildContent.VOCATION), 1.0, "and building none of it");
 
         Effects body = PerkPool.effects(Map.of(
-            GlobalPerks.PACKMULE, 2, GlobalPerks.BRISK, 3, GlobalPerks.LONGARM, 3, GlobalPerks.ASCETIC, 1));
+            GlobalPerks.GOLEM_PACK_ROOM, 2, GlobalPerks.BRISK, 3, GlobalPerks.LONGARM, 3, GlobalPerks.ASCETIC, 1));
         near(helper, body.value(Stats.PACK_ROOM), 1.30, "packmule II");
         near(helper, body.value(Stats.MOVE_SPEED), 1.15, "brisk III");
         near(helper, body.value(Stats.REACH), 1.5, "longarm III");

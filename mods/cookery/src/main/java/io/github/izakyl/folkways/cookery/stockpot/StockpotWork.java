@@ -1,22 +1,28 @@
 package io.github.izakyl.folkways.cookery.stockpot;
 
-import io.github.izakyl.folkways.core.api.terms.RefusalKind;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.work.Amount;
-import io.github.izakyl.folkways.core.api.work.Leaves;
-import io.github.izakyl.folkways.core.api.work.Ending;
-import io.github.izakyl.folkways.core.api.work.Node;
-import io.github.izakyl.folkways.core.api.work.NodeSpec;
-import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.WorkEffort;
-import io.github.izakyl.folkways.core.api.work.Worker;
-import io.github.izakyl.folkways.core.api.work.WorkGesture;
-import io.github.izakyl.folkways.core.api.work.Workload;
-import io.github.izakyl.folkways.core.api.work.WorkSite;
 import io.github.izakyl.folkways.cookery.CookeryContent;
 import io.github.izakyl.folkways.cookery.CookeryRefusal;
 import io.github.izakyl.folkways.cookery.KitchenBookings;
+import io.github.izakyl.folkways.cookery.KitchenClosure;
+import io.github.izakyl.folkways.cookery.KitchenHolding;
+import io.github.izakyl.folkways.cookery.KitchenWork;
+import io.github.izakyl.folkways.core.resident.api.RefusalKind;
+import io.github.izakyl.folkways.core.work.api.Amount;
+import io.github.izakyl.folkways.core.work.api.Ending;
+import io.github.izakyl.folkways.core.work.api.HoldingContext;
+import io.github.izakyl.folkways.core.work.api.HoldingStep;
+import io.github.izakyl.folkways.core.work.api.NodeSpec;
+import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.work.api.WorkAction;
+import io.github.izakyl.folkways.core.work.api.WorkEffort;
+import io.github.izakyl.folkways.core.work.api.WorkGesture;
+import io.github.izakyl.folkways.core.work.api.WorkHolding;
+import io.github.izakyl.folkways.core.work.api.WorkSite;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.work.api.Workload;
+import io.github.izakyl.folkways.core.work.support.Leaves;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.plugins.wares.WaresContent;
 import java.util.List;
 import java.util.Optional;
@@ -25,7 +31,7 @@ import net.minecraft.server.level.ServerLevel;
 
 // One production offer has one completion and one input budget. Its pieces use the real pot batch by batch;
 // serving a first batch must not promise all later batches to the downstream consumer yet.
-final class StockpotWork implements Node, Workload.Within {
+final class StockpotWork implements KitchenWork {
 
     private final NodeSpec spec;
     private final UUID colony;
@@ -42,6 +48,7 @@ final class StockpotWork implements Node, Workload.Within {
     private int served;
     private boolean loaded;
     private RefusalKind failed;
+    private final KitchenClosure closure;
 
     StockpotWork(UUID colony, WorldPos at, Stances stances, StockpotPlan plan, int runs,
                  boolean hasLid, KitchenBookings bookings, Runnable changed) {
@@ -54,7 +61,8 @@ final class StockpotWork implements Node, Workload.Within {
         this.hasLid = hasLid;
         this.bookings = bookings;
         this.changed = changed;
-        this.spec = NodeSpec.of(UUID.randomUUID(), CookeryContent.ID, new WorkSite.AtBlock(at), stances, this)
+        this.spec = NodeSpec.of(UUID.randomUUID(), CookeryContent.ID, new WorkSite.AtBlock(at), stances,
+            new Workload.Custom())
             .needs(plan.totalNeeds(runs, hasLid, StockpotLoad.lid()))
             .gives(new Amount(plan.produces(), (long) plan.portions() * runs))
             .leaves(plan.workLeaves(runs, !hasLid))
@@ -63,13 +71,20 @@ final class StockpotWork implements Node, Workload.Within {
             .estimate((int) Math.min(Integer.MAX_VALUE, (40L + Math.max(0, plan.recipe().time())) * runs))
             .doing(CookeryContent.COOKING, plan.produces()).done();
         nextBatch();
+        closure = new KitchenClosure(how -> {}, changed);
     }
 
     private void nextBatch() {
         UUID batch = UUID.randomUUID();
         loading = new StockpotLoad(colony, batch, at, stances, plan, hasLid, bookings, changed, id(), generation);
-        taking = new StockpotTake(colony, batch, at, stances, plan, bookings, changed, false, id(), served + 1 < runs, generation);
+        taking = new StockpotTake(colony, batch, at, stances, plan, bookings, changed,
+            id(), served + 1 < runs, generation);
         loaded = false;
+    }
+
+    @Override
+    public boolean producesBeforeSettlement() {
+        return true;
     }
 
     @Override
@@ -89,60 +104,60 @@ final class StockpotWork implements Node, Workload.Within {
 
     @Override
     public Optional<RefusalKind> refusal(ServerLevel level) {
+        if (closure.closed()) {
+            return Optional.of(CookeryRefusal.STATION_CHANGED);
+        }
         return loading.refusal(level);
     }
 
     @Override
-    public Turn next(ServerLevel level, Worker who) {
+    public WorkHolding acquire(HoldingContext context) {
+        return new StockpotHolding();
+    }
+
+    private final class StockpotHolding extends KitchenHolding {
+
+        StockpotHolding() {
+            super(StockpotWork.this::operation, () -> served == runs || failed != null,
+                StockpotWork.this::commit, why -> failed = why);
+        }
+
+        @Override
+        protected HoldingStep stepCompleted(HoldingContext context, WorkAction operation, HoldingStep step) {
+            StockpotWork.this.completed(context.level(), operation, step instanceof HoldingStep.Failed failure
+                ? new Ending.Failed(id(), failure.why()) : Ending.DONE);
+            return new HoldingStep.Running();
+        }
+    }
+
+    private WorkAction operation(ServerLevel level, Worker who) {
         refusal(level).ifPresent(why -> failed = why);
         if (bookings.cancelled(at, id(), generation)) {
             failed = CookeryRefusal.STATION_CHANGED;
         }
         if (failed != null || served == runs) {
-            return LEAVE;
+            return null;
         }
         if (!bookings.first(at, id())) {
-            return WAIT;
+            return null;
         }
-        Node next = loaded ? taking : loading;
-        return next.ready(level) ? new Turn.Piece(new Piece(next)) : WAIT;
+        StockpotAction next = loaded ? taking : loading;
+        return next.ready(level) ? next : null;
     }
 
-    @Override
-    public void ended(ServerLevel level, Node piece, Ending how) {
+    private void completed(ServerLevel level, WorkAction piece, Ending how) {
         if (how instanceof Ending.Failed failure) {
             failed = failure.why();
-        } else if (how instanceof Ending.Done && piece instanceof Piece action) {
-            if (action.delegate == loading) {
+        } else if (how instanceof Ending.Done) {
+            if (piece == loading) {
                 loaded = true;
-            } else if (action.delegate == taking) {
+            } else if (piece == taking) {
                 served++;
                 if (served < runs) {
                     nextBatch();
                 }
             }
         }
-    }
-
-    // An urge can abandon a wind-up without abandoning the outer work. A fresh piece id lets the same batch
-    // resume afterwards; the persistent pot identity and its kitchen turn stay unchanged.
-    private static final class Piece implements Node {
-        private final Node delegate;
-        private final NodeSpec spec;
-
-        Piece(Node delegate) {
-            this.delegate = delegate;
-            NodeSpec source = delegate.spec();
-            this.spec = new NodeSpec(UUID.randomUUID(), source.owner(), source.site(), source.stances(),
-                source.needs(), source.gives(), source.leaves(), source.tools(), source.workload(), source.effort(),
-                source.pace(), source.vocation(), source.gesture(), source.focus(), source.estimate(),
-                source.doing(), source.about(), source.subject());
-        }
-
-        public NodeSpec spec() { return spec; }
-        public boolean ready(ServerLevel level) { return delegate.ready(level); }
-        public Optional<RefusalKind> refusal(ServerLevel level) { return delegate.refusal(level); }
-        public Outcome commit(ServerLevel level, Worker who) { return delegate.commit(level, who); }
     }
 
     @Override
@@ -152,7 +167,8 @@ final class StockpotWork implements Node, Workload.Within {
     }
 
     @Override
-    public void ended(ServerLevel level, Ending how) {
-        changed.run();
+    public KitchenClosure closure() {
+        return closure;
     }
+
 }

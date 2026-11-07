@@ -1,7 +1,7 @@
 package io.github.izakyl.folkways.create.rail.passage;
 
-import io.github.izakyl.folkways.core.api.passage.Hop;
-import io.github.izakyl.folkways.core.api.work.Stances;
+import io.github.izakyl.folkways.core.travel.api.Hop;
+import io.github.izakyl.folkways.core.work.api.Stances;
 import io.github.izakyl.folkways.create.rail.domain.TransitNetwork;
 import io.github.izakyl.folkways.create.rail.domain.TransitSnapshot;
 import java.util.ArrayList;

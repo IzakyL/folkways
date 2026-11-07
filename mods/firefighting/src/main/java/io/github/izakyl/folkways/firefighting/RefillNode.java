@@ -1,18 +1,18 @@
 package io.github.izakyl.folkways.firefighting;
 
 import com.mikoalopex.createfirefightingadd.content.equipment.extinguisher.FireExtinguisherItem;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
-import io.github.izakyl.folkways.core.api.terms.Reach;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.work.Amount;
-import io.github.izakyl.folkways.core.api.work.Need;
-import io.github.izakyl.folkways.core.api.work.Node;
-import io.github.izakyl.folkways.core.api.work.NodeSpec;
-import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.WorkSite;
-import io.github.izakyl.folkways.core.api.work.Worker;
-import io.github.izakyl.folkways.core.api.work.Workload;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
+import io.github.izakyl.folkways.core.work.api.Amount;
+import io.github.izakyl.folkways.core.work.api.Need;
+import io.github.izakyl.folkways.core.work.api.Node;
+import io.github.izakyl.folkways.core.work.api.NodeSpec;
+import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.work.api.WorkSite;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.work.api.Workload;
+import io.github.izakyl.folkways.core.work.support.WorkStances;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.plugins.damagecontrol.DamageControlContent;
 import io.github.izakyl.folkways.plugins.damagecontrol.DamageControlRefusal;
 import java.util.List;
@@ -80,7 +80,7 @@ final class RefillNode implements Node {
     }
 
     public Outcome commit(ServerLevel level, Worker who) {
-        if (!ready(level) || !Reach.standingIn(who.body(), spec.stances())) {
+        if (!ready(level) || !WorkStances.standingIn(who.body(), spec.stances())) {
             return Outcome.failed(DamageControlRefusal.NOT_LOADED);
         }
         ItemStack stack = ExtinguisherAdapter.find(who.pack());

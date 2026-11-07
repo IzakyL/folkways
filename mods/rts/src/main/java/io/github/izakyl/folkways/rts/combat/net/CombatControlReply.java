@@ -1,7 +1,7 @@
 package io.github.izakyl.folkways.rts.combat.net;
 
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;

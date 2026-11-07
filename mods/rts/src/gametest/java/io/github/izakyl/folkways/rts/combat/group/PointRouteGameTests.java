@@ -1,17 +1,18 @@
 package io.github.izakyl.folkways.rts.combat.group;
 
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.colony.Colonies;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.colony.Held;
-import io.github.izakyl.folkways.core.api.resident.body.Body;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
-import io.github.izakyl.folkways.core.api.terms.Reach;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.engine.labor.LaborFixture;
+import io.github.izakyl.folkways.core.colony.api.Claimed;
+import io.github.izakyl.folkways.core.colony.api.Colonies;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
+import io.github.izakyl.folkways.core.resident.api.Body;
+import io.github.izakyl.folkways.core.runtime.LaborFixture;
 import io.github.izakyl.folkways.core.testing.Cleanup;
+import io.github.izakyl.folkways.core.world.api.Reach;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfile;
 import io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfiles;
+import io.github.izakyl.folkways.plugins.combat.weapon.PatrolSupplies;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import io.github.izakyl.folkways.plugins.person.PersonContent;
 import io.github.izakyl.folkways.rts.FolkwaysRtsMod;
@@ -31,9 +32,11 @@ import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.tags.ItemTags;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.ai.attributes.Attributes;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -94,7 +97,7 @@ public final class PointRouteGameTests {
                 helper.assertTrue(
                     partial != null && !partial.canReach() && partial.getNodeCount() > 1,
                     "the fixture must offer useful nodes without reaching the distant mandatory click");
-                scene.groups.commandSelectionPoints(people, List.of(goal), -1);
+                scene.groups.commandSelectionPoints(people, List.of(goal), -1, false);
             })
             .thenWaitUntil(
             () ->
@@ -126,7 +129,7 @@ public final class PointRouteGameTests {
     public static void temporarilyAirborneReferenceWaitsAndRetriesInsteadOfFailingTheSquad(GameTestHelper helper) {
         Scene scene = new Scene(helper);
         List<Body> people = scene.people();
-        scene.groups.commandSelectionPoints(people, List.of(scene.at(19, 1, 10)), -1);
+        scene.groups.commandSelectionPoints(people, List.of(scene.at(19, 1, 10)), -1, false);
         UnitGroup group = scene.group();
         people.forEach(body -> body.mob().setOnGround(false));
         group.tick();
@@ -160,7 +163,7 @@ public final class PointRouteGameTests {
                 helper.setBlock(new BlockPos(x, y, 15), Blocks.STONE);
             }
         }
-        scene.groups.commandSelectionPoints(people, List.of(scene.at(19, 1, 10)), -1);
+        scene.groups.commandSelectionPoints(people, List.of(scene.at(19, 1, 10)), -1, false);
         UnitGroup group = scene.group();
         helper.startSequence()
             .thenWaitUntil(
@@ -183,7 +186,7 @@ public final class PointRouteGameTests {
                     .allMatch(
                     body -> scene.groups.ofResident(body.id()).orElseThrow() == group),
                     "route failure keeps actual squad membership for a replacement command");
-                scene.groups.commandSelectionPoints(people, List.of(scene.at(5, 1, 10)), -1);
+                scene.groups.commandSelectionPoints(people, List.of(scene.at(5, 1, 10)), -1, false);
             })
             .thenWaitUntil(
             () ->
@@ -198,8 +201,8 @@ public final class PointRouteGameTests {
         Scene scene = new Scene(helper);
         List<Body> people = scene.people();
         WorldPos first = scene.at(12, 1, 10);
-        scene.groups.appendSelectionPoint(people, first);
-        scene.groups.appendSelectionPoint(people, scene.at(19, 1, 10));
+        scene.groups.appendSelectionPoint(people, first, false);
+        scene.groups.appendSelectionPoint(people, scene.at(19, 1, 10), false);
         UnitGroup group = scene.group();
         CompoundTag saved = new CompoundTag();
         Body away = people.get(1);
@@ -310,7 +313,7 @@ public final class PointRouteGameTests {
                 body.mob().moveTo(cell.getX() + .5, cell.getY(), cell.getZ() + .5);
                 body.mob().setOnGround(true);
                 level.addFreshEntity(body.mob());
-                colony.hold(PersonContent.ID, Held.Entity.of(body.mob())).orElseThrow();
+                colony.hold(PersonContent.ID, Claimed.Entity.of(body.mob())).orElseThrow();
                 body.joinColony(colony.id());
                 arm(colony, body, "Melee", ItemSpec.of(Tags.Items.MELEE_WEAPON_TOOLS));
                 bodies.add(body);
@@ -356,6 +359,33 @@ public final class PointRouteGameTests {
             .filter(one -> one.name().equals(name))
             .findFirst()
             .orElseGet(() -> profiles.add(profiles.create(name).id(), LoadoutProfile.Entry.weapon(weapon)));
+        profiles.assign(List.of(body.id()), Optional.of(profile.id()));
+    }
+
+    private static void assignLoadout(
+        PatrolSupplies supplies,
+        Body body, String name) {
+        var profiles = supplies.profiles();
+        var profile = profiles.all().stream().filter(value -> value.name().equals(name)).findFirst()
+            .orElseGet(() -> {
+                var created = profiles.create(name);
+                var weapon = switch (name) {
+                    case "melee" -> ItemSpec.of(
+                        Tags.Items.MELEE_WEAPON_TOOLS);
+                    case "bow" -> ItemSpec.of(Items.BOW);
+                    case "crossbow" -> ItemSpec.of(Items.CROSSBOW);
+                    default -> throw new IllegalArgumentException(name);
+                };
+                var entries = new ArrayList<LoadoutProfile.Entry>();
+                entries.add(LoadoutProfile.Entry.weapon(weapon));
+                if (!name.equals("melee")) {
+                    entries.add(LoadoutProfile.Entry.supply(
+                        ItemSpec.of(ItemTags.ARROWS), 8, 8));
+                }
+                profiles.replace(new LoadoutProfile(
+                    created.id(), created.name(), entries));
+                return profiles.get(created.id()).orElseThrow();
+            });
         profiles.assign(List.of(body.id()), Optional.of(profile.id()));
     }
 }

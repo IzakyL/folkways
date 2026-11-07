@@ -198,7 +198,7 @@ test("tasks rotating under the same reason are not judged as one stuck task", ()
   assert.deepEqual(judgeFailures(beats), []);
 });
 
-test("old logs with only totals report missing evidence, not a deadlock", () => {
+test("incomplete task evidence is reported without inventing a deadlock", () => {
   const findings = judgeFailures(Array(12).fill(beat({ why: { WAY_PENDING: 1 }, unassigned: 1 })));
   assert.equal(findings.length, 1);
   assert.equal(findings[0].rule, "failures/task-identity-missing");

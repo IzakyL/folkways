@@ -1,14 +1,14 @@
 package io.github.izakyl.folkways.plugins.supply;
 
-import io.github.izakyl.folkways.core.api.colony.Closing;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.colony.ColonyView;
-import io.github.izakyl.folkways.core.api.colony.Holding;
-import io.github.izakyl.folkways.core.api.colony.Release;
-import io.github.izakyl.folkways.core.api.terms.Reach;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.Workshop;
+import io.github.izakyl.folkways.core.colony.api.Claim;
+import io.github.izakyl.folkways.core.colony.api.ClaimRelease;
+import io.github.izakyl.folkways.core.colony.api.Closing;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.colony.api.ColonyView;
+import io.github.izakyl.folkways.core.plan.api.Workshop;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.world.api.Reach;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.front.api.Facing;
 import io.github.izakyl.folkways.front.api.notice.Line;
 import io.github.izakyl.folkways.front.api.panel.Board;
@@ -28,7 +28,7 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 
-final class SupplyPresence implements Facing, Holding.Watch {
+final class SupplyPresence implements Facing, Claim.Watch {
     private final Colony colony;
     private final Map<WorldPos, SupplyWorkshop> workshops = new LinkedHashMap<>();
     private final Set<ResourceKey<Level>> published = new LinkedHashSet<>();
@@ -36,8 +36,8 @@ final class SupplyPresence implements Facing, Holding.Watch {
     private long next;
 
     SupplyPresence(Colony colony, MinecraftServer server) { this.colony = colony; }
-    public void held(Holding holding) { dirty = true; }
-    public void released(Holding holding, Release why) { dirty = true; }
+    public void held(Claim holding) { dirty = true; }
+    public void released(Claim holding, ClaimRelease why) { dirty = true; }
 
     void tick(MinecraftServer server) {
         long now = server.overworld().getGameTime();
@@ -80,7 +80,7 @@ final class SupplyPresence implements Facing, Holding.Watch {
     }
 
     public boolean shows(ResourceLocation page) {
-        return !page.equals(SupplyContent.ID) || !colony.holdings(SupplyContent.SOURCE).isEmpty();
+        return !page.equals(SupplyContent.ID) || !colony.claims(SupplyContent.SOURCE).isEmpty();
     }
 
     public Optional<Board> board(ResourceLocation page, ColonyView view) {

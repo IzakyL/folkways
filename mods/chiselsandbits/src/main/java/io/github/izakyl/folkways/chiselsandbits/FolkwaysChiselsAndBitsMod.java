@@ -1,7 +1,8 @@
 package io.github.izakyl.folkways.chiselsandbits;
 
-import io.github.izakyl.folkways.core.api.structure.StructureCompat;
-import io.github.izakyl.folkways.core.api.structure.Voxelizer;
+import io.github.izakyl.folkways.chiselsandbits.upgrade.ChiselsAndBitsUpgrades;
+import io.github.izakyl.folkways.core.work.api.StructureCompat;
+import io.github.izakyl.folkways.core.work.api.Voxelizer;
 import mod.chiselsandbits.block.ChiseledBlock;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.neoforged.bus.api.IEventBus;
@@ -15,9 +16,12 @@ public final class FolkwaysChiselsAndBitsMod {
     public static final String ID = "folkways_chiselsandbits";
 
     public FolkwaysChiselsAndBitsMod(IEventBus bus, ModContainer container) {
+        ChiselsAndBitsUpgrades.register();
         container.registerConfig(ModConfig.Type.SERVER, CandBConfig.SPEC);
         bus.addListener(this::setup);
-        if (net.neoforged.fml.loading.FMLEnvironment.dist.isClient()) bus.addListener(CandBModels::setup);
+        if (net.neoforged.fml.loading.FMLEnvironment.dist.isClient()) {
+            bus.addListener(CandBModels::setup);
+        }
     }
 
     private void setup(FMLCommonSetupEvent event) {

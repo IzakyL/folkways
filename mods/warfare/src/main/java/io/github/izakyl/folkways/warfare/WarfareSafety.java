@@ -1,8 +1,8 @@
 package io.github.izakyl.folkways.warfare;
 
-import io.github.izakyl.folkways.core.api.colony.Colonies;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
+import io.github.izakyl.folkways.core.colony.api.Colonies;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
+import io.github.izakyl.folkways.core.world.api.WorldSpaces;
 import io.github.izakyl.folkways.plugins.combat.Threats;
 import io.github.izakyl.folkways.plugins.person.ResidentEntity;
 import java.util.ArrayList;
@@ -84,7 +84,7 @@ final class WarfareSafety {
             .flatMap(id -> Colonies.of(level.getServer(), id))
             .ifPresent(
             colony -> {
-                colony.holdings().forEach(holding -> owned.addAll(holding.what().cells()));
+                colony.claims().forEach(holding -> owned.addAll(holding.what().cells()));
                 owned.addAll(colony.storesIn(level.dimension()));
             });
         return owned;

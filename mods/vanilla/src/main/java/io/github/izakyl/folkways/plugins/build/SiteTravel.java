@@ -1,7 +1,7 @@
 package io.github.izakyl.folkways.plugins.build;
 
-import io.github.izakyl.folkways.core.api.terms.Closures;
-import io.github.izakyl.folkways.core.api.terms.Footing;
+import io.github.izakyl.folkways.core.world.api.Closures;
+import io.github.izakyl.folkways.core.world.api.Footing;
 import io.github.izakyl.folkways.plugins.person.walk.Breathing;
 import java.util.Comparator;
 import java.util.HashSet;

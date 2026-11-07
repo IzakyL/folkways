@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.plugins.wares;
 
-import io.github.izakyl.folkways.core.api.work.WorkNoise;
+import io.github.izakyl.folkways.core.work.api.WorkNoise;
 import java.util.List;
 import net.minecraft.core.BlockPos;
 import net.minecraft.sounds.SoundEvent;

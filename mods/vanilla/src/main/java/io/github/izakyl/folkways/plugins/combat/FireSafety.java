@@ -1,14 +1,14 @@
 package io.github.izakyl.folkways.plugins.combat;
 
-import io.github.izakyl.folkways.core.api.resident.body.Bodies;
+import io.github.izakyl.folkways.core.resident.api.Bodies;
 import java.util.Optional;
 import java.util.UUID;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
-import net.minecraft.world.phys.AABB;
-import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.level.ClipContext;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.HitResult;
+import net.minecraft.world.phys.Vec3;
 
 /** Conservative ally clearance for a direct shot, repeated at discharge. */
 public final class FireSafety {

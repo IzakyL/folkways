@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.create.elevator;
 
-import io.github.izakyl.folkways.core.api.passage.Fare;
+import io.github.izakyl.folkways.core.travel.api.Fare;
 import java.util.OptionalLong;
 import java.util.UUID;
 

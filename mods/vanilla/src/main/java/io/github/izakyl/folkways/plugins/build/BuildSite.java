@@ -1,33 +1,40 @@
 package io.github.izakyl.folkways.plugins.build;
 
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.ground.BlockChanges;
-import io.github.izakyl.folkways.core.api.inventory.InventorySnapshot;
-import io.github.izakyl.folkways.core.api.resident.body.Body;
-import io.github.izakyl.folkways.core.api.structure.StructureCompat;
-import io.github.izakyl.folkways.core.api.terms.Closures;
-import io.github.izakyl.folkways.core.api.terms.Goods;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
-import io.github.izakyl.folkways.core.api.terms.Reach;
-import io.github.izakyl.folkways.core.api.terms.Realm;
-import io.github.izakyl.folkways.core.api.terms.RefusalKind;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.work.Amount;
-import io.github.izakyl.folkways.core.api.work.Before;
-import io.github.izakyl.folkways.core.api.work.Ending;
-import io.github.izakyl.folkways.core.api.work.Grown;
-import io.github.izakyl.folkways.core.api.work.Leaves;
-import io.github.izakyl.folkways.core.api.work.Need;
-import io.github.izakyl.folkways.core.api.work.Node;
-import io.github.izakyl.folkways.core.api.work.NodeSpec;
-import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Recourse;
-import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.ToolUse;
-import io.github.izakyl.folkways.core.api.work.WorkSite;
-import io.github.izakyl.folkways.core.api.work.Worker;
-import io.github.izakyl.folkways.core.api.work.Workload;
-import io.github.izakyl.folkways.core.engine.labor.LaborRefusal;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.inventory.api.InventorySnapshot;
+import io.github.izakyl.folkways.core.item.api.Goods;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
+import io.github.izakyl.folkways.core.plan.api.Before;
+import io.github.izakyl.folkways.core.plan.api.Grown;
+import io.github.izakyl.folkways.core.resident.api.Body;
+import io.github.izakyl.folkways.core.resident.api.RefusalKind;
+import io.github.izakyl.folkways.core.work.api.ActionHandle;
+import io.github.izakyl.folkways.core.work.api.Amount;
+import io.github.izakyl.folkways.core.work.api.Disposition;
+import io.github.izakyl.folkways.core.work.api.Ending;
+import io.github.izakyl.folkways.core.work.api.HoldingContext;
+import io.github.izakyl.folkways.core.work.api.HoldingStep;
+import io.github.izakyl.folkways.core.work.api.LaborRefusal;
+import io.github.izakyl.folkways.core.work.api.Need;
+import io.github.izakyl.folkways.core.work.api.Node;
+import io.github.izakyl.folkways.core.work.api.NodeSpec;
+import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.PreemptReason;
+import io.github.izakyl.folkways.core.work.api.Recourse;
+import io.github.izakyl.folkways.core.work.api.SoftPreempt;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.work.api.StructureCompat;
+import io.github.izakyl.folkways.core.work.api.ToolUse;
+import io.github.izakyl.folkways.core.work.api.WorkHolding;
+import io.github.izakyl.folkways.core.work.api.WorkSite;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.work.api.Workload;
+import io.github.izakyl.folkways.core.work.support.Leaves;
+import io.github.izakyl.folkways.core.world.api.BlockChanges;
+import io.github.izakyl.folkways.core.world.api.Closures;
+import io.github.izakyl.folkways.core.world.api.Reach;
+import io.github.izakyl.folkways.core.world.api.Realm;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
 import io.github.izakyl.folkways.plugins.build.draft.Joint;
 import io.github.izakyl.folkways.plugins.person.walk.Breathing;
@@ -83,10 +90,14 @@ final class BuildSite {
         }
 
         default Optional<List<ItemStack>> pack(Worker who) {
+            return pack(who.resident().id());
+        }
+
+        default Optional<List<ItemStack>> pack(UUID worker) {
             InventorySnapshot.Resident resident = colony().map(one ->
-                one.inventory().snapshot().residents().get(who.resident().id())).orElse(null);
+                one.inventory().snapshot().residents().get(worker)).orElse(null);
             if (resident == null || resident.state() != InventorySnapshot.State.OBSERVED) {
-                colony().ifPresent(one -> one.inventory().ensureObservedResident(who.resident().id()));
+                colony().ifPresent(one -> one.inventory().ensureObservedResident(worker));
                 return Optional.empty();
             }
             return Optional.of(resident.pack().stream().map(slot -> slot.stackCopy()).toList());
@@ -100,14 +111,13 @@ final class BuildSite {
     static final class Piece {
 
         private final Layering.Work work;
-        private final Node node;
+        private final UUID id = UUID.randomUUID();
+        private final BuildAction action;
         private int tries;
         // The node handed out for it while someone is at it, and when it may next be handed out after a hitch.
         @Nullable
         private UUID doing;
         private long restUntil = Long.MIN_VALUE;
-        // Since when it has been up with nobody on the site holding what it takes.
-        private long starvedSince = Long.MIN_VALUE;
         // The scaffold being raised to come to it by, while that is still to raise; whether one was looked for; and
         // how often the piece was done from further off than looks near, for the site's telling.
         @Nullable
@@ -115,9 +125,9 @@ final class BuildSite {
         private boolean looked;
         private int shortOf;
 
-        Piece(Layering.Work work, Node node) {
+        Piece(Layering.Work work, BuildAction action) {
             this.work = work;
-            this.node = node;
+            this.action = action;
         }
 
         // Every cell the piece changes, which nobody stands in to do it.
@@ -129,8 +139,12 @@ final class BuildSite {
             return work;
         }
 
-        Node node() {
-            return node;
+        UUID id() {
+            return id;
+        }
+
+        BuildAction action() {
+            return action;
         }
 
         int tries() {
@@ -171,10 +185,6 @@ final class BuildSite {
     // hitch rests before it is handed out again, and how long the site asks for nobody after a turn that came to
     // nothing.
     private static final int PATIENCE_TICKS = 300;
-    // How long a piece up may go with nobody on the site holding what it takes before hands are asked for it anew,
-    // and how lately a worker must have asked for a piece to count as on the site.
-    private static final int STARVED_TICKS = 200;
-    private static final int PRESENT_TICKS = 40;
     private static final int REST_TICKS = 100;
     private static final int IDLE_TICKS = 200;
 
@@ -198,10 +208,7 @@ final class BuildSite {
     // How long the ground is taken as read before it is read again, once something in it has changed.
     private static final int GROUND_TICKS = 20;
 
-    // How often a worker on its way over the site is stood afresh, its walk giving out each time.
-    private static final int MOST_ASKED = 3;
-
-    // When the presentation looks close enough to stop walking. Movement and target changes have bounded
+    // When a worker looks close enough to stop walking. Movement and target changes have bounded
     // retries, but neither adds time to the operation clock.
     private static final int APPROACH_TICKS = 300;
     private static final int REPATH_TICKS = 40;
@@ -243,10 +250,8 @@ final class BuildSite {
     private boolean closed;
     // Pieces the plan did not lay out, a scaffold left over or a joint, are numbered down from here.
     private int spare;
-    // The turns asked for and not ended yet, each a worker's stay on the site; the nodes handed out to the workers
-    // on it, by the piece each is for; and when a turn that came to nothing ended.
+    // The turns asked for and not ended yet, and when a turn that came to nothing ended.
     private final Map<UUID, Stay> stays = new LinkedHashMap<>();
-    private final Map<UUID, UUID> handed = new HashMap<>();
     private long idleUntil = Long.MIN_VALUE;
     private boolean staffingPending;
     private boolean scaffoldsAllowed = true;
@@ -259,7 +264,7 @@ final class BuildSite {
     private Layering.Plan planned;
     Carving.Cache cache = new Carving.Cache(() -> { });
 
-    private final Map<Integer, Node> openingNodes = new LinkedHashMap<>();
+    private final Map<Integer, Piece> openingNodes = new LinkedHashMap<>();
     private int openingIndex;
     private int openingPhase;
 
@@ -284,10 +289,10 @@ final class BuildSite {
         Map<ItemSpec, Long> owed = new LinkedHashMap<>();
         List<Carving.Quote> carving = new ArrayList<>();
         for (Piece piece : Stream.concat(live.values().stream(), held.values().stream()).toList()) {
-            if (piece.node() instanceof CarveNode node) {
+            if (piece.action() instanceof CarveAction node) {
                 carving.add(node.quotation());
             } else if (piece.work().kind() != Layering.Kind.SCAFFOLD) {
-                piece.node().spec().needs().forEach(need -> owed.merge(need.spec(), need.count(), Long::sum));
+                piece.action().spec().needs().forEach(need -> owed.merge(need.spec(), need.count(), Long::sum));
             }
         }
         Carving.combined(carving, cache).forEach(need -> owed.merge(need.spec(), need.count(), Long::sum));
@@ -343,7 +348,7 @@ final class BuildSite {
             return false;
         }
         Layering.Plan plan = planned;
-        Map<Integer, Node> nodes = openingNodes;
+        Map<Integer, Piece> nodes = openingNodes;
         if (openingPhase == 0) {
             long until = System.nanoTime() + 8_000_000L;
             while (openingIndex < plan.works().size() && System.nanoTime() < until) {
@@ -363,13 +368,13 @@ final class BuildSite {
                     step.after().keySet().forEach(cell -> refused.put(cell, BuildRefusal.NO_STANCE));
                     continue;
                 }
-                Node node = node(level, step, footings.get());
-                nodes.put(work.id(), node);
-                held.put(node.id(), new Piece(work, node));
+                Piece piece = new Piece(work, action(level, step, footings.get()));
+                nodes.put(work.id(), piece);
+                held.put(piece.id(), piece);
                 keyed.add(work.id());
-                nodeOf.put(work.id(), node.id());
+                nodeOf.put(work.id(), piece.id());
                 step.after().keySet().stream().filter(target.cells()::containsKey)
-                    .forEach(cell -> pieceAt.put(cell, node.id()));
+                    .forEach(cell -> pieceAt.put(cell, piece.id()));
             }
             if (openingIndex < plan.works().size()) {
                 return false;
@@ -418,7 +423,8 @@ final class BuildSite {
 
     /**
      * Brings up every piece held back that fewer than {@link #DEPTH} pieces still stand before, one waiting on the
-     * next: hands are asked for only so far ahead. A failed cell is reported locally and does not hold the rest of the site forever.
+     * next: hands are asked for only so far ahead. A failed cell is reported locally and does not hold the rest of the
+     * site forever.
      */
     private void release() {
         if (held.isEmpty() || closed) {
@@ -441,10 +447,11 @@ final class BuildSite {
         staff();
     }
 
-    // One worker's stay on the site, as the colony is asked for it: come to where its first piece is done, bringing what a
+    // One worker's stay on the site, as the colony is asked for it: come to where its first piece is done, bringing
+    // what a
     // batch of the pieces up takes, and stayed in while the site has a piece for the worker. The goods are for
     // whichever pieces they suit, not for the batch they were counted from.
-    private final class Stay implements Node, Workload.Within {
+    private final class Stay implements Node {
 
         private final NodeSpec spec;
         private final Set<UUID> batch;
@@ -452,23 +459,9 @@ final class BuildSite {
         private long positionsAt;
         private long recheckPositionsAt;
         private boolean approachFailed;
-        private long waitingSince = Long.MIN_VALUE;
         private int did;
-        // The worker on the site for it, as it last asked for a piece, and when.
-        @Nullable
-        private Worker who;
-        private long asked = NEVER;
-        // The piece its worker is making for, and since when.
-        @Nullable
-        private Piece toward;
-        private long towardSince;
-        private long repathAt;
-        @Nullable
-        private BlockPos aim;
-        @Nullable
-        private BlockPos last;
-        @Nullable
-        private Path walking;
+        private boolean retired;
+        private boolean refunded;
 
         Stay(ServerLevel level, List<Piece> batch, Stances positions) {
             Set<UUID> ids = new LinkedHashSet<>();
@@ -478,9 +471,9 @@ final class BuildSite {
             int ticks = WALK_TICKS;
             List<Carving.Quote> carving = new ArrayList<>();
             for (Piece piece : batch) {
-                ids.add(piece.node().id());
-                NodeSpec one = piece.node().spec();
-                if (piece.node() instanceof CarveNode node) {
+                ids.add(piece.id());
+                BuildAction.Spec one = piece.action().spec();
+                if (piece.action() instanceof CarveAction node) {
                     carving.add(node.quotation());
                 } else {
                     one.needs().forEach(need -> goods.merge(need.spec(), need.count(), Long::sum));
@@ -492,7 +485,8 @@ final class BuildSite {
             // Never fund a turn with excavation that has not happened yet.
             Carving.funding(carving, cache).forEach(need -> goods.merge(need.spec(), need.count(), Long::sum));
             this.batch = ids;
-            int reserve = batch.stream().anyMatch(piece -> piece.work().id() >= 0) ? accessReserve(level, positions) : 0;
+            int reserve = batch.stream().anyMatch(piece -> piece.work().id() >= 0) ? accessReserve(level,
+                positions) : 0;
             if (reserve > 0) {
                 goods.merge(SCAFFOLDS, (long) reserve, Math::max);
             }
@@ -500,17 +494,17 @@ final class BuildSite {
             // Brought in the pack: the pieces are done all over the site, not beside a store at its edge.
             goods.forEach((item, count) -> needs.add(new Need(item, count, true)));
             Piece first = batch.getFirst();
-            this.first = first.node().id();
+            this.first = first.id();
             positionsAt = geometryVersion;
             recheckPositionsAt = level.getGameTime() + GROUND_TICKS;
             this.spec = NodeSpec.of(UUID.randomUUID(), BuildContent.ID,
-                    new WorkSite.AtBlock(target.cell(first.work().focus())), positions, this)
+                    new WorkSite.AtBlock(target.cell(first.work().focus())), positions, new Workload.Custom())
                 .needs(needs)
                 .leaves(Leaves.merged(left))
                 .tools(tools)
                 .vocation(BuildContent.trade())
                 .estimate(ticks)
-                .doing(first.node().spec().doing())
+                .doing(first.action().spec().doing())
                 .done();
         }
 
@@ -521,12 +515,7 @@ final class BuildSite {
 
         @Override
         public boolean ready(ServerLevel level) {
-            return !closed;
-        }
-
-        @Override
-        public Workload.Within.Turn next(ServerLevel level, Worker who) {
-            return hand(this, level, who);
+            return !closed && !retired;
         }
 
         @Override
@@ -536,19 +525,12 @@ final class BuildSite {
             }
             return Breathing.canStay(body.mob(), body.mob().blockPosition())
                 && (atStance || Closures.in(level).stream().anyMatch(site -> site.holds(body.mob().blockPosition())
-                        && positions.cells().stream().anyMatch(site::holds)));
+                    && positions.cells().stream().anyMatch(site::holds)));
         }
 
         @Override
-        public void ended(ServerLevel level, Node piece, Ending how) {
-            if (how instanceof Ending.Done) {
-                did++;
-                if (toward != null && lowering(toward) && (toward.node().id().equals(piece.id())
-                        || toward.node().id().equals(handed.get(piece.id())))) {
-                    stopApproach(this);
-                }
-            }
-            endings.add(new Heard(piece.id(), how));
+        public WorkHolding acquire(HoldingContext context) {
+            return new StayHolding(this);
         }
 
         @Override
@@ -557,10 +539,22 @@ final class BuildSite {
         }
 
         @Override
-        public void tick(ServerLevel level, Worker who) {
-            this.who = who;
-            this.asked = level.getGameTime();
-            animate(this, level, who.body());
+        public void released(ServerLevel level, Worker who, Ending how) {
+            ScaffoldAction.releaseReturn(who.body(), temporary);
+            who.body().getNavigation().stop();
+            finish(how);
+        }
+
+        @Override
+        public void ended(ServerLevel level, Ending how) {
+            finish(how);
+        }
+
+        private void finish(Ending how) {
+            if (!retired) {
+                retired = true;
+                endings.add(new Heard(id(), how));
+            }
         }
 
         // A turn nobody could come to the site for is asked for again in a while: the site stands where it does.
@@ -570,8 +564,154 @@ final class BuildSite {
                 approachFailed = true;
                 positionsAt = NEVER;
             }
-            return Recourse.waitFor(REST_TICKS);
+            return Recourse.FAIL;
         }
+    }
+
+    private enum Turn {
+        WORK, WAIT, LEAVE
+    }
+
+    private final class StayHolding implements WorkHolding {
+        private final Stay stay;
+        private long waitingSince = Long.MIN_VALUE;
+        @Nullable
+        private Piece piece;
+        @Nullable
+        private BuildAction operation;
+        @Nullable
+        private ActionHandle action;
+        @Nullable
+        private Piece toward;
+        private long towardSince;
+        private long repathAt;
+        @Nullable
+        private BlockPos aim;
+        @Nullable
+        private BlockPos last;
+        @Nullable
+        private Path walking;
+        private boolean closing;
+        private boolean released;
+
+        StayHolding(Stay stay) {
+            this.stay = stay;
+        }
+
+        @Override
+        public HoldingStep tick(HoldingContext context) {
+            if (closing || released) {
+                HoldingStep step = action == null ? new HoldingStep.Yielded() : action.tick(context);
+                stopMoving(context);
+                return step;
+            }
+            if (closed || stay.retired) {
+                return done(context);
+            }
+            tickApproach(this, context.level(), context.worker().body());
+            present(this, context.worker().body());
+            if (action == null) {
+                Turn turn = hand(this, context.level(), context.worker());
+                if (turn == Turn.LEAVE) {
+                    return done(context);
+                }
+                if (turn == Turn.WAIT) {
+                    return new HoldingStep.Running();
+                }
+                action = context.action(operation);
+                tickApproach(this, context.level(), context.worker().body());
+            }
+            if (!operation.ready(context.level())) {
+                return new HoldingStep.Running();
+            }
+            HoldingStep step = action.tick(context);
+            if (step instanceof HoldingStep.Done || step instanceof HoldingStep.Failed) {
+                action.reportEffort(context.body());
+                Ending how = step instanceof HoldingStep.Failed failed
+                    ? new Ending.Failed(stay.id(), failed.why()) : Ending.DONE;
+                ended(context.level(), how);
+            }
+            return new HoldingStep.Running();
+        }
+
+        private void ended(ServerLevel level, Ending how) {
+            if (piece == null) {
+                return;
+            }
+            if (how instanceof Ending.Done) {
+                stay.did++;
+                if (lowering(piece)) {
+                    stopApproach(this);
+                }
+            }
+            endings.add(new Heard(piece.id(), how));
+            piece = null;
+            operation = null;
+            action = null;
+        }
+
+        private HoldingStep done(HoldingContext context) {
+            if (action != null) {
+                action.hardRelease(context, Disposition.END, PreemptReason.OTHER);
+            }
+            stopMoving(context);
+            return new HoldingStep.Done();
+        }
+
+        private void stopMoving(HoldingContext context) {
+            Mob body = context.worker().body();
+            ScaffoldAction.releaseReturn(body, temporary);
+            body.getNavigation().stop();
+            walking = null;
+            context.body().clearDoing();
+            context.body().clearHandPresentation();
+        }
+
+        @Override
+        public void requestSoftPreempt(HoldingContext context, SoftPreempt request) {
+            closing = true;
+            if (action != null) {
+                action.requestSoftPreempt(context, request);
+            }
+        }
+
+        @Override
+        public void hardRelease(HoldingContext context, Disposition result, PreemptReason reason) {
+            if (released) {
+                return;
+            }
+            released = true;
+            if (action != null) {
+                action.hardRelease(context, result, reason);
+            }
+            stopMoving(context);
+        }
+
+        @Override
+        public void suspended(HoldingContext context, PreemptReason reason) {
+        }
+
+        @Override
+        public void resumed(HoldingContext context) {
+            closing = false;
+            released = false;
+            waitingSince = Long.MIN_VALUE;
+            towardSince = context.level().getGameTime();
+            repathAt = 0;
+            if (action != null) {
+                action.resumed(context);
+            }
+        }
+    }
+
+    private boolean retained(Stay stay) {
+        return asks.colony().map(colony -> colony.isHeld(stay.id()) || colony.isSuspended(stay.id()))
+            .orElse(false);
+    }
+
+    private boolean entered(Stay stay) {
+        return asks.colony().map(colony -> colony.isSuspended(stay.id())
+            || colony.isHeld(stay.id()) && !colony.isApproaching(stay.id())).orElse(false);
     }
 
     private Optional<Stances> positions(ServerLevel level, Piece piece) {
@@ -609,16 +749,17 @@ final class BuildSite {
     private boolean refreshPositions(ServerLevel level) {
         boolean changed = false;
         for (Stay stay : List.copyOf(stays.values())) {
-            if (stay.who != null || level.getGameTime() < stay.recheckPositionsAt) {
+            if (entered(stay) || level.getGameTime() < stay.recheckPositionsAt) {
                 continue;
             }
-            Piece first = stay.batch.stream().map(live::get).filter(java.util.Objects::nonNull).findFirst().orElse(null);
-            if (first == null || stay.positionsAt == geometryVersion && stay.first.equals(first.node().id())) {
+            Piece first = stay.batch.stream().map(live::get).filter(java.util.Objects::nonNull).findFirst()
+                .orElse(null);
+            if (first == null || stay.positionsAt == geometryVersion && stay.first.equals(first.id())) {
                 continue;
             }
             stay.positionsAt = geometryVersion;
             stay.recheckPositionsAt = level.getGameTime() + GROUND_TICKS;
-            if (stay.first.equals(first.node().id())) {
+            if (stay.first.equals(first.id())) {
                 boolean usable = stay.spec().stances().cells().stream()
                     .anyMatch(feet -> feet.in(level) && SiteApproach.stands(level, feet.block(level), first.cells()));
                 if (usable && (!stay.approachFailed || positions(level, first)
@@ -626,7 +767,7 @@ final class BuildSite {
                     continue;
                 }
             }
-            stays.remove(stay.id());
+            stay.finish(Ending.REVOKED);
             asks.withdraw(stay.id());
             changed = true;
         }
@@ -635,7 +776,8 @@ final class BuildSite {
 
     /**
      * Asks for hands: a turn for each piece up that nobody is bringing the goods for, which brings them for that
-     * piece and for the pieces that come up behind it as it is done, so far as one pack and one turn's time hold. So whoever comes
+     * piece and for the pieces that come up behind it as it is done, so far as one pack and one turn's time hold. So
+     * whoever comes
      * finds its work up, or brings it up itself, and nobody stands on the site holding goods for work that waits
      * on someone else. A turn ended, or a piece nobody on the site can do, is asked for again here.
      */
@@ -655,8 +797,8 @@ final class BuildSite {
         // many as that takes: how many come is for the colony to say.
         for (Stay stay : List.copyOf(stays.values())) {
             stay.batch.removeIf(id -> !live.containsKey(id));
-            if (stay.batch.isEmpty() && stay.who == null) {
-                stays.remove(stay.id());
+            if (stay.batch.isEmpty() && !retained(stay)) {
+                stay.finish(Ending.REVOKED);
                 asks.withdraw(stay.id());
             }
         }
@@ -667,7 +809,7 @@ final class BuildSite {
         Map<UUID, List<Piece>> after = new HashMap<>();
         List<Piece> seeds = new ArrayList<>();
         for (Piece piece : live.values()) {
-            UUID id = piece.node().id();
+            UUID id = piece.id();
             if (spoken.contains(id) || piece.work().step().isEmpty()) {
                 continue;
             }
@@ -687,7 +829,7 @@ final class BuildSite {
                 staffingPending = true;
                 break;
             }
-            if (!taken.add(seed.node().id()) || !up(seed)) {
+            if (!taken.add(seed.id()) || !up(seed)) {
                 continue;
             }
             Optional<Stances> positions = positions(level, seed);
@@ -695,13 +837,13 @@ final class BuildSite {
                 continue;
             }
             List<Piece> batch = new ArrayList<>(List.of(seed));
-            Set<UUID> ids = new HashSet<>(Set.of(seed.node().id()));
+            Set<UUID> ids = new HashSet<>(Set.of(seed.id()));
             Load load = new Load(seed, seed.work().id() >= 0 ? accessReserve(level, positions.get()) : 0);
             // What comes up behind the piece first, then more of what is up at once that takes the same goods, a
             // floor to lay or a face to clear: never another kind of goods, which the colony may be short of.
             for (int at = 0; at < batch.size(); at++) {
-                for (Piece next : after.getOrDefault(batch.get(at).node().id(), List.of())) {
-                    UUID id = next.node().id();
+                for (Piece next : after.getOrDefault(batch.get(at).id(), List.of())) {
+                    UUID id = next.id();
                     if (taken.contains(id) || !ids.containsAll(waits.get(id)) || !load.takes(next, false)) {
                         continue;
                     }
@@ -715,10 +857,10 @@ final class BuildSite {
                     staffingPending = true;
                     break;
                 }
-                if (more.work().id() < 0 || taken.contains(more.node().id()) || !up(more) || !load.takes(more, true)) {
+                if (more.work().id() < 0 || taken.contains(more.id()) || !up(more) || !load.takes(more, true)) {
                     continue;
                 }
-                taken.add(more.node().id());
+                taken.add(more.id());
                 batch.add(more);
             }
             Stay stay = new Stay(level, batch, positions.get());
@@ -743,7 +885,7 @@ final class BuildSite {
         // Takes the piece on when the turn stays within its time and its pack, and, {@code alike}, when the piece
         // takes no goods the turn does not take already.
         boolean takes(Piece piece, boolean alike) {
-            NodeSpec spec = piece.node().spec();
+            BuildAction.Spec spec = piece.action().spec();
             if (ticks + spec.estimate() > TURN_TICKS
                 || alike && spec.needs().stream().anyMatch(need -> !goods.containsKey(need.spec()))) {
                 return false;
@@ -761,7 +903,7 @@ final class BuildSite {
         }
 
         private void add(Piece piece) {
-            NodeSpec spec = piece.node().spec();
+            BuildAction.Spec spec = piece.action().spec();
             spec.needs().forEach(need -> goods.merge(need.spec(), need.count(), Long::sum));
             left = withLeaves(left, piece);
             ticks += spec.estimate();
@@ -770,7 +912,7 @@ final class BuildSite {
 
     private static List<Amount> withLeaves(List<Amount> left, Piece piece) {
         List<Amount> with = new ArrayList<>(left);
-        with.addAll(piece.node().spec().leaves());
+        with.addAll(piece.action().spec().leaves());
         return Leaves.merged(with);
     }
 
@@ -786,14 +928,12 @@ final class BuildSite {
      * The dependency frontier says what may be done; each hand chooses a nearby piece it has the goods for.
      * Movement continues beside the fixed work clock; a route or a prettier order never delays an operation.
      */
-    private Workload.Within.Turn hand(Stay stay, ServerLevel level, Worker who) {
+    private Turn hand(StayHolding stay, ServerLevel level, Worker who) {
         long now = level.getGameTime();
         Mob body = who.body();
-        stay.who = who;
-        stay.asked = now;
-        // Native arrival tolerance may accept a nearby dry stance before this body can breathe there.
+        // A worker must reach a breathable stance before beginning remote site work.
         if (FolkwaysVanillaConfig.simpleConstruction() && !Breathing.canStay(body, body.blockPosition())) {
-            return Workload.Within.WAIT;
+            return Turn.WAIT;
         }
         boolean coming = false;
         boolean full = false;
@@ -834,7 +974,7 @@ final class BuildSite {
             .thenComparingLong(piece -> piece.work().key()).thenComparingInt(piece -> piece.work().id()));
         if (!choices.isEmpty()) {
             Piece chosen = choices.getFirst();
-            chosen.doing = stay.id();
+            chosen.doing = stay.stay.id();
             stay.waitingSince = Long.MIN_VALUE;
             // Walking dresses the work; it never gates the next operation. Keep a destination long enough to
             // reach it instead of resetting the walk for every block laid on the way there.
@@ -850,42 +990,45 @@ final class BuildSite {
                 stay.towardSince = now;
                 approach(stay, level, body, chosen);
             }
-            look(body, chosen);
-            return out(stay, level, chosen);
+            stay.last = chosen.work().focus();
+            stay.piece = chosen;
+            stay.operation = action(level, chosen.work().step().orElseThrow(), Stances.WHEREVER);
+            present(stay, body);
+            return Turn.WORK;
         }
         if (unknown) {
-            return Workload.Within.WAIT;
+            return Turn.WAIT;
         }
         if (!coming || full) {
-            return Workload.Within.LEAVE;
+            return Turn.LEAVE;
         }
         if (stay.waitingSince == Long.MIN_VALUE) {
             stay.waitingSince = now;
         }
-        return now - stay.waitingSince < PATIENCE_TICKS ? Workload.Within.WAIT : Workload.Within.LEAVE;
+        return now - stay.waitingSince < PATIENCE_TICKS ? Turn.WAIT : Turn.LEAVE;
     }
 
     private static boolean lowering(Piece piece) {
         return piece.work().step().map(step -> step.kind() == BuildJob.Kind.LOWER).orElse(false);
     }
 
-    private void animate(Stay stay, ServerLevel level, Mob body) {
+    private void tickApproach(StayHolding stay, ServerLevel level, Mob body) {
         Piece toward = stay.toward;
         if (FolkwaysVanillaConfig.simpleConstruction()) {
             body.getNavigation().stop();
             if (toward != null) {
-                look(body, toward);
+                present(stay, body);
             }
             return;
         }
         if (closed || toward == null) {
             return;
         }
-        if (lowering(toward) && !live.containsKey(toward.node().id())) {
+        if (lowering(toward) && !live.containsKey(toward.id())) {
             stopApproach(stay);
             return;
         }
-        if (ScaffoldNode.returning(body, temporary)) {
+        if (ScaffoldAction.returning(body, temporary)) {
             return;
         }
         boolean arrived = near(level, body, stay);
@@ -901,22 +1044,25 @@ final class BuildSite {
         if (body.getNavigation().isDone()) {
             if (stay.walking != null && !stay.walking.isDone()
                 && level.getGameTime() < stay.repathAt) {
-                body.getNavigation().moveTo(stay.walking, toward.node().spec().pace());
+                body.getNavigation().moveTo(stay.walking, toward.action().spec().pace());
             } else if (level.getGameTime() >= stay.repathAt) {
                 approach(stay, level, body, toward);
             }
         }
     }
 
-    private static double score(Stay stay, Mob body, Piece piece) {
+    private static double score(StayHolding stay, Mob body, Piece piece) {
         BlockPos focus = piece.work().focus();
         double distance = body.distanceToSqr(focus.getX() + 0.5D, focus.getY(), focus.getZ() + 0.5D);
         return distance + Math.abs(focus.getY() - body.getY()) * 4.0D
             + (stay.last == null ? 0.0D : stay.last.distSqr(focus) * 0.25D);
     }
 
-    private static void look(Mob body, Piece piece) {
-        BlockPos focus = piece.work().focus();
+    private static void present(StayHolding stay, Mob body) {
+        if (stay.toward == null) {
+            return;
+        }
+        BlockPos focus = stay.toward.work().focus();
         body.getLookControl().setLookAt(focus.getX() + 0.5D, focus.getY() + 0.5D, focus.getZ() + 0.5D);
     }
 
@@ -925,21 +1071,18 @@ final class BuildSite {
     private record Approach(@Nullable BlockPos aim, @Nullable Path path) {
     }
 
-    private void approach(Stay stay, ServerLevel level, Mob body, Piece piece) {
-        if (!ScaffoldNode.returning(body, temporary)) {
+    private void approach(StayHolding stay, ServerLevel level, Mob body, Piece piece) {
+        if (!ScaffoldAction.returning(body, temporary)) {
             walk(stay, level, body, piece, route(level, body, piece, MOST_PATHS));
         }
     }
 
     // A completed cleanup has no destination left. Its old route into the access column must not restart
     // after the resident has safely left it and the supporting scaffold has been removed.
-    private void stopApproach(Stay stay) {
+    private void stopApproach(StayHolding stay) {
         stay.toward = null;
         stay.aim = null;
         stay.walking = null;
-        if (stay.who != null) {
-            stay.who.body().getNavigation().stop();
-        }
     }
 
     private Approach route(ServerLevel level, Mob body, Piece piece, int budget) {
@@ -1005,7 +1148,7 @@ final class BuildSite {
         int height = focus.getY();
         int remaining = 0;
         int round = WAY_ROUND + 2;
-        // Bounded local lookahead: do not rescan the whole blueprint on every presentation route.
+        // Bounded local lookahead: do not rescan the whole blueprint on every approach route.
         for (BlockPos at : BlockPos.betweenClosed(focus.offset(-round, 0, -round),
                 focus.offset(round, TALLEST_WAY, round))) {
             BlockState wanted = target.cells().get(at);
@@ -1026,14 +1169,14 @@ final class BuildSite {
         }
         BlockPos foot = column.get().getFirst();
         Step raise = Step.raise(column.get());
-        Node node = node(level, raise, Stances.at(level, foot));
-        live.put(node.id(), new Piece(new Layering.Work(--spare, Layering.Kind.SCAFFOLD, foot, Optional.of(raise),
-            Optional.empty(), true, 0, 0L, List.of()), node));
+        Piece added = new Piece(new Layering.Work(--spare, Layering.Kind.SCAFFOLD, foot, Optional.of(raise),
+            Optional.empty(), true, 0, 0L, List.of()), action(level, raise, Stances.at(level, foot)));
+        live.put(added.id(), added);
         raised.add(new Raised(column.get()));
         staff();
     }
 
-    private void walk(Stay stay, ServerLevel level, Mob body, Piece piece, Approach route) {
+    private void walk(StayHolding stay, ServerLevel level, Mob body, Piece piece, Approach route) {
         stay.repathAt = level.getGameTime() + REPATH_TICKS;
         stay.aim = route.aim();
         if (route.aim() != null && SiteTravel.place(level, body, route.aim())) {
@@ -1043,17 +1186,16 @@ final class BuildSite {
         stay.walking = route.path();
         // Reuse a partial route when none reaches a pose; do not launch another unbudgeted path search.
         if (route.path() != null) {
-            body.getNavigation().moveTo(route.path(), piece.node().spec().pace());
+            body.getNavigation().moveTo(route.path(), piece.action().spec().pace());
         } else {
             body.getNavigation().stop();
         }
     }
 
-    private BuildNode node(ServerLevel level, Step step, Stances footings) {
-        BuildNode node = BuildNode.of(step.job(level, target, footings, latched), (ended, how) -> { }, temporary)
+    private BuildAction action(ServerLevel level, Step step, Stances footings) {
+        BuildAction node = BuildAction.of(step.job(level, target, footings, latched), temporary)
             .emptying(emptying);
         node.cache = cache;
-        node.price();
         if (step.kind() == BuildJob.Kind.RAISE || step.kind() == BuildJob.Kind.LOWER || step.kind() == BuildJob.Kind.JOIN) {
             return node;
         }
@@ -1063,15 +1205,7 @@ final class BuildSite {
         return node.keeping(latched::contains);
     }
 
-    private Workload.Within.Turn out(Stay stay, ServerLevel level, Piece piece) {
-        stay.last = piece.work().focus();
-        Node node = node(level, piece.work().step().orElseThrow(), Stances.WHEREVER);
-        piece.doing = node.id();
-        handed.put(node.id(), piece.node().id());
-        return new Workload.Within.Turn.Piece(node);
-    }
-
-    private boolean near(ServerLevel level, Mob body, Stay stay) {
+    private boolean near(ServerLevel level, Mob body, StayHolding stay) {
         BlockPos aim = stay.aim;
         return aim != null && stay.toward != null
             && body.distanceToSqr(aim.getX() + 0.5D, body.getY(), aim.getZ() + 0.5D) <= 0.65D * 0.65D
@@ -1105,12 +1239,8 @@ final class BuildSite {
             return;
         }
         toldAt = now;
-        List<Worker> present = new ArrayList<>();
-        for (Stay stay : stays.values()) {
-            if (stay.who != null && now - stay.asked <= PRESENT_TICKS) {
-                present.add(stay.who);
-            }
-        }
+        List<UUID> present = stays.values().stream().filter(this::entered)
+            .flatMap(stay -> asks.colony().flatMap(colony -> colony.holder(stay.id())).stream()).toList();
         int up = 0;
         int doing = 0;
         int resting = 0;
@@ -1119,7 +1249,7 @@ final class BuildSite {
         int spoken = 0;
         Map<String, Integer> wanting = new java.util.TreeMap<>();
         for (Piece piece : live.values()) {
-            UUID id = piece.node().id();
+            UUID id = piece.id();
             spoken += stays.values().stream().anyMatch(stay -> stay.batch.contains(id)) ? 1 : 0;
             if (piece.doing != null) {
                 doing++;
@@ -1131,52 +1261,16 @@ final class BuildSite {
             up++;
             resting += now < piece.restUntil ? 1 : 0;
             unstood += piece.shortOf > 0 ? 1 : 0;
-            if (present.stream().allMatch(who -> supplied(who, piece).equals(Optional.of(false)))) {
+            if (present.stream().allMatch(who -> supplied(asks.pack(who), piece).equals(Optional.of(false)))) {
                 unheld++;
-                piece.node().spec().needs().forEach(need -> wanting.merge(String.valueOf(need.spec()), 1, Integer::sum));
+                piece.action().spec().needs().forEach(need ->
+                    wanting.merge(String.valueOf(need.spec()), 1, Integer::sum));
             }
         }
-        LOGGER.info("site {} live={} held={} up={} doing={} resting={} unstood={} unheld={} wanting={} spoken={} turns={} "
+        LOGGER.info("site {} live={} held={} up={} doing={} resting={} unstood={} unheld={} wanting={} spoken={} "
+            + "turns={} "
             + "present={} raised={} left={}", order.toString().substring(0, 8), live.size(), held.size(), up, doing,
             resting, unstood, unheld, wanting, spoken, stays.size(), present.size(), raised.size(), left());
-    }
-
-    // A piece up for a while with nobody on the site holding what it takes is batched afresh: whoever was to bring
-    // its goods has left with them, or sleeps, or is far off, and the goods are no one's in particular.
-    private boolean refund(ServerLevel level) {
-        long now = level.getGameTime();
-        List<Worker> present = new ArrayList<>();
-        for (Stay stay : stays.values()) {
-            if (stay.who != null && now - stay.asked <= PRESENT_TICKS) {
-                present.add(stay.who);
-            }
-        }
-        // What a turn still on its way is to bring for is not starved: one the colony cannot bring yet it tries
-        // again in its own time, and tells what it is short of; batched afresh, it would only start over.
-        Set<UUID> coming = new HashSet<>();
-        for (Stay stay : stays.values()) {
-            if (stay.who == null) {
-                coming.addAll(stay.batch);
-            }
-        }
-        boolean freed = false;
-        for (Piece piece : live.values()) {
-            if (piece.doing != null || !up(piece) || coming.contains(piece.node().id())
-                    || present.stream().anyMatch(who -> supplied(who, piece).orElse(true))) {
-                piece.starvedSince = Long.MIN_VALUE;
-                continue;
-            }
-            if (piece.starvedSince == Long.MIN_VALUE) {
-                piece.starvedSince = now;
-            } else if (now - piece.starvedSince >= STARVED_TICKS) {
-                UUID id = piece.node().id();
-                for (Stay stay : stays.values()) {
-                    freed |= stay.batch.remove(id);
-                }
-                piece.starvedSince = now;
-            }
-        }
-        return freed;
     }
 
     /**
@@ -1195,9 +1289,6 @@ final class BuildSite {
             return false;
         }
         accessAt = now;
-        if (refund(level)) {
-            staff();
-        }
         tell(level);
         boolean changed = false;
         if (latched.size() == target.cells().size() && joined.containsAll(target.joints())) {
@@ -1208,7 +1299,7 @@ final class BuildSite {
                             && !neededForReturn(level, step))
                         .isPresent()) {
                     // No scaffold was placed and no materials spent. Finished work no longer needs this request.
-                    live.remove(piece.node().id());
+                    live.remove(piece.id());
                     changed = true;
                 }
             }
@@ -1240,9 +1331,10 @@ final class BuildSite {
                         && cells.stream().anyMatch(step.after()::containsKey)).isPresent());
                 if (!lowering) {
                     Step lower = Step.lower(cells);
-                    Node node = node(level, lower, Stances.at(level, foot));
-                    live.put(node.id(), new Piece(new Layering.Work(--spare, Layering.Kind.SCAFFOLD, foot,
-                        Optional.of(lower), Optional.empty(), true, 0, 0L, List.of()), node));
+                    Piece added = new Piece(new Layering.Work(--spare, Layering.Kind.SCAFFOLD, foot,
+                        Optional.of(lower), Optional.empty(), true, 0, 0L, List.of()), action(level, lower,
+                            Stances.at(level, foot)));
+                    live.put(added.id(), added);
                     changed = true;
                 }
             }
@@ -1281,11 +1373,11 @@ final class BuildSite {
             }
             BlockPos foot = column.get().getFirst();
             Step raise = Step.raise(column.get());
-            Node node = node(level, raise, Stances.at(level, foot));
-            live.put(node.id(), new Piece(new Layering.Work(--spare, Layering.Kind.SCAFFOLD, foot, Optional.of(raise),
-                Optional.empty(), true, 0, 0L, List.of()), node));
+            Piece added = new Piece(new Layering.Work(--spare, Layering.Kind.SCAFFOLD, foot, Optional.of(raise),
+                Optional.empty(), true, 0, 0L, List.of()), action(level, raise, Stances.at(level, foot)));
+            live.put(added.id(), added);
             raised.add(new Raised(column.get()));
-            piece.way = node.id();
+            piece.way = added.id();
             raising++;
             changed = true;
         }
@@ -1305,7 +1397,7 @@ final class BuildSite {
             bounds = bounds.minmax(new net.minecraft.world.phys.AABB(cell.above()));
         }
         return level.getEntitiesOfClass(Mob.class, bounds.inflate(6.0D, 0.0D, 6.0D)).stream()
-            .anyMatch(mob -> ScaffoldNode.neededForReturn(level, mob, column));
+            .anyMatch(mob -> ScaffoldAction.neededForReturn(level, mob, column));
     }
 
     // The column to raise by a piece too high over any floor near it to look reached from there: beside the
@@ -1344,7 +1436,8 @@ final class BuildSite {
                     column.add(cell);
                     cell = cell.below();
                 }
-                if (column.size() >= TALLEST_WAY || !level.getBlockState(cell).isFaceSturdy(level, cell, Direction.UP)) {
+                if (column.size() >= TALLEST_WAY || !level.getBlockState(cell).isFaceSturdy(level, cell,
+                    Direction.UP)) {
                     continue;
                 }
                 // A floor this near under the piece is near enough to do it from: no scaffold is wanted at all.
@@ -1394,8 +1487,8 @@ final class BuildSite {
                 return false;
             }
         }
-        if (standing != null && piece.node() instanceof BuildNode node) {
-            Optional<BuildRefusal> blocked = node.obstruction(standing);
+        if (standing != null) {
+            Optional<BuildRefusal> blocked = piece.action().obstruction(standing);
             for (BlockPos cell : piece.cells()) {
                 if (blocked.isPresent()) {
                     refused.put(cell, blocked.get());
@@ -1415,7 +1508,7 @@ final class BuildSite {
     // Whether the pack takes what the piece leaves. A piece that spends goods frees room in the doing, so it is let
     // be: the worker brought those goods in for it, and turned away it would carry them off again.
     private Optional<Boolean> roomFor(Worker who, Piece piece) {
-        NodeSpec spec = piece.node().spec();
+        BuildAction.Spec spec = piece.action().spec();
         if (spec.leaves().isEmpty() || !spec.needs().isEmpty()) {
             return Optional.of(true);
         }
@@ -1425,17 +1518,17 @@ final class BuildSite {
 
     // Whether the worker holds what the piece takes, in its pack.
     private Optional<Boolean> supplied(Worker who, Piece piece) {
-        if (piece.node() instanceof CarveNode carve) {
-            carve.price();
-        }
-        if (piece.node().spec().needs().isEmpty()) {
+        if (piece.action().spec().needs().isEmpty()) {
             return Optional.of(true);
         }
-        Optional<List<ItemStack>> pack = asks.pack(who);
+        return supplied(asks.pack(who), piece);
+    }
+
+    private Optional<Boolean> supplied(Optional<List<ItemStack>> pack, Piece piece) {
         if (pack.isEmpty()) {
             return Optional.empty();
         }
-        for (Need need : piece.node().spec().needs()) {
+        for (Need need : piece.action().spec().needs()) {
             long count = pack.get().stream().filter(stack -> Goods.matches(stack, need.spec()))
                 .mapToLong(ItemStack::getCount).sum();
             if (count < need.count()) {
@@ -1508,9 +1601,9 @@ final class BuildSite {
                 continue;
             }
             Step lower = Step.lower(cells);
-            Node node = node(level, lower, footings.get());
-            live.put(node.id(), new Piece(new Layering.Work(--spare, Layering.Kind.SCAFFOLD, cells.getFirst(),
-                Optional.of(lower), Optional.empty(), true, 0, 0L, List.of()), node));
+            Piece added = new Piece(new Layering.Work(--spare, Layering.Kind.SCAFFOLD, cells.getFirst(),
+                Optional.of(lower), Optional.empty(), true, 0, 0L, List.of()), action(level, lower, footings.get()));
+            live.put(added.id(), added);
         }
         staff();
     }
@@ -1548,7 +1641,12 @@ final class BuildSite {
     }
 
     void ended(UUID node, Ending how) {
-        endings.add(new Heard(node, how));
+        Stay stay = stays.get(node);
+        if (stay == null) {
+            endings.add(new Heard(node, how));
+        } else {
+            stay.finish(how);
+        }
     }
 
     /** The pieces still to do that the piece waits for, by their nodes. */
@@ -1582,7 +1680,9 @@ final class BuildSite {
         // Inventories change without a block update, so a waiting collection must be heard here as well.
         boolean wasBlocked = refused.values().stream().anyMatch(why -> why == BuildRefusal.EMPTYING_CONTAINER
             || why == BuildRefusal.NO_ROOM_TO_EMPTY || why == BuildRefusal.UNREADABLE_CONTAINER);
-        if (wasBlocked) staffingPending = true;
+        if (wasBlocked) {
+            staffingPending = true;
+        }
         for (Heard heard; (heard = endings.poll()) != null; ) {
             changed |= end(level, heard);
         }
@@ -1606,6 +1706,9 @@ final class BuildSite {
             touched.forEach(this::dropIfMet);
         }
         changed |= refreshPositions(level);
+        for (Heard heard; (heard = endings.poll()) != null; ) {
+            changed |= end(level, heard);
+        }
         if (changed || geometryChanged || staffingPending && level.getGameTime() >= idleUntil) {
             joinWhatIsLaid(level);
             release();
@@ -1613,33 +1716,47 @@ final class BuildSite {
         }
         // With nothing left to do, the turns still asked for are for nothing.
         if (live.isEmpty() && held.isEmpty() && !stays.isEmpty()) {
+            stays.values().forEach(this::refund);
             stays.keySet().forEach(asks::withdraw);
             stays.clear();
         }
         return changed;
     }
 
+    // A terminal stay gives its unspent batch back once. Its goods remain in their actual inventories.
+    private void refund(Stay stay) {
+        if (stay.refunded) {
+            return;
+        }
+        stay.refunded = true;
+        stay.retired = true;
+        stay.batch.clear();
+        for (Piece piece : live.values()) {
+            if (stay.id().equals(piece.doing)) {
+                piece.doing = null;
+            }
+        }
+    }
+
     private boolean end(ServerLevel level, Heard heard) {
         Stay stay = stays.remove(heard.node());
         if (stay != null) {
-            for (Piece piece : live.values()) {
-                if (stay.id().equals(piece.doing)) {
-                    piece.doing = null;
-                }
+            refund(stay);
+            if (heard.how() instanceof Ending.Dropped) {
+                asks.withdraw(stay.id());
             }
             // The only turn out, and it came to nothing: hands are not asked for again at once, since whatever
             // kept its worker from every piece is likely still so.
-            if (stay.did == 0 && stays.isEmpty()) {
+            if (stay.did == 0 && stays.isEmpty() && !(heard.how() instanceof Ending.Revoked)) {
                 idleUntil = level.getGameTime() + IDLE_TICKS;
             }
             return true;
         }
-        UUID of = handed.remove(heard.node());
-        Piece piece = live.get(of == null ? heard.node() : of);
+        Piece piece = live.get(heard.node());
         if (piece == null) {
             return false;
         }
-        UUID id = piece.node().id();
+        UUID id = piece.id();
         piece.doing = null;
         Step step = piece.work().step().orElse(null);
         boolean done = heard.how() instanceof Ending.Done;
@@ -1677,7 +1794,7 @@ final class BuildSite {
         }
         // A hitch that passes, someone in the way or the walk giving out, rests the piece a while and no more;
         // only a piece that cannot be built is counted against, and at last given up.
-        if (piece.node() instanceof CarveNode carve) {
+        if (piece.action() instanceof CarveAction carve) {
             try {
                 carve.requote(level);
             } catch (StructureCompat.Failure invalid) {
@@ -1699,7 +1816,8 @@ final class BuildSite {
         RefusalKind why = heard.how() instanceof Ending.Failed failed ? failed.why() : BuildRefusal.NO_WAY_TO_BUILD;
         BuildRefusal named = why instanceof BuildRefusal refusal ? refusal : BuildRefusal.NO_WAY_TO_BUILD;
         if (step != null) {
-            step.after().keySet().stream().filter(target.cells()::containsKey).forEach(cell -> refused.put(cell, named));
+            step.after().keySet().stream().filter(target.cells()::containsKey).forEach(cell -> refused.put(cell,
+                named));
         }
         return true;
     }
@@ -1750,9 +1868,9 @@ final class BuildSite {
                 refused.put(joint.from(), BuildRefusal.NO_STANCE);
                 continue;
             }
-            Node node = node(level, step, footings.get());
-            live.put(node.id(), new Piece(new Layering.Work(--spare, Layering.Kind.JOIN, joint.from(), Optional.of(step),
-                Optional.of(joint), true, 0, 0L, List.of()), node));
+            Piece added = new Piece(new Layering.Work(--spare, Layering.Kind.JOIN, joint.from(), Optional.of(step),
+                Optional.of(joint), true, 0, 0L, List.of()), action(level, step, footings.get()));
+            live.put(added.id(), added);
         }
         staff();
     }
@@ -1825,8 +1943,8 @@ final class BuildSite {
         held.clear();
         reopen.run();
         reopen = () -> { };
+        stays.values().forEach(this::refund);
         stays.clear();
-        handed.clear();
         if (listening != null) {
             listening.close();
             listening = null;

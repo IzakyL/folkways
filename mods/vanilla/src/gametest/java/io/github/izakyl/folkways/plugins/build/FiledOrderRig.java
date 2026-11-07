@@ -1,10 +1,10 @@
 package io.github.izakyl.folkways.plugins.build;
 
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.work.Ending;
-import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Worker;
-import io.github.izakyl.folkways.core.engine.labor.Commit;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.work.api.Ending;
+import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.work.internal.Commit;
 import java.util.Optional;
 import java.util.UUID;
 import net.minecraft.gametest.framework.GameTestHelper;
@@ -27,9 +27,9 @@ public final class FiledOrderRig {
         BuildSite site = presence.site(order).orElseThrow();
         for (int round = 0; round < 64 && presence.site(order).isPresent(); round++) {
             for (BuildSite.Piece piece : site.pieces()) {
-                helper.assertTrue(Commit.run(level, piece.node(), worker) instanceof Outcome.Done,
+                helper.assertTrue(Commit.run(level, piece.action(), worker) instanceof Outcome.Done,
                     "the ordinary build work can be committed");
-                site.ended(piece.node().id(), Ending.DONE);
+                site.ended(piece.id(), Ending.DONE);
             }
             presence.settle(level.getServer());
         }

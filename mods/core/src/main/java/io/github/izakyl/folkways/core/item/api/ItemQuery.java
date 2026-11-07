@@ -1,0 +1,134 @@
+package io.github.izakyl.folkways.core.item.api;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.function.BiPredicate;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.Items;
+import org.jetbrains.annotations.Nullable;
+
+// What is typed into an item search, read the same way when it is searched and when it is kept as a rule. Words are
+// all asked for at once and "|" offers another set of them; "@mod" is where an item comes from, "#tag" a tag it
+// carries, and a bare word its id. A whole name means just that one: "@create" is Create and no other mod, "#logs"
+// the logs tag, "minecraft:arrow" the arrow; part of one means any it is part of. "*" and "?" stand for any run of letters and any one letter.
+// A search also finds a bare word in an item's name, which a rule cannot: names are the reader's language, and the
+// server keeps none.
+public final class ItemQuery {
+
+    private static final int CACHED_QUERIES = 256;
+
+    // Rules can be replaced indefinitely; keep only the results used most recently.
+    private static final Map<String, List<Item>> FOUND = Collections.synchronizedMap(
+        new LinkedHashMap<>(CACHED_QUERIES, 0.75F, true) {
+            @Override
+            protected boolean removeEldestEntry(Map.Entry<String, List<Item>> eldest) {
+                return size() > CACHED_QUERIES;
+            }
+        });
+
+    @Nullable
+    private static volatile OptionQuery.Known known;
+
+    private final String text;
+    private final OptionQuery query;
+
+    private ItemQuery(OptionQuery query) {
+        this.text = query.text();
+        this.query = query;
+    }
+
+    public static Optional<ItemQuery> parse(String typed) {
+        return OptionQuery.parse(typed).map(ItemQuery::new);
+    }
+
+    // Tags and mods are read again once tags reload.
+    public static void forget() {
+        FOUND.clear();
+        known = null;
+    }
+
+    public String text() {
+        return text;
+    }
+
+    // The one item or tag this names, when it is a single whole id with nothing else asked.
+    Optional<ItemFilter> lone() {
+        return query.lone().flatMap(word -> {
+            OptionQuery.Known world = known();
+            if (word.startsWith("#") && world.tags().contains(word.substring(1))) {
+                return Optional.of(ItemFilter.tag(ResourceLocation.parse(word.substring(1))));
+            }
+            if (world.items().contains(word)) {
+                return Optional.of(ItemFilter.item(ResourceLocation.parse(word)));
+            }
+            return Optional.empty();
+        });
+    }
+
+    // Whether a rule written this way takes in the item.
+    public boolean matches(Item item) {
+        return matches(item, null);
+    }
+
+    // Whether a search finds the item, its name in the reader's words among what a bare word is looked for in.
+    public boolean matches(Item item, @Nullable String name) {
+        return matches(item, name, String::contains);
+    }
+
+    /**
+     * Searches display names with the supplied matcher (name first, lower-case query second). Only bare
+     * words may search a name; ids, tags, mod names and wildcards retain their registry-based semantics.
+     * Saved rules use {@link #matches(Item)} and never consult this matcher or a translated name.
+     */
+    public boolean matches(Item item, @Nullable String name, BiPredicate<String, String> nameMatcher) {
+        OptionQuery.Known world = known();
+        ResourceLocation id = BuiltInRegistries.ITEM.getKey(item);
+        return query.matches(world,
+            id.toString(), id.getNamespace(), item.builtInRegistryHolder().tags()
+                .map(tag -> tag.location().toString()).toList(), name, nameMatcher);
+    }
+
+    // Every item the rule takes in, in the registry's order.
+    public List<Item> items() {
+        return FOUND.computeIfAbsent(text, any -> {
+            List<Item> found = new ArrayList<>();
+            for (Item item : BuiltInRegistries.ITEM) {
+                if (item != Items.AIR && matches(item)) {
+                    found.add(item);
+                }
+            }
+            return List.copyOf(found);
+        });
+    }
+
+    private static OptionQuery.Known known() {
+        OptionQuery.Known held = known;
+        if (held == null) {
+            Set<String> mods = new HashSet<>();
+            Set<String> items = new HashSet<>();
+            Set<String> tags = new HashSet<>();
+            Set<String> tagPaths = new HashSet<>();
+            for (Item item : BuiltInRegistries.ITEM) {
+                ResourceLocation id = BuiltInRegistries.ITEM.getKey(item);
+                mods.add(id.getNamespace());
+                items.add(id.toString());
+            }
+            BuiltInRegistries.ITEM.getTagNames().forEach(tag -> {
+                tags.add(tag.location().toString());
+                tagPaths.add(tag.location().getPath());
+            });
+            held = new OptionQuery.Known(Set.copyOf(mods), Set.copyOf(items), Set.copyOf(tags), Set.copyOf(tagPaths));
+            known = held;
+        }
+        return held;
+    }
+
+}

@@ -1,32 +1,34 @@
 package io.github.izakyl.folkways.plugins.patrol;
 
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.colony.Colonies;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.colony.Held;
-import io.github.izakyl.folkways.core.api.resident.body.Body;
-import io.github.izakyl.folkways.core.api.terms.Containers;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.work.Ending;
-import io.github.izakyl.folkways.core.api.work.Grown;
-import io.github.izakyl.folkways.core.api.work.Node;
-import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.Urge;
-import io.github.izakyl.folkways.core.api.work.Worker;
-import io.github.izakyl.folkways.core.api.work.Workload;
-import io.github.izakyl.folkways.core.engine.inventory.InventoryObservations;
-import io.github.izakyl.folkways.core.engine.labor.LaborFixture;
+import io.github.izakyl.folkways.core.colony.api.Claimed;
+import io.github.izakyl.folkways.core.colony.api.Colonies;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.inventory.internal.InventoryObservations;
+import io.github.izakyl.folkways.core.item.api.Containers;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
+import io.github.izakyl.folkways.core.plan.api.Grown;
+import io.github.izakyl.folkways.core.resident.api.Body;
+import io.github.izakyl.folkways.core.runtime.LaborFixture;
 import io.github.izakyl.folkways.core.testing.Cleanup;
 import io.github.izakyl.folkways.core.testing.TestWorker;
+import io.github.izakyl.folkways.core.work.api.Ending;
+import io.github.izakyl.folkways.core.work.api.Node;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.work.api.Urge;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.work.api.Workload;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
 import io.github.izakyl.folkways.plugins.combat.DefenseControl;
 import io.github.izakyl.folkways.plugins.combat.SpottedTargets;
 import io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfile;
 import io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfiles;
+import io.github.izakyl.folkways.plugins.combat.weapon.PatrolSupplies;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import io.github.izakyl.folkways.plugins.person.PersonContent;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -35,6 +37,7 @@ import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.tags.ItemTags;
 import net.minecraft.world.Container;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.entity.EntityType;
@@ -72,7 +75,7 @@ public final class PatrolGameTests {
         Colony colony = Colonies.mint(level.getServer());
         var body = PersonBody.RESIDENT.get().create(level);
         place(helper, body, new BlockPos(2, 1, 3));
-        colony.hold(PersonContent.ID, Held.Entity.of(body)).orElseThrow();
+        colony.hold(PersonContent.ID, Claimed.Entity.of(body)).orElseThrow();
         body.joinColony(colony.id());
         WorldPos source = WorldPos.of(level, helper.absolutePos(new BlockPos(18, 1, 3)));
         Container store = Containers.at(level, source.block(level)).orElseThrow();
@@ -147,8 +150,8 @@ public final class PatrolGameTests {
         place(helper, peer.mob(), new BlockPos(1, 1, 2));
         place(helper, zombie, new BlockPos(35, 1, 1));
         zombie.setGlowingTag(true);
-        colony.hold(PersonContent.ID, Held.Entity.of(scout.mob())).orElseThrow();
-        colony.hold(PersonContent.ID, Held.Entity.of(peer.mob())).orElseThrow();
+        colony.hold(PersonContent.ID, Claimed.Entity.of(scout.mob())).orElseThrow();
+        colony.hold(PersonContent.ID, Claimed.Entity.of(peer.mob())).orElseThrow();
         scout.joinColony(colony.id());
         peer.joinColony(colony.id());
         arm(colony, scout, "Melee", ItemSpec.of(Tags.Items.MELEE_WEAPON_TOOLS));
@@ -182,12 +185,13 @@ public final class PatrolGameTests {
     }
 
     private static void grant(Body body, String... ids) {
+        body.perks().level(PatrolContent.VOCATION);
         net.minecraft.nbt.CompoundTag saved = body.mob().saveWithoutId(new net.minecraft.nbt.CompoundTag());
         var attachments = saved.getCompound("neoforge:attachments");
         var state = attachments.getCompound("folkways:body_state");
         var perks = state.getCompound("Perks");
         var vocations = perks.getCompound("vocations");
-        var trade = new net.minecraft.nbt.CompoundTag();
+        var trade = vocations.getCompound(PatrolContent.VOCATION.toString()).copy();
         var owned = new net.minecraft.nbt.ListTag();
         for (String id : ids) {
             var entry = new net.minecraft.nbt.CompoundTag();
@@ -528,6 +532,33 @@ public final class PatrolGameTests {
             .filter(one -> one.name().equals(name))
             .findFirst()
             .orElseGet(() -> profiles.add(profiles.create(name).id(), LoadoutProfile.Entry.weapon(weapon)));
+        profiles.assign(List.of(body.id()), Optional.of(profile.id()));
+    }
+
+    private static void assignLoadout(
+        PatrolSupplies supplies,
+        Body body, String name) {
+        var profiles = supplies.profiles();
+        var profile = profiles.all().stream().filter(value -> value.name().equals(name)).findFirst()
+            .orElseGet(() -> {
+                var created = profiles.create(name);
+                var weapon = switch (name) {
+                    case "melee" -> ItemSpec.of(
+                        Tags.Items.MELEE_WEAPON_TOOLS);
+                    case "bow" -> ItemSpec.of(Items.BOW);
+                    case "crossbow" -> ItemSpec.of(Items.CROSSBOW);
+                    default -> throw new IllegalArgumentException(name);
+                };
+                var entries = new ArrayList<LoadoutProfile.Entry>();
+                entries.add(LoadoutProfile.Entry.weapon(weapon));
+                if (!name.equals("melee")) {
+                    entries.add(LoadoutProfile.Entry.supply(
+                        ItemSpec.of(ItemTags.ARROWS), 8, 8));
+                }
+                profiles.replace(new LoadoutProfile(
+                    created.id(), created.name(), entries));
+                return profiles.get(created.id()).orElseThrow();
+            });
         profiles.assign(List.of(body.id()), Optional.of(profile.id()));
     }
 }

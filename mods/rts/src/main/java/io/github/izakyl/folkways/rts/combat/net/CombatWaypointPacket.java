@@ -1,7 +1,7 @@
 package io.github.izakyl.folkways.rts.combat.net;
 
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import java.util.List;
 import java.util.UUID;
 import net.minecraft.network.RegistryFriendlyByteBuf;
@@ -23,10 +23,6 @@ public record CombatWaypointPacket(
         if (request <= 0 || residents.isEmpty() || residents.size() > CombatPackets.MAX_MEMBERS) {
             throw new IllegalArgumentException("invalid waypoint selection");
         }
-    }
-
-    public CombatWaypointPacket(long request, UUID colonyId, List<UUID> residents, WorldPos point) {
-        this(request, colonyId, residents, point, false);
     }
 
     @Override

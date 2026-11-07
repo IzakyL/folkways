@@ -1,7 +1,7 @@
 package io.github.izakyl.folkways.front.client;
 
-import io.github.izakyl.folkways.front.api.ui.OverheadTools;
 import io.github.izakyl.folkways.front.api.notice.Line;
+import io.github.izakyl.folkways.front.api.ui.OverheadTools;
 import io.github.izakyl.folkways.front.client.ColonyLookCard.Row;
 import io.github.izakyl.folkways.front.engine.net.LookLines;
 import java.util.List;

@@ -117,11 +117,9 @@ final class Hunger {
     }
 
     void load(Reader reader) {
-        reader.integer(TAG_FOOD_LEVEL).ifPresent(level -> {
-            foodLevel = clampFood(level);
-            saturationLevel = Math.max(0.0F, reader.decimal(TAG_SATURATION).orElse(0.0F));
-            exhaustionLevel = Math.max(0.0F, reader.decimal(TAG_EXHAUSTION).orElse(0.0F));
-        });
+        foodLevel = clampFood(reader.integer(TAG_FOOD_LEVEL).orElseThrow());
+        saturationLevel = Math.max(0.0F, reader.decimal(TAG_SATURATION).orElseThrow());
+        exhaustionLevel = Math.max(0.0F, reader.decimal(TAG_EXHAUSTION).orElseThrow());
         vitalsTimer = 0;
     }
 

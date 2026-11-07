@@ -1,17 +1,17 @@
 package io.github.izakyl.folkways.plugins.compost;
 
-import io.github.izakyl.folkways.core.api.colony.Closing;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.colony.ColonyView;
-import io.github.izakyl.folkways.core.api.colony.Holding;
-import io.github.izakyl.folkways.core.api.colony.Release;
-import io.github.izakyl.folkways.core.api.colony.Sweep;
-import io.github.izakyl.folkways.core.api.inventory.InventorySnapshot;
-import io.github.izakyl.folkways.core.api.terms.Stand;
-import io.github.izakyl.folkways.core.api.terms.Stash;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.work.Grown;
-import io.github.izakyl.folkways.core.api.work.Stances;
+import io.github.izakyl.folkways.core.colony.api.Claim;
+import io.github.izakyl.folkways.core.colony.api.ClaimRelease;
+import io.github.izakyl.folkways.core.colony.api.Closing;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.colony.api.ColonyView;
+import io.github.izakyl.folkways.core.colony.api.Sweep;
+import io.github.izakyl.folkways.core.inventory.api.InventorySnapshot;
+import io.github.izakyl.folkways.core.inventory.api.Stash;
+import io.github.izakyl.folkways.core.plan.api.Grown;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.world.api.Stand;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.front.api.Facing;
 import io.github.izakyl.folkways.front.api.notice.Line;
 import java.util.ArrayList;
@@ -28,7 +28,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.Blocks;
 
 /** Owns native composters independently of any optional cooking integration. */
-public final class CompostPresence implements Facing, Holding.Watch {
+public final class CompostPresence implements Facing, Claim.Watch {
     private final Colony colony;
     private final MinecraftServer server;
     private final SeedSupport seeds;
@@ -52,9 +52,9 @@ public final class CompostPresence implements Facing, Holding.Watch {
 
     public SeedBudget budget(ServerLevel level) { return seeds.budget(level); }
 
-    public void held(Holding holding) { dirty = true; sweep.nudge(); }
+    public void held(Claim holding) { dirty = true; sweep.nudge(); }
 
-    public void released(Holding holding, Release why) {
+    public void released(Claim holding, ClaimRelease why) {
         for (WorldPos at : holding.what().cells()) {
             bookings.withdraw(at);
             sites.remove(at);
@@ -72,7 +72,7 @@ public final class CompostPresence implements Facing, Holding.Watch {
     public void refresh(MinecraftServer server) {
         dirty = false;
         Set<WorldPos> marked = new LinkedHashSet<>();
-        colony.holdings(CompostContent.POINT).forEach(holding -> marked.addAll(holding.what().cells()));
+        colony.claims(CompostContent.POINT).forEach(holding -> marked.addAll(holding.what().cells()));
         for (ServerLevel level : server.getAllLevels()) {
             colony.inventory().observe(CompostContent.ID, level,
                 marked.stream().filter(at -> at.in(level)).toList());

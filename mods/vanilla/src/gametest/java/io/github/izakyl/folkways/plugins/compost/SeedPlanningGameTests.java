@@ -1,14 +1,14 @@
 package io.github.izakyl.folkways.plugins.compost;
 
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.colony.Colonies;
-import io.github.izakyl.folkways.core.api.colony.Held;
-import io.github.izakyl.folkways.core.api.colony.Release;
-import io.github.izakyl.folkways.core.api.terms.Containers;
-import io.github.izakyl.folkways.core.api.terms.Goods;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.work.Stances;
+import io.github.izakyl.folkways.core.colony.api.ClaimRelease;
+import io.github.izakyl.folkways.core.colony.api.Claimed;
+import io.github.izakyl.folkways.core.colony.api.Colonies;
+import io.github.izakyl.folkways.core.item.api.Containers;
+import io.github.izakyl.folkways.core.item.api.Goods;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import io.github.izakyl.folkways.plugins.person.PersonContent;
 import io.github.izakyl.folkways.plugins.person.ResidentEntity;
@@ -209,7 +209,7 @@ public final class SeedPlanningGameTests {
                 body.moveTo(helper.absolutePos(new BlockPos(5 + index, 1, 4)).getCenter());
                 helper.assertTrue(level.addFreshEntity(body), "each local fixture resident is admitted to the actual level");
                 helper.assertTrue(level.getEntity(body.getUUID()) == body, "both local residents are indexed before reading physical stock");
-                colony.hold(PersonContent.ID, Held.Entity.of(body)).orElseThrow();body.joinColony(colony.id());colony.entered(body);
+                colony.hold(PersonContent.ID, Claimed.Entity.of(body)).orElseThrow();body.joinColony(colony.id());colony.entered(body);
                 body.pack().setItem(0, new ItemStack(Items.WHEAT_SEEDS, index == 0 ? 20 : 11));bodies.add(body);
             }
             var support = new SeedSupport(colony, server);var budget = support.budget(level);
@@ -234,14 +234,14 @@ public final class SeedPlanningGameTests {
             ResidentEntity away = PersonBody.RESIDENT.get().create(level);away.setNoAi(true);
             away.moveTo(helper.absolutePos(new BlockPos(7, 1, 4)).getCenter());
             helper.assertTrue(level.addFreshEntity(away), "the resident that will be unloaded is admitted to the actual level");
-            var unloaded = colony.hold(PersonContent.ID, Held.Entity.of(away)).orElseThrow();
+            var unloaded = colony.hold(PersonContent.ID, Claimed.Entity.of(away)).orElseThrow();
             away.joinColony(colony.id());colony.entered(away);
             away.remove(Entity.RemovalReason.UNLOADED_TO_CHUNK);
-            helper.assertTrue(colony.holdingOf(away.getUUID()).isPresent(), "unloading keeps the resident held");
+            helper.assertTrue(colony.claimOf(away.getUUID()).isPresent(), "unloading keeps the resident held");
             var unknown = budget.planning();
             helper.assertTrue(!unknown.complete() && unknown.tally(Items.WHEAT_SEEDS).compostable() == 0
                 && unknown.reserves().isEmpty(), "an unloaded held resident remains a conservative unknown for the colony");
-            colony.release(unloaded.id(), Release.LET_GO);
+            colony.release(unloaded.id(), ClaimRelease.LET_GO);
             helper.assertTrue(budget.planning().complete(), "removing the unloaded resident restores a fully observed colony");
             var absent = new BlockPos(25_000_000, 80, 25_000_000);
             colony.stores(storesOwner, level.dimension(), List.of(WorldPos.of(level, absent)));
@@ -260,7 +260,9 @@ public final class SeedPlanningGameTests {
 
     private static SeedBudget.Snapshot snapshot(SeedBudget.Location location, int wheat, List<SeedBudget.Claim> claims, boolean complete) {
         List<ItemStack> stacks = new ArrayList<>();
-        for (int left = wheat; left > 0; left -= 64) stacks.add(new ItemStack(Items.WHEAT_SEEDS, Math.min(left, 64)));
+        for (int left = wheat; left > 0; left -= 64) {
+            stacks.add(new ItemStack(Items.WHEAT_SEEDS, Math.min(left, 64)));
+        }
         return new SeedBudget.Snapshot(List.of(new SeedBudget.Stock("one real pack", location, stacks)), claims, List.of(), Map.of(), List.of(), complete);
     }
 }

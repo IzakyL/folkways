@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.create.rail.domain;
 
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import net.minecraft.core.BlockPos;
 
 // Where a train stands at a station: the stop on the track, the way the track runs through it, how wide the train is

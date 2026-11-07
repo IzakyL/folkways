@@ -45,14 +45,14 @@ const IMPORTS = [
   "net.minecraft.world.entity.ai.attributes.Attributes", "net.minecraft.world.item.ItemStack", "net.minecraft.world.item.Items",
   "net.minecraft.world.phys.Vec3", "net.minecraft.world.level.block.Blocks",
   "com.tacz.guns.api.item.IGun", "com.tacz.guns.api.item.IAmmo", "com.tacz.guns.api.item.gun.FireMode", "com.tacz.guns.init.ModItems",
-  "io.github.izakyl.folkways.core.api.colony.Colonies", "io.github.izakyl.folkways.core.api.colony.Held",
-  "io.github.izakyl.folkways.core.api.terms.WorldSpaces", "io.github.izakyl.folkways.plugins.person.PersonBody",
+  "io.github.izakyl.folkways.core.colony.api.Colonies", "io.github.izakyl.folkways.core.colony.api.Claimed",
+  "io.github.izakyl.folkways.core.world.api.WorldSpaces", "io.github.izakyl.folkways.plugins.person.PersonBody",
   "io.github.izakyl.folkways.plugins.person.PersonContent", "io.github.izakyl.folkways.plugins.person.ResidentEntity",
   "io.github.izakyl.folkways.plugins.person.look.ResidentLooks", "io.github.izakyl.folkways.plugins.person.look.MaidLooks",
   "io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfiles",
   "io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfile",
   "io.github.izakyl.folkways.plugins.combat.weapon.LoadoutRegistry",
-  "io.github.izakyl.folkways.core.api.terms.WorldPos",
+  "io.github.izakyl.folkways.core.world.api.WorldPos",
   "io.github.izakyl.folkways.plugins.patrol.SentryPosts",
   "io.github.izakyl.folkways.plugins.patrol.PatrolStaffing",
 ];
@@ -72,7 +72,7 @@ for(int n=0;n<3;n++){
  var look=n==0?ResourceLocation.parse("folkways:steve_wide"):
   n==1?ResourceLocation.parse("folkways:model/default_boy/blue"):maid;
  body.setLookId(ResourceKey.create(ResidentLooks.REGISTRY,look));
- level.addFreshEntity(body);colony.hold(PersonContent.ID,Held.Entity.of(body)).orElseThrow();body.joinColony(colony.id());
+ level.addFreshEntity(body);colony.hold(PersonContent.ID,Claimed.Entity.of(body)).orElseThrow();body.joinColony(colony.id());
  ItemStack actual=new ItemStack(ModItems.MODERN_KINETIC_GUN.get());IGun gun=(IGun)actual.getItem();
  gun.setGunId(actual,ResourceLocation.parse("tacz:m1911"));gun.setFireMode(actual,FireMode.SEMI);
  gun.setCurrentAmmoCount(actual,6);gun.setBulletInBarrel(actual,true);body.pack().insert(actual);
@@ -84,7 +84,7 @@ for(int n=0;n<3;n++){
  for(int x=0;x<2;x++){for(int z=0;z<2;z++){
   cells.add(WorldPos.of(level,body.blockPosition().below().offset(x,0,z)));
  }}
- var zone=colony.hold(SentryPosts.ZONE,new Held.Area(cells)).orElseThrow();
+ var zone=colony.hold(SentryPosts.ZONE,new Claimed.Area(cells)).orElseThrow();
  PatrolStaffing.of(colony).configure(level,zone.id(),Set.of(profile.id()),1);
  ids.add(body.getUUID().toString());
  var target=EntityType.ZOMBIE.create(level);target.setNoAi(true);target.setItemSlot(EquipmentSlot.HEAD,new ItemStack(Items.CARVED_PUMPKIN));

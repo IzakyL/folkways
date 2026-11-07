@@ -18,11 +18,11 @@ import java.lang.reflect.*;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
-import io.github.izakyl.folkways.core.api.passage.Hop;
-import io.github.izakyl.folkways.core.api.participation.*;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.engine.colony.ColonyWays;
-import io.github.izakyl.folkways.core.engine.travel.Urgency;
+import io.github.izakyl.folkways.core.travel.api.Hop;
+import io.github.izakyl.folkways.core.resident.api.*;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
+import io.github.izakyl.folkways.core.travel.internal.ColonyWays;
+import io.github.izakyl.folkways.core.travel.internal.Urgency;
 public final class Task {
   static Object field(Object owner, String name) throws Exception {
     Class<?> c = owner.getClass();
@@ -104,9 +104,9 @@ public final class Task {
           if (goals.isEmpty() || BlockPos.of(from).distManhattan(BlockPos.of(goals.get(0))) < 300) continue;
           far++;
           Object realm = call(ask,"realm");
-          WorldPos fromPos = new WorldPos((io.github.izakyl.folkways.core.api.terms.Realm)realm, BlockPos.of(from));
+          WorldPos fromPos = new WorldPos((io.github.izakyl.folkways.core.world.api.Realm)realm, BlockPos.of(from));
           Set<WorldPos> goalPos = new LinkedHashSet<>();
-          for (long g : goals) goalPos.add(new WorldPos((io.github.izakyl.folkways.core.api.terms.Realm)realm, BlockPos.of(g)));
+          for (long g : goals) goalPos.add(new WorldPos((io.github.izakyl.folkways.core.world.api.Realm)realm, BlockPos.of(g)));
           int s = (int)call(web,"at",fromPos);
           int e = -1; for (WorldPos g : goalPos) { e = (int)call(web,"at",g); if (e >= 0) break; }
           Object said = direct.invoke(graph, quiet, sort, fromPos, goalPos, Map.of());

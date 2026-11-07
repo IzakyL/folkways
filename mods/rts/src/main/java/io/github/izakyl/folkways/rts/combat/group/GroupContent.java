@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.rts.combat.group;
 
-import io.github.izakyl.folkways.core.api.Declaring;
+import io.github.izakyl.folkways.core.extension.api.Declaring;
 import net.minecraft.resources.ResourceLocation;
 
 public final class GroupContent {

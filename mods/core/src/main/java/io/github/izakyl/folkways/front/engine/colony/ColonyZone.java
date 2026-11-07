@@ -1,9 +1,9 @@
 package io.github.izakyl.folkways.front.engine.colony;
 
-import io.github.izakyl.folkways.core.api.colony.Held;
-import io.github.izakyl.folkways.core.api.colony.Holding;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
+import io.github.izakyl.folkways.core.colony.api.Claim;
+import io.github.izakyl.folkways.core.colony.api.Claimed;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
+import io.github.izakyl.folkways.core.world.api.WorldSpaces;
 import io.github.izakyl.folkways.front.api.ZoneView;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -39,8 +39,8 @@ public final class ColonyZone implements ZoneView {
         this.settings = Objects.requireNonNull(settings, "settings");
     }
 
-    public static Optional<ColonyZone> in(Holding holding, ServerLevel level, ColonySettings settings) {
-        if (!(holding.what() instanceof Held.Area area)) {
+    public static Optional<ColonyZone> in(Claim holding, ServerLevel level, ColonySettings settings) {
+        if (!(holding.what() instanceof Claimed.Area area)) {
             return Optional.empty();
         }
         Map<BlockPos, WorldPos> here = new LinkedHashMap<>();

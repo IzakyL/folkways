@@ -1,12 +1,12 @@
 package io.github.izakyl.folkways.modulargolems.domain;
 
-import io.github.izakyl.folkways.core.api.Declaring;
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.participation.Participation;
-import io.github.izakyl.folkways.core.api.participation.Participations;
-import io.github.izakyl.folkways.core.api.participation.Stake;
-import io.github.izakyl.folkways.core.api.resident.ResidentKind;
-import io.github.izakyl.folkways.core.api.resident.ResidentKinds;
+import io.github.izakyl.folkways.core.extension.api.Declaring;
+import io.github.izakyl.folkways.core.resident.api.Participation;
+import io.github.izakyl.folkways.core.resident.api.Participations;
+import io.github.izakyl.folkways.core.resident.api.ResidentKind;
+import io.github.izakyl.folkways.core.resident.api.ResidentKinds;
+import io.github.izakyl.folkways.core.resident.api.Stake;
 import io.github.izakyl.folkways.front.api.Delegation;
 import io.github.izakyl.folkways.front.api.Enrollment;
 import io.github.izakyl.folkways.front.api.Registering;

@@ -7,31 +7,32 @@ import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.cookery.CookeryContent;
 import io.github.izakyl.folkways.cookery.KitchenBookings;
 import io.github.izakyl.folkways.cookery.testing.RecoveryAsking;
-import io.github.izakyl.folkways.core.api.terms.Containers;
-import io.github.izakyl.folkways.core.api.terms.Goods;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.work.Ending;
-import io.github.izakyl.folkways.core.api.work.Grown;
-import io.github.izakyl.folkways.core.api.work.Hold;
-import io.github.izakyl.folkways.core.api.work.Node;
-import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Produce;
-import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.WorkSite;
-import io.github.izakyl.folkways.core.api.work.Worker;
-import io.github.izakyl.folkways.core.api.work.Workload;
-import io.github.izakyl.folkways.core.engine.labor.Commit;
-import io.github.izakyl.folkways.core.engine.plan.Crew;
-import io.github.izakyl.folkways.core.engine.plan.Known;
-import io.github.izakyl.folkways.core.engine.plan.Message;
-import io.github.izakyl.folkways.core.engine.plan.PlanningFixture;
-import io.github.izakyl.folkways.core.engine.plan.Situation;
-import io.github.izakyl.folkways.core.engine.plan.Solving;
-import io.github.izakyl.folkways.core.engine.plan.Stands;
-import io.github.izakyl.folkways.core.engine.plan.Stock;
-import io.github.izakyl.folkways.core.engine.plan.Unassigned;
+import io.github.izakyl.folkways.core.colony.api.Colonies;
+import io.github.izakyl.folkways.core.inventory.internal.Stands;
+import io.github.izakyl.folkways.core.item.api.Containers;
+import io.github.izakyl.folkways.core.item.api.Goods;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
+import io.github.izakyl.folkways.core.plan.api.Grown;
+import io.github.izakyl.folkways.core.plan.api.Produce;
+import io.github.izakyl.folkways.core.plan.internal.Crew;
+import io.github.izakyl.folkways.core.plan.internal.Known;
+import io.github.izakyl.folkways.core.plan.internal.Message;
+import io.github.izakyl.folkways.core.plan.internal.PlanningFixture;
+import io.github.izakyl.folkways.core.plan.internal.Situation;
+import io.github.izakyl.folkways.core.plan.internal.Solving;
+import io.github.izakyl.folkways.core.plan.internal.Stock;
+import io.github.izakyl.folkways.core.plan.internal.Unassigned;
+import io.github.izakyl.folkways.core.runtime.HoldingFixture;
 import io.github.izakyl.folkways.core.testing.TestWorker;
+import io.github.izakyl.folkways.core.work.api.Ending;
+import io.github.izakyl.folkways.core.work.api.Hold;
+import io.github.izakyl.folkways.core.work.api.Node;
+import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.work.api.WorkSite;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.work.support.WorkStances;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.effect.Effects;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import io.github.izakyl.folkways.plugins.person.ResidentEntity;
@@ -43,6 +44,7 @@ import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.entity.EntityType;
@@ -64,6 +66,110 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 public final class MillstoneGameTests {
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) { event.register(MillstoneGameTests.class); }
+
+    @GameTest(template = "empty")
+    public static void exitMarkersRequireColonyAndKeepTheZeroUuidMeaning(GameTestHelper helper) {
+        try (Rig rig = new Rig(helper)) {
+            var colony = Colonies.mint(rig.level.getServer());
+            try {
+                CompoundTag marker = new CompoundTag();
+                marker.put("station", rig.at.save());
+                rig.actor.getPersistentData().put("folkways.cookery.millstone.exit", marker);
+                boolean rejected = false;
+                try {
+                    MillstoneDrive.urges(colony, rig.worker, colony.view(rig.level));
+                } catch (IllegalArgumentException expected) {
+                    rejected = true;
+                }
+                helper.assertTrue(rejected, "an exit marker cannot omit its colony UUID");
+                marker.putUUID("colony", new UUID(0, 0));
+                helper.assertValueEqual(MillstoneDrive.urges(colony, rig.worker, colony.view(rig.level)).size(), 1,
+                    "zero UUID still permits an exit after losing colony membership");
+                marker.putUUID("colony", UUID.randomUUID());
+                helper.assertTrue(MillstoneDrive.urges(colony, rig.worker, colony.view(rig.level)).isEmpty(),
+                    "another colony cannot consume the exit marker");
+                marker.putUUID("colony", colony.id());
+                helper.assertValueEqual(MillstoneDrive.urges(colony, rig.worker, colony.view(rig.level)).size(), 1,
+                    "the saved colony retains its exit urge");
+            } finally {
+                rig.actor.getPersistentData().remove("folkways.cookery.millstone.exit");
+                colony.raze();
+            }
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 1200)
+    public static void hardUrgesPreserveTheNativeMotorBatchAndItsFlour(GameTestHelper helper) {
+        Rig rig = new Rig(helper);
+        MillstoneWork work = rig.plan(3);
+        HoldingFixture holding = rig.holding(work).prepare().hardUrge();
+        rig.load(work);
+        holding.hardUrge();
+        boolean[] driving = {true};
+        helper.onEachTick(
+            () -> {
+            if (driving[0] && !holding.running()) {
+                driving[0] = false;
+            }
+            });
+        helper.runAfterDelay(60, holding::hardUrge);
+        helper.startSequence()
+                .thenWaitUntil(
+                    () ->
+                    helper.assertTrue(
+                        !driving[0],
+                        "the resumed native motor finishes and physically leaves"))
+                .thenExecute(
+                    () -> {
+                    try {
+                    helper.assertTrue(holding.step() instanceof Outcome.Done, "the original drive settles");
+                    holding.prepare().hardUrge();
+                    helper.assertTrue(
+                        rig.step(work) instanceof Outcome.Done,
+                        "the original flour is taken");
+                    holding.hardUrge();
+                    helper.assertValueEqual(
+                        rig.count(ModItems.FLOUR.get()),
+                        3L,
+                        "exactly three original flour survive");
+                    helper.assertValueEqual(rig.count(Items.WHEAT), 0L, "accepted wheat is never refunded");
+                    helper.assertTrue(rig.mill().isOutputEmpty(), "no native duplicate remains");
+                    } finally {
+                    rig.close();
+                    }
+                    })
+                .thenSucceed();
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 800)
+    public static void nativeGrindingUnbindsAndWalksOutBeforeDeliveringActualFlour(GameTestHelper helper) {
+        Rig rig = new Rig(helper);
+        MillstoneWork work = rig.plan(3);
+        rig.load(work);
+        HoldingFixture drive = rig.holding(work).prepare();
+        helper.assertTrue(rig.mill().isBoundTo(rig.actor), "the assigned resident is the real motor");
+        helper.assertValueEqual(rig.count(Items.WHEAT), 0L, "the accepted input was spent exactly once");
+        float walked = rig.actor.walkDist;
+        helper.startSequence().thenWaitUntil(() -> helper.assertTrue(rig.mill().getInput().isEmpty(),
+            "the original block ticker finishes grinding")).thenExecute(() -> {
+                helper.assertTrue(!rig.mill().hasEntity(), "the finishing native tick releases its motor");
+                helper.assertTrue(MillstoneDrive.exiting(rig.actor), "unbinding alone does not pretend the resident left");
+                helper.assertTrue(!rig.mill().isOutputEmpty(), "real output remains held against asynchronous ejection");
+            }).thenWaitUntil(() -> helper.assertTrue(!drive.running(),
+                "the resident actually walks to its safe exit")).thenExecute(() -> {
+                    try {
+                        helper.assertTrue(rig.actor.walkDist > walked + 0.05F, "the exit required physical movement");
+                    helper.assertTrue(drive.step() instanceof Outcome.Done, "driving completes only after exit");
+                        helper.assertTrue(rig.step(work) instanceof Outcome.Done, "the actual mill output is extracted");
+                        helper.assertValueEqual(rig.count(ModItems.FLOUR.get()), 3L, "each real input produces one real flour");
+                        helper.assertTrue(work.commit(rig.level, rig.worker) instanceof Outcome.Done, "the batch settles once");
+                        helper.assertTrue(rig.mill().isOutputEmpty() && !rig.mill().hasEntity(), "the station is empty and unbound");
+                        helper.assertTrue(rig.level.getEntitiesOfClass(ItemEntity.class,
+                            new net.minecraft.world.phys.AABB(rig.cell).inflate(5)).isEmpty(), "the products were not also ejected");
+                    } finally { rig.close(); }
+                }).thenSucceed();
+    }
 
     @GameTest(template = "empty")
     public static void aPassingResidentCannotBindButNativeAnimalsStillCan(GameTestHelper helper) {
@@ -104,9 +210,9 @@ public final class MillstoneGameTests {
     public static void withdrawingAnAlreadyPlannedMillNeverSpendsItsIngredients(GameTestHelper helper) {
         try (Rig rig = new Rig(helper)) {
             MillstoneWork work = rig.plan(3);
-            Node prepared = ((Workload.Within.Turn.Piece) work.next(rig.level, rig.worker)).node();
+            HoldingFixture prepared = rig.holding(work).prepare();
             rig.bookings.withdraw(rig.at);
-            helper.assertTrue(Commit.run(rig.level, prepared, rig.worker) instanceof Outcome.Failed, "the old generation cannot load");
+            helper.assertTrue(prepared.step() instanceof Outcome.Failed, "the old generation cannot load");
             helper.assertValueEqual(rig.count(Items.WHEAT), 3L, "withdrawal cannot consume planned ingredients");
             helper.assertTrue(!rig.mill().hasEntity(), "withdrawal cannot bind the old worker");
         }
@@ -138,11 +244,12 @@ public final class MillstoneGameTests {
     @GameTest(template = "empty", timeoutTicks = 1000)
     public static void revokingTheActiveMotorLicenceLeavesAndPausesItsActualBatchUntilRestored(GameTestHelper helper) {
         Rig rig = new Rig(helper); MillstoneWork original = rig.plan(3); rig.load(original);
-        Node driving = ((Workload.Within.Turn.Piece) original.next(rig.level, rig.worker)).node();
+        HoldingFixture driving = rig.holding(original).prepare();
         var licence = rig.actor.licences().trade(WaresContent.trade()).orElseThrow();
         ItemStack accepted = rig.mill().getInput().copy();
         int initialProgress = rig.mill().saveWithoutMetadata(rig.level.registryAccess()).getInt("Progress");
-        int[] paused = { -1 }; float[] walked = { 0 }; MillstoneWork[] resumed = { null }; Node[] resumedDrive = { null };
+        int[] paused = { -1 }; float[] walked = { 0 }; MillstoneWork[] resumed = { null };
+        HoldingFixture[] resumedDrive = { null };
         Grown[] wanted = { null }; var asking = new RecoveryAsking(helper);
         helper.startSequence().thenIdle(20).thenExecute(() -> {
             int actual = rig.mill().saveWithoutMetadata(rig.level.registryAccess()).getInt("Progress");
@@ -156,14 +263,14 @@ public final class MillstoneGameTests {
                 paused[0] = rig.mill().saveWithoutMetadata(rig.level.registryAccess()).getInt("Progress");
                 helper.assertTrue(paused[0] > 0 && MillstoneDrive.exiting(rig.actor), "the unfinished native batch is paused while the released resident still owes a physical departure");
                 helper.assertTrue(ItemStack.matches(rig.mill().getInput(), accepted), "revocation preserves the exact native input and components");
-            }).thenWaitUntil(() -> helper.assertTrue(!((Workload.Continuous) driving.spec().workload()).holds(rig.level, rig.worker)
+            }).thenWaitUntil(() -> helper.assertTrue(!driving.running()
                 && !MillstoneDrive.exiting(rig.actor), "the active Within drive ends only after its former motor actually walks clear"))
             .thenExecute(() -> {
                 helper.assertTrue(rig.actor.walkDist > walked[0] + 0.05F, "revoking the vocation never substitutes teleportation or in-place unbinding for departure");
-                Outcome failure = Commit.run(rig.level, driving, rig.worker);
+                Outcome failure = driving.step();
                 helper.assertTrue(failure instanceof Outcome.Failed, "the unlicensed old drive does not pretend its unfinished recipe completed");
                 var ending = new Ending.Failed(driving.id(), ((Outcome.Failed) failure).why());
-                original.ended(rig.level, driving, ending); driving.released(rig.level, rig.worker, ending); original.ended(rig.level, ending);
+                 driving.release(ending); original.ended(rig.level, ending);
                 rig.hold.release(ending); rig.hold = null;
                 helper.assertTrue(new MillstoneStation().recovery(rig.colony, rig.level, rig.at, rig.stances, rig.bookings, () -> {})
                     .getFirst().nodes().getFirst().spec().needs().isEmpty(), "the original accepted batch remains available to recovery without another wheat budget");
@@ -177,19 +284,20 @@ public final class MillstoneGameTests {
                 resumed[0] = (MillstoneWork) wanted[0].nodes().getFirst();
                 asking.offer(List.of(wanted[0]));
                 helper.assertTrue(resumed[0].spec().needs().isEmpty() && resumed[0].planned(rig.level).isEmpty(), "restoring the task licence adopts the same persistent batch without reinserting input");
-                resumedDrive[0] = ((Workload.Within.Turn.Piece) resumed[0].next(rig.level, rig.worker)).node();
-                helper.assertTrue(((Workload.Continuous) resumedDrive[0].spec().workload()).holds(rig.level, rig.worker)
+                resumedDrive[0] = rig.holding(resumed[0]).prepare();
+                helper.assertTrue(
+                    resumedDrive[0].running()
                     && rig.mill().isBoundTo(rig.actor), "the restored resident really rebinds as the native motor");
                 helper.assertValueEqual(rig.mill().saveWithoutMetadata(rig.level.registryAccess()).getInt("Progress"), paused[0], "binding recovery does not reset the native countdown");
                 asking.assertKept(wanted[0], new MillstoneStation().recovery(rig.colony, rig.level, rig.at, rig.stances, rig.bookings, () -> {}));
             }).thenIdle(40).thenExecute(() -> asking.assertKept(wanted[0], new MillstoneStation().recovery(rig.colony, rig.level, rig.at, rig.stances, rig.bookings, () -> {})))
             .thenIdle(40).thenExecute(() -> asking.assertKept(wanted[0], new MillstoneStation().recovery(rig.colony, rig.level, rig.at, rig.stances, rig.bookings, () -> {})))
             .thenWaitUntil(() -> helper.assertTrue(rig.mill().getInput().isEmpty(), "the resumed native ticker eventually produces the original real output"))
-            .thenWaitUntil(() -> helper.assertTrue(!((Workload.Continuous) resumedDrive[0].spec().workload()).holds(rig.level, rig.worker), "the restored motor also physically leaves after successful grinding"))
+            .thenWaitUntil(() -> helper.assertTrue(!resumedDrive[0].running(), "the restored motor also physically leaves after successful grinding"))
             .thenExecute(() -> {
                 try {
-                    helper.assertTrue(Commit.run(rig.level, resumedDrive[0], rig.worker) instanceof Outcome.Done, "the recovered native drive actually completes");
-                    resumed[0].ended(rig.level, resumedDrive[0], Ending.DONE);
+                    helper.assertTrue(resumedDrive[0].step() instanceof Outcome.Done, "the recovered native drive actually completes");
+
                     helper.assertTrue(rig.step(resumed[0]) instanceof Outcome.Done && resumed[0].commit(rig.level, rig.worker) instanceof Outcome.Done, "the actual stored output is collected and settled once");
                     asking.assertKept(wanted[0], new MillstoneStation().recovery(rig.colony, rig.level, rig.at, rig.stances, rig.bookings, () -> {}));
                     helper.assertValueEqual(rig.count(ModItems.FLOUR.get()), 3L, "the exact three original wheat become three actual flour after licence restoration");
@@ -228,7 +336,7 @@ public final class MillstoneGameTests {
         MillstoneWork work = rig.plan(3);
         rig.load(work);
         float walked = rig.actor.walkDist;
-        new MillstoneStation().stop(rig.colony, io.github.izakyl.folkways.core.api.colony.Closing.RAZED);
+        new MillstoneStation().stop(rig.colony, io.github.izakyl.folkways.core.colony.api.Closing.RAZED);
         rig.hold.release(Ending.REVOKED);
         helper.assertTrue(!rig.mill().hasEntity(), "colony closure unbinds the resident immediately");
         helper.startSequence().thenWaitUntil(() -> helper.assertTrue(!MillstoneDrive.exiting(rig.actor),
@@ -313,10 +421,9 @@ public final class MillstoneGameTests {
                     var recovery = new MillstoneStation().recovery(rig.colony, rig.level, rig.at, rig.stances, rig.bookings, () -> {});
                     MillstoneWork resumed = (MillstoneWork) recovery.getFirst().nodes().getFirst();
                     helper.assertTrue(resumed.spec().needs().isEmpty() && resumed.planned(rig.level).isEmpty(), "the live resident adopts the same batch without another raw budget");
-                    Node drive = ((Workload.Within.Turn.Piece) resumed.next(rig.level, rig.worker)).node();
-                    helper.assertTrue(!((Workload.Continuous) drive.spec().workload()).holds(rig.level, rig.worker), "the new resident has no invented duty to walk the dead actor out");
-                    helper.assertTrue(Commit.run(rig.level, drive, rig.worker) instanceof Outcome.Done, "native finished state permits recovery");
-                    resumed.ended(rig.level, drive, Ending.DONE);
+                HoldingFixture drive = rig.holding(resumed).prepare();
+                helper.assertTrue(!drive.running(), "the new resident has no invented duty to walk the dead actor out");
+                helper.assertTrue(drive.step() instanceof Outcome.Done, "native finished state permits recovery");
                     helper.assertTrue(rig.step(resumed) instanceof Outcome.Done && resumed.commit(rig.level, rig.worker) instanceof Outcome.Done, "the live resident extracts and settles the actual stored products");
                     resumed.ended(rig.level, Ending.DONE);
                     helper.assertValueEqual(rig.count(ModItems.FLOUR.get()), 3L, "the exact original three real flour are delivered once");
@@ -338,9 +445,9 @@ public final class MillstoneGameTests {
             rig.level.setBlockAndUpdate(actual.above(), Blocks.AIR.defaultBlockState());
             helper.assertTrue(MillstoneStation.inSight(rig.level, footing, rig.cell), "the reserved footing sees a native part of this mill, without another test structure blocking its ray");
             helper.assertTrue(MillstoneDrive.exit(rig.level, rig.at, rig.actor).isPresent(), "the real native motor has a supported departure path before loading");
-            helper.assertTrue(io.github.izakyl.folkways.core.api.terms.Reach.standingIn(rig.actor, rig.stances), "ordinary core navigation has legitimately arrived within its 0.9-block tolerance");
-            helper.assertTrue(io.github.izakyl.folkways.core.api.terms.Reach.withinReach(footing, rig.cell)
-                && !io.github.izakyl.folkways.core.api.terms.Reach.withinReach(rig.actor.blockPosition(), rig.cell), "rounding the actual body down crosses the reach boundary despite a valid reserved footing");
+            helper.assertTrue(WorkStances.standingIn(rig.actor, rig.stances), "ordinary core navigation has legitimately arrived within its 0.9-block tolerance");
+            helper.assertTrue(io.github.izakyl.folkways.core.world.api.Reach.withinReach(footing, rig.cell)
+                && !io.github.izakyl.folkways.core.world.api.Reach.withinReach(rig.actor.blockPosition(), rig.cell), "rounding the actual body down crosses the reach boundary despite a valid reserved footing");
             rig.load(rig.plan(3));
             helper.assertTrue(rig.mill().isBoundTo(rig.actor) && rig.mill().getInput().getCount() == 3, "the real native mill accepts the fetched ingredients from the valid reserved stance");
             helper.assertValueEqual(rig.count(Items.WHEAT), 0L, "the accepted three real inputs are consumed once");
@@ -385,7 +492,7 @@ public final class MillstoneGameTests {
                     "freeing exactly one real cell admits the unchanged recovery batch");
                 long flour = known.weave().vertices().get(root.id()).plan().carrying().stream()
                     .filter(amount -> amount.spec().equals(Goods.specOf(new ItemStack(ModItems.FLOUR.get()))))
-                    .mapToLong(io.github.izakyl.folkways.core.api.work.Amount::count).sum();
+                    .mapToLong(io.github.izakyl.folkways.core.work.api.Amount::count).sum();
                 helper.assertValueEqual(flour, 3L,
                     "all three real recovered products remain in the root's capacity budget without a consumer promise");
             } finally { solver.closed(); }
@@ -405,6 +512,13 @@ public final class MillstoneGameTests {
     }
     static final class Rig implements AutoCloseable {
         final Worker worker;
+        private final java.util.Map<Node, HoldingFixture> claims =
+                new java.util.IdentityHashMap<>();
+
+        HoldingFixture holding(Node node) {
+            return claims.computeIfAbsent(node, next -> new HoldingFixture(level, next, worker));
+        }
+
         final GameTestHelper helper;
         final ServerLevel level;
         final UUID colony = UUID.randomUUID();
@@ -454,11 +568,10 @@ public final class MillstoneGameTests {
                 + ", real input=" + mill().getInput());
         }
         Outcome step(MillstoneWork work) {
-            Node node = ((Workload.Within.Turn.Piece) work.next(level, worker)).node();
-            Outcome outcome = Commit.run(level, node, worker);
+            Outcome outcome = holding(work).step();
             if (outcome instanceof Outcome.Done done) {
-                done.made().forEach(stack -> helper.assertTrue(Containers.insert(pack, stack).isEmpty(), "actual products fit in the test pack"));
-                work.ended(level, node, Ending.DONE);
+                done.made().forEach(stack -> helper.assertTrue(Containers.insert(pack, stack).isEmpty(),
+                    "actual native products fit"));
             }
             return outcome;
         }

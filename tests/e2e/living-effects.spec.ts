@@ -84,7 +84,7 @@ const READING = defineTask<{ uuid: string }, { lines: string }>({
   side: "server",
   source: javaTask({
     imports: ["net.minecraft.server.MinecraftServer", "net.minecraft.network.chat.Component",
-      "io.github.izakyl.folkways.core.api.resident.body.Body", "io.github.izakyl.folkways.front.api.ui.Pages",
+      "io.github.izakyl.folkways.core.resident.api.Body", "io.github.izakyl.folkways.front.api.ui.Pages",
       "io.github.izakyl.folkways.plugins.person.living.LivingContent"],
     body: `
 var level = ((MinecraftServer)ctx.server()).overworld();

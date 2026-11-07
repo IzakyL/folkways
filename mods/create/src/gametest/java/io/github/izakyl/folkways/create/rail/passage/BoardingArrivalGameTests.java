@@ -1,19 +1,19 @@
 package io.github.izakyl.folkways.create.rail.passage;
 
-import io.github.izakyl.folkways.core.testing.Proxies;
-import io.github.izakyl.folkways.create.FolkwaysCreateMod;
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.resident.Going;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.engine.labor.LaborRefusal;
-import io.github.izakyl.folkways.plugins.person.PersonBody;
-import io.github.izakyl.folkways.plugins.person.walk.OnFoot;
+import io.github.izakyl.folkways.core.resident.api.Going;
+import io.github.izakyl.folkways.core.testing.Proxies;
+import io.github.izakyl.folkways.core.work.api.LaborRefusal;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
+import io.github.izakyl.folkways.create.FolkwaysCreateMod;
 import io.github.izakyl.folkways.create.rail.domain.Boarding;
 import io.github.izakyl.folkways.create.rail.domain.RailRefusal;
 import io.github.izakyl.folkways.create.rail.domain.SeatRef;
 import io.github.izakyl.folkways.create.rail.domain.TransitNetwork;
 import io.github.izakyl.folkways.create.rail.domain.TransitNetworks;
+import io.github.izakyl.folkways.plugins.person.PersonBody;
+import io.github.izakyl.folkways.plugins.person.walk.OnFoot;
 import java.util.List;
 import java.util.Optional;
 import java.util.OptionalLong;

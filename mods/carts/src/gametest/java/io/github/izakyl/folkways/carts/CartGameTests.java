@@ -2,14 +2,14 @@ package io.github.izakyl.folkways.carts;
 
 import com.jusipat.astikorcartsredux.entity.AbstractCargoCart;
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.colony.Colonies;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.colony.Held;
-import io.github.izakyl.folkways.core.api.terms.Goods;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
-import io.github.izakyl.folkways.core.api.vocation.KitRules;
-import io.github.izakyl.folkways.core.engine.plan.Crew;
-import io.github.izakyl.folkways.core.engine.plan.PlanningFixture;
+import io.github.izakyl.folkways.core.colony.api.Claimed;
+import io.github.izakyl.folkways.core.colony.api.Colonies;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.colony.api.KitRules;
+import io.github.izakyl.folkways.core.item.api.Goods;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
+import io.github.izakyl.folkways.core.plan.internal.Crew;
+import io.github.izakyl.folkways.core.plan.internal.PlanningFixture;
 import io.github.izakyl.folkways.plugins.person.ResidentEntity;
 import java.util.List;
 import java.util.Optional;
@@ -121,24 +121,24 @@ public final class CartGameTests {
     public static void admissionSurvivesUnloadingAndColonySaveLoadButDestructionReleasesIt(GameTestHelper helper)
             throws ReflectiveOperationException {
         try (Rig rig = new Rig(helper, "hand_cart")) {
-            var held = rig.colony.holdingOf(rig.cart.getUUID()).orElseThrow();
+            var held = rig.colony.claimOf(rig.cart.getUUID()).orElseThrow();
             rig.cart.setRemoved(net.minecraft.world.entity.Entity.RemovalReason.UNLOADED_TO_CHUNK);
-            helper.assertTrue(rig.colony.holdingOf(rig.cart.getUUID()).filter(held::equals).isPresent(),
+            helper.assertTrue(rig.colony.claimOf(rig.cart.getUUID()).filter(held::equals).isPresent(),
                 "unloading a cart retains admission");
-            var original = io.github.izakyl.folkways.core.engine.colony.ColonyData
+            var original = io.github.izakyl.folkways.core.colony.internal.ColonyData
                 .find(helper.getLevel().getServer(), rig.colony.id()).orElseThrow();
             var load = original.getClass().getDeclaredMethod("load", io.github.izakyl.folkways.base.persist.Reader.class);
             load.setAccessible(true);
-            var restored = (io.github.izakyl.folkways.core.engine.colony.ColonyData) ((Optional<?>) load.invoke(null,
+            var restored = (io.github.izakyl.folkways.core.colony.internal.ColonyData) ((Optional<?>) load.invoke(null,
                 io.github.izakyl.folkways.base.persist.Reader.of(original.save(new CompoundTag())))).orElseThrow();
-            helper.assertTrue(restored.works().holdingOf(rig.cart.getUUID()).filter(held::equals).isPresent(),
+            helper.assertTrue(restored.works().claimOf(rig.cart.getUUID()).filter(held::equals).isPresent(),
                 "entity admission survives actual colony serialization without loading the cart");
             var replacement = rig.newCart("hand_cart");
             replacement.setUUID(rig.cart.getUUID());
             replacement.moveTo(rig.body.position());
             helper.getLevel().addFreshEntity(replacement);
             replacement.discard();
-            helper.assertTrue(rig.colony.holdingOf(replacement.getUUID()).isEmpty(),
+            helper.assertTrue(rig.colony.claimOf(replacement.getUUID()).isEmpty(),
                 "a broken admitted cart releases its holding");
         }
         helper.succeed();
@@ -182,7 +182,7 @@ public final class CartGameTests {
             cart = newCart(kind);
             cart.moveTo(fixture.source.cell().getBottomCenter().add(0, 0, 1));
             helper.getLevel().addFreshEntity(cart);
-            colony.hold(FolkwaysCartsMod.OWNER, Held.Entity.of(cart)).orElseThrow();
+            colony.hold(FolkwaysCartsMod.OWNER, Claimed.Entity.of(cart)).orElseThrow();
         }
 
         private AbstractCargoCart newCart(String kind) {

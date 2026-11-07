@@ -221,7 +221,7 @@ const RIDERS_NOW = defineTask<Record<string, any>, Record<string, any>>({
   side: "server",
   timeoutMs: 20_000,
   source: javaTask({
-    imports: ["io.github.izakyl.folkways.core.api.resident.body.Bodies"],
+    imports: ["io.github.izakyl.folkways.core.resident.api.Bodies"],
     body: `
 var level=ctx.server().overworld();var args=Args.of(ctx);var riders=new ArrayList<Object>();
 for(var id:args.list("riders")){

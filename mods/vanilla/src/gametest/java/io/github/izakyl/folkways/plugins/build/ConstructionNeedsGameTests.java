@@ -1,20 +1,19 @@
 package io.github.izakyl.folkways.plugins.build;
 
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.colony.Colonies;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.resident.Resident;
-import io.github.izakyl.folkways.core.api.resident.body.Body;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.work.Grown;
-import io.github.izakyl.folkways.core.api.work.Node;
-import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Worker;
-import io.github.izakyl.folkways.core.api.work.Workload;
-import io.github.izakyl.folkways.core.engine.inventory.InventoryObservations;
-import io.github.izakyl.folkways.core.engine.labor.Commit;
+import io.github.izakyl.folkways.core.colony.api.Colonies;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.inventory.internal.InventoryObservations;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
+import io.github.izakyl.folkways.core.plan.api.Grown;
+import io.github.izakyl.folkways.core.resident.api.Body;
+import io.github.izakyl.folkways.core.resident.api.Resident;
 import io.github.izakyl.folkways.core.testing.Proxies;
 import io.github.izakyl.folkways.core.testing.TestWorker;
+import io.github.izakyl.folkways.core.work.api.Node;
+import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import java.util.ArrayList;
@@ -55,10 +54,12 @@ public final class ConstructionNeedsGameTests {
         helper.assertTrue(fixture.asked.size() == 1, "refresh does not duplicate construction requests");
         Node node = fixture.asked.getFirst();
         helper.assertTrue(node.spec().needs().stream().anyMatch(need ->
-            need.spec().equals(io.github.izakyl.folkways.core.api.terms.ItemSpec.of(ResourceLocation.withDefaultNamespace("campfire"))) && need.count() == 1), "one campfire is requested");
-        helper.assertTrue(node.spec().vocation().filter(BuildContent.trade()::equals).isPresent(), "construction uses the building vocation");
+            need.spec().equals(ItemSpec.of(ResourceLocation.withDefaultNamespace("campfire"))) && need.count() == 1),
+            "one campfire is requested");
+        helper.assertTrue(node.spec().vocation().filter(BuildContent.trade()::equals).isPresent(),
+            "construction uses the building vocation");
         fixture.pack.setItem(0, new ItemStack(Items.CAMPFIRE));
-        Outcome outcome = Commit.run(helper.getLevel(), fixture.operation(), fixture.worker);
+        Outcome outcome = fixture.operation().step(helper.getLevel(), fixture.worker);
         helper.assertTrue(outcome instanceof Outcome.Done, "normal construction commit succeeds: " + outcome);
         helper.assertTrue(helper.getLevel().getBlockState(fixture.cell).is(Blocks.CAMPFIRE), "campfire is built");
         helper.assertTrue(fixture.pack.isEmpty(), "construction spends its campfire material");
@@ -82,9 +83,10 @@ public final class ConstructionNeedsGameTests {
         Fixture fixture = new Fixture(helper);
         fixture.refresh();
         fixture.pack.setItem(0, new ItemStack(Items.CAMPFIRE));
-        Node operation = fixture.operation();
+        SiteRig.Shift operation = fixture.operation();
+        operation.tick(helper.getLevel(), fixture.worker);
         helper.getLevel().setBlock(fixture.cell, Blocks.DIAMOND_BLOCK.defaultBlockState(), 2);
-        Outcome outcome = Commit.run(helper.getLevel(), operation, fixture.worker);
+        Outcome outcome = operation.step(helper.getLevel(), fixture.worker);
         helper.assertTrue(outcome instanceof Outcome.Failed, "construction refuses a newly placed obstacle");
         helper.assertTrue(helper.getLevel().getBlockState(fixture.cell).is(Blocks.DIAMOND_BLOCK), "new block survives");
         helper.assertTrue(fixture.pack.countItem(Items.CAMPFIRE) == 1, "failed construction spends no materials");
@@ -108,14 +110,15 @@ public final class ConstructionNeedsGameTests {
             cell = helper.absolutePos(new BlockPos(2, 2, 2));
             for (int x = 0; x <= 4; x++) {
                 for (int z = 0; z <= 4; z++) {
-                    helper.getLevel().setBlock(helper.absolutePos(new BlockPos(x, 1, z)), Blocks.STONE.defaultBlockState(), 2);
+                    helper.getLevel().setBlock(helper.absolutePos(new BlockPos(x, 1, z)),
+                        Blocks.STONE.defaultBlockState(), 2);
                 }
             }
             helper.getLevel().setBlock(cell, Blocks.AIR.defaultBlockState(), 2);
             inventoryColony = Colonies.mint(helper.getLevel().getServer());
             Colony colony = Proxies.of(Colony.class, (proxy, method, args) -> switch (method.getName()) {
                 case "inventory" -> inventoryColony.inventory();
-                case "holdingAt" -> Optional.empty();
+                case "claimAt" -> Optional.empty();
                 case "submit" -> { asked.addAll(((Grown) args[2]).nodes()); yield null; }
                 case "withdraw" -> { withdrawn.add((UUID) args[1]); yield null; }
                 default -> null;
@@ -128,13 +131,10 @@ public final class ConstructionNeedsGameTests {
             worker = TestWorker.of(body, new Resident(body.getUUID(), ResourceLocation.withDefaultNamespace("pig")), pack).spill(stack -> { });
         }
 
-        Node operation() {
+        SiteRig.Shift operation() {
             InventoryObservations.publish(inventoryColony, helper.getLevel(),
                 Map.of(resident.id(), resident));
-            Workload.Within shift = (Workload.Within) asked.getFirst().spec().workload();
-            Workload.Within.Turn turn = shift.next(helper.getLevel(), worker);
-            helper.assertTrue(turn instanceof Workload.Within.Turn.Piece, "builder receives a construction operation: " + turn);
-            return ((Workload.Within.Turn.Piece) turn).node();
+            return new SiteRig.Shift(asked.getFirst());
         }
 
         void close() {
@@ -144,7 +144,8 @@ public final class ConstructionNeedsGameTests {
         }
 
         void refresh() {
-            needs.refresh(helper.getLevel(), Map.of(WorldPos.of(helper.getLevel(), cell), Blocks.CAMPFIRE.defaultBlockState()));
+            needs.refresh(helper.getLevel(), Map.of(WorldPos.of(helper.getLevel(), cell),
+                Blocks.CAMPFIRE.defaultBlockState()));
         }
     }
 }

@@ -1,8 +1,8 @@
 package io.github.izakyl.folkways.front.engine.item;
 
-import io.github.izakyl.folkways.core.api.colony.Books;
-import io.github.izakyl.folkways.core.api.colony.Colonies;
-import io.github.izakyl.folkways.core.api.colony.Colony;
+import io.github.izakyl.folkways.core.colony.api.Colonies;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.front.api.Books;
 import io.github.izakyl.folkways.front.engine.authority.ColonyAuthority;
 import io.github.izakyl.folkways.front.engine.charter.Charters;
 import java.util.Optional;

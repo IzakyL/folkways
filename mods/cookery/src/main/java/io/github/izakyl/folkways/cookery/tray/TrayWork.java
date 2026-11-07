@@ -1,41 +1,45 @@
 package io.github.izakyl.folkways.cookery.tray;
 
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModRecipes;
-import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
-import io.github.izakyl.folkways.core.api.terms.Goods;
-import io.github.izakyl.folkways.core.api.terms.ItemDrops;
-import io.github.izakyl.folkways.core.api.terms.Reach;
-import io.github.izakyl.folkways.core.api.terms.RefusalKind;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
-import io.github.izakyl.folkways.core.api.work.Amount;
-import io.github.izakyl.folkways.core.api.work.Leaves;
-import io.github.izakyl.folkways.core.api.work.Ending;
-import io.github.izakyl.folkways.core.api.work.Grown;
-import io.github.izakyl.folkways.core.api.work.Hold;
-import io.github.izakyl.folkways.core.api.work.Need;
-import io.github.izakyl.folkways.core.api.work.Node;
-import io.github.izakyl.folkways.core.api.work.NodeSpec;
-import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.WorkEffort;
-import io.github.izakyl.folkways.core.api.work.WorkGesture;
-import io.github.izakyl.folkways.core.api.work.WorkSite;
-import io.github.izakyl.folkways.core.api.work.Worker;
-import io.github.izakyl.folkways.core.api.work.Workload;
 import io.github.izakyl.folkways.cookery.CookeryContent;
 import io.github.izakyl.folkways.cookery.CookeryRefusal;
 import io.github.izakyl.folkways.cookery.KitchenBookings;
+import io.github.izakyl.folkways.cookery.KitchenClosure;
 import io.github.izakyl.folkways.cookery.KitchenDelivery;
+import io.github.izakyl.folkways.cookery.KitchenHolding;
+import io.github.izakyl.folkways.cookery.KitchenWork;
+import io.github.izakyl.folkways.core.item.api.Goods;
+import io.github.izakyl.folkways.core.item.api.ItemDrops;
+import io.github.izakyl.folkways.core.plan.api.Grown;
+import io.github.izakyl.folkways.core.resident.api.RefusalKind;
+import io.github.izakyl.folkways.core.work.api.Amount;
+import io.github.izakyl.folkways.core.work.api.Hold;
+import io.github.izakyl.folkways.core.work.api.HoldingContext;
+import io.github.izakyl.folkways.core.work.api.Need;
+import io.github.izakyl.folkways.core.work.api.NodeSpec;
+import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.work.api.WorkAction;
+import io.github.izakyl.folkways.core.work.api.WorkEffort;
+import io.github.izakyl.folkways.core.work.api.WorkGesture;
+import io.github.izakyl.folkways.core.work.api.WorkHolding;
+import io.github.izakyl.folkways.core.work.api.WorkSite;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.work.api.Workload;
+import io.github.izakyl.folkways.core.work.support.Leaves;
+import io.github.izakyl.folkways.core.work.support.WorkStances;
+import io.github.izakyl.folkways.core.world.api.Reach;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
+import io.github.izakyl.folkways.core.world.api.WorldSpaces;
+import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
 import io.github.izakyl.folkways.plugins.wares.WaresContent;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
 
-final class TrayWork implements Node, Workload.Within {
+final class TrayWork implements KitchenWork {
     private final UUID colony;
     private final UUID batch;
     private final WorldPos at;
@@ -53,6 +57,7 @@ final class TrayWork implements Node, Workload.Within {
     private boolean loaded;
     private boolean finished;
     private RefusalKind failed;
+    private final KitchenClosure closure;
 
     TrayWork(UUID colony, WorldPos at, int slot, Stances stances, TrayStation.Job job, int count,
              KitchenBookings bookings, Runnable changed, TrayBatch.Batch previous) {
@@ -60,11 +65,26 @@ final class TrayWork implements Node, Workload.Within {
         this.bookings = bookings; generation = bookings.generation(at); this.changed = changed;
         recovering = previous != null; loaded = recovering; batch = recovering ? previous.id() : UUID.randomUUID();
         List<Amount> output = List.of(new Amount(Goods.specOf(job.output()), (long) count * job.output().getCount()));
-        spec = NodeSpec.of(batch, CookeryContent.ID, new WorkSite.AtBlock(at), stances, this)
+        spec = NodeSpec.of(batch, CookeryContent.ID, new WorkSite.AtBlock(at), stances, new Workload.Custom())
             .needs(loaded ? List.of() : List.of(new Need(job.input(), count, true))).gives(output).leaves(output).effort(WorkEffort.NONE)
             .vocation(WaresContent.trade()).estimate(40 + job.time()).doing(CookeryContent.COOKING).done();
         recoveryGoal = recovering ? Grown.of(this) : null;
+        closure = new KitchenClosure(how -> {
+            if (hold != null) {
+                hold.release(how);
+                hold = null;
+            }
+            if (recovering) {
+                TrayStation.endRecovery(colony, at, this);
+            }
+        }, changed);
     }
+
+    @Override
+    public boolean producesBeforeSettlement() {
+        return true;
+    }
+
     public NodeSpec spec() { return spec; }
 
     @Override
@@ -74,17 +94,25 @@ final class TrayWork implements Node, Workload.Within {
     Grown recoveryGoal() { return recoveryGoal; }
     public Optional<RefusalKind> planned(ServerLevel level) {
         if (!recovering) { return Optional.empty(); }
-        if (hold != null) return bookings.valid(at, id(), generation) ? Optional.empty() : Optional.of(CookeryRefusal.STATION_CHANGED);
+        if (hold != null) {
+            return bookings.valid(at, id(), generation) ? Optional.empty()
+                : Optional.of(CookeryRefusal.STATION_CHANGED);
+        }
         if (generation != bookings.generation(at) || !bookings.free(at)) { return Optional.of(CookeryRefusal.STATION_CHANGED); }
         hold = bookings.hold(at, id(), spec().estimate());
         var refused = hold.take();
-        if (refused.isEmpty()) TrayStation.rememberRecovery(colony, at, this);
+        if (refused.isEmpty()) {
+            TrayStation.rememberRecovery(colony, at, this);
+        }
         return refused;
     }
     public boolean ready(ServerLevel level) {
         return bookings.cancelled(at, id(), generation) || bookings.first(at, id()) && (loaded || TrayWeather.allows(level, at.block(level), job.subtype()));
     }
     public Optional<RefusalKind> refusal(ServerLevel level) {
+        if (closure.closed()) {
+            return Optional.of(CookeryRefusal.STATION_CHANGED);
+        }
         if (bookings.cancelled(at, id(), generation)) { return Optional.of(CookeryRefusal.STATION_CHANGED); }
         var tray = TrayStation.tray(level, at);
         if (tray.isEmpty()) { return Optional.of(CookeryRefusal.NOT_A_STATION); }
@@ -94,28 +122,40 @@ final class TrayWork implements Node, Workload.Within {
         if (!loaded && bookings.first(at, id()) && !tray.get().getItem(slot).isEmpty()) { return Optional.of(CookeryRefusal.STATION_BUSY); }
         return Optional.empty();
     }
-    public Turn next(ServerLevel level, Worker who) {
+
+    @Override
+    public WorkHolding acquire(HoldingContext context) {
+        return new KitchenHolding(this::operation, () -> finished || failed != null,
+            this::commit, why -> failed = why);
+    }
+
+    private WorkAction operation(ServerLevel level, Worker who) {
         refusal(level).ifPresent(why -> failed = why);
-        if (failed != null || finished) { return LEAVE; }
-        if (!bookings.first(at, id())) { return WAIT; }
+        if (failed != null || finished) { return null; }
+        if (!bookings.first(at, id())) { return null; }
         var tray = TrayStation.tray(level, at).orElseThrow();
         if (!loaded && !TrayWeather.allows(level, at.block(level), job.subtype())
-                || loaded && TrayBatch.read(tray, level).filter(owned -> TrayBatch.ready(tray, level, owned)).isEmpty()) { return WAIT; }
-        return new Turn.Piece(new Action(!loaded));
+            || loaded && TrayBatch.read(tray, level).filter(owned -> TrayBatch.ready(tray, level,
+                owned)).isEmpty()) { return null; }
+        return new Action(!loaded);
     }
-    public void ended(ServerLevel level, Node piece, Ending how) { if (how instanceof Ending.Failed failure) { failed = failure.why(); } }
     public Outcome commit(ServerLevel level, Worker who) {
         return finished && !bookings.cancelled(at, id(), generation) ? Outcome.done() : Outcome.failed(failed == null ? CookeryRefusal.STATION_CHANGED : failed);
     }
-    public void ended(ServerLevel level, Ending how) { if (hold != null) { hold.release(how); hold = null; } if (recovering) TrayStation.endRecovery(colony, at, this); changed.run(); }
+
+    @Override
+    public KitchenClosure closure() {
+        return closure;
+    }
+
     private boolean reachable(ServerLevel level, Worker who) {
-        var local = stances instanceof Stances.Cells ? Reach.stanceHolding(who.body(), stances)
+        var local = stances instanceof Stances.Cells ? WorkStances.stanceHolding(who.body(), stances)
             : WorldSpaces.relative(level, at.realm(), who.body().position()).map(net.minecraft.core.BlockPos::containing);
         return local
             .flatMap(feet -> WorldSpaces.storage(level, new WorldPos(at.realm(), feet)))
             .filter(feet -> Reach.withinReach(feet, at.block(level)) && Reach.inSight(level, feet, at.block(level))).isPresent();
     }
-    private final class Action implements Node {
+    private final class Action implements WorkAction {
         private final boolean load;
         private final NodeSpec spec;
         Action(boolean load) {

@@ -1,9 +1,9 @@
 package io.github.izakyl.folkways.modulargolems.resident;
 
 import dev.xkmc.modulargolems.content.entity.common.AbstractGolemEntity;
-import io.github.izakyl.folkways.core.api.resident.ResidentKind;
-import io.github.izakyl.folkways.core.api.resident.body.Bodies;
-import io.github.izakyl.folkways.core.api.resident.body.Body;
+import io.github.izakyl.folkways.core.resident.api.Bodies;
+import io.github.izakyl.folkways.core.resident.api.Body;
+import io.github.izakyl.folkways.core.resident.api.ResidentKind;
 import java.util.Optional;
 import java.util.UUID;
 import net.minecraft.world.InteractionHand;

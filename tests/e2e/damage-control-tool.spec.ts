@@ -63,7 +63,7 @@ return Map.of("x", (1 - relative.dot(camera.getLeftVector()) / (depth * wide)) *
 const SERVER = defineTask<undefined, any>({
   name: "folkways.damage-control.server-probe", side: "server",
   source: javaTask({
-    imports: ["io.github.izakyl.folkways.core.engine.colony.ColonyRegistry", "io.github.izakyl.folkways.front.engine.colony.ColonyFront"],
+    imports: ["io.github.izakyl.folkways.core.colony.internal.ColonyRegistry", "io.github.izakyl.folkways.front.engine.colony.ColonyFront"],
     body: `
 var server = ctx.server();
 var colony = ColonyRegistry.get(server).colonies().iterator().next().works();

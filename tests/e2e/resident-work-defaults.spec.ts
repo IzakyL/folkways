@@ -19,8 +19,8 @@ const READ = defineTask<{ player: string }, { allowed: boolean; priority: number
   source: javaTask({ imports: [
     "io.github.izakyl.folkways.front.engine.charter.CurrentColony",
     "io.github.izakyl.folkways.front.engine.colony.Residents",
-    "io.github.izakyl.folkways.core.engine.colony.WorkDefaults",
-    "io.github.izakyl.folkways.core.api.vocation.Vocations",
+    "io.github.izakyl.folkways.core.colony.api.WorkDefaults",
+    "io.github.izakyl.folkways.core.vocation.api.Vocations",
     "io.github.izakyl.folkways.plugins.person.PersonBody",
   ], body: `
 var server=ctx.server();var player=server.getPlayerList().getPlayerByName(Args.of(ctx).string("player"));

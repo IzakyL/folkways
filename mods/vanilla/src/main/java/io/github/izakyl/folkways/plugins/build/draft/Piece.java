@@ -1,7 +1,7 @@
 package io.github.izakyl.folkways.plugins.build.draft;
 
-import io.github.izakyl.folkways.core.api.structure.StructurePayload;
-import io.github.izakyl.folkways.core.api.structure.StructureCompat;
+import io.github.izakyl.folkways.core.work.api.StructureCompat;
+import io.github.izakyl.folkways.core.world.api.StructurePayload;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -117,7 +117,9 @@ public record Piece(Map<BlockPos, BlockState> cells, Vec3i size, List<Set<Intege
                     if (state != null) {
                         BlockPos at = new BlockPos(x, y, z);
                         grown.put(at, state);
-                        if (payloads.containsKey(source)) payload.put(at, payloads.get(source));
+                        if (payloads.containsKey(source)) {
+                            payload.put(at, payloads.get(source));
+                        }
                     }
                 }
             }
@@ -137,7 +139,9 @@ public record Piece(Map<BlockPos, BlockState> cells, Vec3i size, List<Set<Intege
                     if (state != null) {
                         BlockPos at = new BlockPos(x, y, z);
                         laid.put(at, state);
-                        if (payloads.containsKey(source)) payload.put(at, payloads.get(source));
+                        if (payloads.containsKey(source)) {
+                            payload.put(at, payloads.get(source));
+                        }
                     }
                 }
             }

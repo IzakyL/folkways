@@ -1,9 +1,9 @@
 package io.github.izakyl.folkways.plugins.build;
 
-import io.github.izakyl.folkways.core.api.Declaring;
-import io.github.izakyl.folkways.library.Shelves;
+import io.github.izakyl.folkways.core.extension.api.Declaring;
 import io.github.izakyl.folkways.front.api.Registering;
 import io.github.izakyl.folkways.front.api.ui.RegisteringUi;
+import io.github.izakyl.folkways.library.Shelves;
 import io.github.izakyl.folkways.plugins.build.draft.PatternPackets;
 import io.github.izakyl.folkways.plugins.build.draft.Patterns;
 import io.github.izakyl.folkways.plugins.build.draft.Templates;

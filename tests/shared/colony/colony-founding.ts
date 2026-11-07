@@ -448,7 +448,7 @@ async function vocationHandle(server: MinecraftServer, vocation: string): Promis
     throw new Error(`vocation ${vocation}: ResourceLocation.parse returned no handle (${JSON.stringify(parsed)})`);
   }
   const required = await reflect.invoke(server, {
-    target: { kind: "static", className: "io.github.izakyl.folkways.core.api.vocation.Vocations" },
+    target: { kind: "static", className: "io.github.izakyl.folkways.core.vocation.api.Vocations" },
     method: "required",
     args: [{ $handle: id }],
     argTypes: ["net.minecraft.resources.ResourceLocation"],
@@ -468,7 +468,7 @@ export async function vocationPriority(server: MinecraftServer, residentUuid: st
     path: "licences()",
     method: "of",
     args: [{ $handle: await vocationHandle(server, vocation) }],
-    argTypes: ["io.github.izakyl.folkways.core.api.vocation.Vocation"],
+    argTypes: ["io.github.izakyl.folkways.core.vocation.api.Vocation"],
     returnType: "java.util.Optional",
     returnHandle: true,
     limits: { maxDepth: 1 },
@@ -752,13 +752,13 @@ const POINT_MEMBERSHIP = defineTask<{ target: Vec }, { member: boolean }>({
   name: "folkways.shared.colony-point-membership",
   side: "server",
   source: javaTask({
-    imports: ["net.minecraft.core.BlockPos", "io.github.izakyl.folkways.core.api.terms.WorldPos",
-      "io.github.izakyl.folkways.core.api.colony.Colonies", "io.github.izakyl.folkways.core.api.colony.Held"],
+    imports: ["net.minecraft.core.BlockPos", "io.github.izakyl.folkways.core.world.api.WorldPos",
+      "io.github.izakyl.folkways.core.colony.api.Colonies", "io.github.izakyl.folkways.core.colony.api.Claimed"],
     body: `var raw=(Map<?,?>)Args.of(ctx).value("target");
 var cell=new BlockPos(((Number)raw.get("x")).intValue(),((Number)raw.get("y")).intValue(),((Number)raw.get("z")).intValue());
 var at=WorldPos.of(ctx.server().overworld(),cell);
-boolean member=Colonies.all(ctx.server()).stream().flatMap(colony->colony.holdingAt(at).stream())
-  .anyMatch(holding->holding.what() instanceof Held.Point);
+boolean member=Colonies.all(ctx.server()).stream().flatMap(colony->colony.claimAt(at).stream())
+  .anyMatch(holding->holding.what() instanceof Claimed.Point);
 return Map.of("member",member);`,
   }),
 });

@@ -1,13 +1,13 @@
 package io.github.izakyl.folkways.create.build;
 
-import io.github.izakyl.folkways.plugins.build.BlueprintHandoffPanel;
-import io.github.izakyl.folkways.plugins.build.BlueprintUploads;
-import io.github.izakyl.folkways.plugins.build.UploadBlueprintPacket;
 import com.simibubi.create.CreateClient;
 import com.simibubi.create.content.schematics.client.SchematicHandler;
 import com.simibubi.create.content.schematics.client.SchematicTransformation;
 import com.simibubi.create.foundation.utility.CreatePaths;
-import io.github.izakyl.folkways.core.api.colony.Books;
+import io.github.izakyl.folkways.front.api.Books;
+import io.github.izakyl.folkways.plugins.build.BlueprintHandoffPanel;
+import io.github.izakyl.folkways.plugins.build.BlueprintUploads;
+import io.github.izakyl.folkways.plugins.build.UploadBlueprintPacket;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;

@@ -18,10 +18,10 @@ const INSTALL = defineTask<Record<string, never>, Record<string, any>>({
       "net.neoforged.bus.api.EventPriority",
       "net.neoforged.neoforge.common.NeoForge",
       "net.neoforged.neoforge.server.ServerLifecycleHooks",
-      "io.github.izakyl.folkways.core.api.work.Doing",
-      "io.github.izakyl.folkways.core.api.work.WorkExertion",
-      "io.github.izakyl.folkways.core.api.work.WorkProgress",
-      "io.github.izakyl.folkways.core.api.work.WorkYield",
+      "io.github.izakyl.folkways.core.resident.api.Doing",
+      "io.github.izakyl.folkways.core.work.api.WorkExertion",
+      "io.github.izakyl.folkways.core.work.api.WorkProgress",
+      "io.github.izakyl.folkways.core.work.api.WorkYield",
     ],
     body: `
 var props = System.getProperties();

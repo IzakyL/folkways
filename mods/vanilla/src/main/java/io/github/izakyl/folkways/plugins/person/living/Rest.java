@@ -51,7 +51,6 @@ final class Rest {
     }
 
     void load(Reader reader) {
-        reader.decimal(TAG_TIRED).or(() -> reader.integer(TAG_TIRED).map(Integer::floatValue))
-            .ifPresent(value -> tired = Math.clamp(value, RESTED, SPENT));
+        tired = Math.clamp(reader.decimal(TAG_TIRED).orElseThrow(), RESTED, SPENT);
     }
 }

@@ -1,9 +1,9 @@
 package io.github.izakyl.folkways.create.rail.passage;
 
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.passage.Hop;
-import io.github.izakyl.folkways.core.api.passage.Passage;
-import io.github.izakyl.folkways.core.api.resident.Conveyance;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.resident.api.Conveyance;
+import io.github.izakyl.folkways.core.travel.api.Hop;
+import io.github.izakyl.folkways.core.travel.api.Passage;
 import io.github.izakyl.folkways.create.rail.domain.RailContent;
 import io.github.izakyl.folkways.create.rail.domain.RailPresence;
 import java.util.ArrayList;

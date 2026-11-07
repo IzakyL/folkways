@@ -1,8 +1,8 @@
 package io.github.izakyl.folkways.chiselsandbits;
 
-import io.github.izakyl.folkways.core.api.structure.StructureCompat;
-import io.github.izakyl.folkways.core.api.structure.StructurePayload;
-import io.github.izakyl.folkways.core.api.structure.Voxelizer;
+import io.github.izakyl.folkways.core.work.api.StructureCompat;
+import io.github.izakyl.folkways.core.work.api.Voxelizer;
+import io.github.izakyl.folkways.core.world.api.StructurePayload;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;

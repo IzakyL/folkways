@@ -33,6 +33,10 @@ final class BoardOwnership {
 
     static Optional<Batch> read(ChoppingBoardBlockEntity board, ServerLevel level) {
         CompoundTag tag = board.getPersistentData().getCompound(KEY);
+        if (!tag.hasUUID("batch") || !tag.hasUUID("colony") || !tag.contains("fingerprint", Tag.TAG_COMPOUND)
+                || !tag.contains("recipe", Tag.TAG_STRING)) {
+            return Optional.empty();
+        }
         ResourceLocation recipe = ResourceLocation.tryParse(tag.getString("recipe"));
         if (board.getCurrentCutStack().isEmpty() || !tag.hasUUID("colony") || !tag.hasUUID("batch")
                 || recipe == null || !tag.getCompound("fingerprint").equals(fingerprint(board, level))) {

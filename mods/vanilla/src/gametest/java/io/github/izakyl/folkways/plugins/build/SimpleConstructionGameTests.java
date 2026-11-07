@@ -1,20 +1,17 @@
 package io.github.izakyl.folkways.plugins.build;
 
-import static io.github.izakyl.folkways.plugins.build.SiteRig.floor;
-
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.colony.Colonies;
-import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.core.api.colony.Held;
-import io.github.izakyl.folkways.core.api.terms.Closures;
-import io.github.izakyl.folkways.core.api.terms.Reach;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.work.Ending;
-import io.github.izakyl.folkways.core.api.work.Grown;
-import io.github.izakyl.folkways.core.api.work.Node;
-import io.github.izakyl.folkways.core.api.work.Workload;
-import io.github.izakyl.folkways.core.engine.labor.LaborFixture;
+import io.github.izakyl.folkways.core.colony.api.Claimed;
+import io.github.izakyl.folkways.core.colony.api.Colonies;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.plan.api.Grown;
+import io.github.izakyl.folkways.core.runtime.LaborFixture;
 import io.github.izakyl.folkways.core.testing.Cleanup;
+import io.github.izakyl.folkways.core.work.api.Ending;
+import io.github.izakyl.folkways.core.work.api.Node;
+import io.github.izakyl.folkways.core.work.support.WorkStances;
+import io.github.izakyl.folkways.core.world.api.Closures;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
@@ -50,6 +47,7 @@ import net.neoforged.neoforge.common.ModConfigSpec;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
+import static io.github.izakyl.folkways.plugins.build.SiteRig.floor;
 
 @EventBusSubscriber(modid = FolkwaysVanillaMod.ID, bus = EventBusSubscriber.Bus.MOD)
 @GameTestHolder(FolkwaysMod.MOD_ID)
@@ -132,7 +130,7 @@ public final class SimpleConstructionGameTests {
         TemporaryScaffolds temporary = new TemporaryScaffolds(() -> { });
         List<BlockPos> column = java.util.stream.IntStream.rangeClosed(1, 6)
             .mapToObj(y -> at(helper, 13, y, 11)).toList();
-        column.forEach(cell -> helper.getLevel().setBlock(cell, ScaffoldNode.state(), 3));
+        column.forEach(cell -> helper.getLevel().setBlock(cell, ScaffoldAction.state(), 3));
         temporary.added(column.stream().map(cell -> WorldPos.of(helper.getLevel(), cell)).toList());
         Scene scene = new Scene(helper, Map.of(at(helper, 12, 1, 10), Blocks.STONE.defaultBlockState()),
             new BlockPos(5, 1, 10), temporary);
@@ -211,7 +209,7 @@ public final class SimpleConstructionGameTests {
         scene.body.setPos(Vec3.atBottomCenterOf(wet).add(0, 0, 0.3D));
         scene.previousPosition = scene.body.position();
         Node stay = scene.stays.getFirst();
-        helper.assertTrue(Reach.standingIn(scene.body, stay.spec().stances()),
+        helper.assertTrue(WorkStances.standingIn(scene.body, stay.spec().stances()),
             "the planned stances are inside ordinary arrival tolerance");
         helper.assertFalse(Breathing.canStay(scene.body, scene.body.blockPosition()),
             "the resident's own eyes remain underwater");
@@ -230,10 +228,9 @@ public final class SimpleConstructionGameTests {
         ResidentEntity body = PersonBody.RESIDENT.get().create(helper.getLevel());
         body.setPos(Vec3.atBottomCenterOf(at(helper, 10, 1, 10)));
         Node stay = rig.asked.getFirst().nodes().getFirst();
-        Workload.Within shift = (Workload.Within) stay.spec().workload();
-        helper.assertTrue(shift.arrived(helper.getLevel(), body, stay.spec().stances(),
-                    Reach.standingIn(body, stay.spec().stances()))
-                == Reach.standingIn(body, stay.spec().stances()),
+        helper.assertTrue(stay.arrived(helper.getLevel(), body, stay.spec().stances(),
+                    WorkStances.standingIn(body, stay.spec().stances()))
+                == WorkStances.standingIn(body, stay.spec().stances()),
             "disabled construction retains ordinary stance arrival");
         rig.site.close();
         body.discard();
@@ -293,7 +290,7 @@ public final class SimpleConstructionGameTests {
             body.pack().setItem(3, new ItemStack(Items.IRON_SHOVEL));
             level.addFreshEntity(body);
             colony = Colonies.mint(level.getServer());
-            colony.hold(PersonContent.ID, Held.Entity.of(body)).orElseThrow();
+            colony.hold(PersonContent.ID, Claimed.Entity.of(body)).orElseThrow();
             body.joinColony(colony.id());
             colony.entered(body);
             postponeLeisure();
@@ -345,8 +342,8 @@ public final class SimpleConstructionGameTests {
         }
 
         private boolean arrived(Node stay) {
-            return ((Workload.Within) stay.spec().workload()).arrived(level, body, stay.spec().stances(),
-                Reach.standingIn(body, stay.spec().stances()));
+            return stay.arrived(level, body, stay.spec().stances(),
+                WorkStances.standingIn(body, stay.spec().stances()));
         }
 
         private void advance() {
@@ -373,7 +370,7 @@ public final class SimpleConstructionGameTests {
             helper.onEachTick(this::advance);
             helper.startSequence().thenWaitUntil(() -> helper.assertTrue(site.complete()
                     && stays.stream().allMatch(node -> ended.contains(node.id()) || withdrawn.contains(node.id())),
-                    "the whole site finishes through real Within dispatch: " + site.refusals()
+                    "the whole site finishes through real holding dispatch: " + site.refusals()
                         + ", pos=" + body.position() + ", entityTicks=" + body.tickCount
                         + ", pieces=" + site.pieces().size() + ", asked=" + stays.size()
                         + ", ended=" + ended.size() + ", withdrawn=" + withdrawn.size()))

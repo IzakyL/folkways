@@ -1,33 +1,30 @@
 package io.github.izakyl.folkways.cookery.tray;
 
-import io.github.izakyl.folkways.core.testing.Cleanup;
-import io.github.izakyl.folkways.core.testing.TestWorker;
 import com.github.ysbbbbbb.kaleidoscopecookery.blockentity.kitchen.BambooTrayBlockEntity;
 import com.github.ysbbbbbb.kaleidoscopecookery.crafting.recipe.BambooTrayRecipe;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModRecipes;
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.terms.Containers;
-import io.github.izakyl.folkways.core.api.terms.Goods;
-import io.github.izakyl.folkways.core.api.terms.WorldPos;
-import io.github.izakyl.folkways.core.api.work.Leaves;
-import io.github.izakyl.folkways.core.api.work.Ending;
-import io.github.izakyl.folkways.core.api.work.Grown;
-import io.github.izakyl.folkways.core.api.work.Hold;
-import io.github.izakyl.folkways.core.api.work.Node;
-import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Produce;
-import io.github.izakyl.folkways.core.api.work.Stances;
-import io.github.izakyl.folkways.core.api.work.WorkSite;
-import io.github.izakyl.folkways.core.api.work.Worker;
-import io.github.izakyl.folkways.core.api.work.Workload;
-import io.github.izakyl.folkways.core.engine.labor.Commit;
 import io.github.izakyl.folkways.cookery.CookeryContent;
-import io.github.izakyl.folkways.cookery.testing.KitchenRecoveryWanted;
-import io.github.izakyl.folkways.cookery.testing.NativeCookingMatrix;
-import io.github.izakyl.folkways.cookery.CookeryRefusal;
 import io.github.izakyl.folkways.cookery.KitchenBookings;
+import io.github.izakyl.folkways.cookery.testing.KitchenRecoveryWanted;
 import io.github.izakyl.folkways.cookery.tray.mixin.BambooTrayAccess;
+import io.github.izakyl.folkways.core.item.api.Containers;
+import io.github.izakyl.folkways.core.item.api.Goods;
+import io.github.izakyl.folkways.core.plan.api.Grown;
+import io.github.izakyl.folkways.core.plan.api.Produce;
+import io.github.izakyl.folkways.core.runtime.HoldingFixture;
+import io.github.izakyl.folkways.core.testing.Cleanup;
+import io.github.izakyl.folkways.core.testing.TestWorker;
+import io.github.izakyl.folkways.core.work.api.Ending;
+import io.github.izakyl.folkways.core.work.api.Hold;
+import io.github.izakyl.folkways.core.work.api.Node;
+import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.work.api.WorkSite;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.work.support.Leaves;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import io.github.izakyl.folkways.plugins.person.ResidentEntity;
 import java.util.List;
@@ -37,9 +34,7 @@ import java.util.function.Consumer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTest;
-import net.minecraft.gametest.framework.GameTestGenerator;
 import net.minecraft.gametest.framework.GameTestHelper;
-import net.minecraft.gametest.framework.TestFunction;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.SimpleContainer;
@@ -50,8 +45,8 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.PointedDripstoneBlock;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.DripstoneThickness;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
@@ -69,11 +64,114 @@ public final class TrayGameTests {
     private static final String MUD = "wetting/clay_to_mud";
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) { event.register(TrayGameTests.class); }
-    @GameTestGenerator
-    public static List<TestFunction> nativeRecipes() {
-        return NativeCookingMatrix.recipes("bamboo_tray", 28, 2200,
-            (helper, id) -> runRecipe(helper, id.getPath().substring("bamboo_tray/".length())));
-    }
+
+    @GameTest(template = "empty", timeoutTicks = 2200)
+    public static void hardUrgesPreserveTheAcceptedDryingBatch(GameTestHelper helper) {
+        Rig rig = new Rig(helper, LEAVES);
+        TrayWork work = rig.plan();
+        HoldingFixture holding = rig.holding(work).prepare().hardUrge();
+        helper.assertTrue(rig.step(work) instanceof Outcome.Done, "the native tray accepts its original input");
+        holding.hardUrge();
+        helper.runAfterDelay(40, holding::hardUrge);
+        afterProcessing(
+            rig,
+            ready -> {
+            holding.prepare().hardUrge();
+            helper.assertTrue(
+                ready.step(work) instanceof Outcome.Done,
+                "the original dried batch is taken once");
+            holding.hardUrge();
+            helper.assertValueEqual(
+                Goods.countIn(ready.pack, Goods.specOf(ready.output)),
+                (long) ready.output.getCount(),
+                "suspension preserves the exact native output");
+            helper.assertTrue(
+                ready.tray().getItem(0).isEmpty() && ready.drops().isEmpty(),
+                "no duplicate remains");
+            }); }
+    @GameTest(template = "empty", timeoutTicks = 2200)
+    public static void drying_fresh_tea_leaves_to_dried_tea_leaves(GameTestHelper helper) { runRecipe(helper, "drying/fresh_tea_leaves_to_dried_tea_leaves"); }
+
+    @GameTest(template = "empty", timeoutTicks = 2200)
+    public static void drying_kelp_to_dried_kelp(GameTestHelper helper) { runRecipe(helper, "drying/kelp_to_dried_kelp"); }
+
+    @GameTest(template = "empty", timeoutTicks = 2200)
+    public static void drying_mud_to_clay(GameTestHelper helper) { runRecipe(helper, "drying/mud_to_clay"); }
+
+    @GameTest(template = "empty", timeoutTicks = 2200)
+    public static void drying_rotten_flesh_to_leather(GameTestHelper helper) { runRecipe(helper, "drying/rotten_flesh_to_leather"); }
+
+    @GameTest(template = "empty", timeoutTicks = 2200)
+    public static void drying_wet_sponge_to_sponge(GameTestHelper helper) { runRecipe(helper, "drying/wet_sponge_to_sponge"); }
+
+    @GameTest(template = "empty", timeoutTicks = 2200)
+    public static void wetting_black_concrete_powder_to_black_concrete(GameTestHelper helper) { runRecipe(helper, "wetting/black_concrete_powder_to_black_concrete"); }
+
+    @GameTest(template = "empty", timeoutTicks = 2200)
+    public static void wetting_blue_concrete_powder_to_blue_concrete(GameTestHelper helper) { runRecipe(helper, "wetting/blue_concrete_powder_to_blue_concrete"); }
+
+    @GameTest(template = "empty", timeoutTicks = 2200)
+    public static void wetting_brown_concrete_powder_to_brown_concrete(GameTestHelper helper) { runRecipe(helper, "wetting/brown_concrete_powder_to_brown_concrete"); }
+
+    @GameTest(template = "empty", timeoutTicks = 2200)
+    public static void wetting_clay_to_mud(GameTestHelper helper) { runRecipe(helper, "wetting/clay_to_mud"); }
+
+    @GameTest(template = "empty", timeoutTicks = 2200)
+    public static void wetting_copper_block_to_oxidized_copper(GameTestHelper helper) { runRecipe(helper, "wetting/copper_block_to_oxidized_copper"); }
+
+    @GameTest(template = "empty", timeoutTicks = 2200)
+    public static void wetting_cyan_concrete_powder_to_cyan_concrete(GameTestHelper helper) { runRecipe(helper, "wetting/cyan_concrete_powder_to_cyan_concrete"); }
+
+    @GameTest(template = "empty", timeoutTicks = 2200)
+    public static void wetting_dirt_to_mud(GameTestHelper helper) { runRecipe(helper, "wetting/dirt_to_mud"); }
+
+    @GameTest(template = "empty", timeoutTicks = 2200)
+    public static void wetting_dried_kelp_to_kelp(GameTestHelper helper) { runRecipe(helper, "wetting/dried_kelp_to_kelp"); }
+
+    @GameTest(template = "empty", timeoutTicks = 2200)
+    public static void wetting_dried_tea_leaves_to_fresh_tea_leaves(GameTestHelper helper) { runRecipe(helper, "wetting/dried_tea_leaves_to_fresh_tea_leaves"); }
+
+    @GameTest(template = "empty", timeoutTicks = 2200)
+    public static void wetting_gray_concrete_powder_to_gray_concrete(GameTestHelper helper) { runRecipe(helper, "wetting/gray_concrete_powder_to_gray_concrete"); }
+
+    @GameTest(template = "empty", timeoutTicks = 2200)
+    public static void wetting_green_concrete_powder_to_green_concrete(GameTestHelper helper) { runRecipe(helper, "wetting/green_concrete_powder_to_green_concrete"); }
+
+    @GameTest(template = "empty", timeoutTicks = 2200)
+    public static void wetting_leather_to_rotten_flesh(GameTestHelper helper) { runRecipe(helper, "wetting/leather_to_rotten_flesh"); }
+
+    @GameTest(template = "empty", timeoutTicks = 2200)
+    public static void wetting_light_blue_concrete_powder_to_light_blue_concrete(GameTestHelper helper) { runRecipe(helper, "wetting/light_blue_concrete_powder_to_light_blue_concrete"); }
+
+    @GameTest(template = "empty", timeoutTicks = 2200)
+    public static void wetting_light_gray_concrete_powder_to_light_gray_concrete(GameTestHelper helper) { runRecipe(helper, "wetting/light_gray_concrete_powder_to_light_gray_concrete"); }
+
+    @GameTest(template = "empty", timeoutTicks = 2200)
+    public static void wetting_lime_concrete_powder_to_lime_concrete(GameTestHelper helper) { runRecipe(helper, "wetting/lime_concrete_powder_to_lime_concrete"); }
+
+    @GameTest(template = "empty", timeoutTicks = 2200)
+    public static void wetting_magenta_concrete_powder_to_magenta_concrete(GameTestHelper helper) { runRecipe(helper, "wetting/magenta_concrete_powder_to_magenta_concrete"); }
+
+    @GameTest(template = "empty", timeoutTicks = 2200)
+    public static void wetting_orange_concrete_powder_to_orange_concrete(GameTestHelper helper) { runRecipe(helper, "wetting/orange_concrete_powder_to_orange_concrete"); }
+
+    @GameTest(template = "empty", timeoutTicks = 2200)
+    public static void wetting_pink_concrete_powder_to_pink_concrete(GameTestHelper helper) { runRecipe(helper, "wetting/pink_concrete_powder_to_pink_concrete"); }
+
+    @GameTest(template = "empty", timeoutTicks = 2200)
+    public static void wetting_purple_concrete_powder_to_purple_concrete(GameTestHelper helper) { runRecipe(helper, "wetting/purple_concrete_powder_to_purple_concrete"); }
+
+    @GameTest(template = "empty", timeoutTicks = 2200)
+    public static void wetting_red_concrete_powder_to_red_concrete(GameTestHelper helper) { runRecipe(helper, "wetting/red_concrete_powder_to_red_concrete"); }
+
+    @GameTest(template = "empty", timeoutTicks = 2200)
+    public static void wetting_sponge_to_wet_sponge(GameTestHelper helper) { runRecipe(helper, "wetting/sponge_to_wet_sponge"); }
+
+    @GameTest(template = "empty", timeoutTicks = 2200)
+    public static void wetting_white_concrete_powder_to_white_concrete(GameTestHelper helper) { runRecipe(helper, "wetting/white_concrete_powder_to_white_concrete"); }
+
+    @GameTest(template = "empty", timeoutTicks = 2200)
+    public static void wetting_yellow_concrete_powder_to_yellow_concrete(GameTestHelper helper) { runRecipe(helper, "wetting/yellow_concrete_powder_to_yellow_concrete"); }
 
     private static void runRecipe(GameTestHelper helper, String recipe) {
         Rig rig = new Rig(helper, recipe);
@@ -113,10 +211,14 @@ public final class TrayGameTests {
         TrayWork[] recovered = new TrayWork[1];
         boolean[] closed = {false};
         Consumer<Ending> close = how -> {
-            if (closed[0]) return;
+            if (closed[0]) {
+                return;
+            }
             closed[0] = true;
             try {
-                if (recovered[0] != null) recovered[0].ended(rig.level, how);
+                if (recovered[0] != null) {
+                    recovered[0].ended(rig.level, how);
+                }
             } finally {
                 rig.close();
             }
@@ -145,8 +247,10 @@ public final class TrayGameTests {
                 helper.assertValueEqual(rig.progress(), 0, "the real native exposure check does not dry through an opaque roof");
                 helper.assertTrue(ItemStack.matches(rig.tray().getItem(0), rig.input.copyWithCount(2)),
                     "sheltered raw leaves remain unchanged in the actual slot");
-                helper.assertTrue(recovered[0].next(rig.level, rig.worker) instanceof Workload.Within.Turn.Wait,
-                    "the actual recovery workload waits for its sheltered native batch");
+                helper.assertTrue(
+                    rig.holding(recovered[0]).running(),
+                    "the actual recovery workload waits for its sheltered native"
+                    + " batch");
                 rig.level.setBlockAndUpdate(rig.cell.above(2), Blocks.AIR.defaultBlockState());
             })
             .thenWaitUntil(() -> helper.assertTrue(TrayBatch.read(rig.tray(), rig.level)
@@ -198,11 +302,10 @@ public final class TrayGameTests {
     public static void withdrawingAPlannedTrayReturnsTheOriginalIngredientsWithoutPuttingAny(GameTestHelper helper) {
         try (Rig rig = new Rig(helper, LEAVES)) {
             TrayWork work = rig.plan();
-            var turn = work.next(rig.level, rig.worker);
-            helper.assertTrue(turn instanceof Workload.Within.Turn.Piece, "the planned native load is available");
-            Node load = ((Workload.Within.Turn.Piece) turn).node();
+            HoldingFixture load = rig.holding(work).prepare();
             rig.bookings.withdraw(rig.at);
-            helper.assertTrue(Commit.run(rig.level, load, rig.worker) instanceof Outcome.Failed, "a withdrawn generation cannot put into the real slot");
+            helper.assertTrue(
+                load.step() instanceof Outcome.Failed, "a withdrawn generation cannot put into the real slot");
             helper.assertValueEqual(Goods.countIn(rig.pack, Goods.specOf(rig.input)), 2L, "the core returns the two unaccepted leaves");
             helper.assertTrue(rig.tray().isEmpty(), "the withdrawn tray remains physically empty");
         }
@@ -245,6 +348,13 @@ public final class TrayGameTests {
     }
     private static final class Rig implements AutoCloseable {
         final Worker worker;
+        private final java.util.Map<Node, HoldingFixture> claims =
+                new java.util.IdentityHashMap<>();
+
+        HoldingFixture holding(Node node) {
+            return claims.computeIfAbsent(node, next -> new HoldingFixture(level, next, worker));
+        }
+
         final GameTestHelper helper;
         final ServerLevel level;
         final UUID colony = UUID.randomUUID();
@@ -307,15 +417,10 @@ public final class TrayGameTests {
             return work;
         }
         Outcome step(TrayWork work) {
-            var turn = work.next(level, worker);
-            if (!(turn instanceof Workload.Within.Turn.Piece)) {
-                helper.fail("expected a native tray action, got " + turn + "; refusal=" + work.refusal(level) + "; slot=" + tray().getItem(0) + "; progress=" + progress());
-                return Outcome.failed(CookeryRefusal.STATION_CHANGED);
-            }
-            Node piece = ((Workload.Within.Turn.Piece) turn).node(); Outcome outcome = Commit.run(level, piece, worker);
+            Outcome outcome = holding(work).step();
             if (outcome instanceof Outcome.Done done) {
-                done.made().forEach(stack -> helper.assertTrue(Containers.insert(pack, stack).isEmpty(), "the actual native products fit"));
-                work.ended(level, piece, Ending.DONE);
+                done.made().forEach(stack -> helper.assertTrue(Containers.insert(pack, stack).isEmpty(),
+                    "actual native products fit"));
             }
             return outcome;
         }

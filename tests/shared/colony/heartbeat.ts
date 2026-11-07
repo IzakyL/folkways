@@ -108,6 +108,18 @@ export function parseNav(line: string): NavBeat | null {
   const publish = line.match(/ publish=(\d+)usstraighten\/(\d+)usfreeze\/(\d+)usmax/);
   const attached = line.match(/ attached=(\d+)laid\/(\d+)closed\/(\d+)far/);
   const segments = line.match(/ segments=(\d+)struck\/(\d+)walked/);
+  if (!slices || !graph || !quests || !rambles || !publish || !attached || !segments
+    || num(line, "colonies") === undefined || num(line, "searches") === undefined
+    || num(line, "nodes") === undefined || num(line, "asksPending") === undefined
+    || num(line, "renumbered") === undefined || num(line, "hops") === undefined
+    || !/ peakSearches\/tick=\d+/.test(line) || !/ peakNodes\/tick=\d+/.test(line)
+    || !/ disproved=\d+pts/.test(line) || !/ straightened=\d+pts/.test(line)
+    || !/ denied=[\w/]+/.test(line)
+    || !/ budget=-/.test(line) && (!parseBudget(line)
+      || !/ spent=\d+usavg\/\d+usmax/.test(line) || !/ work=\d+usavg\/\d+usmax/.test(line)
+      || !/ skipped=\d+\/\d+/.test(line))) {
+    return null;
+  }
   const denied: Record<string, number> = {};
   for (const part of (line.match(/ denied=([\w/]+)/)?.[1] ?? "").split("/")) {
     const kv = part.match(/^(\d+)([A-Za-z]+)$/);
@@ -165,6 +177,9 @@ export function parseColony(line: string): ColonyBeat | null {
   const who = line.match(/([0-9a-f-]{36})@([a-z0-9_.-]+:[a-z0-9_./-]+)/);
   const why = counted(line.match(/ unassigned=\{([^}]*)\}/)?.[1]);
   const waiting = line.match(/ unassignedNodes=\{([^}]*)\}/);
+  if (!waiting) {
+    return null;
+  }
   return {
     colony: who?.[1],
     dimension: who?.[2],
@@ -177,9 +192,8 @@ export function parseColony(line: string): ColonyBeat | null {
     released: Number(head[7]),
     why,
     unassigned: sumOf(why),
-    unassignedNodes: waiting
-      ? Object.fromEntries([...waiting[1].matchAll(/([0-9a-f-]{36})=([A-Z_]+)/g)].map((match) => [match[1], match[2]]))
-      : undefined,
+    unassignedNodes: Object.fromEntries(
+      [...waiting[1].matchAll(/([0-9a-f-]{36})=([A-Z_]+)/g)].map((match) => [match[1], match[2]])),
     shortfall: num(line, "shortfall") ?? 0,
     turned: num(line, "turned") ?? 0,
     refused: counted(line.match(/ refused=\{([^}]*)\}/)?.[1]),

@@ -1,34 +1,3 @@
-import blockwright.minecraft.core.Args;
-import blockwright.minecraft.core.Sync;
-import dev.blockwright.api.Context;
-import io.github.izakyl.folkways.plugins.build.draft.Chosen;
-import io.github.izakyl.folkways.plugins.build.draft.Commission;
-import io.github.izakyl.folkways.plugins.build.draft.DraftTemplate;
-import io.github.izakyl.folkways.plugins.build.draft.Drafting;
-import io.github.izakyl.folkways.plugins.build.draft.Drawn;
-import io.github.izakyl.folkways.plugins.build.draft.Hint;
-import io.github.izakyl.folkways.plugins.build.draft.Pattern;
-import io.github.izakyl.folkways.plugins.build.draft.Patterns;
-import io.github.izakyl.folkways.plugins.build.draft.World;
-import io.github.izakyl.folkways.chiselsandbits.CandBStructureCodec;
-import io.github.izakyl.folkways.core.api.structure.StructureCompat;
-import io.github.izakyl.folkways.core.api.structure.Voxelizer;
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
-import io.github.izakyl.folkways.front.api.Schema;
-import java.io.ByteArrayOutputStream;
-import java.util.HashSet;
-import java.util.ArrayList;
-import java.util.List;
-import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.item.ItemStack;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.HashMap;
-import net.minecraft.core.BlockPos;
-import net.minecraft.core.Direction;
-import net.minecraft.nbt.CompoundTag;
-import net.minecraft.nbt.NbtIo;
-import net.minecraft.resources.ResourceLocation;
 
 public final class Task {
     private static final List<BlockPos> PLACED = new ArrayList<>();

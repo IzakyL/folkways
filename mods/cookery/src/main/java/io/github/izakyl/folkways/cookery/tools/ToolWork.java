@@ -1,24 +1,29 @@
 package io.github.izakyl.folkways.cookery.tools;
 
-import io.github.izakyl.folkways.core.api.terms.ItemSpec;
-import io.github.izakyl.folkways.core.api.terms.RefusalKind;
-import io.github.izakyl.folkways.core.api.terms.Stash;
-import io.github.izakyl.folkways.core.api.work.Staged;
-import io.github.izakyl.folkways.core.api.work.Amount;
-import io.github.izakyl.folkways.core.api.work.Ending;
-import io.github.izakyl.folkways.core.api.work.Leaves;
-import io.github.izakyl.folkways.core.api.work.Node;
-import io.github.izakyl.folkways.core.api.work.NodeSpec;
-import io.github.izakyl.folkways.core.api.work.NodeState;
-import io.github.izakyl.folkways.core.api.work.Outcome;
-import io.github.izakyl.folkways.core.api.work.Recourse;
-import io.github.izakyl.folkways.core.api.work.ToolUse;
-import io.github.izakyl.folkways.core.api.work.Tools;
-import io.github.izakyl.folkways.core.api.work.Unmet;
-import io.github.izakyl.folkways.core.api.work.WorkEffort;
-import io.github.izakyl.folkways.core.api.work.Worker;
-import io.github.izakyl.folkways.core.api.work.Workload;
 import io.github.izakyl.folkways.cookery.CookeryRefusal;
+import io.github.izakyl.folkways.core.inventory.api.Stash;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
+import io.github.izakyl.folkways.core.resident.api.RefusalKind;
+import io.github.izakyl.folkways.core.work.api.ActionSpec;
+import io.github.izakyl.folkways.core.work.api.Amount;
+import io.github.izakyl.folkways.core.work.api.Ending;
+import io.github.izakyl.folkways.core.work.api.HoldingContext;
+import io.github.izakyl.folkways.core.work.api.HoldingStep;
+import io.github.izakyl.folkways.core.work.api.Node;
+import io.github.izakyl.folkways.core.work.api.NodeSpec;
+import io.github.izakyl.folkways.core.work.api.NodeState;
+import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Recourse;
+import io.github.izakyl.folkways.core.work.api.ToolUse;
+import io.github.izakyl.folkways.core.work.api.Unmet;
+import io.github.izakyl.folkways.core.work.api.WorkAction;
+import io.github.izakyl.folkways.core.work.api.WorkEffort;
+import io.github.izakyl.folkways.core.work.api.WorkHolding;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.work.api.Workload;
+import io.github.izakyl.folkways.core.work.support.Leaves;
+import io.github.izakyl.folkways.core.work.support.Staged;
+import io.github.izakyl.folkways.core.work.support.Tools;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -28,7 +33,7 @@ import java.util.UUID;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
 
-final class ToolWork implements Node, Workload.Within {
+final class ToolWork implements Node {
 
     private final TaskTools service;
     private final Node original;
@@ -39,7 +44,8 @@ final class ToolWork implements Node, Workload.Within {
     private ServerLevel level;
     private volatile UUID borrower;
     private boolean started;
-    private boolean actionIssued;
+    private boolean originalReleased;
+    private boolean ended;
     private boolean workDone;
     private boolean complete;
     private RefusalKind failure;
@@ -54,7 +60,12 @@ final class ToolWork implements Node, Workload.Within {
         leaves.addAll(Leaves.room(declared.size()));
         List<ToolUse> remaining = original.spec().tools().stream().filter(use ->
             Tools.shared(use.need()).isEmpty()).toList();
-        spec = copy(original.spec(), original.id(), this, remaining, leaves, WorkEffort.NONE);
+        spec = copy(original.spec(), original.id(), new Workload.Custom(), remaining, leaves, WorkEffort.NONE);
+    }
+
+    @Override
+    public boolean producesBeforeSettlement() {
+        return !original.spec().gives().isEmpty();
     }
 
     @Override
@@ -130,7 +141,11 @@ final class ToolWork implements Node, Workload.Within {
     }
 
     @Override
-    public Optional<RefusalKind> refusal(ServerLevel level) { return workDone ? Optional.empty() :
+    public Optional<RefusalKind> refusal(ServerLevel level) {
+        if (ended) {
+            return Optional.of(CookeryRefusal.STATION_CHANGED);
+        }
+        return workDone ? Optional.empty() :
         original.refusal(level); }
 
     @Override
@@ -149,16 +164,34 @@ final class ToolWork implements Node, Workload.Within {
     public boolean permitsProduction(ItemSpec goods) { return original.permitsProduction(goods); }
 
     @Override
-    public Turn next(ServerLevel level, Worker who) {
+    public WorkHolding acquire(HoldingContext context) {
+        return new EquipmentHolding(original, () -> started, () -> workDone, this::loanContext,
+            (actual, step, release) -> {
+                workDone = true;
+                if (step instanceof HoldingStep.Failed failed) {
+                    failure = failed.why();
+                }
+                release.run();
+                releaseOriginal(actual.level(), actual.worker(),
+                    failure == null ? Ending.DONE : new Ending.Failed(id(), failure));
+            }, this::operation, () -> complete, this::commit, this::completed);
+    }
+
+    private HoldingContext loanContext(HoldingContext context) {
+        return EquipmentHolding.context(context, new LoanWorker(context.worker(), service, loans),
+            operation -> operation instanceof Staged ? new StagedAction(operation) : new Action(operation));
+    }
+
+    private ToolAction operation(ServerLevel level, Worker who) {
         if (complete) {
-            return LEAVE;
+            return null;
         }
         if (borrower != null && !borrower.equals(who.resident().id())) {
             // Never use or return an identical-looking stack from a replacement worker. The original
             // body retains its physical loan for the separate cancellation/reload return recovery.
             failure = CookeryRefusal.STATION_CHANGED;
             complete = true;
-            return LEAVE;
+            return null;
         }
         if (!started && !workDone && !loans.keySet().containsAll(families) && allowed().isEmpty()) {
             failure = CookeryRefusal.NOTHING_TO_WORK_WITH;
@@ -177,52 +210,27 @@ final class ToolWork implements Node, Workload.Within {
                 Optional<KitchenTools.Lease> claim = service.pool.reserve(service.colony.id(), id(), family,
                     who.resident().id(), available.inventory());
                 if (claim.isEmpty()) {
-                    return WAIT;
+                    return null;
                 }
                 KitchenTools.Lease lease = claim.get();
                 ToolStock.Source source = available.sources().get(lease.tool());
                 if (source == null) {
                     service.returned(lease);
-                    return WAIT;
+                    return null;
                 }
                 borrower = who.resident().id();
                 loans.put(family, lease);
-                return new Turn.Piece(new ToolAction.Borrow(service, lease, source, spec.vocation()));
+                return new ToolAction.Borrow(service, lease, source, spec.vocation());
             }
             started = true;
             service.protect(id(), who.resident().id(), families);
         }
         if (!workDone) {
-            if (original.spec().workload() instanceof Within within) {
-                Turn turn = within.next(level, new LoanWorker(who, service, loans));
-                if (turn instanceof Turn.Piece piece) {
-                    if (!equipped(piece.node(), who)) {
-                        failure = CookeryRefusal.NOTHING_TO_WORK_WITH;
-                        workDone = true;
-                    } else {
-                        return new Turn.Piece(action(piece.node()));
-                    }
-                } else if (turn instanceof Turn.Wait) {
-                    return WAIT;
-                } else {
-                    workDone = true;
-                }
-            } else if (original.spec().workload() instanceof Workload.Once || original.spec().workload() instanceof
-                Workload.Continuous) {
-                if (!equipped(original, who)) {
-                    failure = CookeryRefusal.NOTHING_TO_WORK_WITH;
-                    workDone = true;
-                } else {
-                    return new Turn.Piece(action(original));
-                }
-            } else {
-                failure = CookeryRefusal.STATION_CHANGED;
-                workDone = true;
-            }
+            return null;
         }
         for (KitchenTools.Lease lease : List.copyOf(loans.values())) {
             if (service.stock.waitingForResident(lease)) {
-                return WAIT;
+                return null;
             }
             ItemStack expected = service.tool(lease).orElse(ItemStack.EMPTY);
             int slot = service.carriedSlot(who.pack(), lease, expected);
@@ -234,17 +242,16 @@ final class ToolWork implements Node, Workload.Within {
             ItemStack tool = who.pack().getItem(slot);
             var target = service.destination(level, lease, tool);
             if (target.isEmpty()) {
-                return WAIT;
+                return null;
             }
-            return new Turn.Piece(new ToolAction.Return(service, lease, target.get()));
+            return new ToolAction.Return(service, lease, target.get());
         }
         complete = true;
-        io.github.izakyl.folkways.core.api.resident.body.TaskTools.release(id());
-        return LEAVE;
+        io.github.izakyl.folkways.core.resident.api.TaskTools.release(id());
+        return null;
     }
 
-    @Override
-    public void ended(ServerLevel level, Node piece, Ending how) {
+    private void completed(ToolAction piece, Ending how) {
         if (piece instanceof ToolAction.Borrow borrow) {
             borrow.ended(how);
             if (!borrow.moved) {
@@ -258,17 +265,6 @@ final class ToolWork implements Node, Workload.Within {
             }
             return;
         }
-        if (piece instanceof Action action) {
-            if (original.spec().workload() instanceof Within within) {
-                within.ended(level, action.delegate, how);
-            } else if (how == Ending.DONE) {
-                workDone = true;
-            }
-            if (how instanceof Ending.Failed failed) {
-                failure = failed.why();
-                workDone = true;
-            }
-        }
     }
 
     @Override
@@ -279,11 +275,15 @@ final class ToolWork implements Node, Workload.Within {
         if (failure != null) {
             return Outcome.failed(failure);
         }
-        return original.spec().workload() instanceof Within ? original.commit(level, who) : Outcome.done();
+        return Outcome.done();
     }
 
     @Override
     public void ended(ServerLevel level, Ending how) {
+        if (ended) {
+            return;
+        }
+        ended = true;
         try {
             original.ended(level, how);
         } finally {
@@ -293,10 +293,16 @@ final class ToolWork implements Node, Workload.Within {
 
     @Override
     public void released(ServerLevel level, Worker who, Ending how) {
-        // Once/Continuous are already released as the real inner action. A Within owner still has its
-        // own outer execution to release, separate from each original inner piece.
-        if (original.spec().workload() instanceof Within || !actionIssued) {
-            original.released(level, who, how);
+        releaseOriginal(level, who, how);
+        if (!(how instanceof Ending.Done)) {
+            ended(level, how);
+        }
+    }
+
+    private void releaseOriginal(ServerLevel level, Worker who, Ending how) {
+        if (!originalReleased) {
+            originalReleased = true;
+            original.released(level, new LoanWorker(who, service, loans), how);
         }
     }
 
@@ -306,58 +312,21 @@ final class ToolWork implements Node, Workload.Within {
     @Override
     public Unmet unmet(UUID before, Ending how) { return original.unmet(before, how); }
 
-    private boolean equipped(Node action, Worker who) {
+    private boolean equipped(WorkAction action, Worker who) {
         Worker actual = new LoanWorker(who, service, loans);
         return action.spec().tools().stream().allMatch(use -> use.need() instanceof
-            io.github.izakyl.folkways.core.api.work.ToolNeed.None
+            io.github.izakyl.folkways.core.work.api.ToolNeed.None
             || !actual.held(use.need()).isEmpty());
     }
 
-    private Node action(Node node) {
-        if (node == original) {
-            actionIssued = true;
-        }
-        return node instanceof Staged ? new StagedAction(node) : new Action(node);
-    }
+    private class Action implements WorkAction {
+        final WorkAction delegate;
 
-    private class Action implements Node {
-        final Node delegate;
-        private final NodeSpec action;
-
-        Action(Node delegate) {
+        Action(WorkAction delegate) {
             this.delegate = delegate;
-            Workload workload = delegate.spec().workload() instanceof Workload.Continuous continuous
-                ? (Workload.Continuous) (level, who) -> continuous.holds(level, new LoanWorker(who, service, loans))
-                : delegate.spec().workload();
-            action = copy(delegate.spec(), UUID.randomUUID(), workload,
-                delegate.spec().tools(), delegate.spec().leaves(), delegate.spec().effort());
         }
 
-        public NodeSpec spec() { return action; }
-
-        public Optional<RefusalKind> planned(ServerLevel level) {
-            return delegate == original ? Optional.empty() : delegate.planned(level);
-        }
-
-        public boolean acceptsInput(Stash from) { return delegate.acceptsInput(from); }
-
-        public boolean ready(ServerLevel level) { return delegate.ready(level); }
-
-        public boolean settled(ServerLevel level) { return delegate.settled(level); }
-
-        public Optional<RefusalKind> refusal(ServerLevel level) { return delegate.refusal(level); }
-
-        public void released(ServerLevel level, Worker who, Ending how) {
-            delegate.released(level, new LoanWorker(who, service, loans), how);
-        }
-
-        public void ended(ServerLevel level, Ending how) {
-            if (delegate != original) {
-                delegate.ended(level, how);
-            }
-        }
-
-        public void changed(ServerLevel level, NodeState state) { delegate.changed(level, state); }
+        public ActionSpec spec() { return delegate.spec(); }
 
         public Outcome commit(ServerLevel level, Worker who) {
             if (!equipped(delegate, who)) {
@@ -386,7 +355,7 @@ final class ToolWork implements Node, Workload.Within {
     }
 
     private final class StagedAction extends Action implements Staged {
-        StagedAction(Node delegate) { super(delegate); }
+        StagedAction(WorkAction delegate) { super(delegate); }
 
         public Drawn draw(ServerLevel level, Worker who) {
             return ((Staged) delegate).draw(level, new LoanWorker(who, service, loans));
