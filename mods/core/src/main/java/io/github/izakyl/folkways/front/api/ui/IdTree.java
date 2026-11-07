@@ -40,6 +40,10 @@ public final class IdTree {
     }
 
     public static <T> List<Folder<T>> of(Collection<T> leaves, Function<T, String> filing) {
+        return of(leaves, filing, true);
+    }
+
+    public static <T> List<Folder<T>> of(Collection<T> leaves, Function<T, String> filing, boolean compact) {
         // The roots stand in the order they first come; the folders under them, by name.
         Map<String, Growing<T>> roots = new LinkedHashMap<>();
         for (T leaf : leaves) {
@@ -55,7 +59,7 @@ public final class IdTree {
             }
             at.leaves.add(leaf);
         }
-        return roots.values().stream().map(Growing::grown).toList();
+        return roots.values().stream().map(root -> root.grown(compact)).toList();
     }
 
     private static final class Growing<T> {
@@ -72,13 +76,13 @@ public final class IdTree {
         }
 
         // A folder holding nothing but one other folder is shown as that one, named by the whole way down to it.
-        private Folder<T> grown() {
-            if (leaves.isEmpty() && folders.size() == 1) {
-                Folder<T> only = folders.values().iterator().next().grown();
+        private Folder<T> grown(boolean compact) {
+            if (compact && leaves.isEmpty() && folders.size() == 1) {
+                Folder<T> only = folders.values().iterator().next().grown(compact);
                 return new Folder<>(only.prefix(), name + "/" + only.name(), root, only.folders(), only.leaves());
             }
-            return new Folder<>(prefix, name, root, folders.values().stream().map(Growing::grown).toList(),
-                List.copyOf(leaves));
+            return new Folder<>(prefix, name, root,
+                folders.values().stream().map(folder -> folder.grown(compact)).toList(), List.copyOf(leaves));
         }
     }
 }

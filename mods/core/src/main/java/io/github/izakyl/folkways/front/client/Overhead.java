@@ -51,6 +51,13 @@ public final class Overhead {
         VanillaGuiLayers.ARMOR_LEVEL, VanillaGuiLayers.FOOD_LEVEL, VanillaGuiLayers.AIR_LEVEL,
         VanillaGuiLayers.VEHICLE_HEALTH, VanillaGuiLayers.JUMP_METER, VanillaGuiLayers.SELECTED_ITEM_NAME);
 
+    /**
+     * Mods whose every HUD layer only dresses those bars, and goes with them: AppleSkin draws saturation, exhaustion
+     * and what a held food would restore over the food and health bars ({@code appleskin:saturation_level} and its
+     * like), and would leave them hanging over the view from above when the bars were put away.
+     */
+    private static final Set<String> BODY_HUD_DRESSING = Set.of("appleskin");
+
     /** What the camera rides: an entity of this client alone, in no level's lists. */
     private static Entity eye;
 
@@ -351,9 +358,14 @@ public final class Overhead {
         }
     }
 
+    /** Whether a HUD layer belongs to the body the view from above leaves behind, and is put away with it. */
+    static boolean bodyHud(ResourceLocation layer) {
+        return BODY_HUD.contains(layer) || BODY_HUD_DRESSING.contains(layer.getNamespace());
+    }
+
     @SubscribeEvent
     public static void onLayer(RenderGuiLayerEvent.Pre event) {
-        if (on() && BODY_HUD.contains(event.getName())) {
+        if (on() && bodyHud(event.getName())) {
             event.setCanceled(true);
         }
     }

@@ -4,6 +4,16 @@ import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.base.persist.Reader;
 import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.core.api.colony.Colonies;
+import io.github.izakyl.folkways.core.api.colony.Held;
+import io.github.izakyl.folkways.core.api.terms.Goods;
+import io.github.izakyl.folkways.core.api.work.Outcome;
+import io.github.izakyl.folkways.core.engine.plan.haul.Haul;
+import io.github.izakyl.folkways.core.engine.plan.haul.TransferNode;
+import io.github.izakyl.folkways.core.testing.TestWorker;
+import io.github.izakyl.folkways.front.engine.colony.ColonyFront;
+import io.github.izakyl.folkways.front.engine.colony.ColonySettings;
+import io.github.izakyl.folkways.plugins.person.PersonBody;
+import io.github.izakyl.folkways.plugins.wares.WaresContent;
 import io.github.izakyl.folkways.core.api.terms.Containers;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.core.api.terms.ItemFilter;
@@ -49,6 +59,75 @@ public final class OrdersPlanningGameTests {
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) {
         event.register(OrdersPlanningGameTests.class);
+    }
+
+    @GameTest(template = "empty")
+    public static void maintainAndDeliverIgnoreFiltersAndAllowConfigurationWithOrders(GameTestHelper helper) {
+        var level = helper.getLevel();
+        BlockPos cell = helper.absolutePos(new BlockPos(2, 1, 2));
+        level.setBlockAndUpdate(cell, Blocks.BARREL.defaultBlockState());
+        WorldPos at = WorldPos.of(level, cell);
+        ItemSpec bread = ItemSpec.of(Items.BREAD);
+        ItemFilter iron = ItemFilter.item(ResourceLocation.withDefaultNamespace("iron_ingot"));
+        ItemFilter breadFilter = ItemFilter.item(ResourceLocation.withDefaultNamespace("bread"));
+        var body = PersonBody.RESIDENT.get().create(level);
+        var worker = TestWorker.of(body).supplied(() -> List.of(new ItemStack(Items.BREAD)));
+        var target = Containers.at(level, cell).orElseThrow();
+        try {
+            for (String action : List.of(OrderAct.MAINTAIN, OrderAct.DELIVER)) {
+                for (int restriction = 0; restriction < 3; restriction++) {
+                    target.clearContent();
+                    Colony colony = Colonies.mint(level.getServer());
+                    try {
+                        colony.hold(WaresContent.STORE, new Held.Block(at)).orElseThrow();
+                        var front = ColonyFront.of(colony);
+                        front.setSetting(OrdersContent.ID, OrdersContent.ITEM.key(),
+                            new ColonySettings.Value.Items(List.of(breadFilter)));
+                        front.setSetting(OrdersContent.ID, OrdersContent.FILTER.key(),
+                            new ColonySettings.Value.Items(List.of(iron)));
+                        OrdersPresence presence = new OrdersPresence(colony);
+                        var view = colony.view(level);
+                        if (restriction == 0) {
+                            helper.assertFalse(presence.act(OrdersContent.PAGE.id(), OrderAct.ADMIT_ONLY,
+                                Optional.of(cell), view).refused(), "set an iron whitelist before ordering bread");
+                        } else if (restriction == 1) {
+                            helper.assertFalse(presence.setItemFiltersAt(OrdersContent.PAGE.id(), cell,
+                                OrdersContent.FILTER.key(), List.of(breadFilter), view).orElseThrow().refused(),
+                                "blacklist bread before ordering it");
+                        } else {
+                            presence.act(OrdersContent.PAGE.id(), "access:store", Optional.of(cell), view);
+                        }
+                        helper.assertFalse(presence.act(OrdersContent.PAGE.id(), action, Optional.of(cell), view)
+                            .refused(), "both order modes can be filed despite incoming restrictions");
+                        presence.refresh(level.getServer());
+                        Delivery delivery = (Delivery) presence.goals(view).getFirst().nodes().getFirst();
+                        TransferNode put = (TransferNode) Haul.DELIVERIES.expand(delivery).orElseThrow()
+                            .nodes().getFirst();
+                        helper.assertTrue(put.commit(level, worker) instanceof Outcome.Done
+                                && Goods.countIn(target, bread) == 1,
+                            action + " delivers bread under restriction " + restriction);
+                        for (String change : List.of(OrderAct.FILTER_MODE, OrderAct.FILTER_MODE,
+                                OrderAct.ADMIT_ONLY, OrderAct.ADMIT_EXCEPT, "access:store", "access:store")) {
+                            helper.assertFalse(presence.act(OrdersContent.PAGE.id(), change, Optional.of(cell), view)
+                                .refused(), "existing orders allow configuration: " + change);
+                        }
+                        helper.assertFalse(presence.setItemFiltersAt(OrdersContent.PAGE.id(), cell,
+                            OrdersContent.FILTER.key(), List.of(breadFilter), view).orElseThrow().refused(),
+                            "existing orders allow blacklisting their own goods");
+                        helper.assertFalse(presence.act(OrdersContent.PAGE.id(), OrderAct.FILTER_MODE,
+                            Optional.of(cell), view).refused(), "switch to whitelist with an existing order");
+                        helper.assertFalse(presence.setItemFiltersAt(OrdersContent.PAGE.id(), cell,
+                            OrdersContent.FILTER.key(), List.of(), view).orElseThrow().refused(),
+                            "existing orders allow clearing the whitelist");
+                    } finally {
+                        colony.raze();
+                    }
+                }
+            }
+        } finally {
+            body.discard();
+        }
+        helper.succeed();
     }
 
     @GameTest(template = "empty", timeoutTicks = 100)

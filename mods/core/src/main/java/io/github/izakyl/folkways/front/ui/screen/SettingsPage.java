@@ -19,7 +19,7 @@ import io.github.izakyl.folkways.core.api.vocation.Vocations;
 import io.github.izakyl.folkways.core.api.work.Tools;
 import io.github.izakyl.folkways.front.api.CoreSettings;
 import io.github.izakyl.folkways.front.api.Schema;
-import io.github.izakyl.folkways.front.api.ui.ChoicePicker;
+import io.github.izakyl.folkways.front.api.ui.Picker;
 import io.github.izakyl.folkways.front.api.ui.Draw;
 import io.github.izakyl.folkways.front.api.ui.ItemPicker;
 import io.github.izakyl.folkways.front.api.ui.Pages;
@@ -105,6 +105,19 @@ public final class SettingsPage implements Draw {
             Rows.name(Component.translatable("folkways.settings.forget_drawing_settings")),
             forgetDrawingSettings));
 
+        // Like the wheel, the player's own, in their client config.
+        Toggle overlaysWithoutBook = Controls.tick();
+        if (LDLib2.isRemote()) {
+            overlaysWithoutBook.setOn(FolkwaysClientConfig.overlaysWithoutBook(), false);
+            overlaysWithoutBook.setOnToggleChanged(FolkwaysClientConfig::overlaysWithoutBook);
+        }
+        Tokens.name(overlaysWithoutBook, "folkways.settings.overlays_without_book");
+        Component overlaysTip = Component.translatable("folkways.settings.overlays_without_book.tooltip");
+        overlaysWithoutBook.style(style -> style.tooltips(overlaysTip));
+        UIElement overlaysName = Rows.name(Component.translatable("folkways.settings.overlays_without_book"));
+        overlaysName.style(style -> style.tooltips(overlaysTip));
+        table.addChildren(Rows.row().addChildren(Rows.icon(ItemStack.EMPTY), overlaysName, overlaysWithoutBook));
+
         Toggle globalTacticalControls = Controls.tick();
         if (LDLib2.isRemote()) {
             globalTacticalControls.setOn(PersonalCameraControls.globalTacticalControls(), false);
@@ -183,9 +196,9 @@ public final class SettingsPage implements Draw {
     }
 
     private static UIElement picker(Player player, Scope where, Schema.Setting.Choice choice) {
-        Label shown = Rows.value(Component.empty());
+        Label shown = Rows.worn(Component.empty());
         shown.bind(DataBindingBuilder.componentS2C(() -> label(player, where, choice)).build());
-        Button press = new Button().noText();
+        Button press = Rows.wearing();
         press.layout(layout -> layout.widthAuto().minWidth(CONTROL_MIN).flexShrink(0));
         UIElement worn = Controls.worn(choice.byDefault());
         press.addChildren(worn, shown);
@@ -194,18 +207,18 @@ public final class SettingsPage implements Draw {
             .onSyncReceived(id -> {
                 ResourceLocation parsed = ResourceLocation.tryParse(id);
                 if (parsed != null && !parsed.equals(current[0])) {
-                    worn.style(style -> style.background(new ItemStackTexture(ChoicePicker.iconOf(parsed))));
+                    worn.style(style -> style.background(new ItemStackTexture(Picker.iconOf(parsed))));
                 }
                 if (parsed != null) {
                     current[0] = parsed;
                 }
             }).build().getSyncValue());
-        ChoicePicker.Asking asking = new ChoicePicker.Asking(press, (key, option) -> {
+        Picker.Asking asking = new Picker.Asking(press, (key, option) -> {
             if (key.equals(choice.key())) {
                 setChoice(player, where, choice, option);
             }
         });
-        press.setOnClick(event -> ChoicePicker.open(press, choice, current[0],
+        press.setOnClick(event -> Picker.open(press, choice, current[0],
             option -> asking.ask(choice.key(), option)));
         return press;
     }
@@ -214,9 +227,9 @@ public final class SettingsPage implements Draw {
     private static UIElement opener(Player player, ResourceLocation scope,
             Schema.Setting.Items items) {
         Scope where = new Scope.AtColony(scope);
-        Label shown = Rows.value(Component.empty());
+        Label shown = Rows.worn(Component.empty());
         shown.bind(DataBindingBuilder.componentS2C(() -> label(player, where, items)).build());
-        Button press = new Button().noText();
+        Button press = Rows.wearing();
         press.layout(layout -> layout.widthAuto().minWidth(CONTROL_MIN).flexShrink(0));
         UIElement worn = Rows.icon(ItemStack.EMPTY);
         press.addChildren(worn, shown);
@@ -275,7 +288,7 @@ public final class SettingsPage implements Draw {
             case Schema.Setting.Flag flag -> Component.translatable(
                 flagOf(held, flag) ? "folkways.action.on" : "folkways.action.off");
             case Schema.Setting.Count count -> Component.literal(Integer.toString(countOf(held, count)));
-            case Schema.Setting.Choice choice -> ChoicePicker.labelOf(choiceOf(held, choice));
+            case Schema.Setting.Choice choice -> Picker.labelOf(choiceOf(held, choice));
             case Schema.Setting.Items items -> items.single()
                 ? itemsOf(held, items).stream().findFirst().map(ItemPicker::labelOf).orElse(Component.empty())
                 : Component.translatable("folkways.settings.rules", itemsOf(held, items).size());

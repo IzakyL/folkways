@@ -211,6 +211,13 @@ url = "https://cdn.modrinth.com/data/kepjj2sy/versions/woekHsje/ShoulderSurfing-
 sha512 = "4497d2f8a992d6d8985b1a6fa7018158a877521052302682866f89171d14eafa7c6b75d92c6e08531003476bc292f71c67c7e4f34b8c1a6864074a3b0dcd7e75"
 target = []
 
+# Dresses the food and health bars with saturation and exhaustion; the view from above has to put it away with the
+# bars. Installed only by the appleskin profile.
+[mods.appleskin]
+url = "https://cdn.modrinth.com/data/EsAfCjCV/versions/uAKA6Laj/appleskin-neoforge-mc1.21-3.0.9.jar"
+sha512 = "f4ea46273e407334b63e262e2555c9a8204f7b5e60f23f272fbaa83ad9e88800e0ee186aca840710df2dbe0a18b37758695fef2ae1a902c10b3706e3de772937"
+target = []
+
 # A colony can be handed to an FTB Teams party, which then says who keeps it; installed only by the ftbteams profile.
 [mods.ftbteams]
 url = "https://maven.ftb.dev/releases/dev/ftb/mods/ftb-teams-neoforge/2101.1.11/ftb-teams-neoforge-2101.1.11.jar"
@@ -433,6 +440,9 @@ folkways_rts = { target = ["server", "client"] }
 # The e2e pair with Shoulder Surfing Reloaded on the client, for the book's aim under its camera.
 [profile.shoulder.mods]
 shouldersurfing = { target = ["client"] }
+
+[profile.appleskin.mods]
+appleskin = { target = ["server", "client"] }
 
 [profile.jech.mods]
 jecharacters = { target = ["client"] }

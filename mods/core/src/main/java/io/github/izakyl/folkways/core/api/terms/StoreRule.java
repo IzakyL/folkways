@@ -20,8 +20,8 @@ public sealed interface StoreRule {
         }
     }
 
-    // What residents may put here: only these goods, or anything but them. What is already inside may still be
-    // taken out.
+    // What residents may put here outside directed orders: only these goods, or anything but them.
+    // Existing stock may still be taken out.
     record Admit(WorldPos where, boolean only, List<ItemSpec> goods) implements StoreRule {
 
         public Admit {

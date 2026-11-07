@@ -2,6 +2,8 @@ package io.github.izakyl.folkways.plugins.supply;
 
 import com.lowdragmc.lowdraglib2.gui.ui.UIElement;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Button;
+import com.lowdragmc.lowdraglib2.gui.ui.elements.Toggle;
+import com.lowdragmc.lowdraglib2.gui.ui.event.UIEvents;
 import io.github.izakyl.folkways.core.api.terms.ItemFilter;
 import io.github.izakyl.folkways.front.api.ui.ItemPicker;
 import io.github.izakyl.folkways.front.api.ui.LonePanel;
@@ -22,7 +24,8 @@ final class SupplyPanel {
     private final long revision;
     private boolean all;
     private List<ItemFilter> filters;
-    private final Button mode = new Button();
+    // A tick, not a button that renames itself: its state reads at a glance, and a click visibly flips it.
+    private final Toggle mode = new Toggle();
     private final Button pick = new Button();
 
     private SupplyPanel(SupplyBox box) {
@@ -39,7 +42,14 @@ final class SupplyPanel {
 
     private UIElement build(Pane pane) {
         UIElement page = Rows.page();
-        mode.setOnClick(event -> { all = !all; refresh(); });
+        mode.setText(Component.translatable(KEY + ".only"));
+        mode.setOn(!all, false);
+        mode.setOnToggleChanged(only -> {
+            all = !only;
+            refresh();
+        });
+        // The box alone answers a click of its own accord; its words should too.
+        mode.toggleLabel.addEventListener(UIEvents.MOUSE_DOWN, event -> mode.setOn(!mode.isOn()));
         Tokens.name(mode, KEY + ".mode");
         pick.setOnClick(event -> ItemPicker.many(page, Component.translatable(KEY + ".whitelist"),
             filters, false, next -> { filters = next; refresh(); }));
@@ -56,7 +66,8 @@ final class SupplyPanel {
     }
 
     private void refresh() {
-        mode.setText(Component.translatable(KEY + (all ? ".all" : ".only")));
+        mode.setOn(!all, false);
+        mode.style(style -> style.tooltips(Component.translatable(KEY + (all ? ".all" : ".only"))));
         pick.setText(Component.translatable(KEY + ".filters", filters.size()));
         pick.setActive(!all);
     }

@@ -10,6 +10,7 @@ import io.github.izakyl.folkways.front.api.ZoneRing;
 import io.github.izakyl.folkways.front.api.notice.Line;
 import io.github.izakyl.folkways.front.api.ui.ModeOverlays;
 import io.github.izakyl.folkways.front.api.ui.OverheadTools;
+import io.github.izakyl.folkways.front.engine.charter.CurrentColony;
 import io.github.izakyl.folkways.front.engine.colony.ColonyPath;
 import io.github.izakyl.folkways.front.engine.item.HeldBook;
 import io.github.izakyl.folkways.front.engine.net.ColonyOverviewPacket;
@@ -69,6 +70,8 @@ public final class ColonyHighlightState {
     private static final List<ZoneSnapshot> ZONES = new ArrayList<>();
     private static final Map<UUID, List<Line>> NOTES = new HashMap<>();
     private static final List<Placard> PLACARDS = new ArrayList<>();
+    // How many zone outlines the last world frame drew, read by what checks the overlays reach the screen.
+    private static int outlinesDrawn;
     private static UUID activeColonyId;
     private static int requestCooldown;
     private static boolean recipesNeeded = true;
@@ -129,7 +132,7 @@ public final class ColonyHighlightState {
             return;
         }
 
-        UUID colonyId = heldColonyId(minecraft.player);
+        UUID colonyId = shownColonyId(minecraft.player);
         if (colonyId == null) {
             reset();
             return;
@@ -200,7 +203,10 @@ public final class ColonyHighlightState {
 
         VertexConsumer lines = ModeOverlays.vertices(
             buffers.getBuffer(RenderType.lines()), OverheadTools.BUILD);
-        drawMemberBoxes(level, poseStack, lines, camera, partialTick);
+        // The blocks the colony holds are what the book's point toggles: they are marked only with it in hand.
+        if (heldColonyId(minecraft.player) != null) {
+            drawMemberBoxes(level, poseStack, lines, camera, partialTick);
+        }
         drawZoneOutlines(level, poseStack, lines, camera, partialTick);
         drawPlacardOutlines(level, poseStack, lines, camera, partialTick);
         if (works) {
@@ -219,14 +225,22 @@ public final class ColonyHighlightState {
         buffers.endBatch();
     }
 
+    public static int outlinesDrawn() {
+        return outlinesDrawn;
+    }
+
     private static Minecraft shown(RenderLevelStageEvent event) {
+        if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_TRANSLUCENT_BLOCKS) {
+            // A frame that draws nothing of the colony draws no outlines either.
+            outlinesDrawn = 0;
+        }
         if (event.getStage() != RenderLevelStageEvent.Stage.AFTER_TRANSLUCENT_BLOCKS
             || (MEMBERS.isEmpty() && ZONES.isEmpty() && OWED.isEmpty() && PLACARDS.isEmpty()
                 && NOTES.isEmpty() && pingedBlock() == null)) {
             return null;
         }
         Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.level == null || minecraft.player == null || heldColonyId(minecraft.player) == null) {
+        if (minecraft.level == null || minecraft.player == null || shownColonyId(minecraft.player) == null) {
             return null;
         }
         return minecraft;
@@ -279,6 +293,7 @@ public final class ColonyHighlightState {
 
     private static void drawZoneOutlines(Level level, PoseStack poseStack, VertexConsumer lines, Vec3 viewer,
             float partialTick) {
+        outlinesDrawn = 0;
         for (ZoneSnapshot zone : Layer.ZONES.shown() ? ZONES : List.<ZoneSnapshot>of()) {
             Placed placed = Placed.at(level, zone.min(), partialTick);
             AABB box = localBoxOf(zone);
@@ -291,6 +306,7 @@ public final class ColonyHighlightState {
             placed.enter(poseStack);
             LevelRenderer.renderLineBox(poseStack, lines, box.inflate(0.02D),
                 rgb[0], rgb[1], rgb[2], alpha);
+            outlinesDrawn++;
             if (ZoneSelection.highlighted(zone.id())) {
                 for (ZoneRing ring : zone.rings()) {
                     drawRing(poseStack, lines, ring, zone.min(), rgb);
@@ -544,5 +560,18 @@ public final class ColonyHighlightState {
 
     static UUID heldColonyId(Player player) {
         return HeldBook.bound(player).map(HeldBook::colonyId).orElse(null);
+    }
+
+    /**
+     * The colony whose markings and cards are drawn: the book's, in hand; without it, the one the player acts for
+     * (the colony any book of theirs opens on), when they have asked to see it so. Drawn only: whatever acts on what
+     * is shown still asks for {@link #heldColonyId}.
+     */
+    public static UUID shownColonyId(Player player) {
+        UUID held = heldColonyId(player);
+        if (held != null || Layer.withoutBook() == Layer.Showing.NONE) {
+            return held;
+        }
+        return CurrentColony.id(player).orElse(null);
     }
 }

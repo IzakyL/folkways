@@ -13,7 +13,7 @@ import com.lowdragmc.lowdraglib2.gui.ui.elements.TextField;
 import com.lowdragmc.lowdraglib2.gui.ui.event.UIEvents;
 import io.github.izakyl.folkways.core.api.terms.ItemFilter;
 import io.github.izakyl.folkways.front.api.Schema;
-import io.github.izakyl.folkways.front.api.ui.ChoicePicker;
+import io.github.izakyl.folkways.front.api.ui.Picker;
 import io.github.izakyl.folkways.front.api.ui.ItemPicker;
 import io.github.izakyl.folkways.front.api.ui.Pages;
 import io.github.izakyl.folkways.front.api.ui.Rows;
@@ -95,16 +95,16 @@ final class ZoneSettings {
 
     UIElement build(Player player) {
         UIElement table = Rows.table();
-        ChoicePicker.Asking asking = new ChoicePicker.Asking(table, (key, option) -> choose(player, key, option));
+        Picker.Asking asking = new Picker.Asking(table, (key, option) -> choose(player, key, option));
         ItemPicker.Sending sending = new ItemPicker.Sending(table, (key, filters) -> hold(player, key, filters));
         for (int slot = 0; slot < SLOTS; slot++) {
             int index = slot;
             Row row = new Row();
             row.icon = Rows.icon(ItemStack.EMPTY);
             row.name = Rows.name(Component.empty());
-            row.value = Rows.value(Component.empty());
+            row.value = Rows.worn(Component.empty());
 
-            row.press = new Button().noText();
+            row.press = Rows.wearing();
             row.press.layout(layout -> layout.widthAuto()
                 .minWidth(SettingsPage.CONTROL_MIN).flexShrink(0));
             row.worn = Rows.icon(ItemStack.EMPTY);
@@ -294,14 +294,14 @@ final class ZoneSettings {
         });
     }
 
-    private void pick(int slot, ChoicePicker.Asking asking, ItemPicker.Sending sending) {
+    private void pick(int slot, Picker.Asking asking, ItemPicker.Sending sending) {
         Row row = rows.get(slot);
         String key = drawn[slot];
         if (key == null) {
             return;
         }
         if (row.kind == KIND_CHOICE) {
-            ChoicePicker.open(row.press, row.nameKey, row.options, ResourceLocation.tryParse(row.raw),
+            Picker.open(row.press, row.nameKey, row.options, ResourceLocation.tryParse(row.raw),
                 option -> asking.ask(key, option));
         } else if (row.kind == KIND_ITEMS) {
             SettingsPage.openItems(row.press, Component.translatable(row.nameKey), row.single, row.blocks,
@@ -444,7 +444,7 @@ final class ZoneSettings {
                 if (!raw.equals(row.wearing)) {
                     row.wearing = raw;
                     ResourceLocation picked = ResourceLocation.tryParse(raw);
-                    ItemStack icon = picked == null ? ItemStack.EMPTY : ChoicePicker.iconOf(picked);
+                    ItemStack icon = picked == null ? ItemStack.EMPTY : Picker.iconOf(picked);
                     row.worn.style(style -> style.background(new ItemStackTexture(icon)));
                 }
             }

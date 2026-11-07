@@ -33,7 +33,7 @@ final class DamageControlCommands {
     }
 
     private static void handle(ServerPlayer player, DamageControlCommand packet) {
-        ColonyAuthority.ofHeldBook(player, packet.colony()).ifPresent(authority -> {
+        ColonyAuthority.forColony(player, packet.colony()).ifPresent(authority -> {
             Colony colony = authority.colony();
             Attempt result = apply(player.serverLevel(), colony, packet);
             result.refusal().ifPresent(why -> player.displayClientMessage(why.component(), true));

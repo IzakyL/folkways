@@ -115,6 +115,23 @@ for (const stage of twins()) test(stage.title("container panel carry-set MAINTAI
     await containerAccess(server, client, playerName, targetChest, stage, "store");
     await exerciseFilterPicker(server, client, playerName, targetChest, sourceChest, stage);
     await setMaintainDemandViaUI(server, client, playerName, targetChest, DEMAND_ITEM, 1, stage);
+    const orderedRules = await openContainerRules(server, client, playerName, targetChest, stage);
+    await assertFilterState(client, orderedRules, "white", 1);
+    for (const mode of ["black", "white"] as const) {
+      await clickBoardAction(client, (await boardAct(client, "do", "folkways.orders", orderedRules.admission, 0)).id);
+      await settlePanel(server, client);
+      await assertFilterState(client, orderedRules, mode, 1);
+    }
+    await clickBoardAction(client, (await boardAct(client, "edit", "folkways.orders", orderedRules.filter)).id);
+    await waitForElement(client, { id: "folkways.selector.close" });
+    await filterSearch(server, client, "*minecraft:dirt");
+    await waitForElement(client, { id: "folkways.selector.result.minecraft.dirt" });
+    await clickElement(client, { id: "folkways.selector.result.minecraft.dirt" });
+    await clickElement(client, { id: "folkways.selector.confirm" });
+    await waitForElement(client, { id: "folkways.selector.close" }, { state: "absent" });
+    await settlePanel(server, client);
+    await assertFilterState(client, orderedRules, "white", 0);
+    await screen.dismiss(client);
     await tick.sprint(server, 200);
     expect(await chestItemCount(server, stage.at(targetChest), DEMAND_ITEM),
       "a protected container must not supply an order").toBe(0);
@@ -260,6 +277,9 @@ async function exerciseFilterPicker(server: any, client: any, playerName: string
   await waitForElement(client, { id: "folkways.selector.close" });
   expect(await selectedFilterRules(client), "reopening the target keeps its own filter").toEqual(["minecraft:dirt"]);
   await clickElement(client, { id: "folkways.selector.close" });
+  await clickBoardAction(client, (await boardAct(client, "do", "folkways.orders", reopened.admission, 0)).id);
+  await settlePanel(server, client);
+  await assertFilterState(client, reopened, "white", 1);
 
   await screen.dismiss(client);
 }

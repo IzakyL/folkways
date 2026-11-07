@@ -2,7 +2,7 @@ package io.github.izakyl.folkways.front.client;
 
 import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.front.client.ponder.PonderIntegration;
-import io.github.izakyl.folkways.front.api.ui.ChoicePicker;
+import io.github.izakyl.folkways.front.api.ui.Picker;
 import io.github.izakyl.folkways.front.api.ui.Cues;
 import io.github.izakyl.folkways.front.api.ui.FilterStacks;
 import io.github.izakyl.folkways.front.api.ui.ItemChoice;
@@ -55,7 +55,7 @@ public final class FolkwaysClientRegistry {
             LonePanel.install(LonePanels::open);
             Placing.install(HeldPlacement.HAND);
             SweepOffer.register();
-            ChoicePicker.install(Window::aboveWindows);
+            Picker.install(Window::aboveWindows);
             ItemChoice.install((parent, chosen) ->
                 SelectorWindow.open(parent, stack -> chosen.accept(FilterStacks.parse(stack))));
             ItemProperties.register(FolkwaysItems.COLONY_BOOK.get(),

@@ -10,7 +10,7 @@ import com.google.gson.JsonPrimitive;
 import com.google.gson.GsonBuilder;
 import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.core.testing.Cleanup;
-import io.github.izakyl.folkways.front.api.ui.FolderPicker;
+import io.github.izakyl.folkways.front.api.ui.Picker;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaMod;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import java.io.IOException;
@@ -444,11 +444,11 @@ public final class MaidLookGameTests {
         Component reason = Component.translatable("folkways.looks.requires_geckolib");
         for (boolean ticked : List.of(false, true)) {
             List<String> said = new ArrayList<>();
-            FolderPicker picker = new FolderPicker("test", ticked, (word, key) -> said.add(word + ":" + key));
+            Picker picker = new Picker("test", ticked, (word, key) -> said.add(word + ":" + key));
             picker.fill(List.of(
-                new FolderPicker.Leaf("model", "test:model", Component.literal("Model"), "model",
+                new Picker.Leaf("model", "test:model", Component.literal("Model"), "model",
                     Optional.of(reason)),
-                new FolderPicker.Leaf("skin", "test:skin", Component.literal("Skin"), "skin")));
+                new Picker.Leaf("skin", "test:skin", Component.literal("Skin"), "skin")));
             UIElement model = element(picker.tree(), "model");
             UIElement skin = element(picker.tree(), "skin");
             helper.assertTrue(!model.isActive() && skin.isActive(),

@@ -40,7 +40,7 @@ const DUMP = defineTask<{ player: string; ox: number; oy: number; oz: number }, 
       "io.github.izakyl.folkways.core.api.colony.Holding",
       "io.github.izakyl.folkways.front.engine.charter.CurrentColony",
       "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
-      "io.github.izakyl.folkways.front.engine.item.ColonyBookItem",
+      "io.github.izakyl.folkways.front.engine.authority.ColonyAuthority",
       "net.minecraft.core.BlockPos",
       "net.minecraft.nbt.CompoundTag",
       "net.minecraft.nbt.Tag",
@@ -88,7 +88,7 @@ if (bound == null) {
     throw Fail.notFound("the player acts for no colony", out);
 }
 out.put("colony_id", bound.toString());
-out.put("holds_book_for", Boolean.valueOf(ColonyBookItem.holdsBookFor(player, bound)));
+out.put("authorized", Boolean.valueOf(ColonyAuthority.forColony(player, bound).isPresent()));
 Colony colony = ColonyGround.of(server, bound).orElse(null);
 out.put("registry_present", Boolean.valueOf(colony != null));
 if (colony == null) {
@@ -227,7 +227,7 @@ function substantial(state: ColonyTaskValue, path: string) {
   const seen = () => ` (the ${path} dump read ${JSON.stringify(state)})`;
 
   expect(state.acts_for_colony, `after ${path} founding the player acts for no colony${seen()}`).toBe(true);
-  expect(state.holds_book_for, `after ${path} founding holdsBookFor does not recognize the book in hand${seen()}`).toBe(true);
+  expect(state.authorized, `after ${path} founding the colony acted for gives the player no authority${seen()}`).toBe(true);
   expect(state.registry_present, `the colony minted by ${path} founding is not in the registry${seen()}`).toBe(true);
   expect(state.roster, `the ${path} founding roster does not hold ${RESIDENTS} people${seen()}`).toBe(RESIDENTS);
   expect(state.members, `the ${path} founding member cells are not "${RESIDENTS} beds + 1 food chest"${seen()}`)

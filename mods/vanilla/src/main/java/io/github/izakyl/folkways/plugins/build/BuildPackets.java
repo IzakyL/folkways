@@ -55,7 +55,7 @@ public final class BuildPackets {
     private static void handleCapture(CaptureBlueprintPacket packet, IPayloadContext context) {
         context.enqueueWork(() -> {
             if (!(context.player() instanceof ServerPlayer player)
-                || Books.ofHeldBook(player, packet.colony()).isEmpty()) return;
+                || Books.actingFor(player, packet.colony()).isEmpty()) return;
             Optional<LibraryPath> name = LibraryPath.of(packet.name());
             if (name.isEmpty() || ResourceLocation.tryBuild(Shelves.NAMESPACE, packet.name()) == null) {
                 refuse(player, Component.translatable("folkways.blueprints.capture.name_invalid"));
@@ -140,7 +140,7 @@ public final class BuildPackets {
     private static void setDown(ServerPlayer player, UUID colonyId, String name, Optional<CompoundTag> file,
             String siteName, BlockPos anchor, boolean airIsEmpty, Rotation rotation, Mirror mirror,
             boolean raiseInCreative) {
-        Optional<BuildPresence> site = Books.ofHeldBook(player, colonyId)
+        Optional<BuildPresence> site = Books.actingFor(player, colonyId)
             .flatMap(colony -> BuildContent.presenceIn(colony.service(BuildContent.ID, Object.class)));
         if (site.isEmpty()) {
             return;
@@ -181,7 +181,7 @@ public final class BuildPackets {
     private static void filePrepared(ServerPlayer player, UUID colonyId, Blueprint prepared, BlockPos anchor,
             String siteName, boolean raise) {
         ServerLevel level = player.serverLevel();
-        Optional<BuildPresence> site = Books.ofHeldBook(player, colonyId)
+        Optional<BuildPresence> site = Books.actingFor(player, colonyId)
             .flatMap(colony -> BuildContent.presenceIn(colony.service(BuildContent.ID, Object.class)));
         if (site.isEmpty()) {
             return;
@@ -212,7 +212,7 @@ public final class BuildPackets {
             if (!(context.player() instanceof ServerPlayer player)) {
                 return;
             }
-            Optional<BuildPresence> site = Books.ofHeldBook(player, packet.colonyId())
+            Optional<BuildPresence> site = Books.actingFor(player, packet.colonyId())
                 .flatMap(colony -> BuildContent.presenceIn(colony.service(BuildContent.ID, Object.class)));
             if (site.isEmpty()) {
                 return;

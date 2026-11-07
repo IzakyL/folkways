@@ -71,6 +71,8 @@ final class WorldCards {
      */
     static void flush(Minecraft minecraft, PoseStack poseStack, Vec3 camera) {
         if (QUEUE.isEmpty()) {
+            // Nothing on screen this frame: no card's ink is carried over to ease from when one comes back.
+            INKS.clear();
             return;
         }
         List<Queued> queued = new ArrayList<>(QUEUE);

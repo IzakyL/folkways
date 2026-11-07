@@ -30,6 +30,8 @@ public final class Signs {
     public static final int HEIGHT = ITEM_SIZE + 1;
     public static final int WORD_COLOR = 0xFFAAAAAA;
     public static final int COUNT_COLOR = 0xFFFFFFFF;
+    // How far back an item sits so it is drawn at a page's depth, as LDLib2's own item icons are.
+    private static final float ITEM_DEPTH = -200.0F;
     private static final int TEXT_INK = 8;
     private static final int GAP = 2;
     // Items side by side, with no plus between them, stand further apart so a count is not read as the next item's.
@@ -182,12 +184,22 @@ public final class Signs {
                         graphics.setColor(1f, 1f, 1f, 1f);
                     }
                 }
-                case Placed.Item item -> graphics.renderItem(item.stack(), x + item.x(), y + item.y());
+                case Placed.Item item -> drawItem(graphics, item.stack(), x + item.x(), y + item.y());
                 // Words are inked onto the page; only a count, white over its item, keeps the shadow it needs.
                 case Placed.Text text -> LDLibFonts.drawText(graphics, font, Component.literal(text.text()),
                     x + text.x(), y + text.y(), text.color(), text.color() == COUNT_COLOR);
             }
         }
+    }
+
+    // An item drawn as the panel's own item icons are: pushed back by the depth renderItem lifts it to, so it stays
+    // on its page. Lifted, it stood in front of every flat thing drawn after it, a dialog over the page included.
+    private static void drawItem(GuiGraphics graphics, ItemStack stack, int x, int y) {
+        graphics.flush();
+        graphics.pose().pushPose();
+        graphics.pose().translate(0.0F, 0.0F, ITEM_DEPTH);
+        graphics.renderItem(stack, x, y);
+        graphics.pose().popPose();
     }
 
     private static int width(Font font, List<Sign> signs, int count) {

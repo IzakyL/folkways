@@ -25,28 +25,31 @@ public final class SelectorWindow {
     }
 
     public static void open(Screen parent, Consumer<ItemStack> chosen) {
+        open(parent, Component.translatable("folkways.selector.title"), root ->
+            ItemPicker.one(root, Component.translatable("folkways.selector.title"), null, false,
+                id -> chosen.accept(new ItemStack(BuiltInRegistries.ITEM.get(id)))));
+    }
+
+    public static void open(Screen parent, Component title,
+            java.util.function.Function<UIElement, com.lowdragmc.lowdraglib2.gui.ui.elements.Dialog> dialog) {
         Minecraft minecraft = Minecraft.getInstance();
         UIElement root = new UIElement()
-            .layout(layout -> layout.widthPercent(100).heightPercent(100))
-            .addClass("folkways_desk");
+            .layout(layout -> layout.widthPercent(100).heightPercent(100)).addClass("folkways_desk");
         DeskTextures.installPopups(root);
         ModularUI ui = new ModularUI(UI.of(root,
             List.of(StylesheetManager.INSTANCE.getStylesheetSafe(StylesheetManager.MC),
                 StylesheetManager.INSTANCE.getStylesheetSafe(
                     ResourceLocation.fromNamespaceAndPath("folkways", "lss/desk.lss")))), minecraft.player);
-        minecraft.setScreen(new Held(ui, parent));
-        ItemPicker.one(root, Component.translatable("folkways.selector.title"), null, false,
-                id -> chosen.accept(new ItemStack(BuiltInRegistries.ITEM.get(id))))
-            .darkenBackground()
-            .setOnClose(() -> minecraft.setScreen(parent));
+        minecraft.setScreen(new Held(ui, parent, title));
+        dialog.apply(root).darkenBackground().setOnClose(() -> minecraft.setScreen(parent));
     }
 
     private static final class Held extends ModularUIScreen {
 
         private final Screen parent;
 
-        private Held(ModularUI ui, Screen parent) {
-            super(ui, Component.translatable("folkways.selector.title"));
+        private Held(ModularUI ui, Screen parent, Component title) {
+            super(ui, title);
             this.parent = parent;
         }
 

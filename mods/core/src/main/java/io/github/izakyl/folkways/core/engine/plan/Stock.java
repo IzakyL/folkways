@@ -80,9 +80,12 @@ public final class Stock {
     }
 
     public boolean admits(Stash where, ItemSpec spec) {
+        return StoreRule.admits(rules.getOrDefault(where, List.of()), spec) && accepts(where, spec);
+    }
+
+    private boolean accepts(Stash where, ItemSpec spec) {
         Set<Item> barred = refused.getOrDefault(where, Set.of());
-        return StoreRule.admits(rules.getOrDefault(where, List.of()), spec)
-            && (barred.isEmpty() || Collections.disjoint(Goods.members(spec), barred));
+        return barred.isEmpty() || Collections.disjoint(Goods.members(spec), barred);
     }
 
     public int preference(Stash where, ItemSpec spec) {
@@ -153,7 +156,11 @@ public final class Stock {
     }
 
     public long roomAt(Stash where, ItemSpec spec) {
-        if (!stashes.contains(where) || !admits(where, spec)) {
+        return roomAt(where, spec, false);
+    }
+
+    public long roomAt(Stash where, ItemSpec spec, boolean directed) {
+        if (!stashes.contains(where) || !(directed ? accepts(where, spec) : admits(where, spec))) {
             return 0;
         }
         long room = (long) emptyCells.getOrDefault(where, 0) * Math.max(1, Goods.stackSize(spec));

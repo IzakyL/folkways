@@ -9,7 +9,7 @@ import com.lowdragmc.lowdraglib2.gui.ui.elements.TextField;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.front.api.Fronts;
-import io.github.izakyl.folkways.front.api.ui.ChoicePicker;
+import io.github.izakyl.folkways.front.api.ui.Picker;
 import io.github.izakyl.folkways.front.api.ui.Pages;
 import io.github.izakyl.folkways.front.api.ui.Rows;
 import io.github.izakyl.folkways.front.api.ui.Tokens;
@@ -54,18 +54,18 @@ final class StaffingPanel {
         Tokens.name(allowed, KEY + "allowed");
         allowed.setOnClick(event -> {
             CompoundTag snapshot = shown.copy();
-            List<ChoicePicker.Row> options = new ArrayList<>();
+            List<Picker.Row> options = new ArrayList<>();
             Set<String> current = new HashSet<>();
             for (Tag value : snapshot.getList("profiles", Tag.TAG_COMPOUND)) {
                 CompoundTag profile = (CompoundTag) value;
                 String id = profile.getUUID("id").toString();
-                options.add(new ChoicePicker.Row(id, Component.literal(profile.getString("name")),
+                options.add(new Picker.Row(id, Component.literal(profile.getString("name")),
                     new ItemStack(Items.IRON_CHESTPLATE)));
                 if (profile.getBoolean("allowed")) {
                     current.add(id);
                 }
             }
-            ChoicePicker.openMany(allowed, KEY + "allowed", options, current, picked -> {
+            Picker.openMany(allowed, KEY + "allowed", options, current, picked -> {
                 CompoundTag request = request(snapshot, "allowed");
                 ListTag profiles = new ListTag();
                 for (String id : picked) {

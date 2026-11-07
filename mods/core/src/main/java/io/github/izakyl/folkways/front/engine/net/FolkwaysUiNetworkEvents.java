@@ -61,16 +61,16 @@ public final class FolkwaysUiNetworkEvents {
     public static void registerPayloads(RegisterPayloadHandlersEvent event) {
         PayloadRegistrar registrar = event.registrar(FolkwaysMod.NETWORK_VERSION);
         registrar.playToServer(RequestColonyOverviewPacket.TYPE, RequestColonyOverviewPacket.STREAM_CODEC,
-            asPlayer((packet, player) -> ColonyAuthority.ofHeldBook(player, packet.colonyId())
-                .ifPresent(authority -> PacketDistributor.sendToPlayer(player,
-                    ColonyOverviews.requested(player, authority.colony(),
+            asPlayer((packet, player) -> ColonyAuthority.forColony(player, packet.colonyId()).map(ColonyAuthority::colony)
+                .ifPresent(colony -> PacketDistributor.sendToPlayer(player,
+                    ColonyOverviews.requested(player, colony,
                         packet.recipesNeeded(), packet.unavailable())))));
         registrar.playToServer(ToggleColonyMemberPacket.TYPE, ToggleColonyMemberPacket.STREAM_CODEC,
             asPlayer((packet, player) -> ColonyAuthority
-                .ofHeldBook(player, packet.colonyId(), Optional.of(packet.pos()))
+                .forColony(player, packet.colonyId(), Optional.of(packet.pos()))
                 .ifPresent(authority -> toggleColonyMember(player, authority))));
         registrar.playToServer(ToggleColonyResidentPacket.TYPE, ToggleColonyResidentPacket.STREAM_CODEC,
-            asPlayer((packet, player) -> ColonyAuthority.ofHeldBook(player, packet.colonyId())
+            asPlayer((packet, player) -> ColonyAuthority.forColony(player, packet.colonyId())
                 .ifPresent(authority -> toggleColonyEntity(player, authority, packet.entityId()))));
         registrar.playToServer(SetBookGesturePacket.TYPE, SetBookGesturePacket.STREAM_CODEC,
             asPlayer(FolkwaysUiNetworkEvents::setBookGesture));
@@ -79,7 +79,7 @@ public final class FolkwaysUiNetworkEvents {
             OpenBookPagePacket.STREAM_CODEC,
             asPlayer(
             (packet, player) ->
-                ColonyAuthority.ofHeldBook(player, packet.colonyId())
+                ColonyAuthority.forColony(player, packet.colonyId())
                     .ifPresent(authority -> ColonyShell.open(player, packet.page()))));
         registrar.playToServer(CreateZonePacket.TYPE, CreateZonePacket.STREAM_CODEC,
             asPlayer(FolkwaysUiNetworkEvents::createZone));
@@ -157,21 +157,21 @@ public final class FolkwaysUiNetworkEvents {
     }
 
     private static void createZone(CreateZonePacket packet, ServerPlayer player) {
-        ColonyAuthority.ofHeldBook(player, packet.colonyId()).ifPresent(authority -> ZoneDrafts
+        ColonyAuthority.forColony(player, packet.colonyId()).ifPresent(authority -> ZoneDrafts
             .zone(player.serverLevel(), authority.colony(), packet.delegation(), packet.min(), packet.max(),
                 ColonySettings.load(Reader.of(packet.settings())))
             .ifPresent(zone -> opened(player, authority.colony(), zone.id())));
     }
 
     private static void createPath(CreatePathPacket packet, ServerPlayer player) {
-        ColonyAuthority.ofHeldBook(player, packet.colonyId()).ifPresent(authority -> ZoneDrafts
+        ColonyAuthority.forColony(player, packet.colonyId()).ifPresent(authority -> ZoneDrafts
             .path(player.serverLevel(), authority.colony(), packet.delegation(), packet.points(),
                 ColonySettings.load(Reader.of(packet.settings())))
             .ifPresent(path -> opened(player, authority.colony(), path.id())));
     }
 
     private static void sweepBlocks(SweepBlocksPacket packet, ServerPlayer player) {
-        ColonyAuthority.ofHeldBook(player, packet.colonyId()).ifPresent(authority -> {
+        ColonyAuthority.forColony(player, packet.colonyId()).ifPresent(authority -> {
             Colony colony = authority.colony();
             if (!BlockSweep.take(player.serverLevel(), colony, packet.min(), packet.max(),
                     Set.copyOf(packet.kinds()), player).refused()) {
@@ -254,9 +254,8 @@ public final class FolkwaysUiNetworkEvents {
     }
 
     private static void requestLookAt(RequestLookAtPacket packet, ServerPlayer player) {
-        ColonyAuthority.ofHeldBook(player, packet.colonyId())
-            .ifPresent(authority -> PacketDistributor.sendToPlayer(player,
-                ColonyOverviews.looks(player, authority.colony())));
+        ColonyAuthority.forColony(player, packet.colonyId()).map(ColonyAuthority::colony)
+            .ifPresent(colony -> PacketDistributor.sendToPlayer(player, ColonyOverviews.looks(player, colony)));
     }
 
 }

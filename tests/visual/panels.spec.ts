@@ -166,7 +166,15 @@ test("panels and item models on camera", async ({}, testInfo) => {
     run.note("discovered_pages", tabs);
     for (const [index, tab] of tabs.entries()) {
       await clickTab(client, tab.token);
+      await tick.sprint(server, 5);
       await safeAction(() => frames(client, 3));
+      if (tab.name === FARMING) {
+        await expect.poll(async () => {
+          await tick.sprint(server, 100);
+          await frames(client, 3);
+          return (await panelElements(client)).some(element => /^\d+ cells ·/.test(element.text ?? ""));
+        }, { timeout: 30_000, message: "farm plots must be scanned before capture" }).toBe(true);
+      }
       await run.shot(client, `page-${tab.name}`, {
         subject: `Colony panel · ${tab.name} tab layout`,
         worldState: { tab: tab.name, token: tab.token, tokens: await tokensOf(client) },
@@ -278,12 +286,15 @@ return true;
     await clickElement(client, { id: looksOpen.id });
     await tick.sprint(server, 5);
     await safeAction(() => frames(client, 3));
+    await clickElement(client, { id: "folkways.pool.looks.choose" });
+    await frames(client, 3);
     await run.shot(client, "05-6-person-looks", {
       subject: "Look pool window: a face and a toggle per entry, with the person page still behind it so both can be seen side by side",
       worldState: { via: looksOpen.id, tokens: await tokensOf(client) },
       hard: true,
     });
     await run.lint(probe, "window:looks");
+    await clickElement(client, { id: "folkways.pool.looks.close" });
     await clickUnverified(client, { id: "folkways.window.close.folkways.looks" });
     await expect.poll(async () => (await panelElements(client))
       .find(element => element.id === "folkways.window.folkways.looks")?.displayed,

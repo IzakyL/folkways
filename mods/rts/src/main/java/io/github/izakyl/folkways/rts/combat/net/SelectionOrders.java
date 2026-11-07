@@ -36,14 +36,10 @@ public final class SelectionOrders {
         }
         return Pages.colonyOf(player)
             .filter(colony -> colony.id().equals(expected))
-            .filter(
-            colony ->
-                Books.ofHeldBook(player, expected)
-                    .filter(held -> held.id().equals(expected))
-                    .isPresent());
+            .filter(colony -> Books.actingFor(player, expected).isPresent());
     }
 
-    /** Continuing an accepted task does not require keeping its command book in hand. */
+    /** Continuing an accepted task asks only that the player still keeps the colony and acts for it. */
     public static Optional<Colony> continuing(ServerPlayer player, UUID expected) {
         if (!player.getServer().isSameThread()
             || player.isRemoved()

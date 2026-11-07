@@ -17,7 +17,8 @@ public final class Books {
 
         Optional<Colony> acting(Player player);
 
-        Optional<Colony> ofHeldBook(ServerPlayer player, UUID colony);
+        // The colony a packet names, while it is the one the player acts for and still keeps.
+        Optional<Colony> actingFor(ServerPlayer player, UUID colony);
     }
 
     private static final Source NONE = new Source() {
@@ -38,7 +39,7 @@ public final class Books {
         }
 
         @Override
-        public Optional<Colony> ofHeldBook(ServerPlayer player, UUID colony) {
+        public Optional<Colony> actingFor(ServerPlayer player, UUID colony) {
             return Optional.empty();
         }
     };
@@ -64,7 +65,7 @@ public final class Books {
         return held.acting(player);
     }
 
-    public static Optional<Colony> ofHeldBook(ServerPlayer player, UUID colony) {
-        return held.ofHeldBook(player, colony);
+    public static Optional<Colony> actingFor(ServerPlayer player, UUID colony) {
+        return held.actingFor(player, colony);
     }
 }

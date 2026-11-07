@@ -8,9 +8,5 @@ public enum OrderRefusal implements RefusalKind.Named {
 
     UNKNOWN_ITEM,
 
-    NOT_A_CONTAINER,
-
-    NOT_ADMITTED,
-
-    ORDERED_HERE;
+    NOT_A_CONTAINER;
 }

@@ -91,6 +91,9 @@ feat(draft): add a dock pattern
   共享准备逻辑放入 Core 的 `src/gameTestFixtures`，不注册测试。
 - TypeScript 共享辅助代码放在 `tests/shared/`。套件可引用此处及 `tests/ldlib2/`，不可引用其他套件。
 
+容器黑白名单和 `StoreRule.Access.store` 仅约束居民的日常存放。订单在规划和执行中均豁免，
+也不得阻止修改容器配置。保留容器自身和槽位限制，玩家手动放入不受影响。
+
 ### 翻译与建筑样式
 
 - 模组拥有的玩家可见文本统一加入 `mods/core/src/main/resources/assets/folkways/lang/` 的四份共享语言文件：

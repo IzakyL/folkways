@@ -6,7 +6,6 @@ import com.lowdragmc.lowdraglib2.gui.texture.ItemStackTexture;
 import com.lowdragmc.lowdraglib2.gui.ui.UIElement;
 import com.lowdragmc.lowdraglib2.gui.ui.data.TextWrap;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Button;
-import com.lowdragmc.lowdraglib2.gui.ui.elements.Dialog;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Label;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.ScrollerView;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.TextField;
@@ -22,7 +21,7 @@ import io.github.izakyl.folkways.core.api.terms.ItemQuery;
 import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.front.api.notice.Notice;
 import io.github.izakyl.folkways.front.api.notice.Sentence;
-import io.github.izakyl.folkways.front.api.ui.ChoicePicker;
+import io.github.izakyl.folkways.front.api.ui.Picker;
 import io.github.izakyl.folkways.front.api.ui.Draw;
 import io.github.izakyl.folkways.front.api.ui.ItemPicker;
 import io.github.izakyl.folkways.front.api.ui.Pages;
@@ -42,6 +41,7 @@ import io.github.izakyl.folkways.plugins.person.ResidentEntity;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Set;
 import java.util.Locale;
 import java.util.NoSuchElementException;
 import java.util.Optional;
@@ -56,7 +56,6 @@ import net.minecraft.nbt.StringTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.nbt.TagParser;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.entity.EquipmentSlot;
@@ -399,93 +398,67 @@ public final class LoadoutPage implements Draw {
             return;
         }
         CompoundTag resident = residents.getCompound(slot).copy();
-        Dialog dialog = new Dialog();
-        UIElement list = Rows.page();
-        list.addChildren(assignmentChoice(dialog, resident, null));
-        ListTag choices = shown.getList("assignmentChoices", Tag.TAG_COMPOUND);
+        ListTag choices = shown.getList("assignmentChoices", Tag.TAG_COMPOUND).copy();
+        List<Picker.Leaf> options = new ArrayList<>();
+        options.add(new Picker.Leaf("none", "", text("none"), KEY + "choose.none"));
         for (Tag value : choices) {
-            list.addChildren(assignmentChoice(dialog, resident, (CompoundTag) value));
+            CompoundTag profile = (CompoundTag) value;
+            String id = profile.getUUID("id").toString();
+            options.add(new Picker.Leaf(id, "", Component.literal(profile.getString("name")), KEY + "choose." + id));
         }
-        showMenu(dialog, host, text("assign_residents"), list, choices.size() + 1);
-    }
-
-    private Button assignmentChoice(Dialog dialog, CompoundTag resident, CompoundTag profile) {
-        Button choose = new Button().setText(profile == null ? text("none")
-            : Component.literal(profile.getString("name")));
-        choose.layout(layout -> layout.widthPercent(100).flexShrink(0));
-        limit(choose);
-        choose.style(style -> style.tooltips(profile == null ? text("none")
-            : Component.literal(profile.getString("name"))));
-        Tokens.name(choose, KEY + "choose." + (profile == null ? "none" : profile.getUUID("id")));
-        choose.setOnClick(event -> {
+        Picker picker = new Picker(KEY + "assignment", false).immediate(true).size(210, 260);
+        picker.fill(options);
+        picker.open(host, text("assign_residents"), Set.of(), picked -> {
+            String key = picked.getFirst();
             CompoundTag request = new CompoundTag();
             request.putString("action", "assign_resident");
             request.putUUID("resident", resident.getUUID("id"));
             if (resident.hasUUID("assigned")) {
                 request.putUUID("expected", resident.getUUID("assigned"));
             }
-            if (profile != null) {
+            if (!key.equals("none")) {
+                CompoundTag profile = choices.stream().map(value -> (CompoundTag) value)
+                    .filter(value -> value.getUUID("id").toString().equals(key)).findFirst().orElseThrow();
                 request.putUUID("profile", profile.getUUID("id"));
                 request.putLong("revision", profile.getLong("revision"));
             }
             send(request);
-            dialog.close();
         });
-        return choose;
     }
 
     private void addMenu(UIElement host, ItemPicker.Sending items) {
         CompoundTag base = request("add");
-        Dialog dialog = new Dialog();
-        UIElement list = Rows.page();
-        list.addChildren(menuAdd(dialog, host, items, base, "weapon", null),
-            button("weapon_variants", () -> {
-                dialog.close();
-                pickWeapon(host, base.copy());
-            }), menuAdd(dialog, host, items, base, "supply", null),
-            button("mount", () -> {
-                CompoundTag request = base.copy();
-                request.putString("kind", "MOUNT");
-                dialog.close();
-                send(request);
-            }),
-            menuAdd(dialog, host, items, base, "horse_armor", null),
-            button("observation_gear", () -> {
-                dialog.close();
-                pickObservationGear(host, base.copy());
-            }));
-        for (EquipmentSlot slot :
-            List.of(EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET)) {
-            list.addChildren(menuAdd(dialog, host, items, base, "armor", slot));
+        List<EquipmentSlot> slots = List.of(EquipmentSlot.HEAD, EquipmentSlot.CHEST,
+            EquipmentSlot.LEGS, EquipmentSlot.FEET);
+        List<Picker.Leaf> options = new ArrayList<>();
+        for (String kind : List.of("weapon", "weapon_variants", "supply", "mount", "horse_armor", "observation_gear")) {
+            options.add(new Picker.Leaf(kind, "", text(kind), KEY + kind));
         }
-        showMenu(dialog, host, text("add"), list, 8);
-    }
-
-    private Button menuAdd(Dialog dialog, UIElement host, ItemPicker.Sending items, CompoundTag base,
-            String kind, EquipmentSlot slot) {
-        Button add = button(slot == null ? kind : slot.getName(), () -> {
+        for (EquipmentSlot slot : slots) {
+            options.add(new Picker.Leaf(slot.getName(), "", text("armor").copy().append(" · ")
+                .append(text(slot.getName())), KEY + slot.getName()));
+        }
+        Picker picker = new Picker(KEY + "adding", false).immediate(true).size(210, 260);
+        picker.fill(options);
+        picker.open(host, text("add"), Set.of(), picked -> {
+            String kind = picked.getFirst();
             CompoundTag request = base.copy();
-            request.putString("kind", kind.toUpperCase(Locale.ROOT));
-            if (slot != null) {
-                request.putString("slot", slot.getName());
+            switch (kind) {
+                case "weapon_variants" -> pickWeapon(host, request);
+                case "observation_gear" -> pickObservationGear(host, request);
+                case "mount" -> {
+                    request.putString("kind", "MOUNT");
+                    send(request);
+                }
+                default -> {
+                    Optional<EquipmentSlot> slot = slots.stream().filter(value -> value.getName().equals(kind))
+                        .findFirst();
+                    request.putString("kind", slot.isPresent() ? "ARMOR" : kind.toUpperCase(Locale.ROOT));
+                    slot.ifPresent(value -> request.putString("slot", value.getName()));
+                    pick(host, items, request);
+                }
             }
-            dialog.close();
-            pick(host, items, request);
         });
-        if (slot != null) {
-            add.setText(text("armor").copy().append(" · ").append(text(slot.getName())));
-        }
-        return add;
-    }
-
-    private void showMenu(Dialog dialog, UIElement host, Component title, UIElement list, int count) {
-        dialog.titleBar.addChildren(new Label().setText(title).textStyle(style -> style.adaptiveWidth(true)));
-        var scroll = Rows.fills(Rows.box());
-        scroll.addScrollViewChild(list);
-        dialog.addContent(Rows.fills(Rows.page()).addChildren(scroll));
-        Button close = button("close", dialog::close);
-        dialog.addButton(close);
-        ChoicePicker.show(dialog, host, 210, Math.min(260, 64 + count * 26));
     }
 
     private TextField number() {
@@ -656,27 +629,29 @@ public final class LoadoutPage implements Draw {
     private void pickWeapon(UIElement host, CompoundTag request) {
         request.putString("kind", "WEAPON");
         ListTag choices = shown.getList("weaponChoices", Tag.TAG_COMPOUND);
-        List<ItemPicker.Offer> offers = new ArrayList<>();
+        List<Picker.Row> offers = new ArrayList<>();
         for (int n = 0; n < choices.size(); n++) {
             CompoundTag choice = choices.getCompound(n);
             ItemStack stack =
                 ItemStack.parseOptional(
                 Minecraft.getInstance().level.registryAccess(), choice.getCompound("stack"));
             offers.add(
-                new ItemPicker.Offer(
-                ItemFilter.item(ResourceLocation.fromNamespaceAndPath("folkways", "weapon/" + n)),
-                stack.getHoverName(),
-                stack));
+                new Picker.Row(
+                Integer.toString(n),
+                stack.getHoverName(), stack,
+                stack.getItem().builtInRegistryHolder().key().location().getNamespace(),
+                stack.getItem().builtInRegistryHolder().tags().map(tag -> tag.location().toString()).toList()));
         }
-        ItemPicker.among(
+        Picker.openMany(
             host,
             text("weapon_variants"),
             offers,
-            List.of(),
+            Set.of(),
+            "folkways.selector",
             filters -> {
                 List<ItemSpec> specs = new ArrayList<>();
-                for (ItemFilter filter : filters) {
-                    int index = Integer.parseInt(filter.id().getPath().substring("weapon/".length()));
+                for (String filter : filters) {
+                    int index = Integer.parseInt(filter);
                     specs.add(
                         ItemSpec.CODEC
                         .parse(
@@ -697,14 +672,14 @@ public final class LoadoutPage implements Draw {
 
     private void pickObservationGear(UIElement content, CompoundTag request) {
         request.putString("action", "observation_gear");
-        List<ItemPicker.Offer> offers = ObservationGear.choices().stream()
-            .map(stack -> new ItemPicker.Offer(
-                ItemFilter.item(stack.getItem().builtInRegistryHolder().key().location()),
+        List<Picker.Row> offers = ObservationGear.choices().stream()
+            .map(stack -> new Picker.Row(
+                stack.getItem().builtInRegistryHolder().key().location().toString(),
                 stack.getHoverName(), stack)).toList();
-        ItemPicker.among(content, text("observation_gear"), offers, List.of(), picked -> {
+        Picker.openMany(content, text("observation_gear"), offers, Set.of(), "folkways.selector", picked -> {
             if (!picked.isEmpty()) {
                 ListTag choices = new ListTag();
-                picked.forEach(filter -> choices.add(StringTag.valueOf(filter.id().toString())));
+                picked.forEach(filter -> choices.add(StringTag.valueOf(filter)));
                 request.put("choices", choices);
                 send(request);
             }

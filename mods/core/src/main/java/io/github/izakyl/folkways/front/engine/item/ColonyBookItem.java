@@ -74,9 +74,4 @@ public final class ColonyBookItem extends Item {
         }
         return Optional.empty();
     }
-
-    // A book in hand, while the player acts for that colony.
-    public static boolean holdsBookFor(Player player, UUID colonyId) {
-        return heldBook(player).isPresent() && CurrentColony.id(player).filter(colonyId::equals).isPresent();
-    }
 }

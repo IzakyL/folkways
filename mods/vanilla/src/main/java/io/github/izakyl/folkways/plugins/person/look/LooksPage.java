@@ -3,11 +3,10 @@ package io.github.izakyl.folkways.plugins.person.look;
 import com.lowdragmc.lowdraglib2.gui.sync.bindings.impl.DataBindingBuilder;
 import com.lowdragmc.lowdraglib2.gui.ui.UIElement;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Label;
-import com.lowdragmc.lowdraglib2.gui.ui.elements.ScrollerView;
+import com.lowdragmc.lowdraglib2.gui.ui.elements.Button;
 import io.github.izakyl.folkways.core.api.colony.Books;
 import io.github.izakyl.folkways.core.api.colony.Colony;
 import io.github.izakyl.folkways.front.api.ui.Draw;
-import io.github.izakyl.folkways.front.api.ui.IdTree;
 import io.github.izakyl.folkways.front.api.ui.Pages;
 import io.github.izakyl.folkways.front.api.ui.Rows;
 import io.github.izakyl.folkways.front.api.ui.Tokens;
@@ -35,31 +34,34 @@ public final class LooksPage implements Draw {
     private static final String HOLDS = "folkways.pool.looks.holds";
 
     private final Label counter = Rows.text(Component.empty());
+    private Set<ResourceLocation> current = Set.of();
 
     @Override
     public UIElement build(Player player) {
-        LookPicker.Line[] line = new LookPicker.Line[1];
-        LookPicker picker = new LookPicker("folkways.pool.looks", player.level().isClientSide(), true,
-            (word, what) -> line[0].say(word, what));
         Tokens.name(counter, "folkways.pool.looks.count");
-        picker.side().addChildAt(counter, 0);
-
-        ScrollerView scroller = Rows.box();
-        scroller.addScrollViewChild(Rows.page().addChildren(
+        Button choose = new Button().setText(Component.translatable("folkways.pool.looks.choose"));
+        Tokens.name(choose, "folkways.pool.looks.choose");
+        choose.setOnClick(event -> {
+            Set<ResourceLocation> before = Set.copyOf(current);
+            LookPicker.pool(choose, before, picked -> {
+                Set<ResourceLocation> after = new HashSet<>(picked);
+                List<LookPoolEdits.Edit> edits = new ArrayList<>();
+                for (ResourceLocation look : LookPreview.known()) {
+                    if (LookPreview.disabledReason(look).isEmpty() && before.contains(look) != after.contains(look)) {
+                        edits.add(new LookPoolEdits.Edit(look, after.contains(look)));
+                    }
+                }
+                LookPoolEdits.send(edits, net.neoforged.neoforge.network.PacketDistributor::sendToServer);
+            });
+        });
+        UIElement page = Rows.page().addChildren(
             new PoolSets("looks", LooksPage::offered, LooksPage::replace)
                 .disabledReason(id -> LookPicker.disabledReason(
                     LookSet.of(player.level().registryAccess(), id).map(LookSet::looks)
                         .or(() -> Optional.ofNullable(MaidLooks.sets().get(id))).orElseGet(List::of)))
-                .build(player),
-            picker.tree()));
-        UIElement page = Rows.page().addChildren(picker.beside(picker.searching(scroller)));
-        page.layout(layout -> layout.flexGrow(1).flexShrink(1).minHeight(0));
-
-        line[0] = new LookPicker.Line(page, (word, what) -> heard(player, word, what));
+                .build(player), counter, choose);
         page.addSyncValue(DataBindingBuilder.tagS2C(() -> reading(player))
-            .onSyncReceived(tag -> fill(picker, tag))
-            .build()
-            .getSyncValue());
+            .onSyncReceived(this::fill).build().getSyncValue());
         return page;
     }
 
@@ -80,32 +82,6 @@ public final class LooksPage implements Draw {
         return tag;
     }
 
-    private static void heard(Player player, String word, String what) {
-        Optional<Colony> colony = Books.acting(player);
-        Optional<ServerLevel> level = Pages.levelOf(player);
-        if (colony.isEmpty() || level.isEmpty()) {
-            return;
-        }
-        Set<ResourceLocation> looks = ResidentLooks.pool(level.get().registryAccess()).keySet();
-        switch (word) {
-            case LookPicker.ON, LookPicker.OFF -> {
-                ResourceLocation look = ResourceLocation.tryParse(what);
-                if (look != null && looks.contains(look)) {
-                    LookPool.set(colony.get(), look, word.equals(LookPicker.ON));
-                }
-            }
-            case LookPicker.FOLDER_ON, LookPicker.FOLDER_OFF -> {
-                if (what.indexOf(':') > 0) {
-                    LookPool.setAll(colony.get(),
-                        looks.stream().filter(look -> IdTree.under(what, look.toString())).toList(),
-                        word.equals(LookPicker.FOLDER_ON));
-                }
-            }
-            default -> {
-            }
-        }
-    }
-
     private static List<PoolSets.Offered> offered(Player player) {
         List<PoolSets.Offered> offered = new ArrayList<>();
         Pages.levelOf(player).ifPresent(level -> LookSet.all(level.registryAccess()).forEach(set ->
@@ -124,7 +100,7 @@ public final class LooksPage implements Draw {
         }
     }
 
-    private void fill(LookPicker picker, Tag tag) {
+    private void fill(Tag tag) {
         CompoundTag reading = tag instanceof CompoundTag compound ? compound : new CompoundTag();
         ListTag written = reading.getList(ON, Tag.TAG_STRING);
         Set<ResourceLocation> on = new HashSet<>();
@@ -138,7 +114,6 @@ public final class LooksPage implements Draw {
         counter.setText(total == 0
             ? Component.translatable("folkways.settings.looks.empty")
             : Component.translatable("folkways.settings.looks.count", on.size(), total));
-        picker.fill();
-        picker.mark(on);
+        current = Set.copyOf(on);
     }
 }

@@ -44,7 +44,7 @@ public final class LookLineCards {
     public static boolean queue(RenderLevelStageEvent event, Entity entity, List<Line> lines) {
         Minecraft minecraft = Minecraft.getInstance();
         if (event.getStage() != RenderLevelStageEvent.Stage.AFTER_TRANSLUCENT_BLOCKS || ShadowPass.active()
-                || minecraft.player == null || ColonyHighlightState.heldColonyId(minecraft.player) == null
+                || minecraft.player == null || ColonyHighlightState.shownColonyId(minecraft.player) == null
                 || !Layer.RESIDENTS.cards() || !event.getFrustum().isVisible(entity.getBoundingBox())) {
             return false;
         }

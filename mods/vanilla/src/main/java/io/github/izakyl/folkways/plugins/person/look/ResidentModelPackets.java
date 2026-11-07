@@ -22,6 +22,12 @@ public final class ResidentModelPackets {
 
     public static void registerPayloads(RegisterPayloadHandlersEvent event) {
         event.registrar(FolkwaysMod.NETWORK_VERSION)
+            .playToServer(LookPoolEdits.TYPE, LookPoolEdits.CODEC, (packet, context) ->
+                context.enqueueWork(() -> {
+                    if (context.player() instanceof ServerPlayer player) {
+                        LookPoolEdits.accept(player, packet);
+                    }
+                }))
             .playToClient(ModelLibraryPacket.TYPE, ModelLibraryPacket.STREAM_CODEC, ResidentModelPackets::handleLibrary)
             .playToClient(ModelAssetPacket.TYPE, ModelAssetPacket.STREAM_CODEC, ResidentModelPackets::handleAsset)
             .playToServer(RequestModelAssetsPacket.TYPE, RequestModelAssetsPacket.STREAM_CODEC,

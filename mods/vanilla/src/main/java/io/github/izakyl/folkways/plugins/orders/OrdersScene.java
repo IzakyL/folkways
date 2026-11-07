@@ -129,6 +129,13 @@ public final class OrdersScene {
             .placeNearTarget()
             .attachKeyFrame();
         scene.idle(90);
+
+        scene.overlay().showText(100)
+            .text("Whitelists, blacklists and Allow storing apply only to ordinary resident storage. Orders bypass them, and you can change these settings at any time.")
+            .pointAt(target)
+            .placeNearTarget()
+            .attachKeyFrame();
+        scene.idle(110);
     }
 
     private static BlockState chestFacing(Direction facing) {

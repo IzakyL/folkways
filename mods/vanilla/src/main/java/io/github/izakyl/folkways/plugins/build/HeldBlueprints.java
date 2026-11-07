@@ -3,7 +3,7 @@ package io.github.izakyl.folkways.plugins.build;
 import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
 import io.github.izakyl.folkways.core.api.colony.Books;
 import io.github.izakyl.folkways.front.api.Ghost;
-import io.github.izakyl.folkways.front.api.ui.LonePanel;
+import io.github.izakyl.folkways.front.client.SelectorWindow;
 import io.github.izakyl.folkways.front.api.ui.Placing;
 import io.github.izakyl.folkways.plugins.build.draft.Templates;
 import io.github.izakyl.folkways.plugins.build.draft.client.LocalPatterns;
@@ -42,9 +42,6 @@ public final class HeldBlueprints {
     private HeldBlueprints() {
     }
 
-    private static final float PICKER_WIDTH = 300f;
-    private static final float PICKER_HEIGHT = 230f;
-
     public static void install() {
         BlueprintsPage.install(HeldBlueprints::shelf, entry -> take(entry, () -> {
             Player player = Minecraft.getInstance().player;
@@ -56,10 +53,11 @@ public final class HeldBlueprints {
             HeldBlueprints::pick));
     }
 
-    // The same list on a panel of its own, which goes back to the view it was opened from once one is picked.
+    // The same dialog on a screen of its own, which goes back to the view once a blueprint is picked.
     private static void pick() {
-        LonePanel.open("blueprint_picker", Component.translatable(BuildContent.BLUEPRINTS.nameKey()),
-            PICKER_WIDTH, PICKER_HEIGHT, pane -> BlueprintsPage.shelfOf(shelf(), entry -> take(entry, pane::close)));
+        SelectorWindow.open(Minecraft.getInstance().screen, Component.translatable(BuildContent.BLUEPRINTS.nameKey()),
+            host -> BlueprintsPage.open(host, shelf(), entry -> take(entry, () -> {
+            })));
     }
 
     private static List<BlueprintsPage.Entry> shelf() {

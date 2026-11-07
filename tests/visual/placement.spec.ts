@@ -141,6 +141,7 @@ test("placing patterns and blueprints on camera", async ({}, testInfo) => {
     await settlePanel(server, client);
     await clickElement(client, { id: SHELF }, { scrollIntoView: true });
     await waitForElement(client, { id: SHELF_WINDOW }, { timeoutMs: 8_000 });
+    await clickElement(client, { id: "folkways.blueprints.choose" });
     await settlePanel(server, client);
     await run.shot(client, "06-blueprint-shelf", {
       subject: "The blueprint shelf: files from the server's and the player's own folkways/blueprint folders",

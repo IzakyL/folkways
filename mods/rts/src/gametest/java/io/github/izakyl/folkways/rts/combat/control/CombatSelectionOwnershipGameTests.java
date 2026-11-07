@@ -224,19 +224,11 @@ public final class CombatSelectionOwnershipGameTests {
         UUID generation = group.commandId().orElseThrow();
         helper.assertTrue(f.ownership.suspend(f.first), "leaving interaction suspends its existing references");
         f.first.setItemSlot(EquipmentSlot.MAINHAND, ItemStack.EMPTY);
+        // Authority is the keeper's, not the book's: with the book put away they still continue and may still act.
         helper.assertTrue(
             SelectionOrders.continuing(f.first, f.colony.id()).isPresent()
-            && SelectionOrders.authorized(f.first, f.colony.id()).isEmpty(),
-            "a real keeper retains continuation authority while new input still requires the book");
-        helper.assertFalse(
-            f.ownership.select(f.first, List.of(temporary.id()))
-            || f.ownership.bindGroup(f.first, 0)
-            || f.ownership.recallGroup(f.first, 0)
-            || f.ownership.releaseSelected(f.first, List.of(body.id()))
-            || SelectionOrders.submit(f.first, f.colony.id(), List.of(body.id()), List.of(f.at(10)), -1)
-            || SelectionOrders.attack(f.first, f.colony.id(), List.of(body.id()), UUID.randomUUID())
-            || SelectionOrders.stop(f.first, f.colony.id(), List.of(body.id())),
-            "putting the book away cannot issue new selection, group, release, move, attack or stop input");
+            && SelectionOrders.authorized(f.first, f.colony.id()).isPresent(),
+            "a real keeper retains continuation and input authority with the book put away");
         helper.runAfterDelay(
             CombatSelectionOwnership.LEASE_TICKS + 30,
             () -> {

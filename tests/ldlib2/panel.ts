@@ -234,6 +234,8 @@ interface Located {
   label: string;
   clip?: Box;
   clipLabel?: string;
+  /** The scroller's own viewport, where a wheel turn reaches it whatever clips the element itself. */
+  wheel?: Box;
   clippingAncestors: number;
   revealed: boolean;
   revealedVertically: boolean;
@@ -334,10 +336,14 @@ export async function scrollElementIntoView(
         { cause: error },
       );
     }
-    const { element: target, clip } = at;
-    if (clip === undefined || at.revealed) {
+    const { element: target } = at;
+    if (at.clip === undefined || at.revealed) {
       return target;
     }
+    // A row that clips its own content and sits wholly past the viewport's edge cuts the clip to nothing; the
+    // scroller's own viewport is still there to wheel, and to measure the way back against.
+    const clipped = at.clip.width <= 0 || at.clip.height <= 0;
+    const clip = clipped && at.wheel ? at.wheel : at.clip;
     if (clip.width <= 0 || clip.height <= 0) {
       throw new Error(
         `LDLib2 element ${label} sits in a viewport that is itself clipped away (${at.clippingAncestors} clipping `
@@ -369,7 +375,8 @@ export async function scrollElementIntoView(
     // Once a turn has shown how far one line scrolls, wheel as many lines as the rest of the way needs.
     const remaining = target.y < clip.y ? clip.y - target.y : target.y + target.height - (clip.y + clip.height);
     lines = pxPerLine === undefined ? 1 : Math.min(MAX_WHEEL_LINES, Math.max(1, Math.ceil(remaining / pxPerLine)));
-    const point = { x: Math.round(clip.x + clip.width / 2), y: Math.round(clip.y + clip.height / 2) };
+    const aim = at.wheel ?? clip;
+    const point = { x: Math.round(aim.x + aim.width / 2), y: Math.round(aim.y + aim.height / 2) };
     await client.run(WHEEL, { x: point.x, y: point.y, yOffset: direction, count: lines }, run);
     history.push(`turn ${turn}: element y ${round(target.y)}, wheel ${direction * lines} at ${point.x},${point.y}`);
   }

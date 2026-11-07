@@ -28,6 +28,8 @@ versions. Back up your world before trying a nightly build.
   sizes, and draw patrol routes.
 - **Keep chests stocked.** Set an item and a target amount. Residents craft, smelt,
   harvest or haul until the order is filled.
+  Orders bypass container whitelists, blacklists and Allow storing. These settings
+  govern ordinary resident storage and can be changed while orders exist; player storage is unaffected.
 - **Compost surplus seeds.** Mark a native composter, then configure automatic
   composting and seed reserves on its Composting settings page.
 - **Build from drawings.** Choose patterns for roads, arch bridges, walls, docks,
@@ -138,6 +140,7 @@ different blocks already occupying a recorded cell are reported as conflicts.
 | [GeckoLib](https://modrinth.com/mod/geckolib) 4.9+                                                                          | Bedrock-format resident models                                                                                                                                                           |
 | [Touhou Little Maid](https://modrinth.com/mod/touhou-little-maid) 1.5+, with GeckoLib                                       | Built-in and installed add-on models become selectable resident looks, individually or by pack                                                                                           |
 | [Shoulder Surfing Reloaded](https://modrinth.com/mod/shoulder-surfing-reloaded) 5.2.0+                                      | Colony Book aiming follows its third-person crosshair                                                                                                                                    |
+| [AppleSkin](https://modrinth.com/mod/appleskin) 3.0+ | Its saturation and exhaustion overlays are put away with the food and health bars in the View from above |
 | [JEI](https://modrinth.com/mod/jei) / [EMI](https://modrinth.com/mod/emi)                                                   | Item filters open the recipe viewer's ingredient list                                                                                                                                    |
 | [FTB Teams](https://www.curseforge.com/minecraft/mc-mods/ftb-teams-forge) 2101.1+                                           | A founder can hand the colony to their party; party members keep it and the party owner holds the founder's rights                                                                       |
 | [Just Enough Characters (JEC)](https://www.curseforge.com/minecraft/mc-mods/just-enough-characters) 4.5+                    | Pinyin, initials and mixed-input searches in item and folder pickers, Workforce and stock; install on the client only                                                                    |

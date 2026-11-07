@@ -33,10 +33,15 @@ public final class Stores {
     }
 
     public static Optional<Container> at(ServerLevel level, WorldPos where) {
+        return at(level, where, false);
+    }
+
+    // Orders bypass incoming goods filters while retaining slot and native container restrictions.
+    public static Optional<Container> at(ServerLevel level, WorldPos where, boolean directed) {
         return WorldSpaces.resolve(level.getServer(), where)
             .filter(block -> block.level() == level)
             .flatMap(block -> Containers.at(block.level(), block.cell()))
-            .flatMap(container -> kept(container, rulesAt(level, where)))
+            .flatMap(container -> kept(container, rulesAt(level, where), directed))
             .map(container -> new Watched(container, () -> InventoryChanges.store(level, where)));
     }
 
@@ -102,6 +107,13 @@ public final class Stores {
     }
 
     static Optional<Container> kept(Container container, List<StoreRule> rules) {
+        return kept(container, rules, false);
+    }
+
+    private static Optional<Container> kept(Container container, List<StoreRule> rules, boolean directed) {
+        if (directed) {
+            rules = rules.stream().filter(rule -> !(rule instanceof StoreRule.Admit)).toList();
+        }
         if (rules.stream().allMatch(rule -> rule instanceof StoreRule.Reserve || rule instanceof StoreRule.Prefer)) {
             return Optional.of(container);
         }

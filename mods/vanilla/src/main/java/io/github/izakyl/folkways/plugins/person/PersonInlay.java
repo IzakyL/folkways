@@ -11,6 +11,7 @@ import io.github.izakyl.folkways.front.api.ui.Nook;
 import io.github.izakyl.folkways.front.api.ui.Rows;
 import io.github.izakyl.folkways.front.api.ui.Tokens;
 import io.github.izakyl.folkways.plugins.person.look.LookPicker;
+import io.github.izakyl.folkways.front.api.ui.Picker;
 import io.github.izakyl.folkways.plugins.person.look.ResidentLooks;
 import io.github.izakyl.folkways.plugins.person.name.ColonyNames;
 import java.util.Optional;
@@ -64,17 +65,13 @@ public final class PersonInlay implements Inlay {
                 caption("folkways.resident.surname"), surname, apply),
             Rows.strip().addChildren(caption("folkways.resident.look"), look, change));
         inlay.setDisplay(false);
-        LookPicker.Line line = new LookPicker.Line(inlay, (word, what) -> {
-            if (word.equals(LookPicker.PICK)) {
-                wear(nook, what);
-            }
-        });
+        Picker.Asking line = new Picker.Asking(inlay, (word, what) -> wear(nook, what.toString()));
         change.setOnClick(event -> {
             if (picking != null) {
                 picking.close();
             }
             picking = LookPicker.open(change, ResourceLocation.tryParse(worn),
-                picked -> line.say(LookPicker.PICK, picked.toString()));
+                picked -> line.ask("look", picked));
         });
         inlay.addSyncValue(DataBindingBuilder.tagS2C(() -> reading(nook))
             .onSyncReceived(tag -> {

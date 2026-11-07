@@ -551,6 +551,7 @@ async function stageMaids(run: VisualRun, server: any, client: any, player: stri
       await settle(server, client, 8);
       mark("pool");
       await sleepMs(1_200);
+      await click(client, "folkways.pool.looks.choose");
       if (!(await visible(client, "folkways.pool.looks.look.touhou_little_maid.maid.geckolib.winefox"))) {
         await click(client, POOL_MAID_FOLDER);
         await settle(server, client);
@@ -561,6 +562,7 @@ async function stageMaids(run: VisualRun, server: any, client: any, player: stri
       }
       mark("pool_folder");
       await sleepMs(1_400);
+      await click(client, "folkways.pool.looks.close");
       await click(client, POOL_MAID_SET);
       await settle(server, client, 8);
       mark("pool_set");
@@ -627,6 +629,7 @@ async function stageBlueprint(run: VisualRun, server: any, client: any, player: 
       await sleepMs(1_200);
       await click(client, "folkways.board.open.folkways.build.0.0");
       await waitFor(client, "folkways.window.folkways.blueprints");
+      await click(client, "folkways.blueprints.choose");
       await settle(server, client, 8);
       mark("shelf");
       await sleepMs(1_300);
@@ -1458,6 +1461,7 @@ async function orderBlueprint(server: any, client: MinecraftClient, player: stri
   await settle(server, client, 8);
   await click(client, "folkways.board.open.folkways.build.0.0");
   await waitFor(client, "folkways.window.folkways.blueprints");
+      await click(client, "folkways.blueprints.choose");
   await settle(server, client, 8);
   await click(client, `folkways.blueprints.entry.local.blueprint.${name}`);
   await settle(server, client, 8);

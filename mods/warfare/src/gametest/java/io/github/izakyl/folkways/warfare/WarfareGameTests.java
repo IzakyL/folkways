@@ -722,18 +722,14 @@ public final class WarfareGameTests {
     }
 
     @GameTest(batch = "warfare", template = "warfare_range")
-    public static void entityStationEnrollmentRetainsBookAuthorityRangeAndColonyExclusion(GameTestHelper helper) {
+    public static void entityStationEnrollmentRetainsKeeperAuthorityRangeAndColonyExclusion(GameTestHelper helper) {
         Scene f = new Scene(helper, false);
         VehicleEntity station = f.station(ModEntities.MK_42.get(), 6, 10);
         var player = FakePlayerFactory.get(f.level, new GameProfile(UUID.randomUUID(), "station_keeper"));
         Charters.keep(f.colony, Charter.founded("Station test", player.getUUID()));
         player.setData(FolkwaysPlayerAttachments.CURRENT_COLONY, Optional.of(f.colony.id()));
-        player.setItemSlot(EquipmentSlot.MAINHAND, ItemStack.EMPTY);
-        helper.assertTrue(ColonyAuthority.ofHeldBook(player, f.colony.id()).isEmpty(),
-            "an entity packet without the held colony book gets no authority");
-        player.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(FolkwaysItems.COLONY_BOOK.get()));
-        helper.assertTrue(ColonyAuthority.ofHeldBook(player, f.colony.id()).isPresent(),
-            "the existing keeper and held-book contract authorizes entity inclusion");
+        helper.assertTrue(ColonyAuthority.forColony(player, f.colony.id()).isPresent(),
+            "the keeper acting for the colony is authorized for entity inclusion");
         f.place(player, 15, 10);
         helper.assertTrue(MemberToggle.toggleEntity(f.colony, station, player).refused(),
             "a nine-block request exceeds the existing eight-block entity range");
@@ -758,9 +754,8 @@ public final class WarfareGameTests {
         helper.assertFalse(MemberToggle.toggleEntity(f.colony, station, player).refused(),
             "the same point action withdraws the independent entity");
         Charters.keep(f.colony, Charter.founded("Revoked", UUID.randomUUID()));
-        helper.assertTrue(ColonyAuthority.ofHeldBook(player, f.colony.id()).isEmpty(),
+        helper.assertTrue(ColonyAuthority.forColony(player, f.colony.id()).isEmpty(),
             "revoked keeper authority cannot mutate station membership");
-        player.setItemSlot(EquipmentSlot.MAINHAND, ItemStack.EMPTY);
         helper.succeed();
     }
 

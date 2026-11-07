@@ -11,7 +11,7 @@ import com.lowdragmc.lowdraglib2.gui.ui.elements.TextField;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Toggle;
 import com.lowdragmc.lowdraglib2.gui.ui.event.UIEvents;
 import io.github.izakyl.folkways.core.api.colony.Colony;
-import io.github.izakyl.folkways.front.api.ui.ChoicePicker;
+import io.github.izakyl.folkways.front.api.ui.Picker;
 import io.github.izakyl.folkways.front.api.ui.Draw;
 import io.github.izakyl.folkways.front.api.ui.Pages;
 import io.github.izakyl.folkways.front.api.ui.Rows;
@@ -60,7 +60,7 @@ public final class CompostPage implements Draw {
             colony(player).ifPresent(colony -> CompostSettings.defaultReserve(colony, count)));
         Tokens.name(defaultCount.field, "folkways.settings.compost.default_reserve");
         UIElement table = Rows.table();
-        ChoicePicker.Asking resets = new ChoicePicker.Asking(table, (key, ignored) ->
+        Picker.Asking resets = new Picker.Asking(table, (key, ignored) ->
             colony(player).ifPresent(colony -> window.stream()
                 .filter(item -> BuiltInRegistries.ITEM.getKey(item).toString().equals(key)).findFirst()
                 .ifPresent(item -> CompostSettings.reset(colony, item))));

@@ -31,7 +31,7 @@ public final class RailPackets {
         if (!(context.player() instanceof ServerPlayer player)) {
             return;
         }
-        context.enqueueWork(() -> Books.ofHeldBook(player, packet.colonyId())
+        context.enqueueWork(() -> Books.actingFor(player, packet.colonyId())
             .flatMap(colony -> RailContent.presenceIn(colony.service(RailContent.ID, Object.class)))
             .ifPresent(trains -> PacketDistributor.sendToPlayer(player,
                 new RosterSyncPacket(trains.taken(), trains.crews()))));

@@ -106,6 +106,10 @@ feat(draft): add a dock pattern
 - Shared TypeScript helpers belong in `tests/shared/`. A suite can import from
   there and `tests/ldlib2/`, but not from another suite.
 
+Container whitelists, blacklists and `StoreRule.Access.store` govern ordinary resident storage only.
+Directed orders bypass them in planning and execution, and never prevent configuration changes.
+Keep native container and slot restrictions intact; player insertion is unaffected.
+
 ### Translations and patterns
 
 - Add mod-owned player-facing strings to all four shared catalogs in

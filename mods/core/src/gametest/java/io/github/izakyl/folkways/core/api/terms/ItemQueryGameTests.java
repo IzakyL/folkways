@@ -5,6 +5,7 @@ import io.github.izakyl.folkways.base.persist.Reader;
 import io.github.izakyl.folkways.front.engine.colony.ColonySettings;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
@@ -125,6 +126,27 @@ public final class ItemQueryGameTests {
             helper.assertTrue(Goods.matches(new ItemStack(log), spec), "the rules take in " + log);
         }
         helper.assertFalse(Goods.matches(new ItemStack(Items.OAK_PLANKS), spec), "and nothing else");
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void genericOptionsUseTheSameGrammar(GameTestHelper helper) {
+        OptionQuery.Known known = new OptionQuery.Known(Set.of("own", "other"),
+            Set.of("archer", "archer_captain", "pack:builder"), Set.of("work:ranged", "work:ranged_elite"),
+            Set.of("ranged", "ranged_elite"));
+        for (String typed : List.of("archer", "@own #ranged", "@oth | #ranged", "arch?r", "#work:rang*")) {
+            helper.assertTrue(OptionQuery.parse(typed).orElseThrow().matches(known, "archer", "own",
+                List.of("work:ranged"), "北境弓手", String::contains), "a non-item option matches " + typed);
+        }
+        for (String typed : List.of("@other", "#ranged_elite", "@own builder", "archer_captain", "arch?")) {
+            helper.assertFalse(OptionQuery.parse(typed).orElseThrow().matches(known, "archer", "own",
+                List.of("work:ranged"), "北境弓手", String::contains), "a non-item option excludes " + typed);
+        }
+        helper.assertFalse(OptionQuery.parse("archer").orElseThrow().matches(known, "archer_captain", "own",
+            List.of(), "archer captain", String::contains), "a whole option id takes just that one");
+        helper.assertTrue(OptionQuery.parse("@own beijing").orElseThrow().matches(known, "archer", "own",
+            List.of(), "北境弓手", (name, word) -> name.equals("北境弓手") && word.equals("beijing")),
+            "the caller's display matcher receives a bare word inside an expression");
         helper.succeed();
     }
 

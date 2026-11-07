@@ -198,6 +198,10 @@ public final class Ldlib2 {
             if (clip != null) {
                 out.put("clip", clip.json());
                 out.put("clipLabel", Rules.label(tree, clipping.get(clipping.size() - 1)));
+                Rules.Box wheel = Rules.wheelBox(tree, node);
+                if (wheel != null && wheel.width() > 0 && wheel.height() > 0) {
+                    out.put("wheel", wheel.json());
+                }
             }
             return out;
         } catch (RuntimeException failure) {

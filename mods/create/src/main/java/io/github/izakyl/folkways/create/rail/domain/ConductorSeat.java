@@ -62,7 +62,7 @@ public final class ConductorSeat {
         if (!(player instanceof ServerPlayer server)) {
             return false;
         }
-        Optional<RailPresence> trains = Books.ofHeldBook(server, colony.get())
+        Optional<RailPresence> trains = Books.actingFor(server, colony.get())
             .flatMap(works -> RailContent.presenceIn(works.service(RailContent.ID, Object.class)));
         if (trains.isEmpty()) {
             return true;

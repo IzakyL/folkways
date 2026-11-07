@@ -2,7 +2,6 @@ package io.github.izakyl.folkways.plugins.build.draft.client;
 
 import com.lowdragmc.lowdraglib2.gui.ui.UIElement;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Button;
-import com.lowdragmc.lowdraglib2.gui.ui.elements.Dialog;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Label;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.ScrollerView;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.TextField;
@@ -14,10 +13,8 @@ import io.github.izakyl.folkways.front.api.Ghost;
 import io.github.izakyl.folkways.front.api.Schema;
 import io.github.izakyl.folkways.FolkwaysMod;
 import io.github.izakyl.folkways.front.api.ui.FilterStacks;
-import io.github.izakyl.folkways.front.api.ui.FolderPicker;
-import io.github.izakyl.folkways.front.api.ui.ItemPicker;
+import io.github.izakyl.folkways.front.api.ui.Picker;
 import io.github.izakyl.folkways.front.api.ui.Rows;
-import io.github.izakyl.folkways.front.api.ui.ChoicePicker;
 import io.github.izakyl.folkways.front.api.ui.Taking;
 import io.github.izakyl.folkways.front.api.ui.Tokens;
 import io.github.izakyl.folkways.library.Shelves;
@@ -189,31 +186,15 @@ public final class DraftPanel {
 
     // The patterns stand in folders with a search over them; a click on one takes it and comes back to the page.
     private void pickPattern() {
-        Dialog dialog = new Dialog();
-        FolderPicker picker = new FolderPicker(TOKEN, false, (word, key) -> {
-            dialog.close();
-            patterns.stream().filter(pattern -> pattern.id().toString().equals(key)).findFirst()
-                .filter(pattern -> pattern != chosen).ifPresent(this::choose);
-        }).openRoots();
-        picker.fill(patterns.stream().map(pattern -> new FolderPicker.Leaf(pattern.id().toString(),
+        Picker picker = new Picker(TOKEN, false).openRoots().immediate(true).outsideClose(true)
+            .size(PICKER_WIDTH, PICKER_HEIGHT);
+        picker.fill(patterns.stream().map(pattern -> new Picker.Leaf(pattern.id().toString(),
             filedOf(pattern), nameOf(pattern), TOKEN + ".pattern." + Tokens.of(pattern.id()))).toList());
-        if (chosen != null) {
-            picker.mark(Set.of(chosen.id().toString()));
-            picker.reveal(chosen.id().toString());
-        }
-        Button close = new Button()
-            .setText(Component.translatable("folkways.selector.close"))
-            .setOnClick(event -> dialog.close());
-        close.addClass("__cancel-button__");
-        Tokens.name(close, TOKEN + ".close");
-        dialog.setTitle(TOKEN + ".choose");
-        dialog.addContent(new UIElement()
-            .layout(layout -> layout.flexDirection(FlexDirection.COLUMN)
-                .widthPercent(100).heightPercent(100).gapAll(3))
-            .addChildren(picker.list()));
-        dialog.addButton(close);
-        Tokens.name(dialog, TOKEN + ".picker");
-        ChoicePicker.show(dialog, patternPress, PICKER_WIDTH, PICKER_HEIGHT);
+        Set<String> held = chosen == null ? Set.of() : Set.of(chosen.id().toString());
+        picker.open(patternPress, Component.translatable(TOKEN + ".choose"), held, picked ->
+            patterns.stream().filter(pattern -> picked.contains(pattern.id().toString()))
+                .filter(pattern -> pattern != chosen).findFirst().ifPresent(this::choose));
+        held.forEach(picker::reveal);
     }
 
     // Kept under the server's or the player's own; a pack's patterns stand in a folder of their namespace.
@@ -456,24 +437,24 @@ public final class DraftPanel {
         }
 
         private UIElement one(Schema.Setting.Choice choice) {
-            List<ChoicePicker.Row> rows = new ArrayList<>();
+            List<Picker.Row> rows = new ArrayList<>();
             List<Face.Option> offered = chosen.face().offered(choice.key());
             for (int at = 0; at < choice.options().size(); at++) {
                 ResourceLocation id = choice.options().get(at);
                 Face.Option option = at < offered.size() ? offered.get(at) : null;
                 ItemStack icon = option == null ? ItemStack.EMPTY : option.icon().map(DraftPanel::stackOf)
                     .orElse(ItemStack.EMPTY);
-                Component label = option == null ? ChoicePicker.labelOf(id)
-                    : worded(Face.wordOf(choice.key(), option), ChoicePicker.labelOf(id));
-                rows.add(new ChoicePicker.Row(id.toString(), label, icon.isEmpty() ? ChoicePicker.iconOf(id) : icon));
+                Component label = option == null ? Picker.labelOf(id)
+                    : worded(Face.wordOf(choice.key(), option), Picker.labelOf(id));
+                rows.add(new Picker.Row(id.toString(), label, icon.isEmpty() ? Picker.iconOf(id) : icon));
             }
-            Button press = new Button().noText();
+            Button press = Rows.wearing();
             press.layout(layout -> layout.widthAuto().minWidth(CONTROL_MIN).flexShrink(1));
             Runnable show = () -> {
                 String held = values.choice(choice.key()).toString();
                 wear(press, rows.stream().filter(each -> each.key().equals(held)).toList());
             };
-            press.setOnClick(event -> ChoicePicker.open(press, worded(choice.key(), choice.name()), rows,
+            press.setOnClick(event -> Picker.open(press, worded(choice.key(), choice.name()), rows,
                 values.choice(choice.key()).toString(), picked -> {
                     values.choose(choice, ResourceLocation.parse(picked));
                     show.run();
@@ -484,8 +465,7 @@ public final class DraftPanel {
 
         // Options this game has not loaded the block of are left out, as a pack may offer another mod's.
         private UIElement any(Schema.Setting.Items items) {
-            List<ChoicePicker.Row> rows = new ArrayList<>();
-            List<ItemPicker.Offer> offers = new ArrayList<>();
+            List<Picker.Row> rows = new ArrayList<>();
             Map<String, ItemFilter> filters = new LinkedHashMap<>();
             for (Face.Option option : chosen.face().offered(items.key())) {
                 ItemFilter filter = filterOf(option);
@@ -495,19 +475,22 @@ public final class DraftPanel {
                 ItemStack icon = option.icon().map(DraftPanel::stackOf).orElse(ItemStack.EMPTY);
                 Component label = worded(Face.wordOf(items.key(), option), naming(filter));
                 ItemStack worn = icon.isEmpty() ? FilterStacks.of(filter) : icon;
-                rows.add(new ChoicePicker.Row(option.key(), label, worn));
-                offers.add(new ItemPicker.Offer(filter, label, worn));
+                rows.add(new Picker.Row(option.key(), label, worn, filter.id().getNamespace(), filter.tag()
+                    ? List.of(filter.id().toString()) : BuiltInRegistries.ITEM.get(filter.id())
+                        .builtInRegistryHolder().tags().map(tag -> tag.location().toString()).toList()));
                 filters.put(option.key(), filter);
             }
-            Button press = new Button().noText();
+            Button press = Rows.wearing();
             press.layout(layout -> layout.widthAuto().minWidth(CONTROL_MIN).flexShrink(1));
             Runnable show = () -> {
                 List<ItemFilter> held = values.filtersOf(items.key());
                 wear(press, rows.stream().filter(each -> held.contains(filters.get(each.key()))).toList());
             };
-            press.setOnClick(event -> ItemPicker.among(press, worded(items.key(), items.name()), offers,
-                values.filtersOf(items.key()), picked -> {
-                    values.hold(items.key(), picked);
+            press.setOnClick(event -> Picker.openMany(press, worded(items.key(), items.name()), rows,
+                filters.entrySet().stream().filter(entry -> values.filtersOf(items.key()).contains(entry.getValue()))
+                    .map(Map.Entry::getKey).collect(java.util.stream.Collectors.toSet()),
+                "folkways.selector", picked -> {
+                    values.hold(items.key(), picked.stream().map(filters::get).toList());
                     show.run();
                 }));
             show.run();
@@ -515,21 +498,21 @@ public final class DraftPanel {
         }
 
         // One thing held reads as its icon and name; several as their icons in a row; none as "empty".
-        private void wear(Button press, List<ChoicePicker.Row> held) {
+        private void wear(Button press, List<Picker.Row> held) {
             press.clearAllChildren();
             if (held.isEmpty()) {
-                press.addChildren(Rows.value(Component.translatable(TOKEN + ".empty")));
+                press.addChildren(Rows.worn(Component.translatable(TOKEN + ".empty")));
                 return;
             }
-            for (ChoicePicker.Row each : held.subList(0, Math.min(held.size(), MOST_ICONS))) {
+            for (Picker.Row each : held.subList(0, Math.min(held.size(), MOST_ICONS))) {
                 if (!each.icon().isEmpty()) {
                     press.addChildren(Rows.icon(each.icon()));
                 }
             }
             if (held.size() == 1) {
-                press.addChildren(Rows.value(held.get(0).label()));
+                press.addChildren(Rows.worn(held.get(0).label()));
             } else if (held.size() > MOST_ICONS) {
-                press.addChildren(Rows.value(Component.literal("+" + (held.size() - MOST_ICONS))));
+                press.addChildren(Rows.worn(Component.literal("+" + (held.size() - MOST_ICONS))));
             }
         }
     }

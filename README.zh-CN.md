@@ -21,6 +21,7 @@ Folkways 是面向 **Minecraft 1.21.1 / NeoForge** 的殖民地模组。
 - **安排工种，由居民规划任务。** 在“居民分工”页设置优先级，殖民地负责选择任务、物资和执行顺序。
 - **划出工作区域。** 圈出农田、牧场和渔场，选择作物、牲畜目标数量，或绘制巡逻路线。
 - **维持容器库存。** 指定物品和目标数量，居民会通过制作、烧炼、收获或搬运补足库存。
+  订单送货不受容器黑白名单和“允许放入”限制；这些设置只约束居民的日常存放，有订单时也可随时修改，玩家手动放入不受影响。
 - **把多余种子变成骨粉。** 登记原版堆肥桶，在“堆肥设置”中管理自动堆肥和种子保留量。
 - **照着样式建造。** 道路、拱桥、城墙、码头、矿场、铁路、拱廊和梯田均有内置样式，居民会清理现场并使用殖民地库存施工。
   开启 `blueprints.simpleConstruction`（默认 `false`）后，居民进入工地即停下，就地完成施工。
@@ -105,6 +106,7 @@ Core 已内置 Ponder 和 Flywheel；Vanilla 已内置 Starlark 解释器，无�
 | [GeckoLib](https://modrinth.com/mod/geckolib) 4.9+                                                                                     | 使用基岩版格式的居民模型                                                                                            |
 | [Touhou Little Maid / 车万女仆](https://modrinth.com/mod/touhou-little-maid) 1.5+，需 GeckoLib                                         | 将内置及已安装扩展包中的模型用作居民外观，可逐个或按包选择                                                          |
 | [Shoulder Surfing Reloaded](https://modrinth.com/mod/shoulder-surfing-reloaded) 5.2.0+                                                 | 殖民书沿第三人称相机的准星瞄准                                                                                      |
+| [AppleSkin](https://modrinth.com/mod/appleskin) 3.0+ | 俯瞰时，其饱和度与消耗度叠加层随饥饿条、生命条一起隐藏 |
 | [JEI](https://modrinth.com/mod/jei) / [EMI](https://modrinth.com/mod/emi)                                                              | 在容器和物品筛选中使用配方查看器的物品列表                                                                          |
 | [FTB Teams](https://www.curseforge.com/minecraft/mc-mods/ftb-teams-forge) 2101.1+                                                      | 创始人可将殖民地交给队伍；队员共同管理，队长持有创始人权限                                                          |
 | [Just Enough Characters（JEC）](https://www.curseforge.com/minecraft/mc-mods/just-enough-characters) 4.5+                              | 在物品选择器、目录选择器、居民分工和库存页使用全拼、首字母与混合输入搜索；仅需客户端安装                            |

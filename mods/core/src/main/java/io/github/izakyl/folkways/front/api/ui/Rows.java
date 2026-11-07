@@ -6,6 +6,7 @@ import com.lowdragmc.lowdraglib2.gui.ui.UIElement;
 import com.lowdragmc.lowdraglib2.gui.ui.data.ScrollDisplay;
 import com.lowdragmc.lowdraglib2.gui.ui.data.ScrollerMode;
 import com.lowdragmc.lowdraglib2.gui.ui.data.TextWrap;
+import com.lowdragmc.lowdraglib2.gui.ui.data.Vertical;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Button;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Label;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Scroller;
@@ -219,6 +220,24 @@ public final class Rows {
     // "Label value" with the label dimmed, small enough to ride a title line.
     public static Label figure(Component label, Component value) {
         return value(label.copy().withColor(QUIET & 0xFFFFFF).append(" ").append(value));
+    }
+
+    /**
+     * A button that wears what it holds, an icon before its words, instead of text of its own. The button's
+     * content box is shorter than an icon: both are centred on its middle line, or the icon would sit low and the
+     * words high.
+     */
+    public static Button wearing() {
+        Button press = new Button().noText();
+        press.layout(layout -> layout.alignItems(AlignItems.CENTER));
+        return press;
+    }
+
+    /** The words on a {@link #wearing} button, centred in their line beside the icon. */
+    public static Label worn(Component text) {
+        Label label = value(text);
+        label.textStyle(style -> style.textAlignVertical(Vertical.CENTER));
+        return label;
     }
 
     public static Button act() {

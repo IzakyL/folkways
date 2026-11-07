@@ -4,7 +4,7 @@ import com.lowdragmc.lowdraglib2.gui.ui.UIElement;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Label;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.TextField;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Toggle;
-import io.github.izakyl.folkways.front.api.ui.ChoicePicker;
+import io.github.izakyl.folkways.front.api.ui.Picker;
 import io.github.izakyl.folkways.front.api.ui.Cue;
 import io.github.izakyl.folkways.front.api.ui.Cues;
 import io.github.izakyl.folkways.front.api.ui.Rows;
@@ -57,7 +57,7 @@ final class Controls {
 
     // A choice's button wears the icon of what is picked before its name.
     static UIElement worn(ResourceLocation option) {
-        return Rows.icon(ChoicePicker.iconOf(option));
+        return Rows.icon(Picker.iconOf(option));
     }
 
     static String stamped(String key, String value) {

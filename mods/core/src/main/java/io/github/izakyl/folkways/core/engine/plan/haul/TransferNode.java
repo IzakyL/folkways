@@ -57,6 +57,9 @@ public final class TransferNode implements Node, Staged {
     private final Manifest cargo;
     private final boolean handed;
     private boolean directed;
+    // An order's own delivery: its put passes the destination's incoming goods filters. A relay that only stows what
+    // a resident carries is handed on too, but is not ordered and keeps to the filters.
+    private boolean ordered;
     private final LongConsumer landed;
     private Optional<Delivery.Source> collection = Optional.empty();
     private boolean collecting;
@@ -102,8 +105,10 @@ public final class TransferNode implements Node, Staged {
             Workload.Once.of(FolkwaysConfig.haulReachTicks(), Haul::haste))
             .needs(goods).vocation(Haul.trade()).gesture(WorkGesture.SWING).doing(Doings.STOWING, goods.spec())
             .done();
-        return new TransferNode(spec, Endpoint.pack(), Endpoint.store(into), new Manifest(List.of(), List.of()), true,
-            landed);
+        TransferNode delivery = new TransferNode(spec, Endpoint.pack(), Endpoint.store(into),
+            new Manifest(List.of(), List.of()), true, landed);
+        delivery.ordered = true;
+        return delivery;
     }
 
     // A directed collection uses the ordinary take and put, kept together until the exact stack is delivered.
@@ -155,6 +160,7 @@ public final class TransferNode implements Node, Staged {
     public TransferNode resolved(Manifest manifest) {
         TransferNode resolved = new TransferNode(spec, from, to, manifest, false, landed);
         resolved.directed = directed;
+        resolved.ordered = ordered;
         return resolved;
     }
 
@@ -197,6 +203,9 @@ public final class TransferNode implements Node, Staged {
         return new Doing.Wares(carried, List.of());
     }
 
+    // Whether it is an order's own delivery, which passes the destination's incoming goods filters.
+    public boolean ordered() { return ordered; }
+
     // Whether what it puts down is only known from what is handed on to it.
     public boolean handedOn() { return handed; }
 
@@ -238,7 +247,7 @@ public final class TransferNode implements Node, Staged {
 
     private Optional<Container> inventory(Endpoint endpoint, ServerLevel level, Worker who) {
         return switch (endpoint) {
-            case Endpoint.Store store -> Stores.at(level, store.stash().pos());
+            case Endpoint.Store store -> Stores.at(level, store.stash().pos(), ordered && endpoint == to);
             case Endpoint.Pack pack -> pack.resident().isEmpty()
                 || pack.resident().get().equals(who.resident().id())
                 ? Optional.of(who.pack()) : Optional.empty();

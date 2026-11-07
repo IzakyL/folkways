@@ -1,9 +1,9 @@
 package io.github.izakyl.folkways.carts;
 
 import com.jusipat.astikorcartsredux.entity.AbstractCargoCart;
+import io.github.izakyl.folkways.front.client.ColonyHighlightState;
 import io.github.izakyl.folkways.front.client.LookLineCards;
 import io.github.izakyl.folkways.front.client.ShadowPass;
-import io.github.izakyl.folkways.front.engine.item.HeldBook;
 import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.client.Minecraft;
@@ -33,7 +33,7 @@ public final class CartsCards {
         }
         Minecraft minecraft = Minecraft.getInstance();
         List<Integer> cards = new ArrayList<>();
-        if (minecraft.level != null && minecraft.player != null && HeldBook.bound(minecraft.player).isPresent()) {
+        if (minecraft.level != null && minecraft.player != null && ColonyHighlightState.shownColonyId(minecraft.player) != null) {
             for (var entity : minecraft.level.entitiesForRendering()) {
                 if (entity instanceof AbstractCargoCart cart && CartLinks.admissible(cart)) {
                     if (LookLineCards.queue(event, cart, CartContents.lines(cart))) {

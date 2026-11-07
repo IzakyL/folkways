@@ -1,17 +1,15 @@
 import { test } from "@playwright/test";
 import { defineTask, javaTask, input, screen, tick, type MinecraftClient, type MinecraftServer } from "@izakyl/blockwright-minecraft";
-import { foundColonyFast, foundingBox, openColonyPanelViaBook, setBookGesture, waitForGroundedPlayer, type Vec } from "../shared/colony/colony-founding";
-import { createMarkedZone, holdZoneAndOpen } from "../shared/ui/zone-tools";
-import { aimAndWorldLeftClick } from "../shared/ui/world-ui";
+import { foundColonyFast, foundingBox, openColonyPanelViaBook, waitForGroundedPlayer, type Vec } from "../shared/colony/colony-founding";
 import { CONFIG_PATH, VisualRun } from "../shared/capture/visual-kit";
 import { QUIET_TOASTS } from "../shared/capture/ponder";
-import { clickTab } from "./ui-catalog";
+import { clickTab, OPEN_ZONE, ZONE_FIXTURES } from "./ui-catalog";
 import { clickElement, hoverElement } from "../ldlib2";
 import { launchPair, type E2EPair } from "../shared/harness/pair";
 import { tracePath } from "../shared/harness/out-paths";
 import { seededOffThreadServer } from "../shared/harness/mod-settings";
 import { BUDGET } from "../shared/harness/budgets";
-import { frames, safeAction, softly, tryCommand, waitForElement } from "../shared/harness/bw-helpers";
+import { frames, safeAction, tryCommand, waitForElement } from "../shared/harness/bw-helpers";
 import { newRunId } from "../shared/harness/run-id";
 
 const OPEN_SELECTOR = defineTask<void, boolean>({
@@ -20,6 +18,29 @@ const OPEN_SELECTOR = defineTask<void, boolean>({
     imports: ["io.github.izakyl.folkways.front.client.SelectorWindow"],
     body: `SelectorWindow.open(null, stack -> {}); return true;`,
   }),
+});
+
+const OPEN_CHOICE = defineTask<void, boolean>({
+  name: "folkways.visual.picker.open-choice", side: "client",
+  source: javaTask({ imports: [
+    "io.github.izakyl.folkways.front.client.SelectorWindow",
+    "io.github.izakyl.folkways.front.api.ui.Picker",
+    "net.minecraft.network.chat.Component",
+    "net.minecraft.world.item.ItemStack",
+    "net.minecraft.world.item.Items",
+  ], body: `
+SelectorWindow.open(null,Component.literal("Choice"),root->Picker.open(root,Component.literal("Choice"),List.of(
+ new Picker.Row("archer",Component.literal("Archer"),new ItemStack(Items.BOW)),
+ new Picker.Row("builder",Component.literal("Builder"),new ItemStack(Items.BRICKS))),"archer",picked->{}));
+return true;
+` }),
+});
+const NARROW = defineTask<void, boolean>({
+  name: "folkways.visual.picker.narrow", side: "client",
+  source: javaTask({ imports: ["net.minecraft.client.Minecraft"], body: `
+var mc=Minecraft.getInstance();mc.getWindow().setWindowed(640,800);mc.options.guiScale().set(2);mc.resizeDisplay();
+return true;
+` }),
 });
 
 // A tour of the item picker in its states, for a reader to look at.
@@ -48,7 +69,7 @@ test("item picker states", async ({}, testInfo) => {
       await safeAction(() => frames(client, n));
     };
     const shot = (name: string, subject: string) => run.shot(client, name, { subject, worldState: {}, hard: true });
-    const click = (id: string) => softly(() => clickElement(client, { id }, { scrollIntoView: true }));
+    const click = (id: string) => clickElement(client, { id }, { scrollIntoView: true });
     const type = async (text: string) => {
       await click("folkways.selector.search");
       await safeAction(() => input.key(client, { text }));
@@ -67,10 +88,10 @@ test("item picker states", async ({}, testInfo) => {
 
     // The colony's tool list: rules held, every item filed by mod and tag.
     await openColonyPanelViaBook(server, client, player, founding.standBlock);
-    await clickTab(client, "folkways.tab.settings");
+    await clickTab(client, "folkways.page.build");
     await settle();
-    await click("folkways.settings.open.tool");
-    await softly(() => waitForElement(client, { id: "folkways.selector.close" }, { timeoutMs: 8_000 }));
+    await click("folkways.settings.open.tool.folkways.building.folkways.build");
+    await waitForElement(client, { id: "folkways.selector.close" }, { timeoutMs: 8_000 });
     await settle();
     await shot("01-many-tree", "Tools: a folder per mod, its count of items taken in; the rules held below");
 
@@ -104,26 +125,20 @@ test("item picker states", async ({}, testInfo) => {
     await settle();
 
     // A groundwork zone's fill block: one block, picked.
-    await setBookGesture(server, client, player, "box");
-    const min = { x: origin.x + 4, y: origin.y - 1, z: origin.z + 6 };
-    const max = { x: origin.x + 6, y: origin.y - 1, z: origin.z + 8 };
-    for (const corner of [min, max]) {
-      await tryCommand(server, `setblock ${corner.x} ${corner.y} ${corner.z} minecraft:stone`);
-      await tick.sprint(server, 2);
-      await aimAndWorldLeftClick(server, client, player, corner, GROUND);
-      await tick.sprint(server, 3);
-    }
-    await createMarkedZone(server, client, player, founding.standBlock, "ground");
-    await holdZoneAndOpen(server, client, player, { min, max });
+    const fixtures = await server.run(ZONE_FIXTURES, { player });
+    const ground = fixtures.zones.find(zone => zone.type === "folkways:ground");
+    if (!ground) throw new Error("The groundwork fixture is missing");
+    await server.run(OPEN_ZONE, { player, zone: ground.id });
+    await waitForElement(client, { id: "folkways.zoneconfig.value.block" });
     await settle();
     await shot("08-zone-settings", "A groundwork zone's settings: the fill block worn on its button");
 
     await click("folkways.zoneconfig.value.block");
-    await softly(() => waitForElement(client, { id: "folkways.selector.close" }, { timeoutMs: 8_000 }));
+    await waitForElement(client, { id: "folkways.selector.close" }, { timeoutMs: 8_000 });
     await settle();
     await shot("09-one-tree", "One block: the same folders, blocks only, no boxes and no rules");
 
-    await type("stone");
+    await type("minecraft:cobblestone");
     await click("folkways.selector.result.minecraft.cobblestone");
     await settle();
     await shot("10-one-picked", "Cobblestone picked: marked, and Confirm lit");
@@ -131,9 +146,22 @@ test("item picker states", async ({}, testInfo) => {
     await click("folkways.selector.confirm");
     await settle(5);
     await shot("11-zone-after", "Confirmed: the zone's button wears cobblestone");
+    await client.run(OPEN_CHOICE);
+    await settle();
+    await shot("12-compact-choice", "A short Choice dialog keeps its search field and follows the row count");
+    await click("folkways.choice.cancel");
+    await client.run(NARROW);
+    await client.run(OPEN_CHOICE);
+    await settle();
+    await shot("13-phone-choice", "Choice at a phone-narrow window and GUI scale two: search, rows and buttons fit");
+    await click("folkways.choice.cancel");
+    await client.run(OPEN_SELECTOR);
+    await settle();
+    await shot("14-phone-items", "The full item registry at a phone-narrow GUI scale stays inside the screen");
+    await click("folkways.selector.close");
     run.expectTaken(["00-independent-placeholder", "00-independent-search-help", "01-many-tree", "02-mod-open",
       "03-tag-open", "04-item-ticked", "05-folder-ticked", "06-search", "07-search-ruled", "08-zone-settings",
-      "09-one-tree", "10-one-picked", "11-zone-after"]);
+      "09-one-tree", "10-one-picked", "11-zone-after", "12-compact-choice", "13-phone-choice", "14-phone-items"]);
   } catch (error) {
     pair?.failing(error);
     throw error;

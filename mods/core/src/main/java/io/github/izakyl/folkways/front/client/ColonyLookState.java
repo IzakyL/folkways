@@ -39,8 +39,10 @@ public final class ColonyLookState {
             residents = List.of();
             return;
         }
-        UUID colonyId = ColonyHighlightState.heldColonyId(minecraft.player);
-        if (colonyId == null) {
+        UUID colonyId = ColonyHighlightState.shownColonyId(minecraft.player);
+        // Without the book there is nothing to ask for unless residents' cards are to be drawn.
+        if (colonyId == null || ColonyHighlightState.heldColonyId(minecraft.player) == null
+                && !Layer.RESIDENTS.cards()) {
             residents = List.of();
             return;
         }

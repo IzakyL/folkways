@@ -8,7 +8,9 @@ import io.github.izakyl.folkways.core.api.terms.Stand;
 import io.github.izakyl.folkways.core.api.terms.Stash;
 import io.github.izakyl.folkways.core.api.terms.StoreRule;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
+import io.github.izakyl.folkways.core.api.work.Delivery;
 import io.github.izakyl.folkways.core.api.work.Grown;
+import io.github.izakyl.folkways.core.api.work.Outcome;
 import io.github.izakyl.folkways.core.api.work.Need;
 import io.github.izakyl.folkways.core.api.work.Node;
 import io.github.izakyl.folkways.core.api.work.NodeSpec;
@@ -19,6 +21,7 @@ import io.github.izakyl.folkways.core.engine.plan.PlanningFixture.Owed;
 import io.github.izakyl.folkways.core.engine.plan.haul.Haul;
 import io.github.izakyl.folkways.core.engine.plan.haul.TransferNode;
 import io.github.izakyl.folkways.core.testing.Nodes;
+import io.github.izakyl.folkways.core.testing.TestWorker;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -49,6 +52,61 @@ public final class StoreRuleGameTests {
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) {
         event.register(StoreRuleGameTests.class);
+    }
+
+    @GameTest(template = "empty")
+    public static void ordersBypassIncomingRulesButOrdinaryTransfersStillObeyThem(GameTestHelper helper) {
+        PlanningFixture f = new PlanningFixture(helper);
+        var barrels = f.barrels();
+        Stash target = new Stash(f.target);
+        UUID owner = UUID.randomUUID();
+        var worker = TestWorker.of(f.worker.body(), f.worker.resident(), f.worker.pack())
+            .supplied(() -> List.of(new ItemStack(Items.BREAD, 5)));
+        Delivery order = Delivery.to(UUID.randomUUID(), Haul.DOMAIN, new WorkSite.AtBlock(f.target),
+            Stances.at(f.target), BREAD, 5, count -> { });
+        TransferNode requested = (TransferNode) Haul.DELIVERIES.expand(order).orElseThrow().nodes().getFirst();
+        TransferNode ordinary = new TransferNode(UUID.randomUUID(), TransferNode.Endpoint.pack(),
+            TransferNode.Endpoint.store(target), new Manifest(List.of(new ItemStack(Items.BREAD, 5)), List.of()),
+            Stances.at(f.target), new WorkSite.AtBlock(f.target));
+        // A relay stows what a resident already carries; it is handed on like an order's put but is not one.
+        TransferNode relay = TransferNode.relay(target, new Need(BREAD, 5, true), Set.of(Stand.at(f.target)));
+        List<List<StoreRule>> choices = List.of(
+            List.of(new StoreRule.Admit(f.target, true, List.of(IRON))),
+            List.of(new StoreRule.Admit(f.target, false, List.of(BREAD))),
+            List.of(new StoreRule.Access(f.target, true, false)),
+            List.of(new StoreRule.Admit(f.target, true, List.of()),
+                new StoreRule.Access(f.target, false, false), new StoreRule.Slots(f.target, 2, 3)));
+        try {
+            for (List<StoreRule> rules : choices) {
+                barrels.target().clearContent();
+                Stores.ruled(owner, Map.of(f.target, rules));
+                helper.assertTrue(ordinary.commit(helper.getLevel(), worker) instanceof Outcome.Failed
+                        && barrels.target().isEmpty(),
+                    "ordinary stowing is refused by each incoming restriction: " + rules);
+                helper.assertTrue(requested.commit(helper.getLevel(), worker) instanceof Outcome.Done
+                        && Goods.countIn(barrels.target(), BREAD) == 5,
+                    "ordered goods land despite each incoming restriction: " + rules);
+                if (rules.stream().anyMatch(rule -> rule instanceof StoreRule.Slots)) {
+                    helper.assertTrue(barrels.target().getItem(2).getCount() == 5,
+                        "orders still use the selected physical slot");
+                }
+                barrels.target().clearContent();
+                TransferNode resolved = requested.resolved(
+                    new Manifest(List.of(new ItemStack(Items.BREAD, 5)), List.of()));
+                helper.assertTrue(resolved.commit(helper.getLevel(), worker) instanceof Outcome.Done,
+                    "binding an order's exact cargo preserves its exemption");
+                if (rules.stream().anyMatch(rule -> rule instanceof StoreRule.Admit)) {
+                    barrels.target().clearContent();
+                    helper.assertTrue(relay.commit(helper.getLevel(), worker) instanceof Outcome.Failed
+                            && barrels.target().isEmpty(),
+                        "a relay that is no order still keeps to the incoming goods filters: " + rules);
+                }
+            }
+        } finally {
+            Stores.ruled(owner, Map.of());
+            f.worker.body().discard();
+        }
+        helper.succeed();
     }
 
     @GameTest(template = "empty", timeoutTicks = 100)
@@ -107,14 +165,16 @@ public final class StoreRuleGameTests {
             Map.of(target, List.of(new StoreRule.Admit(target.pos(), true, List.of(IRON)))));
         helper.assertTrue(ironOnly.roomAt(target, BREAD) == 0 && ironOnly.roomAt(target, IRON) > 0,
             "a store that takes only iron has no room for bread");
-        Planned refused = solve(f, f.stands, ironOnly, target);
-        helper.assertTrue(refused.weave().vertices().isEmpty() && !refused.diagnosis().shortfalls().isEmpty(),
-            "bread is not carried into a store that does not take it");
+        helper.assertTrue(drawnFrom(solve(f, f.stands, ironOnly, target)).equals(Set.of(source)),
+            "an order carries bread despite the iron whitelist");
 
         Stock noBread = new Stock(held, empty,
             Map.of(target, List.of(new StoreRule.Admit(target.pos(), false, List.of(BREAD)))));
         helper.assertTrue(noBread.roomAt(target, BREAD) == 0 && noBread.roomAt(target, IRON) > 0,
             "a store that takes anything but bread still has room for iron");
+
+        helper.assertTrue(drawnFrom(solve(f, f.stands, noBread, target)).equals(Set.of(source)),
+            "an order carries bread despite the bread blacklist");
 
         Stock open = new Stock(held, empty,
             Map.of(target, List.of(new StoreRule.Admit(target.pos(), true, List.of(BREAD)))));
@@ -177,7 +237,7 @@ public final class StoreRuleGameTests {
                 "slot restrictions and preferences do not discard general access permissions");
             helper.assertTrue(Containers.insert(kept, new ItemStack(Items.IRON_INGOT, 130)).getCount() == 2
                     && barrel.getItem(2).getCount() == 64 && barrel.getItem(3).getCount() == 64,
-                "a directed write through the container view still uses only admitted, selected slots");
+                "the ordinary container view still uses only admitted, selected slots");
             helper.assertTrue(barrel.getItem(0).getCount() == 7 && barrel.getItem(4).isEmpty(),
                 "the inaccessible slots remain untouched");
         } finally {
@@ -212,7 +272,8 @@ public final class StoreRuleGameTests {
         ItemSpec box = ItemSpec.of(ResourceLocation.withDefaultNamespace("shulker_box"));
         Stock stock = new Stock(List.of(new Stock.Holding(source, new ItemStack(Items.SHULKER_BOX, 1))),
             Map.of(source, 26, target, 27), Map.of(), Map.of(target, refused));
-        helper.assertTrue(stock.roomAt(target, box) == 0 && stock.roomAt(target, BREAD) > 0,
+        helper.assertTrue(stock.roomAt(target, box) == 0 && stock.roomAt(target, box, true) == 0
+                && stock.roomAt(target, BREAD) > 0,
             "the plan sees no room for goods the container would not take");
         Owed owed = new Owed(new WorkSite.AtBlock(target.pos()), Stances.at(target.pos()), box, 1);
         PlanningFixture.Rounds rounds = new PlanningFixture.Rounds();

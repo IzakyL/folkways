@@ -6,7 +6,6 @@ import io.github.izakyl.folkways.front.engine.charter.Charters;
 import io.github.izakyl.folkways.front.engine.charter.CurrentColony;
 import io.github.izakyl.folkways.front.engine.colony.ColonyGround;
 import io.github.izakyl.folkways.front.engine.colony.Residents;
-import io.github.izakyl.folkways.front.engine.item.ColonyBookItem;
 import java.util.Optional;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
@@ -55,13 +54,11 @@ public final class ColonyAuthority {
         return CurrentColony.of(player).map(colony -> new ColonyAuthority(colony, at));
     }
 
-    // Through the book in hand, for the colony the player has chosen: what a click out in the world acts with.
-    public static Optional<ColonyAuthority> ofHeldBook(ServerPlayer player, UUID colonyId,
+    // For the colony a packet names, which must be the one the player has chosen and still keeps: what a click out
+    // in the world, or a request from the client, acts or reads with. Nothing in hand is asked for.
+    public static Optional<ColonyAuthority> forColony(ServerPlayer player, UUID colonyId,
             Optional<BlockPos> named) {
-        if (!ColonyBookItem.holdsBookFor(player, colonyId)) {
-            return Optional.empty();
-        }
-        Optional<Colony> colony = CurrentColony.of(player);
+        Optional<Colony> colony = CurrentColony.of(player).filter(found -> found.id().equals(colonyId));
         if (colony.isEmpty()) {
             return Optional.empty();
         }
@@ -72,8 +69,8 @@ public final class ColonyAuthority {
             .map(at -> new ColonyAuthority(colony.get(), Optional.of(at)));
     }
 
-    public static Optional<ColonyAuthority> ofHeldBook(ServerPlayer player, UUID colonyId) {
-        return ofHeldBook(player, colonyId, Optional.empty());
+    public static Optional<ColonyAuthority> forColony(ServerPlayer player, UUID colonyId) {
+        return forColony(player, colonyId, Optional.empty());
     }
 
     public Colony colony() {

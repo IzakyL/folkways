@@ -4,7 +4,7 @@ import com.lowdragmc.lowdraglib2.gui.ui.UIElement;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Button;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Toggle;
 import io.github.izakyl.folkways.front.api.Schema;
-import io.github.izakyl.folkways.front.api.ui.ChoicePicker;
+import io.github.izakyl.folkways.front.api.ui.Picker;
 import io.github.izakyl.folkways.front.api.ui.Rows;
 import io.github.izakyl.folkways.front.api.ui.Tokens;
 import io.github.izakyl.folkways.front.engine.colony.ColonySettings;
@@ -49,9 +49,9 @@ final class DraftSettings {
                     control = box;
                 }
                 case Schema.Setting.Choice choice -> {
-                    Button button = new Button().noText();
+                    Button button = Rows.wearing();
                     wear(button, values.choice(choice.key()));
-                    button.setOnClick(event -> ChoicePicker.open(button, choice, values.choice(choice.key()),
+                    button.setOnClick(event -> Picker.open(button, choice, values.choice(choice.key()),
                         option -> {
                             values = values.with(choice.key(), new ColonySettings.Value.Choice(option));
                             wear(button, option);
@@ -85,6 +85,6 @@ final class DraftSettings {
 
     private static void wear(Button button, ResourceLocation option) {
         button.clearAllChildren();
-        button.addChildren(Controls.worn(option), Rows.value(ChoicePicker.labelOf(option)));
+        button.addChildren(Controls.worn(option), Rows.worn(Picker.labelOf(option)));
     }
 }

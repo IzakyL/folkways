@@ -5,6 +5,8 @@ import io.github.izakyl.folkways.core.api.colony.Colonies;
 import io.github.izakyl.folkways.core.api.inventory.InventorySnapshot.State;
 import io.github.izakyl.folkways.core.api.inventory.InventorySnapshot;
 import io.github.izakyl.folkways.core.api.terms.Containers;
+import io.github.izakyl.folkways.core.api.terms.StoreRule;
+import io.github.izakyl.folkways.core.api.terms.ItemSpec;
 import io.github.izakyl.folkways.core.api.terms.Stand;
 import io.github.izakyl.folkways.core.api.terms.Stash;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
@@ -21,6 +23,7 @@ import io.github.izakyl.folkways.core.engine.colony.ColonyData;
 import io.github.izakyl.folkways.core.engine.inventory.InventoryObservations;
 import io.github.izakyl.folkways.core.engine.plan.Manifest;
 import io.github.izakyl.folkways.core.engine.plan.Stands;
+import io.github.izakyl.folkways.core.engine.plan.Stores;
 import io.github.izakyl.folkways.core.engine.plan.haul.TransferNode;
 import io.github.izakyl.folkways.plugins.person.PersonBody;
 import java.util.List;
@@ -56,6 +59,41 @@ public final class InventorySurveyGameTests {
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) {
         event.register(InventorySurveyGameTests.class);
+    }
+
+    @GameTest(template = "empty")
+    public static void dailyStowingStillObeysIncomingRulesWhenAnOrderUsesTheSameStore(GameTestHelper helper) {
+        var level = helper.getLevel();
+        var colony = Colonies.mint(level.getServer());
+        var body = PersonBody.RESIDENT.get().create(level);
+        BlockPos cell = helper.absolutePos(new BlockPos(1, 1, 1));
+        level.setBlockAndUpdate(cell, Blocks.BARREL.defaultBlockState());
+        WorldPos at = WorldPos.of(level, cell);
+        Stash stash = Stash.at(at);
+        ItemSpec bread = ItemSpec.of(Items.BREAD);
+        ItemSpec iron = ItemSpec.of(Items.IRON_INGOT);
+        Placement placement = new Placement(Set.of(), List.of(), List.of(), List.of(stash));
+        var target = Containers.at(level, cell).orElseThrow();
+        try {
+            for (StoreRule restriction : List.of(new StoreRule.Admit(at, true, List.of(iron)),
+                    new StoreRule.Admit(at, false, List.of(bread)), new StoreRule.Access(at, true, false))) {
+                target.clearContent();
+                body.pack().clearContent();
+                colony.rule(OWNER, level.dimension(), List.of(new StoreRule.Reserve(at, bread), restriction));
+                helper.assertTrue(Containers.insert(Stores.at(level, at, true).orElseThrow(),
+                    new ItemStack(Items.BREAD)).isEmpty(), "the order can use this store");
+                Worker worker = new Hands(body, Stands.NONE, placement, drop -> {
+                    throw new AssertionError("ordinary stowing must keep its goods");
+                }, List::of);
+                Stowing.put(worker, placement, List.of(new ItemStack(Items.BREAD, 2)));
+                helper.assertTrue(target.getItem(0).getCount() == 1 && body.pack().count(Items.BREAD) == 2,
+                    "daily stowing leaves its goods in the pack despite the order: " + restriction);
+            }
+        } finally {
+            body.discard();
+            colony.raze();
+        }
+        helper.succeed();
     }
 
     @GameTest(template = "empty")

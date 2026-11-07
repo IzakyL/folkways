@@ -11,6 +11,7 @@ public final class FolkwaysClientConfig {
 
     private static final ModConfigSpec.BooleanValue INVERT_WHEEL;
     private static final ModConfigSpec.BooleanValue REMEMBER_DRAWING_SETTINGS;
+    private static final ModConfigSpec.BooleanValue OVERLAYS_WITHOUT_BOOK;
     private static final ModConfigSpec.ConfigValue<List<? extends String>> GLOBAL_TACTICAL_CONTROL_USERS;
 
     public static final ModConfigSpec SPEC;
@@ -33,6 +34,15 @@ public final class FolkwaysClientConfig {
             "Remember the last options used for each kind of zone, path or"
             + " building pattern configuration.")
             .define("rememberDrawingSettings", true);
+        OVERLAYS_WITHOUT_BOOK =
+            BUILDER.translation("folkways.settings.overlays_without_book")
+            .comment(
+            "Keep drawing the colony you act for over the world while no colony"
+            + " book is in hand, whatever",
+            "is held instead: its zones, paths and works marked on the ground,"
+            + " and their cards, residents' too.",
+            "Only shown: pointing at or changing anything still takes the book.")
+            .define("overlaysWithoutBook", false);
         GLOBAL_TACTICAL_CONTROL_USERS =
             BUILDER.translation("folkways.settings.global_tactical_controls")
             .comment(
@@ -68,6 +78,16 @@ public final class FolkwaysClientConfig {
 
     public static void rememberDrawingSettings(boolean on) {
         REMEMBER_DRAWING_SETTINGS.set(on);
+        SPEC.save();
+    }
+
+    /** Whether the colony stays drawn over the world with the book put away; off until the player asks. */
+    public static boolean overlaysWithoutBook() {
+        return SPEC.isLoaded() && OVERLAYS_WITHOUT_BOOK.get();
+    }
+
+    public static void overlaysWithoutBook(boolean on) {
+        OVERLAYS_WITHOUT_BOOK.set(on);
         SPEC.save();
     }
 

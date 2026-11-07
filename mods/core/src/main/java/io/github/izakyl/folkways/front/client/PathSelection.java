@@ -236,7 +236,9 @@ public final class PathSelection {
             return;
         }
         Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.level == null || minecraft.player == null || HeldBook.bound(minecraft.player).isEmpty()) {
+        // Without the book the draft is already cleared away; what is left is the colony's own paths, if shown.
+        if (minecraft.level == null || minecraft.player == null
+                || ColonyHighlightState.shownColonyId(minecraft.player) == null) {
             return;
         }
         Level level = minecraft.level;

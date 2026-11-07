@@ -1,9 +1,9 @@
 package io.github.izakyl.folkways.rts.combat.net;
 
 import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.core.api.colony.Books;
 import io.github.izakyl.folkways.core.api.terms.WorldPos;
 import io.github.izakyl.folkways.core.api.terms.WorldSpaces;
+import io.github.izakyl.folkways.front.engine.charter.CurrentColony;
 import io.github.izakyl.folkways.rts.FolkwaysRtsMod;
 import io.github.izakyl.folkways.rts.combat.control.CombatSelectionOwnership;
 import io.github.izakyl.folkways.rts.combat.group.UnitGroup;
@@ -404,7 +404,7 @@ public final class CombatPackets {
                     () -> {
                         if (context.player() instanceof ServerPlayer player) {
                             var colony =
-                                Books.heldColony(player)
+                                CurrentColony.id(player)
                                 .flatMap(id -> SelectionOrders.authorized(player, id));
                             CombatOrderState state =
                                 colony.flatMap(

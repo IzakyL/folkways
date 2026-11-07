@@ -47,22 +47,18 @@ const FOLDER = defineTask<void, boolean>({
     "com.lowdragmc.lowdraglib2.gui.ui.ModularUI",
     "com.lowdragmc.lowdraglib2.gui.ui.elements.Button",
     "com.lowdragmc.lowdraglib2.gui.ui.elements.Dialog",
-    "io.github.izakyl.folkways.front.api.ui.FolderPicker",
+    "io.github.izakyl.folkways.front.api.ui.Picker",
     "io.github.izakyl.folkways.front.api.ui.Tokens",
     "net.minecraft.client.Minecraft",
     "net.minecraft.network.chat.Component",
   ], body: `
-var picker=new FolderPicker("folkways.jech.fixture",false,(word,key)->{}).openRoots()
+var picker=new Picker("folkways.jech.fixture",false,(word,key)->{}).openRoots()
  .naming(folder->Component.literal("建筑"));
 picker.fill(List.of(
- new FolderPicker.Leaf("iron","test:build/iron",Component.literal("铁锭"),"folkways.jech.fixture.iron"),
- new FolderPicker.Leaf("stone","test:build/stone",Component.literal("石头"),"folkways.jech.fixture.stone")));
-var dialog=new Dialog();dialog.setTitle("JEC search fixture");
-dialog.layout(layout->layout.width(460).height(300));dialog.style(style->style.zIndex(10000));
-dialog.addContent(picker.list());
-var close=new Button().setText("Close").setOnClick(event->dialog.close());
-Tokens.name(close,"folkways.jech.fixture.close");dialog.addButton(close);
-dialog.show(ModularUI.of(((Minecraft)ctx.client()).screen));return true;
+ new Picker.Leaf("iron","test:build/iron",Component.literal("铁锭"),"folkways.jech.fixture.iron"),
+ new Picker.Leaf("stone","test:build/stone",Component.literal("石头"),"folkways.jech.fixture.stone")));
+picker.size(230,150).open(ModularUI.of(((Minecraft)ctx.client()).screen).ui.rootElement,
+ Component.literal("JEC search fixture"),Set.of(),picked->{});return true;
 ` }),
 });
 const SETTINGS = defineTask<void, Record<string, boolean | number>>({

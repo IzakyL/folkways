@@ -40,7 +40,7 @@ public final class BookLookup implements Books.Source {
     }
 
     @Override
-    public Optional<Colony> ofHeldBook(ServerPlayer player, UUID colony) {
-        return ColonyAuthority.ofHeldBook(player, colony).map(ColonyAuthority::colony);
+    public Optional<Colony> actingFor(ServerPlayer player, UUID colony) {
+        return ColonyAuthority.forColony(player, colony).map(ColonyAuthority::colony);
     }
 }

@@ -179,11 +179,6 @@ final class OrdersPresence implements Facing {
             return Attempt.refused(OrderRefusal.NOT_A_CONTAINER);
         }
         Shelf next = shelfAt(into).taking(Optional.of(new Shelf.Admitting(only, what.get())));
-        for (Order order : ordersAt(into)) {
-            if (!next.admits(order.what())) {
-                return Attempt.refused(OrderRefusal.ORDERED_HERE);
-            }
-        }
         return shelve(next);
     }
 
@@ -222,11 +217,6 @@ final class OrdersPresence implements Facing {
 
     private Attempt changeFilter(Shelf shelf, Shelf.Admitting admitting) {
         Shelf next = shelf.taking(Optional.of(admitting));
-        for (Order order : ordersAt(shelf.into())) {
-            if (!next.admits(order.what())) {
-                return Attempt.refused(OrderRefusal.ORDERED_HERE);
-            }
-        }
         return shelve(next);
     }
 
@@ -253,9 +243,6 @@ final class OrdersPresence implements Facing {
         }
         if (Containers.at(view.level(), into.block(view.level())).isEmpty()) {
             return Attempt.refused(OrderRefusal.NOT_A_CONTAINER);
-        }
-        if (!shelfAt(into).admits(what.get())) {
-            return Attempt.refused(OrderRefusal.NOT_ADMITTED);
         }
         Order order = new Order(into, what.get(), draft.count(OrdersContent.LOW.key()),
             draft.count(OrdersContent.COUNT.key()), standing);

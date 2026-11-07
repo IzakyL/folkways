@@ -1013,7 +1013,7 @@ public final class Weaver {
             }
             Stash into = put.delivers().get();
             Need goods = put.spec().needs().getFirst();
-            if (roomFor(into, goods.spec()) < goods.count()) {
+            if (roomFor(into, goods.spec(), put.ordered()) < goods.count()) {
                 lastWhy = Why.NO_ROOM;
                 noted.add(new Gap(id, id, goods.spec(), goods.count(), Why.NO_ROOM));
                 return false;
@@ -2603,10 +2603,14 @@ public final class Weaver {
     }
 
     private long roomFor(Stash where, ItemSpec concrete) {
+        return roomFor(where, concrete, false);
+    }
+
+    private long roomFor(Stash where, ItemSpec concrete, boolean directed) {
         if (!now.stock().holds(where)) {
             return 0;
         }
-        return Math.max(0, now.stock().roomAt(where, concrete)
+        return Math.max(0, now.stock().roomAt(where, concrete, directed)
             + claims.taken(new Resource.Lot(where, concrete))
             - claims.taken(new Resource.Space(where, concrete)));
     }

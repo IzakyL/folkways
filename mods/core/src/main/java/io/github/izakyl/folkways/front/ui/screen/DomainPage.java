@@ -28,7 +28,7 @@ import io.github.izakyl.folkways.front.api.notice.Sentence;
 import io.github.izakyl.folkways.front.api.panel.Board;
 import io.github.izakyl.folkways.front.api.panel.PageKind;
 import io.github.izakyl.folkways.front.api.ui.Children;
-import io.github.izakyl.folkways.front.api.ui.ChoicePicker;
+import io.github.izakyl.folkways.front.api.ui.Picker;
 import io.github.izakyl.folkways.front.api.ui.Draw;
 import io.github.izakyl.folkways.front.api.ui.FilterStacks;
 import io.github.izakyl.folkways.front.api.ui.ItemDrops;
@@ -110,6 +110,9 @@ public final class DomainPage implements Draw {
     private static final String[] VERBS = {"", "do", "edit", "open", "ping", "admit"};
 
     private static final int HEADING_COLOR = 0xFF9A3324;
+    private static final int REFUSED_COLOR = 0xFF8A2416;
+    // How long a refusal stays said on the page: long enough to be read after the click.
+    private static final long REFUSAL_TICKS = 100L;
     private static final int TITLE_COLOR = 0xFF2B1C12;
     private static final int METER_FULL = 0xFF5B7F2C;
     private static final int METER_SHORT = 0xFFB0761C;
@@ -128,6 +131,9 @@ public final class DomainPage implements Draw {
 
     private final PageKind page;
     private UIElement figures;
+    // The last refusal an act on this page met, and when.
+    private Component refused = Component.empty();
+    private long refusedAt = Long.MIN_VALUE / 2;
 
     private DomainPage(PageKind page) {
         this.page = page;
@@ -145,7 +151,7 @@ public final class DomainPage implements Draw {
     public UIElement build(Player player) {
         Drawn drawn = new Drawn();
         figures = Rows.strip();
-        figures.layout(layout -> layout.widthAuto().flexShrink(0));
+        figures.layout(layout -> layout.widthAuto().flexShrink(1).minWidth(0).flexWrap(FlexWrap.WRAP));
         UIElement grid = Rows.grid();
         drawn.grid = grid;
         drawn.carrying = grid.addRPCEvent(RPCEventBuilder.simple(Integer.class, Integer.class,
@@ -154,7 +160,7 @@ public final class DomainPage implements Draw {
                     carryOut(player, index, slot);
                 }
             }));
-        drawn.asking = new ChoicePicker.Asking(grid, (key, option) -> choose(player, key, option));
+        drawn.asking = new Picker.Asking(grid, (key, option) -> choose(player, key, option));
         drawn.sending = new ItemPicker.Sending(grid, (key, filters) -> hold(player, key, filters));
         for (int index = 0; index < ROW_SLOTS; index++) {
             grid.addChildren(slot(player, drawn, index));
@@ -170,7 +176,19 @@ public final class DomainPage implements Draw {
             .ifPresent(vocation -> contents.addChildren(SettingsPage.tools(player, vocation, "." + Tokens.of(page.id()))));
         scroller.addScrollViewChild(contents);
 
-        UIElement page = Rows.page().addChildren(scroller);
+        // What the last act on this page was refused for, said under the board: the action bar it also goes to is
+        // drawn under the open panel, where a refused switch looked as if it had not been pressed at all.
+        Label refusal = Rows.note(Component.empty());
+        refusal.textStyle(style -> style.textColor(REFUSED_COLOR));
+        refusal.setDisplay(false);
+        Tokens.name(refusal, "folkways.board.refusal." + Tokens.of(this.page.id()));
+        refusal.addSyncValue(DataBindingBuilder.componentS2C(() -> refusalOf(player))
+            .onSyncReceived(said -> {
+                refusal.setText(said);
+                refusal.setDisplay(!said.getString().isEmpty());
+            }).build().getSyncValue());
+
+        UIElement page = Rows.page().addChildren(scroller, refusal);
         page.layout(layout -> layout.flexGrow(1).flexShrink(1).minHeight(0));
         page.addSyncValue(DataBindingBuilder.tagS2C(() -> boardTag(player))
             .onSyncReceived(tag -> drawn.accept(player, tag))
@@ -488,7 +506,7 @@ public final class DomainPage implements Draw {
             case Board.Act.Do carry -> act(serverPlayer, colony.get(), level.get(), carry.actionKey());
             case Board.Act.Admit admit -> {
                 Attempt result = Endorsements.called(level.get(), colony.get(), serverPlayer, admit.kind());
-                result.refusal().ifPresent(why -> serverPlayer.displayClientMessage(why.component(), true));
+                told(serverPlayer, Optional.of(result));
                 if (result instanceof Attempt.Pending) {
                     serverPlayer.displayClientMessage(Component.translatable("folkways.settlers.checking_stock"), true);
                 }
@@ -547,8 +565,7 @@ public final class DomainPage implements Draw {
                     Optional<Attempt> applied = ColonyBoards.setItemFilters(colony.get(), page.id(), at, key, kept,
                         ColonyViews.forBoard(colony.get(), level.get(), at));
                     if (applied.isPresent()) {
-                        applied.get().refusal().ifPresent(why ->
-                            serverPlayer.displayClientMessage(why.component(), true));
+                        told(serverPlayer, applied);
                         return;
                     }
                 }
@@ -558,9 +575,19 @@ public final class DomainPage implements Draw {
     }
 
     private void act(ServerPlayer player, Colony colony, ServerLevel level, String actionKey) {
-        ColonyBoards.act(level, colony, page.id(), ColonyShell.siteOf(player), actionKey)
-            .flatMap(Attempt::refusal)
-            .ifPresent(why -> player.displayClientMessage(why.component(), true));
+        told(player, ColonyBoards.act(level, colony, page.id(), ColonyShell.siteOf(player), actionKey));
+    }
+
+    // An act answered: a refusal is said in the action bar and on the page, until it fades or the next act goes.
+    private void told(ServerPlayer player, Optional<Attempt> answered) {
+        Optional<Component> why = answered.flatMap(Attempt::refusal).map(refused -> refused.component());
+        why.ifPresent(said -> player.displayClientMessage(said, true));
+        refused = why.orElse(Component.empty());
+        refusedAt = player.serverLevel().getGameTime();
+    }
+
+    private Component refusalOf(Player player) {
+        return player.level().getGameTime() - refusedAt <= REFUSAL_TICKS ? refused : Component.empty();
     }
 
     private static final class Row {
@@ -614,7 +641,7 @@ public final class DomainPage implements Draw {
         private ItemPicker.Sending sending;
         private RPCEmitter carrying;
         private ResourceLocation[][] chosen = new ResourceLocation[ROW_SLOTS][ACT_SLOTS];
-        private ChoicePicker.Asking asking;
+        private Picker.Asking asking;
         private final String[][] typed = new String[ROW_SLOTS][ACT_SLOTS];
         private final Controls.Echo echoed = new Controls.Echo(ROW_SLOTS * ACT_SLOTS);
 
@@ -665,7 +692,7 @@ public final class DomainPage implements Draw {
             if (choosing != null) {
                 setting(choosing).ifPresent(pair -> {
                     if (pair.setting() instanceof Schema.Setting.Choice choice) {
-                        ChoicePicker.open(press, choice, chosen[index][slot],
+                        Picker.open(press, choice, chosen[index][slot],
                             option -> asking.ask(choice.key(), option));
                     }
                 });
