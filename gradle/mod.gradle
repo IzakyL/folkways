@@ -1,7 +1,9 @@
 // What every Folkways mod project shares. A project sets modId and modName before applying this.
 
 group = project.maven_group
-version = project.mod_version
+// CI passes -Pversion_suffix=nightly.<sha> for master builds, so nightlies never share a release version.
+def versionSuffix = providers.gradleProperty("version_suffix").getOrElse("")
+version = versionSuffix ? "${project.mod_version}-${versionSuffix}" : project.mod_version
 
 base {
     archivesName = "${project.modName}-neoforge-${project.minecraft_version}"
