@@ -3,7 +3,7 @@ package io.github.izakyl.folkways.cookery.millstone;
 import com.github.ysbbbbbb.kaleidoscopecookery.blockentity.kitchen.MillstoneBlockEntity;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems;
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.cookery.CookeryContent;
 import io.github.izakyl.folkways.cookery.KitchenBookings;
 import io.github.izakyl.folkways.cookery.testing.RecoveryAsking;
@@ -33,10 +33,10 @@ import io.github.izakyl.folkways.core.work.api.WorkSite;
 import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.core.work.support.WorkStances;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
-import io.github.izakyl.folkways.effect.Effects;
-import io.github.izakyl.folkways.plugins.person.PersonBody;
-import io.github.izakyl.folkways.plugins.person.ResidentEntity;
-import io.github.izakyl.folkways.plugins.wares.WaresContent;
+import io.github.izakyl.folkways.core.effect.Effects;
+import io.github.izakyl.folkways.vanilla.person.PersonBody;
+import io.github.izakyl.folkways.vanilla.person.ResidentEntity;
+import io.github.izakyl.folkways.vanilla.wares.WaresContent;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -61,13 +61,13 @@ import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
 @EventBusSubscriber(modid = "folkways_cookery", bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@GameTestHolder("folkways_cookery")
 @PrefixGameTestTemplate(false)
 public final class MillstoneGameTests {
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) { event.register(MillstoneGameTests.class); }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void exitMarkersRequireColonyAndKeepTheZeroUuidMeaning(GameTestHelper helper) {
         try (Rig rig = new Rig(helper)) {
             var colony = Colonies.mint(rig.level.getServer());
@@ -99,7 +99,7 @@ public final class MillstoneGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 1200)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 1200)
     public static void hardUrgesPreserveTheNativeMotorBatchAndItsFlour(GameTestHelper helper) {
         Rig rig = new Rig(helper);
         MillstoneWork work = rig.plan(3);
@@ -142,7 +142,7 @@ public final class MillstoneGameTests {
                 .thenSucceed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 800)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 800)
     public static void nativeGrindingUnbindsAndWalksOutBeforeDeliveringActualFlour(GameTestHelper helper) {
         Rig rig = new Rig(helper);
         MillstoneWork work = rig.plan(3);
@@ -171,7 +171,7 @@ public final class MillstoneGameTests {
                 }).thenSucceed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void aPassingResidentCannotBindButNativeAnimalsStillCan(GameTestHelper helper) {
         try (Rig rig = new Rig(helper)) {
             helper.assertTrue(!rig.mill().canBindEntity(rig.actor), "ordinary residents have no motor permission");
@@ -188,7 +188,7 @@ public final class MillstoneGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void noReachableExitRejectsLoadingAndRefundsTheOriginalGoods(GameTestHelper helper) {
         try (Rig rig = new Rig(helper)) {
             MillstoneWork work = rig.plan(3);
@@ -206,7 +206,7 @@ public final class MillstoneGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void withdrawingAnAlreadyPlannedMillNeverSpendsItsIngredients(GameTestHelper helper) {
         try (Rig rig = new Rig(helper)) {
             MillstoneWork work = rig.plan(3);
@@ -219,7 +219,7 @@ public final class MillstoneGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 120)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 120)
     public static void cancellationUnbindsImmediatelyAndTheResidentReallyLeaves(GameTestHelper helper) {
         Rig rig = new Rig(helper);
         MillstoneWork work = rig.plan(3);
@@ -241,7 +241,7 @@ public final class MillstoneGameTests {
             }).thenSucceed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 1000)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 1000)
     public static void revokingTheActiveMotorLicenceLeavesAndPausesItsActualBatchUntilRestored(GameTestHelper helper) {
         Rig rig = new Rig(helper); MillstoneWork original = rig.plan(3); rig.load(original);
         HoldingFixture driving = rig.holding(original).prepare();
@@ -309,7 +309,7 @@ public final class MillstoneGameTests {
             }).thenSucceed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 40)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 40)
     public static void reloadedNativeMotorCannotKeepItsOldRuntimePermission(GameTestHelper helper) {
         Rig rig = new Rig(helper);
         MillstoneWork work = rig.plan(3);
@@ -330,7 +330,7 @@ public final class MillstoneGameTests {
         });
     }
 
-    @GameTest(template = "empty", timeoutTicks = 120)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 120)
     public static void removingTheColonyStillLetsItsFormerMotorWalkOut(GameTestHelper helper) {
         Rig rig = new Rig(helper);
         MillstoneWork work = rig.plan(3);
@@ -348,7 +348,7 @@ public final class MillstoneGameTests {
                 } finally { rig.close(); }
             }).thenSucceed();
     }
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void aMillstonePartIsVisibleButAnExternalWallStillBlocksLoading(GameTestHelper helper) {
         try (Rig rig = new Rig(helper)) {
             helper.assertTrue(MillstoneStation.inSight(rig.level, rig.actor.blockPosition(), rig.cell),
@@ -364,7 +364,7 @@ public final class MillstoneGameTests {
         }
         helper.succeed();
     }
-    @GameTest(template = "empty", timeoutTicks = 180)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 180)
     public static void blockingAllExitsDuringGrindingUnbindsAndWaitsForARealWalkOut(GameTestHelper helper) {
         Rig rig = new Rig(helper);
         rig.load(rig.plan(3));
@@ -391,7 +391,7 @@ public final class MillstoneGameTests {
                 }).thenSucceed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 800)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 800)
     public static void aDeadMotorLeavesNoDepartureLeaseAndAnotherResidentCollectsTheSameNativeBatch(GameTestHelper helper) {
         Rig rig = new Rig(helper); MillstoneWork work = rig.plan(3); rig.load(work);
         helper.startSequence().thenWaitUntil(() -> helper.assertTrue(rig.mill().getInput().isEmpty(),
@@ -433,7 +433,7 @@ public final class MillstoneGameTests {
                 } finally { dead.discard(); rig.close(); }
             }).thenSucceed();
     }
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void arrivingWithinTheCoreStanceToleranceStillLoadsAtTheReachBoundary(GameTestHelper helper) {
         try (Rig rig = new Rig(helper)) {
             BlockPos footing = rig.cell.offset(-3, 0, -3);
@@ -454,7 +454,7 @@ public final class MillstoneGameTests {
         }
         helper.succeed();
     }
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void aNativeRecoveryRootStillRequiresRoomForAllItsUnpromisedFlour(GameTestHelper helper) {
         var fixture = new PlanningFixture(helper);
         try (Rig rig = new Rig(helper)) {

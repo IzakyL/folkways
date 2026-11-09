@@ -29,7 +29,7 @@ test("bits stone arch bridge gallery", async ({}, testInfo) => {
   let pair: E2EPair | undefined;
   try {
     pair = await launchPair({
-      config: "blockwright.toml#chiselsandbits",
+      config: "blockwright.toml#carving",
       server: { trace: tracePath("pattern", "bridge-server"),
         instance: seededOffThreadServer(`bridge-server-${runId}`), startFrozen: false },
       client: { trace: tracePath("pattern", "bridge-client"), instance: `bridge-client-${runId}` },

@@ -1,7 +1,7 @@
 package io.github.izakyl.folkways.core.runtime;
 
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks;
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.cookery.CookeryContent;
 import io.github.izakyl.folkways.cookery.CookeryRefusal;
 import io.github.izakyl.folkways.core.work.api.NodeSpec;
@@ -22,8 +22,8 @@ import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
-@EventBusSubscriber(modid = FolkwaysMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@EventBusSubscriber(modid = FolkwaysCoreMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
+@GameTestHolder(FolkwaysCoreMod.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class CookeryStallsGameTests {
     @SubscribeEvent
@@ -31,7 +31,7 @@ public final class CookeryStallsGameTests {
 
     // Only a lasting refusal met twice at one actual station is told, as that station and what was cooked there;
     // a passing one never is, nor does it count towards a lasting one.
-    @GameTest(template = "empty", timeoutTicks = 20)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 20)
     public static void kitchenRefusalsAreToldOnlyWhenLastingAndOnlyAtTheirActualStation(GameTestHelper helper) {
         WorldPos at = WorldPos.of(helper.getLevel(), helper.absolutePos(new BlockPos(2, 1, 2)));
         WorldPos other = at.at(at.cell().east(4));

@@ -22,13 +22,13 @@ import { newRunId } from "../shared/harness/run-id";
 // Every dialog the unified picker draws, one shot each with the page that opened it behind: a reader's tour after
 // a change to Picker, not an assertion of layout. A scene that cannot be reached is reported at the end.
 
-const BOOK_ITEM = "folkways:colony_book";
+const BOOK_ITEM = "folkways_core:colony_book";
 const HUT_ASSET = "tests/shared/assets/ghost-hut.nbt";
 
 const OPEN_SELECTOR = defineTask<void, boolean>({
   name: "folkways.visual.picker-review.selector", side: "client",
   source: javaTask({
-    imports: ["io.github.izakyl.folkways.front.client.SelectorWindow"],
+    imports: ["io.github.izakyl.folkways.core.front.client.SelectorWindow"],
     body: `SelectorWindow.open(null, stack -> {}); return true;`,
   }),
 });
@@ -37,7 +37,7 @@ const OPEN_SELECTOR = defineTask<void, boolean>({
 const OPEN_HELD_BLUEPRINTS = defineTask<void, boolean>({
   name: "folkways.visual.picker-review.held-blueprints", side: "client",
   source: javaTask({ body: `
-var held = Class.forName("io.github.izakyl.folkways.plugins.build.HeldBlueprints");
+var held = Class.forName("io.github.izakyl.folkways.vanilla.build.HeldBlueprints");
 var pick = held.getDeclaredMethod("pick"); pick.setAccessible(true); pick.invoke(null); return true;
 ` }),
 });
@@ -46,16 +46,16 @@ var pick = held.getDeclaredMethod("pick"); pick.setAccessible(true); pick.invoke
 const OPEN_MIXED = defineTask<void, boolean>({
   name: "folkways.visual.picker-review.mixed", side: "client",
   source: javaTask({ imports: [
-    "io.github.izakyl.folkways.front.client.SelectorWindow",
-    "io.github.izakyl.folkways.front.api.ui.Picker",
+    "io.github.izakyl.folkways.core.front.client.SelectorWindow",
+    "io.github.izakyl.folkways.core.front.api.ui.Picker",
     "net.minecraft.network.chat.Component",
     "net.minecraft.world.item.ItemStack",
     "net.minecraft.world.item.Items",
   ], body: `
 SelectorWindow.open(null,Component.literal("Mixed"),root->Picker.openMany(root,Component.literal("Mixed"),List.of(
- new Picker.Row("folkways:archer",Component.literal("Archer (bow)"),new ItemStack(Items.BOW)),
+ new Picker.Row("folkways_vanilla:archer",Component.literal("Archer (bow)"),new ItemStack(Items.BOW)),
  new Picker.Row("guard",Component.literal("Guard (no item)"),ItemStack.EMPTY),
- new Picker.Row("folkways:builder",Component.literal("Builder (bricks)"),new ItemStack(Items.BRICKS)),
+ new Picker.Row("folkways_vanilla:builder",Component.literal("Builder (bricks)"),new ItemStack(Items.BRICKS)),
  new Picker.Row("scout",Component.literal("Scout (no item)"),ItemStack.EMPTY)),java.util.Set.of("guard"),picked->{}));
 return true;
 ` }),
@@ -73,11 +73,11 @@ return true;
 const LOADOUTS = defineTask<{ player: string }, { route: string }>({
   name: "folkways.visual.picker-review.loadouts", side: "server",
   source: javaTask({ imports: [
-    "io.github.izakyl.folkways.front.api.ui.Pages",
-    "io.github.izakyl.folkways.front.ui.screen.ColonyShell",
-    "io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfiles",
-    "io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfile",
-    "io.github.izakyl.folkways.plugins.patrol.PatrolContent",
+    "io.github.izakyl.folkways.core.front.api.ui.Pages",
+    "io.github.izakyl.folkways.core.front.ui.screen.ColonyShell",
+    "io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutProfiles",
+    "io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutProfile",
+    "io.github.izakyl.folkways.vanilla.patrol.PatrolContent",
     "io.github.izakyl.folkways.core.api.colony.Held",
     "io.github.izakyl.folkways.core.api.terms.WorldPos",
     "io.github.izakyl.folkways.core.api.terms.ItemSpec", "net.minecraft.world.item.Items",
@@ -263,7 +263,7 @@ test("every picker dialog on camera", async ({}, testInfo) => {
       await panel();
       await clickTab(client, "folkways.page.build");
       await settle();
-      await click("folkways.settings.open.tool.folkways.building.folkways.build");
+      await click("folkways.settings.open.tool.folkways_vanilla.building.folkways_vanilla.build");
       await expectPicker("tools");
       await click("folkways.selector.folder.minecraft");
       await shot("settings-tools-folder", "SettingsPage tools: the minecraft folder opened, a folder per tag");
@@ -276,7 +276,7 @@ test("every picker dialog on camera", async ({}, testInfo) => {
       await panel();
       await clickTab(client, "folkways.page.wares");
       await settle();
-      await click("folkways.board.edit.folkways.wares.0.0");
+      await click("folkways.board.edit.folkways_vanilla.wares.0.0");
       await expectPicker("fuel");
       await hoverElement(client, { id: "folkways.selector.rule.0" }, { hoverFrames: 15 });
       await run.shot(client, "rule-tooltip", { subject: "A rule held: hovering it names the item it is", worldState: {}, hard: true });
@@ -285,7 +285,7 @@ test("every picker dialog on camera", async ({}, testInfo) => {
     await scene("blueprints-page", async () => {
       await panel();
       await clickTab(client, "folkways.page.build");
-      await click("folkways.board.open.folkways.build.0.0");
+      await click("folkways.board.open.folkways_vanilla.build.0.0");
       await waitForElement(client, { id: "folkways.blueprints.choose" }, { timeoutMs: 8_000 });
       await click("folkways.blueprints.choose");
       await expectPicker("blueprints");
@@ -298,7 +298,7 @@ test("every picker dialog on camera", async ({}, testInfo) => {
     await scene("looks-page", async () => {
       await panel();
       await clickTab(client, "folkways.page.person");
-      const opens = await boardActs(client, "open", "folkways.person");
+      const opens = await boardActs(client, "open", "folkways_vanilla.person");
       await click(opens[1].id);
       await waitForElement(client, { id: "folkways.pool.looks.choose" });
       await click("folkways.pool.looks.choose");
@@ -426,19 +426,19 @@ test("every picker dialog on camera", async ({}, testInfo) => {
       await tryCommand(server, `fill ${commandPos(post)} ${commandPos(max)} minecraft:air`);
       await openColonyPanelViaBook(server, client, player, founding.standBlock);
       await settlePanel(server, client);
-      await waitForElement(client, { id: "folkways.zoneconfig.kind.folkways.farm" }, { timeoutMs: 8_000 });
-      await click("folkways.zoneconfig.kind.folkways.farm");
+      await waitForElement(client, { id: "folkways.zoneconfig.kind.folkways_vanilla.farm" }, { timeoutMs: 8_000 });
+      await click("folkways.zoneconfig.kind.folkways_vanilla.farm");
       await waitForElement(client, { id: "folkways.draft.value.crop" }, { timeoutMs: 8_000 });
       await click("folkways.draft.value.crop");
       await expectPicker("draft crop");
       await shot("draft-settings-crop", "DraftSettings: a new farm's crop, chosen before the zone is made");
       await closePickers();
-      await click("folkways.zoneconfig.offer.folkways.draft");
+      await click("folkways.zoneconfig.offer.folkways_vanilla.draft");
       await waitForElement(client, { id: "folkways.draft.choose" }, { timeoutMs: 8_000 });
       await click("folkways.draft.choose");
       await expectPicker("draft patterns");
       await shot("draft-panel-patterns", "DraftPanel: the patterns that can be drawn in the marked box");
-      await click("folkways.draft.pattern.folkways.terraced_field");
+      await click("folkways.draft.pattern.folkways_vanilla.terraced_field");
       await waitForElement(client, { id: "folkways.draft.preview" }, { timeoutMs: 8_000 });
       const knobs = (await shown()).filter(element => element.className.endsWith(".Button")
         && element.id!.startsWith("folkways.draft.knob."));
@@ -460,7 +460,7 @@ test("every picker dialog on camera", async ({}, testInfo) => {
       await safeAction(() => screen.dismiss(client));
       await tryCommand(server, `gamemode creative ${player}`);
       const box = { x: origin.x + 2, y: origin.y, z: origin.z + 3 };
-      await world.command(server, `setblock ${commandPos(box)} folkways:creative_supply_box`);
+      await world.command(server, `setblock ${commandPos(box)} folkways_vanilla:creative_supply_box`);
       // An empty hand: with the book in it, the use would open the colony panel instead.
       await tryCommand(server, `item replace entity ${player} weapon.mainhand with minecraft:air`);
       await tick.sprint(server, 3);
@@ -491,7 +491,7 @@ test("every picker dialog on camera", async ({}, testInfo) => {
     await scene("narrow-looks", async () => {
       await panel();
       await clickTab(client, "folkways.page.person");
-      const opens = await boardActs(client, "open", "folkways.person");
+      const opens = await boardActs(client, "open", "folkways_vanilla.person");
       await click(opens[1].id);
       await waitForElement(client, { id: "folkways.pool.looks.choose" });
       await click("folkways.pool.looks.choose");

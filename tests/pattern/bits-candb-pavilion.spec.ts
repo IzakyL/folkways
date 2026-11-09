@@ -15,7 +15,7 @@ const CAMERA_SETUP = defineTask<void, unknown>({
   source: readFileSync("tests/pattern/galleries/arch-bridge/CameraSetup.java", "utf8"),
 });
 const SETTLE_MS = 5_000;
-const PATTERN = "mods/chiselsandbits/src/main/resources/data/folkways_chiselsandbits/folkways/pattern/pavilion.star";
+const PATTERN = "mods/carving/src/main/resources/data/folkways_carving/folkways/pattern/pavilion.star";
 const gallery = {
   pattern: "bits-candb-pavilion",
   task: defineTask<Record<string, any>, any>({
@@ -52,7 +52,7 @@ test(`pattern gallery: ${gallery.pattern}`, async ({}, testInfo) => {
   let pair: E2EPair | undefined;
   try {
     pair = await launchPair({
-      config: "blockwright.toml#chiselsandbits",
+      config: "blockwright.toml#carving",
       server: {
         trace: tracePath("pattern", `${scope}-server`),
         instance: seededOffThreadServer(`${scope}-server-${runId}`),

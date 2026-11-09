@@ -40,7 +40,7 @@ type Reading = {
   residents: ResidentReading[];
 };
 
-const COMBAT_PAGE = "folkways.combat";
+const COMBAT_PAGE = "folkways_vanilla.combat";
 const COMBAT_TAB = "folkways.page.combat";
 const CONTROL = "folkways.combat.";
 
@@ -56,7 +56,7 @@ test("the combat page creates a real GUARD, releases it, and executes its two-po
       config: "blockwright.toml#rts",
       server: { instance: `combat-page-server-${run}` },
       client: { instance: `combat-page-client-${run}` },
-      snapshot: { entityTypes: ["folkways:resident"] },
+      snapshot: { entityTypes: ["folkways_vanilla:resident"] },
     });
     const { server, client } = pair;
     await setVisualLanguage(client, "zh_cn");
@@ -315,12 +315,12 @@ function distance(entity: Pick<ResidentReading, "x" | "z">, destination: Vec): n
 const TASK_IMPORTS = [
   "java.util.ArrayList", "java.util.LinkedHashMap", "java.util.List", "java.util.Map", "java.util.UUID",
   "net.minecraft.server.MinecraftServer", "net.minecraft.core.BlockPos", "net.minecraft.world.entity.Entity",
-  "io.github.izakyl.folkways.core.colony.api.Colonies", "io.github.izakyl.folkways.plugins.person.PersonContent",
+  "io.github.izakyl.folkways.core.colony.api.Colonies", "io.github.izakyl.folkways.vanilla.person.PersonContent",
   "io.github.izakyl.folkways.core.resident.api.Bodies",
-  "io.github.izakyl.folkways.plugins.person.ResidentEntity",
-  "io.github.izakyl.folkways.rts.combat.command.ResidentCommands",
-  "io.github.izakyl.folkways.rts.combat.group.UnitGroups", "io.github.izakyl.folkways.rts.combat.group.UnitGroup",
-  "io.github.izakyl.folkways.plugins.combat.weapon.PatrolSupplies",
+  "io.github.izakyl.folkways.vanilla.person.ResidentEntity",
+  "io.github.izakyl.folkways.core.rts.combat.command.ResidentCommands",
+  "io.github.izakyl.folkways.core.rts.combat.group.UnitGroups", "io.github.izakyl.folkways.core.rts.combat.group.UnitGroup",
+  "io.github.izakyl.folkways.vanilla.combat.weapon.PatrolSupplies",
 ];
 
 const RESIDENTS = defineTask<{ colony: string }, string[]>({
@@ -328,7 +328,7 @@ const RESIDENTS = defineTask<{ colony: string }, string[]>({
   side: "server",
   source: javaTask({
     imports: ["net.minecraft.server.MinecraftServer", "java.util.UUID", "io.github.izakyl.folkways.core.colony.api.Colonies",
-      "io.github.izakyl.folkways.plugins.person.PersonBody", "io.github.izakyl.folkways.plugins.person.ResidentEntity"],
+      "io.github.izakyl.folkways.vanilla.person.PersonBody", "io.github.izakyl.folkways.vanilla.person.ResidentEntity"],
     body: `
 var level=((MinecraftServer)ctx.server()).overworld();var a=Args.of(ctx);
 var colony=Colonies.of(level.getServer(),UUID.fromString(a.string("colony"))).orElseThrow();
@@ -395,7 +395,7 @@ const ASSIGN_PROFILE = defineTask<Scene & { profile: string }, boolean>({
   source: javaTask({
     imports: ["java.util.Optional", "java.util.UUID", "net.minecraft.server.MinecraftServer", "net.minecraft.world.item.Items",
       "io.github.izakyl.folkways.core.colony.api.Colonies", "io.github.izakyl.folkways.core.item.api.ItemSpec",
-      "io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfiles", "io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfile"],
+      "io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutProfiles", "io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutProfile"],
     body: `
 var a=Args.of(ctx);var colony=Colonies.of((MinecraftServer)ctx.server(),UUID.fromString(a.string("colony"))).orElseThrow();
 var profiles=LoadoutProfiles.of(colony);var profile=profiles.create(a.string("profile"));
@@ -410,7 +410,7 @@ const CLEANUP = defineTask<Scene, { done: true }>({
   side: "server",
   source: javaTask({
     imports: ["java.util.Map", "java.util.UUID", "net.minecraft.server.MinecraftServer", "io.github.izakyl.folkways.core.colony.api.Colonies",
-      "io.github.izakyl.folkways.rts.combat.group.UnitGroups"],
+      "io.github.izakyl.folkways.core.rts.combat.group.UnitGroups"],
     body: `
 var server=(MinecraftServer)ctx.server();var level=server.overworld();var a=Args.of(ctx);
 for(String raw:a.strings("residents")){var entity=level.getEntity(UUID.fromString(raw));if(entity!=null)entity.discard();}

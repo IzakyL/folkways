@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.cookery.tavern;
 
-import io.github.izakyl.folkways.plugins.person.living.DiningDrinks;
+import io.github.izakyl.folkways.vanilla.person.living.DiningDrinks;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.NonNullList;

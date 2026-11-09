@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.core.world.api;
 
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.world.internal.Ground;
 import io.github.izakyl.folkways.core.world.internal.Grounds;
 import java.util.HashMap;
@@ -21,8 +21,8 @@ import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
-@EventBusSubscriber(modid = FolkwaysMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@EventBusSubscriber(modid = FolkwaysCoreMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
+@GameTestHolder(FolkwaysCoreMod.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class GroundGameTests {
 
@@ -33,7 +33,7 @@ public final class GroundGameTests {
         event.register(GroundGameTests.class);
     }
 
-    @GameTest(template = "empty_large", timeoutTicks = 100)
+    @GameTest(template = "empty_large", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void reachAcrossSectionsFollowsTheWorldAndTrialsLeaveItAlone(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         room(helper, 6, 8);
@@ -68,7 +68,7 @@ public final class GroundGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void bambooOffersNoPlaceToStand(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         BlockPos cell = at(helper, 2, 1, 2);

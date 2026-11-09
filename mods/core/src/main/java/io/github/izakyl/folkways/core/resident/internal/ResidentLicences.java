@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.core.resident.internal;
 
-import io.github.izakyl.folkways.base.persist.Required;
+import io.github.izakyl.folkways.core.base.persist.Required;
 import io.github.izakyl.folkways.core.resident.api.Licence;
 import io.github.izakyl.folkways.core.resident.api.Licences.Trade;
 import io.github.izakyl.folkways.core.resident.api.Licences;

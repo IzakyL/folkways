@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.core.plan.internal;
 
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.inventory.api.Stash;
 import io.github.izakyl.folkways.core.inventory.internal.Stands;
 import io.github.izakyl.folkways.core.item.api.Containers;
@@ -48,7 +48,7 @@ import io.github.izakyl.folkways.core.work.internal.HaulRefusal;
 import io.github.izakyl.folkways.core.work.internal.TransferNode;
 import io.github.izakyl.folkways.core.world.api.Stand;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
-import io.github.izakyl.folkways.effect.Effects;
+import io.github.izakyl.folkways.core.effect.Effects;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -72,12 +72,12 @@ import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
-@EventBusSubscriber(modid = FolkwaysMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@EventBusSubscriber(modid = FolkwaysCoreMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
+@GameTestHolder(FolkwaysCoreMod.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class TransportExecutionGameTests {
 
-    private static final ResourceLocation MODE = ResourceLocation.fromNamespaceAndPath("folkways", "execution_test");
+    private static final ResourceLocation MODE = ResourceLocation.fromNamespaceAndPath("folkways_core", "execution_test");
     private static final ItemSpec GOODS = ItemSpec.exact(new ItemStack(Items.IRON_INGOT));
 
     @SubscribeEvent
@@ -85,7 +85,7 @@ public final class TransportExecutionGameTests {
         event.register(TransportExecutionGameTests.class);
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void planningManyStockLots(GameTestHelper helper) {
         try (Rig rig = new Rig(helper)) {
             for (int store = 0; store < 4; store++) {
@@ -129,7 +129,7 @@ public final class TransportExecutionGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void foreignTransportKeepsPackAndStockPlanningUnrouted(GameTestHelper helper) {
         for (int publication = 0; publication < 3; publication++) {
             try (Rig rig = new Rig(helper)) {
@@ -160,7 +160,7 @@ public final class TransportExecutionGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void transportIntentsEstimateThroughTheRegistryWithoutLaying(GameTestHelper helper) {
         try (Rig rig = new Rig(helper)) {
             Routing routing = new Routing();
@@ -217,7 +217,7 @@ public final class TransportExecutionGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void workshopOutputsArePricedFromWorkerStances(GameTestHelper helper) {
         try (Rig rig = new Rig(helper)) {
             WorldPos station = rig.pos(2).at(rig.pos(2).cell().offset(0, 0, 2));
@@ -266,7 +266,7 @@ public final class TransportExecutionGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void carryingAroundATrunkReallyDeliversAndConservesGoods(GameTestHelper helper) {
         try (Rig rig = new Rig(helper)) {
             rig.mode.line("trunk", 1, 3, 1);
@@ -298,7 +298,7 @@ public final class TransportExecutionGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void linesOfOneModeAreNeverChained(GameTestHelper helper) {
         try (Rig rig = new Rig(helper)) {
             rig.mode.line("first", 1, 2, 1).line("second", 2, 3, 1);
@@ -310,7 +310,7 @@ public final class TransportExecutionGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void sourcesArePricedByTheRouteTheyWouldTake(GameTestHelper helper) {
         try (Rig rig = new Rig(helper)) {
             rig.store(0).clearContent();
@@ -342,7 +342,7 @@ public final class TransportExecutionGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void downstreamWaitsAndFailedUpstreamCreatesNoOutput(GameTestHelper helper) {
         try (Rig rig = new Rig(helper)) {
             rig.mode.line("trunk", 1, 3, 1);
@@ -367,7 +367,7 @@ public final class TransportExecutionGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void aDearTrunkLosesToExecutableDirectCarrying(GameTestHelper helper) {
         try (Rig rig = new Rig(helper)) {
             rig.mode.line("dear", 1, 3, 100_000);
@@ -379,7 +379,7 @@ public final class TransportExecutionGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void failedExpansionReleasesTheWholeGrowthAndUsesTheNextLine(GameTestHelper helper) {
         try (Rig rig = new Rig(helper)) {
             rig.mode.line("rejected", 1, 3, 1).line("accepted", 1, 3, 2);
@@ -406,7 +406,7 @@ public final class TransportExecutionGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void noPublishedModeNeverEntersTheEstimate(GameTestHelper helper) {
         try (Rig rig = new Rig(helper)) {
             rig.published = false;
@@ -419,7 +419,7 @@ public final class TransportExecutionGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void partialCoverageRequiresACompleteExecutableTail(GameTestHelper helper) {
         try (Rig rig = new Rig(helper)) {
             rig.mode.line("trunk", 1, 3, 1);
@@ -453,7 +453,7 @@ public final class TransportExecutionGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void pendingRoutesUseKnownWorkAndRequestUnknownConnections(GameTestHelper helper) {
         try (Rig rig = new Rig(helper)) {
             rig.mode.line("trunk", 1, 3, 1);
@@ -479,7 +479,7 @@ public final class TransportExecutionGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void aModesOwnTransfersCarryDirectlyAndRollBackWithIt(GameTestHelper helper) {
         try (Rig rig = new Rig(helper)) {
             rig.nested();
@@ -535,7 +535,7 @@ public final class TransportExecutionGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void inReachStockFeedsAnUnlicensedWorkerWithOrWithoutTransport(GameTestHelper helper) {
         for (boolean published : List.of(false, true)) {
             try (Rig rig = new Rig(helper)) {
@@ -563,7 +563,7 @@ public final class TransportExecutionGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void directCarryKeepsPackSizedSharesWithUnrelatedTransport(GameTestHelper helper) {
         for (boolean published : List.of(false, true)) {
             try (Rig rig = new Rig(helper)) {
@@ -840,7 +840,7 @@ public final class TransportExecutionGameTests {
         }
 
         private Fake line(String name, int from, int to, long cost) {
-            var id = ResourceLocation.fromNamespaceAndPath("folkways", name);
+            var id = ResourceLocation.fromNamespaceAndPath("folkways_core", name);
             var link = new TransportLink(id, 1, endpoint(from), endpoint(to), List.of(GOODS),
                 new TransportLink.Capacity(MODE, 64, 64, 1, false),
                 new TransportLink.Service(MODE, 1, 0, Long.MAX_VALUE), true, true, true);
@@ -850,7 +850,7 @@ public final class TransportExecutionGameTests {
         }
 
         private TransportEndpoint endpoint(int index) {
-            return new TransportEndpoint(ResourceLocation.fromNamespaceAndPath("folkways", "hub_" + index),
+            return new TransportEndpoint(ResourceLocation.fromNamespaceAndPath("folkways_core", "hub_" + index),
                 rig.pos(index), Set.of(new Stand(rig.pos(index))),
                 new TransportEndpoint.Handover(TransportEndpoint.Form.PACK, MODE));
         }

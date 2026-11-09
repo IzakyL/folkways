@@ -29,7 +29,7 @@ test("a colony aboard a Sable ship comes back whole after the server saves, stop
       // The world has to outlive this first server for the second to load it.
       server: { trace: tracePath("sable", "sable-reload-server"), instance: serverInstance, keepInstanceDir: true },
       client: { trace: tracePath("sable", "sable-reload-client"), instance: `sable-reload-client-${runId}` },
-      snapshot: { entityTypes: ["folkways:resident"] },
+      snapshot: { entityTypes: ["folkways_vanilla:resident"] },
     });
     let { server, client } = pair;
 
@@ -61,7 +61,7 @@ test("a colony aboard a Sable ship comes back whole after the server saves, stop
       config: SABLE_CONFIG,
       server: { trace: tracePath("sable", "sable-reload-server-again"), instance: serverInstance },
       client: { trace: tracePath("sable", "sable-reload-client-again"), instance: `sable-reload-client-again-${runId}` },
-      snapshot: { entityTypes: ["folkways:resident"] },
+      snapshot: { entityTypes: ["folkways_vanilla:resident"] },
     });
     ({ server, client } = pair);
     await waitForGroundedPlayer(server);

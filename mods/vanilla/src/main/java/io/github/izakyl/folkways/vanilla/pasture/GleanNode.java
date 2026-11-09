@@ -1,0 +1,53 @@
+package io.github.izakyl.folkways.vanilla.pasture;
+
+import io.github.izakyl.folkways.core.work.api.Amount;
+import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.WorkNoise;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.work.api.Xp;
+import io.github.izakyl.folkways.core.work.support.Leaves;
+import java.util.List;
+import java.util.Optional;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.item.ItemStack;
+
+final class GleanNode extends PenNode {
+
+    GleanNode(ServerLevel level, Chore chore) {
+        super(PenNode.declare(chore, Herd.Job.GLEAN).leaves(leaves(level, chore)).doing(PastureContent.GLEANING)
+            .done(), chore);
+    }
+
+    // The stack as it lies now, or a cell for it when it cannot be seen.
+    private static List<Amount> leaves(ServerLevel level, Chore chore) {
+        return level.getEntity(chore.beast().subject()) instanceof ItemEntity drop
+            ? Leaves.ofStacks(List.of(drop.getItem()))
+            : Leaves.room(1);
+    }
+
+    @Override
+    public boolean ready(ServerLevel level) {
+        return lying(level) != null;
+    }
+
+    @Override
+    public Outcome commit(ServerLevel level, Worker who) {
+        ItemEntity lying = lying(level);
+        if (lying == null) {
+            return refuse(PastureRefusal.NOTHING_TO_TAKE);
+        }
+        ItemStack taken = lying.getItem().copy();
+        lying.discard();
+        return counted(level, new Outcome.Done(List.of(WorkNoise.stowed()), List.of(taken),
+            Optional.of(new Xp(PastureContent.trade(), 1))));
+    }
+
+    private ItemEntity lying(ServerLevel level) {
+        Entity found = level.getEntity(subject());
+        return found instanceof ItemEntity drop && drop.isAlive() && !drop.getItem().isEmpty()
+            ? drop
+            : null;
+    }
+}

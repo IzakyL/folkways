@@ -1,9 +1,12 @@
 package io.github.izakyl.folkways.create;
 
+import io.github.izakyl.folkways.create.FolkwaysCreateMod;
 import io.github.izakyl.folkways.create.upgrade.CreateUpgrades;
-import io.github.izakyl.folkways.effect.perk.PerkPool;
+import io.github.izakyl.folkways.core.effect.perk.PerkPool;
+import io.github.izakyl.folkways.create.firefighting.FirefightingIntegration;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
+import net.neoforged.fml.ModList;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.config.ModConfig;
 import net.neoforged.fml.event.config.ModConfigEvent;
@@ -20,5 +23,8 @@ public final class FolkwaysCreateMod {
         modBus.addListener(ModConfigEvent.Loading.class, event -> PerkPool.regrant());
         modBus.addListener(ModConfigEvent.Reloading.class, event -> PerkPool.regrant());
         CreatePlugins.install(modBus);
+        if (ModList.get().isLoaded("createfirefightingadd")) {
+            FirefightingIntegration.install(modBus);
+        }
     }
 }

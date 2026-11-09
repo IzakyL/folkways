@@ -1,0 +1,21 @@
+package io.github.izakyl.folkways.vanilla.pasture;
+
+import io.github.izakyl.folkways.core.extension.api.Declaring;
+import io.github.izakyl.folkways.core.front.api.Registering;
+import net.neoforged.bus.api.IEventBus;
+import net.neoforged.fml.loading.FMLEnvironment;
+
+public final class PasturePlugin {
+
+    private PasturePlugin() {
+    }
+
+    public static void install(IEventBus modBus) {
+        net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(BreedingPerks::born);
+        modBus.addListener(Declaring.class, PastureContent::declare);
+        modBus.addListener(Registering.class, PastureContent::enroll);
+        if (FMLEnvironment.dist.isClient()) {
+            modBus.addListener(PastureScene::declare);
+        }
+    }
+}

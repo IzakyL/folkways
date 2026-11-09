@@ -1,11 +1,11 @@
 package io.github.izakyl.folkways.core.vocation.api;
 
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.extension.api.Declaring;
 import io.github.izakyl.folkways.core.resident.api.Participation;
 import io.github.izakyl.folkways.core.resident.api.Participations;
 import io.github.izakyl.folkways.core.resident.api.Stake;
-import io.github.izakyl.folkways.plugins.person.PersonBody;
+import io.github.izakyl.folkways.vanilla.person.PersonBody;
 import java.util.List;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
@@ -16,8 +16,8 @@ import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
-@EventBusSubscriber(modid = FolkwaysMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@EventBusSubscriber(modid = FolkwaysCoreMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
+@GameTestHolder(FolkwaysCoreMod.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class VocationOrderingGameTests {
     // Full-id order deliberately disagrees with ResourceLocation's path-first natural order.
@@ -42,7 +42,7 @@ public final class VocationOrderingGameTests {
         event.register(VocationOrderingGameTests.class);
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void columnsUseExplicitOrderThenFullIdRegardlessOfDeclarationOrder(GameTestHelper helper) {
         List<ResourceLocation> ids = Vocations.ids();
         helper.assertValueEqual(ids.stream().filter(EXPECTED::contains).toList(), EXPECTED,
@@ -52,14 +52,34 @@ public final class VocationOrderingGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
-    public static void builtInColumnsKeepTheirHistoricalOrder(GameTestHelper helper) {
-        List<ResourceLocation> expected = List.of("hauling", "crafting", "building", "farming", "herding",
-                "fishing", "patrolling", "conducting", "dispatching").stream()
-            .map(path -> ResourceLocation.fromNamespaceAndPath("folkways", path))
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
+    public static void builtInColumnsRunGroupByGroup(GameTestHelper helper) {
+        List<ResourceLocation> expected = List.of("farming", "herding", "fishing", "crafting", "building",
+                "hauling", "conducting", "dispatching", "patrolling", "damage_control").stream()
+            .map(path -> ResourceLocation.fromNamespaceAndPath(switch (path) {
+                case "hauling" -> "folkways_core";
+                case "conducting", "dispatching" -> "folkways_create";
+                default -> "folkways_vanilla";
+            }, path))
             .filter(id -> Vocations.of(id).isPresent()).toList();
         helper.assertValueEqual(Vocations.ids().stream().filter(expected::contains).toList(), expected,
-            "built-in work columns retain their order when optional plugins are present or absent");
+            "built-in work columns run gathering, processing, construction, transport, then defence");
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
+    public static void eachGroupHoldsOneContiguousRunOfColumns(GameTestHelper helper) {
+        List<VocationGroup> seen = new java.util.ArrayList<>();
+        for (Vocation vocation : Vocations.all()) {
+            VocationGroup group = vocation.group();
+            if (!seen.isEmpty() && seen.getLast().equals(group)) {
+                continue;
+            }
+            helper.assertFalse(seen.contains(group), "group " + group.id() + " is split across columns");
+            seen.add(group);
+        }
+        helper.assertValueEqual(Vocations.of(ResourceLocation.fromNamespaceAndPath("folkways_core", "hauling"))
+            .map(Vocation::group).orElseThrow(), VocationGroup.TRANSPORT, "hauling is transport work");
         helper.succeed();
     }
 }

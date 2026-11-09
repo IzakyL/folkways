@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.core.runtime;
 
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.inventory.api.Stash;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import io.github.izakyl.folkways.core.plan.internal.Claim;
@@ -14,7 +14,7 @@ import io.github.izakyl.folkways.core.work.api.Placement;
 import io.github.izakyl.folkways.core.work.api.PreemptReason;
 import io.github.izakyl.folkways.core.work.api.Workload;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
-import io.github.izakyl.folkways.front.engine.colony.LaborDebug;
+import io.github.izakyl.folkways.core.front.engine.colony.LaborDebug;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -31,8 +31,8 @@ import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
-@EventBusSubscriber(modid = FolkwaysMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@EventBusSubscriber(modid = FolkwaysCoreMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
+@GameTestHolder(FolkwaysCoreMod.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class SuspendedDiagnosticsGameTests {
     @SubscribeEvent
@@ -40,7 +40,7 @@ public final class SuspendedDiagnosticsGameTests {
         event.register(SuspendedDiagnosticsGameTests.class);
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void snapshotTracksSuspensionAndItsReservations(GameTestHelper helper) throws Exception {
         try (HoldingGameTests.Harness h = new HoldingGameTests.Harness(helper)) {
             Node node = h.node(Workload.Once.of(100), new AtomicInteger(), false);

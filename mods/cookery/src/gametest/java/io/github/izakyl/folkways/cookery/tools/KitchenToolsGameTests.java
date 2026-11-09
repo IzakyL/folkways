@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.cookery.tools;
 
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.item.api.Goods;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import java.util.List;
@@ -19,7 +19,7 @@ import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
 @EventBusSubscriber(modid = "folkways_cookery", bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@GameTestHolder("folkways_cookery")
 @PrefixGameTestTemplate(false)
 public final class KitchenToolsGameTests {
 
@@ -30,7 +30,7 @@ public final class KitchenToolsGameTests {
         event.register(KitchenToolsGameTests.class);
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void malformedLoansFailInsteadOfDroppingOrDeduplicatingThem(GameTestHelper helper) {
         KitchenTools pool = new KitchenTools();
         UUID colony = UUID.randomUUID();
@@ -67,7 +67,7 @@ public final class KitchenToolsGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void unknownUnloadedStockIsNotProofThatTheColonyHasNoTool(GameTestHelper helper) {
         KitchenTools pool = new KitchenTools();
         UUID colony = UUID.randomUUID();
@@ -83,7 +83,7 @@ public final class KitchenToolsGameTests {
             "once all sources are observed empty, true absence permits one bootstrap tool");
         helper.succeed();
     }
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void concurrentEmptyRequestsMergeOneReplacementAndOnlyTheFirstMayManufacture(GameTestHelper helper) {
         KitchenTools pool = new KitchenTools();
         UUID colony = UUID.randomUUID();
@@ -103,7 +103,7 @@ public final class KitchenToolsGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void automaticAndPlayerCommitmentsDoNotOscillateOrManufactureTwice(GameTestHelper helper) {
         KitchenTools pool = new KitchenTools();
         UUID colony = UUID.randomUUID();
@@ -120,7 +120,7 @@ public final class KitchenToolsGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void duplicateTransitObservationsAndUnreachableToolsNeverTriggerManufacture(GameTestHelper helper) {
         KitchenTools pool = new KitchenTools();
         UUID colony = UUID.randomUUID();
@@ -143,7 +143,7 @@ public final class KitchenToolsGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void actualAdditionalToolsPermitParallelLoansWithoutChangingDefaultSupply(GameTestHelper helper) {
         KitchenTools pool = new KitchenTools();
         UUID colony = UUID.randomUUID();
@@ -161,7 +161,7 @@ public final class KitchenToolsGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void cancellationKeepsTheToolReservedUntilItsPhysicalReturnCompletes(GameTestHelper helper) {
         KitchenTools pool = new KitchenTools();
         UUID colony = UUID.randomUUID();
@@ -185,7 +185,7 @@ public final class KitchenToolsGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void restartRecoversOnlyPhysicalReturnsWithoutRevivingOldWork(GameTestHelper helper) {
         KitchenTools before = new KitchenTools();
         UUID colony = UUID.randomUUID();
@@ -210,7 +210,7 @@ public final class KitchenToolsGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void confirmedBreakageAllowsOneReplacementWithinItsOwnColony(GameTestHelper helper) {
         KitchenTools pool = new KitchenTools();
         UUID colony = UUID.randomUUID();

@@ -15,7 +15,7 @@ import { GROUND, around } from "../shared/harness/stage";
 // and founds more, the Members page names who keeps the one open, and only its founder may end it. A player asked
 // in keeps a colony only once they accept.
 
-const BOOK_ITEM = "folkways:colony_book";
+const BOOK_ITEM = "folkways_core:colony_book";
 // The colony a player acts for settles as the change that moves it lands; this leaves room for the packet.
 const SETTLE_TICKS = 10;
 // Someone who keeps colonies on this server without being online: what a second player looks like to the first.
@@ -29,10 +29,10 @@ type Reading = { ok: true; player: string; current: string | null; colonies: Kep
 const IMPORTS = [
   "io.github.izakyl.folkways.core.colony.api.Colonies",
   "io.github.izakyl.folkways.core.colony.api.Colony",
-  "io.github.izakyl.folkways.front.engine.charter.Charter",
-  "io.github.izakyl.folkways.front.engine.charter.Charters",
-  "io.github.izakyl.folkways.front.engine.charter.CurrentColony",
-  "io.github.izakyl.folkways.front.engine.charter.Invitations",
+  "io.github.izakyl.folkways.core.front.engine.charter.Charter",
+  "io.github.izakyl.folkways.core.front.engine.charter.Charters",
+  "io.github.izakyl.folkways.core.front.engine.charter.CurrentColony",
+  "io.github.izakyl.folkways.core.front.engine.charter.Invitations",
   "net.minecraft.server.MinecraftServer",
   "net.minecraft.server.level.ServerPlayer",
 ];

@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.core.resident.api;
 
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.resident.internal.ResidentPack;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
@@ -12,8 +12,8 @@ import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
-@EventBusSubscriber(modid = FolkwaysMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@EventBusSubscriber(modid = FolkwaysCoreMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
+@GameTestHolder(FolkwaysCoreMod.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class PackGameTests {
 
@@ -27,7 +27,7 @@ public final class PackGameTests {
         event.register(PackGameTests.class);
     }
 
-    @GameTest(template = TEMPLATE, timeoutTicks = 100)
+    @GameTest(template = TEMPLATE, templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void aBatchOfGoodsThatStackToOneSpreadsOverCells(GameTestHelper helper) {
         Pack pack = new ResidentPack();
         int batch = 5;
@@ -40,7 +40,7 @@ public final class PackGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = TEMPLATE, timeoutTicks = 100)
+    @GameTest(template = TEMPLATE, templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void whatWillNotFitIsHandedBack(GameTestHelper helper) {
         Pack pack = new ResidentPack();
         int cells = pack.getContainerSize();

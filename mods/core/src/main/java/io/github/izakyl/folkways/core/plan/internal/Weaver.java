@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.core.plan.internal;
 
-import io.github.izakyl.folkways.FolkwaysConfig;
+import io.github.izakyl.folkways.core.FolkwaysConfig;
 import io.github.izakyl.folkways.core.inventory.api.Stash;
 import io.github.izakyl.folkways.core.item.api.Goods;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
@@ -83,7 +83,7 @@ import org.slf4j.LoggerFactory;
  */
 public final class Weaver {
 
-    public static final ResourceLocation OWNER = ResourceLocation.fromNamespaceAndPath("folkways", "supply");
+    public static final ResourceLocation OWNER = ResourceLocation.fromNamespaceAndPath("folkways_core", "supply");
 
     private static final Logger LOGGER = LoggerFactory.getLogger("folkways-labor");
 

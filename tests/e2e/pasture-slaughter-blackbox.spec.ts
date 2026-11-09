@@ -49,7 +49,7 @@ for (const stage of twins()) test(stage.title("pasture slaughter end-to-end: an 
       config: stage.config,
       server: { trace: serverTrace, instance: seededServer(stage.name(`pasture-slaughter-server-${runId}`)) },
       client: { trace: clientTrace, instance: clientInstance },
-      snapshot: () => ({ entityTypes: ["folkways:resident", "minecraft:cow", "minecraft:item"] }),
+      snapshot: () => ({ entityTypes: ["folkways_vanilla:resident", "minecraft:cow", "minecraft:item"] }),
     });
     ({ server, client } = pair);
 

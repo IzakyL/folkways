@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.create.build;
 
-import io.github.izakyl.folkways.plugins.build.Joints;
+import io.github.izakyl.folkways.vanilla.build.Joints;
 
 final class CreateTrack {
 

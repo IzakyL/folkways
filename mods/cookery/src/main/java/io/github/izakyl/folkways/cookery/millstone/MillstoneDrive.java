@@ -1,8 +1,8 @@
 package io.github.izakyl.folkways.cookery.millstone;
 
 import com.github.ysbbbbbb.kaleidoscopecookery.blockentity.kitchen.MillstoneBlockEntity;
-import io.github.izakyl.folkways.base.persist.Reader;
-import io.github.izakyl.folkways.base.persist.Required;
+import io.github.izakyl.folkways.core.base.persist.Reader;
+import io.github.izakyl.folkways.core.base.persist.Required;
 import io.github.izakyl.folkways.cookery.CookeryContent;
 import io.github.izakyl.folkways.cookery.CookeryRefusal;
 import io.github.izakyl.folkways.cookery.KitchenBookings;
@@ -24,7 +24,7 @@ import io.github.izakyl.folkways.core.world.api.Footing;
 import io.github.izakyl.folkways.core.world.api.Reach;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.core.world.api.WorldSpaces;
-import io.github.izakyl.folkways.plugins.wares.WaresContent;
+import io.github.izakyl.folkways.vanilla.wares.WaresContent;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumSet;
@@ -48,7 +48,7 @@ import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
 /** Runtime permission never survives a save; the real ingredients and the obligation to leave do. */
 public final class MillstoneDrive {
     private static final String EXIT = "folkways.cookery.millstone.exit";
-    private static final ResourceLocation LEAVING = ResourceLocation.fromNamespaceAndPath("folkways", "leaving_millstone");
+    private static final ResourceLocation LEAVING = ResourceLocation.fromNamespaceAndPath("folkways_cookery", "leaving_millstone");
     private static final Map<UUID, Lease> LEASES = new HashMap<>();
     private static final Map<UUID, Exit> EXITS = new HashMap<>();
 

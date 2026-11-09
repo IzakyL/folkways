@@ -38,21 +38,21 @@ for (const capture of [
     await client.run(SET_GUI_SCALE, { scale });
     const folders = await client.run(PONDER_FOLDERS);
     const dining = profile !== "base";
-    expect(folders.flatMap(folder => folder.scenes).includes("folkways:dining")).toBe(dining);
+    expect(folders.flatMap(folder => folder.scenes).includes("folkways_vanilla:dining")).toBe(dining);
     expect(await client.run(PONDER_DINING)).toEqual({ lesson: dining, indexed: dining, playback: dining });
     const scenes = folders.flatMap(folder => folder.scenes.filter(id =>
-      profile === "base" || folder.id === "folkways:cookery" || id === "folkways:dining"));
+      profile === "base" || folder.id === "folkways_cookery:cookery" || id === "folkways_vanilla:dining"));
     expect(scenes.length).toBeGreaterThan(0);
     if (profile !== "base") {
-      expect(scenes).toEqual(expect.arrayContaining(["folkways:tavern", "folkways:cookery_pots", "folkways:dining"]));
+      expect(scenes).toEqual(expect.arrayContaining(["folkways_cookery:tavern", "folkways_cookery:cookery_pots", "folkways_vanilla:dining"]));
     }
-    const selected = scenes.filter(id => scale === 3 ? id === "folkways:farming"
-      : locale === "zh_cn" ? ["folkways:housing", "folkways:dining", "folkways:household"].includes(id) : true)
-      .filter(id => !only || only.includes(id.replace(/^folkways:/, "")));
+    const selected = scenes.filter(id => scale === 3 ? id === "folkways_vanilla:farming"
+      : locale === "zh_cn" ? ["folkways_vanilla:housing", "folkways_vanilla:dining", "folkways_vanilla:household"].includes(id) : true)
+      .filter(id => !only || only.includes(id.replace(/^folkways_vanilla:/, "")));
     test.skip(only !== undefined && selected.length === 0, `none of ${process.env.PONDER_SCENES} in this capture`);
     expect(selected.length).toBeGreaterThan(0);
     if (locale === "zh_cn" && !only) {
-      expect(selected).toEqual(expect.arrayContaining(["folkways:housing", "folkways:household"]));
+      expect(selected).toEqual(expect.arrayContaining(["folkways_vanilla:housing", "folkways_vanilla:household"]));
     }
     // Preflight the named entry points before spending time on clips. Ponder screens share context;
     // opening another lesson must reset the old screen instead of retaining its active scene.

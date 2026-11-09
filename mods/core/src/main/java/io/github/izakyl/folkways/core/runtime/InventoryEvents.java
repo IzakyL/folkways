@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.core.runtime;
 
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.colony.api.Colonies;
 import io.github.izakyl.folkways.core.colony.internal.ColonyRegistry;
 import io.github.izakyl.folkways.core.inventory.api.InventoryChanged;
@@ -13,7 +13,7 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.entity.living.LivingEquipmentChangeEvent;
 import net.neoforged.neoforge.event.level.ChunkEvent;
 
-@EventBusSubscriber(modid = FolkwaysMod.CORE_ID)
+@EventBusSubscriber(modid = FolkwaysCoreMod.CORE_ID)
 public final class InventoryEvents {
 
     private InventoryEvents() {

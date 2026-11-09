@@ -2,11 +2,11 @@ package io.github.izakyl.folkways.carts;
 
 import io.github.izakyl.folkways.carts.upgrade.CartsUpgrades;
 import io.github.izakyl.folkways.core.extension.api.Declaring;
-import io.github.izakyl.folkways.front.api.Delegation;
-import io.github.izakyl.folkways.front.api.Enrollment;
-import io.github.izakyl.folkways.front.api.Registering;
-import io.github.izakyl.folkways.front.api.Schema;
-import io.github.izakyl.folkways.front.api.Shape;
+import io.github.izakyl.folkways.core.front.api.Delegation;
+import io.github.izakyl.folkways.core.front.api.Enrollment;
+import io.github.izakyl.folkways.core.front.api.Registering;
+import io.github.izakyl.folkways.core.front.api.Schema;
+import io.github.izakyl.folkways.core.front.api.Shape;
 import java.util.List;
 import net.minecraft.resources.ResourceLocation;
 import net.neoforged.bus.api.IEventBus;
@@ -16,13 +16,13 @@ import net.neoforged.fml.loading.FMLEnvironment;
 @Mod(FolkwaysCartsMod.ID)
 public final class FolkwaysCartsMod {
     public static final String ID = "folkways_carts";
-    public static final ResourceLocation OWNER = ResourceLocation.fromNamespaceAndPath("folkways", "carts");
+    public static final ResourceLocation OWNER = ResourceLocation.fromNamespaceAndPath("folkways_carts", "carts");
 
     // A cart line, drawn as a path whose every point is a station.
-    public static final ResourceLocation LINE = ResourceLocation.fromNamespaceAndPath("folkways", "cart_line");
+    public static final ResourceLocation LINE = ResourceLocation.fromNamespaceAndPath("folkways_carts", "cart_line");
 
-    static final ResourceLocation OPEN = ResourceLocation.fromNamespaceAndPath("folkways", "line_open");
-    static final ResourceLocation CLOSED = ResourceLocation.fromNamespaceAndPath("folkways", "line_closed");
+    static final ResourceLocation OPEN = ResourceLocation.fromNamespaceAndPath("folkways_carts", "line_open");
+    static final ResourceLocation CLOSED = ResourceLocation.fromNamespaceAndPath("folkways_carts", "line_closed");
 
     static final Schema.Setting.Choice CART = new Schema.Setting.Choice("cart", "folkways.settings.cart_line.cart",
         ResourceLocation.fromNamespaceAndPath(CartLinks.ASTIKOR, "oak_hand_cart"),

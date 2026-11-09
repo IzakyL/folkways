@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.core.plan.internal;
 
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.inventory.api.Stash;
 import io.github.izakyl.folkways.core.inventory.api.StoreRule;
 import io.github.izakyl.folkways.core.inventory.internal.Stands;
@@ -46,8 +46,8 @@ import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
-@EventBusSubscriber(modid = FolkwaysMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@EventBusSubscriber(modid = FolkwaysCoreMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
+@GameTestHolder(FolkwaysCoreMod.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class StoreRuleGameTests {
 
@@ -59,7 +59,7 @@ public final class StoreRuleGameTests {
         event.register(StoreRuleGameTests.class);
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void ordersBypassIncomingRulesButOrdinaryTransfersStillObeyThem(GameTestHelper helper) {
         PlanningFixture f = new PlanningFixture(helper);
         var barrels = f.barrels();
@@ -114,7 +114,7 @@ public final class StoreRuleGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void aReserveIsNeverFilledFromAnotherReserveOfTheSameGoods(GameTestHelper helper) {
         PlanningFixture f = new PlanningFixture(helper);
         Stash kitchen = new Stash(f.target);
@@ -158,7 +158,7 @@ public final class StoreRuleGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void aStoreTakesOnlyWhatItsRulesAdmit(GameTestHelper helper) {
         PlanningFixture f = new PlanningFixture(helper);
         Stash target = new Stash(f.target);
@@ -188,7 +188,7 @@ public final class StoreRuleGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void aStoreUsesAllSlotsAndHonorsAdmission(GameTestHelper helper) {
         var level = helper.getLevel();
         BlockPos cell = helper.absolutePos(new BlockPos(1, 1, 1));
@@ -221,7 +221,7 @@ public final class StoreRuleGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void slotRangesAndGeneralAccessRulesRemainIndependent(GameTestHelper helper) {
         var level = helper.getLevel();
         BlockPos cell = helper.absolutePos(new BlockPos(1, 1, 1));
@@ -251,7 +251,7 @@ public final class StoreRuleGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void aStoreHasNoRoomForWhatItsContainerRefuses(GameTestHelper helper) {
         var level = helper.getLevel();
         BlockPos boxAt = helper.absolutePos(new BlockPos(1, 1, 1));
@@ -292,7 +292,7 @@ public final class StoreRuleGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void takingAndGeneralStorageAreIndependentOfOrders(GameTestHelper helper) {
         PlanningFixture f = new PlanningFixture(helper);
         Stash source = new Stash(f.source);
@@ -312,7 +312,7 @@ public final class StoreRuleGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void aRelayMustAllowItsConsumerToTakeTheGoods(GameTestHelper helper) {
         PlanningFixture f = new PlanningFixture(helper);
         Stash source = new Stash(f.source);
@@ -357,7 +357,7 @@ public final class StoreRuleGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void inFlightTakingRechecksPermission(GameTestHelper helper) {
         PlanningFixture f = new PlanningFixture(helper);
         var level = helper.getLevel();

@@ -1,7 +1,7 @@
 package io.github.izakyl.folkways.core.runtime;
 
-import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.base.persist.Reader;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
+import io.github.izakyl.folkways.core.base.persist.Reader;
 import io.github.izakyl.folkways.core.colony.api.KitRules;
 import io.github.izakyl.folkways.core.colony.internal.ColonyData;
 import io.github.izakyl.folkways.core.item.api.Goods;
@@ -24,9 +24,9 @@ import io.github.izakyl.folkways.core.work.internal.Kit;
 import io.github.izakyl.folkways.core.work.support.Tools;
 import io.github.izakyl.folkways.core.work.support.Wear;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
-import io.github.izakyl.folkways.front.engine.colony.ColonyFront;
-import io.github.izakyl.folkways.front.engine.colony.ColonySettings;
-import io.github.izakyl.folkways.plugins.person.PersonBody;
+import io.github.izakyl.folkways.core.front.engine.colony.ColonyFront;
+import io.github.izakyl.folkways.core.front.engine.colony.ColonySettings;
+import io.github.izakyl.folkways.vanilla.person.PersonBody;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -47,13 +47,13 @@ import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
-@EventBusSubscriber(modid = FolkwaysMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@EventBusSubscriber(modid = FolkwaysCoreMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
+@GameTestHolder(FolkwaysCoreMod.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class VocationToolsGameTests {
 
-    private static final ResourceLocation BUILDING = id("building");
-    private static final ResourceLocation FARMING = id("farming");
+    private static final ResourceLocation BUILDING = ResourceLocation.fromNamespaceAndPath("folkways_vanilla", "building");
+    private static final ResourceLocation FARMING = ResourceLocation.fromNamespaceAndPath("folkways_vanilla", "farming");
     private static final ToolNeed AXE = new ToolNeed.Ability(ItemAbilities.AXE_DIG);
 
     @SubscribeEvent
@@ -61,7 +61,7 @@ public final class VocationToolsGameTests {
         event.register(VocationToolsGameTests.class);
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void heldToolAllowedOnlyForBuildingCanDoFarmingWork(GameTestHelper helper) {
         var body = PersonBody.RESIDENT.get().create(helper.getLevel());
         var colony = new ColonyData().works();
@@ -112,7 +112,7 @@ public final class VocationToolsGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void defaultsAndEmptySurviveReload(GameTestHelper helper) {
         var colony = new ColonyData().works();
         Vocation building = Vocations.required(BUILDING);
@@ -129,7 +129,7 @@ public final class VocationToolsGameTests {
     }
 
     // An explicitly empty legacy list migrates as forbidden, like any other list.
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void removedPluginToolDataSurvivesSavingOtherSettings(GameTestHelper helper) {
         var colony = new ColonyData().works();
         ResourceLocation unknown = ResourceLocation.fromNamespaceAndPath("missing_plugin", "trade");
@@ -152,7 +152,7 @@ public final class VocationToolsGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void settingsChangesRefreshSurveyWithoutAChangedPack(GameTestHelper helper) {
         var body = PersonBody.RESIDENT.get().create(helper.getLevel());
         var colony = new ColonyData();
@@ -186,6 +186,6 @@ public final class VocationToolsGameTests {
     }
 
     private static ResourceLocation id(String path) {
-        return ResourceLocation.fromNamespaceAndPath("folkways", path);
+        return ResourceLocation.fromNamespaceAndPath("folkways_core", path);
     }
 }

@@ -12,9 +12,9 @@ import { frames } from "../shared/harness/bw-helpers";
 const SETUP = defineTask<Record<string, never>, boolean>({
   name: "folkways.sidebar.setup", side: "server",
   source: javaTask({ imports: [
-    "io.github.izakyl.folkways.front.engine.charter.Charters",
-    "io.github.izakyl.folkways.front.engine.charter.CurrentColony",
-    "io.github.izakyl.folkways.front.engine.registry.FolkwaysItems",
+    "io.github.izakyl.folkways.core.front.engine.charter.Charters",
+    "io.github.izakyl.folkways.core.front.engine.charter.CurrentColony",
+    "io.github.izakyl.folkways.core.front.engine.registry.FolkwaysItems",
     "net.minecraft.world.item.ItemStack", "net.minecraft.world.InteractionHand",
   ], body: `
 var player = ctx.server().getPlayerList().getPlayers().getFirst();
@@ -27,7 +27,7 @@ return true;
 
 const ENABLED = defineTask<Record<string, never>, boolean>({
   name: "folkways.debug.enabled", side: "server",
-  source: javaTask({ imports: ["io.github.izakyl.folkways.front.engine.colony.LaborDebug"], body: `
+  source: javaTask({ imports: ["io.github.izakyl.folkways.core.front.engine.colony.LaborDebug"], body: `
 return LaborDebug.enabled(ctx.server().getPlayerList().getPlayers().getFirst());
 ` }),
 });
@@ -35,7 +35,7 @@ return LaborDebug.enabled(ctx.server().getPlayerList().getPlayers().getFirst());
 const INCIDENT = defineTask<{ count: number; key: string; other: boolean }, boolean>({
   name: "folkways.debug.incident", side: "server",
   source: javaTask({ imports: [
-    "io.github.izakyl.folkways.front.api.ui.Pages",
+    "io.github.izakyl.folkways.core.front.api.ui.Pages",
     "io.github.izakyl.folkways.core.work.internal.LaborIncident",
     "net.neoforged.neoforge.common.NeoForge", "net.minecraft.network.chat.Component",
   ], body: `
@@ -53,8 +53,8 @@ return true;
 const CLEAR_QUEUED = defineTask<Record<string, never>, boolean>({
   name: "folkways.debug.clearQueued", side: "server",
   source: javaTask({ imports: [
-    "io.github.izakyl.folkways.front.api.ui.Pages",
-    "io.github.izakyl.folkways.front.engine.colony.LaborDebug",
+    "io.github.izakyl.folkways.core.front.api.ui.Pages",
+    "io.github.izakyl.folkways.core.front.engine.colony.LaborDebug",
     "io.github.izakyl.folkways.core.work.internal.LaborIncident",
     "net.neoforged.neoforge.common.NeoForge", "net.minecraft.network.chat.Component",
   ], body: `
@@ -71,7 +71,7 @@ LaborDebug.set(p,false);return !LaborDebug.enabled(p);
 const SAMPLE = defineTask<Record<string, never>, boolean>({
   name: "folkways.debug.sample", side: "server",
   source: javaTask({ imports: [
-    "io.github.izakyl.folkways.front.engine.colony.LaborDebug",
+    "io.github.izakyl.folkways.core.front.engine.colony.LaborDebug",
     "io.github.izakyl.folkways.core.runtime.LaborCensus",
     "io.github.izakyl.folkways.core.runtime.LaborSnapshot",
     "io.github.izakyl.folkways.core.work.api.NodeState", "net.minecraft.server.level.ServerPlayer",
@@ -79,7 +79,7 @@ const SAMPLE = defineTask<Record<string, never>, boolean>({
 var p=ctx.server().getPlayerList().getPlayers().getFirst();
 var census=new LaborCensus(100,Map.of(NodeState.READY,5),5,Map.of("PACK_BUSY",3),Map.of("minecraft:wheat",8L),Map.of("idle",2,"working",1));
 var snapshot=new LaborSnapshot(census,0,12,2,Map.of("NO_ROOM",1),
- List.of("PACK_BUSY/folkways:haul/TransferNode@test"),List.of());
+ List.of("PACK_BUSY/folkways_vanilla:haul/TransferNode@test"),List.of());
 var m=LaborDebug.class.getDeclaredMethod("report",ServerPlayer.class,LaborSnapshot.class);m.setAccessible(true);m.invoke(null,p,snapshot);return true;
 ` }),
 });
@@ -120,7 +120,7 @@ interface Display {
 }
 const DISPLAY = defineTask<Record<string, never>, Display>({
   name: "folkways.sidebar.display", side: "client",
-  source: javaTask({ imports: ["net.minecraft.client.Minecraft", "io.github.izakyl.folkways.FolkwaysClientConfig"], body: `
+  source: javaTask({ imports: ["net.minecraft.client.Minecraft", "io.github.izakyl.folkways.core.FolkwaysClientConfig"], body: `
 var mc = Minecraft.getInstance(); var window = mc.getWindow();
 return Map.of("width", window.getWidth(), "height", window.getHeight(),
     "guiWidth", window.getGuiScaledWidth(), "guiHeight", window.getGuiScaledHeight(),

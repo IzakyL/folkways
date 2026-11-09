@@ -19,7 +19,7 @@ test("resident commands and a four-person formation survive a real world restart
     config: "blockwright.toml#rts",
     server: { instance: `commands-server-${run}`, reuseInstanceDir: true, keepInstanceDir: true },
     client: { instance: `commands-client-${run}`, reuseInstanceDir: true, keepInstanceDir: true },
-    snapshot: { entityTypes: ["folkways:resident"] },
+    snapshot: { entityTypes: ["folkways_vanilla:resident"] },
   };
   let pair: E2EPair | undefined;
   const evidence: Array<{ step: string; reading: Reading }> = [];
@@ -96,10 +96,10 @@ const IMPORTS = [
   "net.minecraft.world.item.ItemStack", "net.minecraft.world.item.Items",
   "io.github.izakyl.folkways.core.colony.api.Colonies", "io.github.izakyl.folkways.core.colony.api.Claimed",
   "io.github.izakyl.folkways.core.resident.api.Body", "io.github.izakyl.folkways.core.world.api.WorldPos",
-  "io.github.izakyl.folkways.core.world.api.Reach", "io.github.izakyl.folkways.plugins.person.PersonBody",
-  "io.github.izakyl.folkways.plugins.person.PersonContent",
-  "io.github.izakyl.folkways.rts.combat.command.ResidentCommands",
-  "io.github.izakyl.folkways.rts.combat.group.UnitGroups", "io.github.izakyl.folkways.rts.combat.group.Deployment",
+  "io.github.izakyl.folkways.core.world.api.Reach", "io.github.izakyl.folkways.vanilla.person.PersonBody",
+  "io.github.izakyl.folkways.vanilla.person.PersonContent",
+  "io.github.izakyl.folkways.core.rts.combat.command.ResidentCommands",
+  "io.github.izakyl.folkways.core.rts.combat.group.UnitGroups", "io.github.izakyl.folkways.core.rts.combat.group.Deployment",
 ];
 
 const SETUP = defineTask<{ x: string; y: string; z: string }, Scene>({

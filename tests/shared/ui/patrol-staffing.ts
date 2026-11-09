@@ -16,11 +16,11 @@ export async function staffRoutePanel(server: MinecraftServer, client: Minecraft
 
 const PREPARE = defineTask<{ player: string }, string>({
   name: "folkways.staffing.prepare-route", side: "server", source: javaTask({
-    imports: ["io.github.izakyl.folkways.front.api.ui.Pages",
-      "io.github.izakyl.folkways.front.ui.screen.ColonyShell",
-      "io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfiles",
-      "io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfile",
-      "io.github.izakyl.folkways.plugins.patrol.PatrolContent",
+    imports: ["io.github.izakyl.folkways.core.front.api.ui.Pages",
+      "io.github.izakyl.folkways.core.front.ui.screen.ColonyShell",
+      "io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutProfiles",
+      "io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutProfile",
+      "io.github.izakyl.folkways.vanilla.patrol.PatrolContent",
       "io.github.izakyl.folkways.core.item.api.ItemSpec", "net.minecraft.world.item.Items"],
     body: `var player=ctx.server().getPlayerList().getPlayerByName(Args.of(ctx).string("player"));
 var colony=Pages.colonyOf(player).orElseThrow();var profiles=LoadoutProfiles.of(colony);

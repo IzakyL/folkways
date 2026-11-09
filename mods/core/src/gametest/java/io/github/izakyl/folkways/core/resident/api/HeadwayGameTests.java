@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.core.resident.api;
 
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.netty.buffer.Unpooled;
 import io.netty.handler.codec.DecoderException;
 import java.util.List;
@@ -15,15 +15,15 @@ import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
-@EventBusSubscriber(modid = FolkwaysMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@EventBusSubscriber(modid = FolkwaysCoreMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
+@GameTestHolder(FolkwaysCoreMod.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class HeadwayGameTests {
 
     private static final String TEMPLATE = "empty";
 
     // Any plugin's verb reads the same; this one stands in for them.
-    private static final ResourceLocation HARVESTING = ResourceLocation.fromNamespaceAndPath("folkways", "harvesting");
+    private static final ResourceLocation HARVESTING = ResourceLocation.fromNamespaceAndPath("folkways_vanilla", "harvesting");
 
     private HeadwayGameTests() {
     }
@@ -33,7 +33,7 @@ public final class HeadwayGameTests {
         event.register(HeadwayGameTests.class);
     }
 
-    @GameTest(template = TEMPLATE)
+    @GameTest(template = TEMPLATE, templateNamespace = "folkways_core")
     public static void unknownProgressNumbersFailDecoding(GameTestHelper helper) {
         for (int type : new int[]{-1, 2, 127}) {
             FriendlyByteBuf buffer = new FriendlyByteBuf(Unpooled.buffer());
@@ -61,14 +61,14 @@ public final class HeadwayGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = TEMPLATE, timeoutTicks = 100)
+    @GameTest(template = TEMPLATE, templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void nothingIsKnownBeforeSettingOut(GameTestHelper helper) {
         helper.assertTrue(new Headway().fraction().isEmpty(),
             "a headway nobody has set out on should say nothing at all");
         helper.succeed();
     }
 
-    @GameTest(template = TEMPLATE, timeoutTicks = 100)
+    @GameTest(template = TEMPLATE, templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void walkingRoundAWallLosesNoGround(GameTestHelper helper) {
         Headway headway = new Headway();
         headway.setOut(40.0D);
@@ -82,7 +82,7 @@ public final class HeadwayGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = TEMPLATE, timeoutTicks = 100)
+    @GameTest(template = TEMPLATE, templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void aDoingRidesTheWireAsItWent(GameTestHelper helper) {
         Doing.Wares carrots = new Doing.Wares(
             List.of(new Doing.Ware(ResourceLocation.withDefaultNamespace("carrot"), 0L)), List.of());

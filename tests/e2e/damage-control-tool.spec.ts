@@ -12,10 +12,10 @@ import { BUDGET } from "../shared/harness/budgets";
 const PROBE = defineTask<undefined, any>({
   name: "folkways.damage-control.tool-probe", side: "client",
   source: javaTask({
-    imports: ["io.github.izakyl.folkways.front.api.ui.OverheadTools", "io.github.izakyl.folkways.front.api.notice.Line"],
+    imports: ["io.github.izakyl.folkways.core.front.api.ui.OverheadTools", "io.github.izakyl.folkways.core.front.api.notice.Line"],
     body: `
 var mc = net.minecraft.client.Minecraft.getInstance();
-var layer = Class.forName("io.github.izakyl.folkways.front.client.Layer");
+var layer = Class.forName("io.github.izakyl.folkways.core.front.client.Layer");
 var preference = layer.getDeclaredField("showing"); preference.setAccessible(true);
 var effective = layer.getDeclaredMethod("showing"); effective.setAccessible(true);
 var saved = new ArrayList<String>(); var shown = new ArrayList<String>();
@@ -26,7 +26,7 @@ var marks = new ArrayList<Object>();
 for (var tool : OverheadTools.active().stream().toList()) for (var mark : tool.marks()) {
     marks.add(Map.of("color", mark.color(), "x", mark.min().getX(), "y", mark.min().getY(), "z", mark.min().getZ()));
 }
-var aimed = Class.forName("io.github.izakyl.folkways.front.client.ToolOverlay").getDeclaredMethod("aimed");
+var aimed = Class.forName("io.github.izakyl.folkways.core.front.client.ToolOverlay").getDeclaredMethod("aimed");
 aimed.setAccessible(true);
 var hovered = (java.util.Optional<OverheadTools.Mark>) aimed.invoke(null);
 return Map.of("saved", saved, "shown", shown, "marks", marks, "active", OverheadTools.active().isPresent(),
@@ -41,7 +41,7 @@ return Map.of("saved", saved, "shown", shown, "marks", marks, "active", Overhead
 const MARK_PIXEL = defineTask<{ color: number }, { x: number; y: number }>({
   name: "folkways.damage-control.mark-pixel", side: "client",
   source: javaTask({
-    imports: ["io.github.izakyl.folkways.front.api.ui.OverheadTools"],
+    imports: ["io.github.izakyl.folkways.core.front.api.ui.OverheadTools"],
     body: `
 var mc = net.minecraft.client.Minecraft.getInstance();
 int color = (int) Args.of(ctx).integer("color");
@@ -63,7 +63,7 @@ return Map.of("x", (1 - relative.dot(camera.getLeftVector()) / (depth * wide)) *
 const SERVER = defineTask<undefined, any>({
   name: "folkways.damage-control.server-probe", side: "server",
   source: javaTask({
-    imports: ["io.github.izakyl.folkways.core.colony.internal.ColonyRegistry", "io.github.izakyl.folkways.front.engine.colony.ColonyFront"],
+    imports: ["io.github.izakyl.folkways.core.colony.internal.ColonyRegistry", "io.github.izakyl.folkways.core.front.engine.colony.ColonyFront"],
     body: `
 var server = ctx.server();
 var colony = ColonyRegistry.get(server).colonies().iterator().next().works();
@@ -72,7 +72,7 @@ var areas = ColonyFront.of(colony).zonesIn(server.overworld()).stream()
 if (areas.isEmpty()) return Map.of("areas", 0, "baselines", 0);
 var zone = areas.getFirst();
 var at = zone.cells().stream().reduce(net.minecraft.core.BlockPos::min).orElseThrow();
-return Map.of("areas", areas.size(), "baselines", colony.kept(net.minecraft.resources.ResourceLocation.parse("folkways:damage_control"))
+return Map.of("areas", areas.size(), "baselines", colony.kept(net.minecraft.resources.ResourceLocation.parse("folkways_vanilla:damage_control"))
     .getList("baselines", 10).size(), "extinguish", zone.settings().flag("extinguish"),
     "repair", zone.settings().flag("repair"), "refill", zone.settings().flag("refill"),
     "at", at.getX()+" "+at.getY()+" "+at.getZ());
@@ -96,7 +96,7 @@ test("damage control marks open zone settings, persist flags and release through
     const origin = { x: Math.round(grounded.pos.x) + 4, y: Math.round(grounded.pos.y), z: Math.round(grounded.pos.z) + 4 };
     await tryCommand(server, `fill ${origin.x - 16} ${origin.y} ${origin.z - 20} ${origin.x + 16} ${origin.y + 16} ${origin.z + 16} air`);
     await tryCommand(server, `fill ${origin.x - 16} ${origin.y - 1} ${origin.z - 20} ${origin.x + 16} ${origin.y - 1} ${origin.z + 16} smooth_stone`);
-    await tryCommand(server, `item replace entity ${name} weapon.mainhand with folkways:colony_book`);
+    await tryCommand(server, `item replace entity ${name} weapon.mainhand with folkways_core:colony_book`);
     await tick.sprint(server, 5);
     await createColonyViaBook(server, client, name, origin);
     await screen.dismiss(client);

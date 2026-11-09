@@ -1,12 +1,12 @@
 package io.github.izakyl.folkways.core.vocation.internal;
 
-import io.github.izakyl.folkways.base.Ledger;
+import io.github.izakyl.folkways.core.base.Ledger;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import io.github.izakyl.folkways.core.vocation.api.Vocation;
 import io.github.izakyl.folkways.core.vocation.api.VocationSpec;
 import io.github.izakyl.folkways.core.vocation.api.Vocations;
-import io.github.izakyl.folkways.effect.perk.Perk;
-import io.github.izakyl.folkways.effect.perk.PerkPool;
+import io.github.izakyl.folkways.core.effect.perk.Perk;
+import io.github.izakyl.folkways.core.effect.perk.PerkPool;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -27,7 +27,7 @@ public final class VocationRegistry implements Vocations.Access {
 
     public Vocation register(VocationSpec spec) {
         Vocation vocation = trades.claim(new Vocation(spec.id(), spec.perks(), spec.kit(),
-            spec.order(), spec.defaultPriority()));
+            spec.order(), spec.defaultPriority(), spec.group()));
         for (Perk perk : spec.perks()) {
             PerkPool.register(spec.id(), perk);
         }
@@ -58,8 +58,8 @@ public final class VocationRegistry implements Vocations.Access {
 
     /**
      * Shared column/wire order, independent of mod loading and event listener registration order.
-     * Built-ins declare explicit orders to retain their historical columns; other trades default
-     * to the end, ordered by namespace:path (not ResourceLocation's path-first natural order).
+     * Columns run group by group so each group's heading spans one contiguous run; within a group,
+     * explicit orders come first, then namespace:path (not ResourceLocation's path-first natural order).
      */
     public List<ResourceLocation> ids() {
         return all().stream().map(Vocation::id).toList();
@@ -67,7 +67,9 @@ public final class VocationRegistry implements Vocations.Access {
 
     public List<Vocation> all() {
         return trades.all().stream()
-            .sorted(Comparator.comparingInt(Vocation::order).thenComparing(trade -> trade.id().toString()))
+            .sorted(Comparator.<Vocation>comparingInt(trade -> trade.group().order())
+                .thenComparing(trade -> trade.group().id().toString())
+                .thenComparingInt(Vocation::order).thenComparing(trade -> trade.id().toString()))
             .toList();
     }
 

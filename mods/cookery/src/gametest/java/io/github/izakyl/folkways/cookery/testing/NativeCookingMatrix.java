@@ -32,7 +32,7 @@ public final class NativeCookingMatrix {
             throw new IllegalStateException(folder + ": expected " + expected + " pinned native recipes, found " + recipes.size());
         }
         return recipes.stream().map(id -> new TestFunction("cookery_" + folder + "_matrix",
-            "folkways:matrix_" + id.getPath().replace('/', '_'), "folkways:empty", maxTicks, 0L, true,
+            "folkways_cookery:matrix_" + id.getPath().replace('/', '_'), "folkways_core:empty", maxTicks, 0L, true,
             helper -> execute.accept(helper, id))).toList();
     }
 

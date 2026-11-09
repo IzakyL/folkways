@@ -1,0 +1,94 @@
+package io.github.izakyl.folkways.vanilla.pasture;
+
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
+import io.github.izakyl.folkways.core.work.api.Need;
+import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.work.api.Xp;
+import io.github.izakyl.folkways.core.work.support.WorkStances;
+import io.github.izakyl.folkways.core.world.api.Reach;
+import io.github.izakyl.folkways.core.world.api.WorldSpaces;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.function.Function;
+import javax.annotation.Nullable;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.animal.Animal;
+import net.minecraft.world.entity.animal.horse.AbstractHorse;
+import net.minecraft.world.item.ItemStack;
+
+final class FeedNode extends PenNode {
+    static final double PARTNER_RANGE_SQR = 64.0D;
+
+    private final UUID mate;
+    private final Pen pen;
+    private final Function<ServerLevel, Optional<Pen>> current;
+
+    FeedNode(Chore chore, ItemSpec feed, Pen pen, Function<ServerLevel, Optional<Pen>> current) {
+        super(PenNode.declare(chore, Herd.Job.FEED).needs(new Need(feed, 2)).doing(PastureContent.FEEDING).done(), chore);
+        this.mate = chore.beast().mate().orElseThrow();
+        this.pen = pen;
+        this.current = current;
+    }
+
+    static boolean willing(Animal beast) {
+        return beast.isAlive() && !beast.isRemoved() && beast.getAge() == 0 && beast.canFallInLove() && !beast.isInLove()
+            && parentable(beast);
+    }
+
+    // A horse breeds only tamed, unridden and whole; feeding any other would spend its golden carrots on a love that
+    // never comes to a foal.
+    private static boolean parentable(Animal beast) {
+        return !(beast instanceof AbstractHorse horse) || horse.isTamed() && !horse.isVehicle() && !horse.isPassenger()
+            && horse.getHealth() >= horse.getMaxHealth();
+    }
+
+    @Override
+    public boolean ready(ServerLevel level) {
+        return pair(level, pen) != null;
+    }
+
+    @Override
+    public Outcome commit(ServerLevel level, Worker who) {
+        Pen now = current.apply(level).orElse(null);
+        Pair pair = now == null ? null : pair(level, now);
+        if (pair == null || !WorkStances.standingIn(who.body(), spec().stances())
+                || !inReach(level, who, pair.first()) || !inReach(level, who, pair.second())) {
+            return refuse(PastureRefusal.NOT_FEEDABLE);
+        }
+        if (now.feedings(now.stock(level)) == 0) {
+            return refuse(PastureRefusal.HERD_CHANGED);
+        }
+        List<ItemStack> food = who.supplied();
+        if (food.stream().mapToInt(ItemStack::getCount).sum() != 2
+                || !food.stream().allMatch(stack -> pair.first().isFood(stack) && pair.second().isFood(stack))) {
+            return refuse(PastureRefusal.NOTHING_TO_WORK_WITH);
+        }
+        // One commit feeds both: a separate trip for the partner can outlast the first animal's love timer.
+        BreedingPerks.fed(level, who, pair.first(), pair.second(), now);
+        BreedingPerks.fed(level, who, pair.second(), pair.first(), now);
+        pair.first().setInLove(null);
+        pair.second().setInLove(null);
+        return counted(level, new Outcome.Done(List.of(), List.of(), Optional.of(new Xp(PastureContent.trade(), 2))));
+    }
+
+    private static boolean inReach(ServerLevel level, Worker who, Animal beast) {
+        return who.body().distanceToSqr(beast) <= Reach.PLAYER_BLOCK_REACH * Reach.PLAYER_BLOCK_REACH
+            && (Reach.inSight(level, WorldSpaces.at(who.body()).block(level), WorldSpaces.at(beast).block(level))
+                || Pen.seenOver(level, who.body().getEyePosition(), beast));
+    }
+
+    private record Pair(Animal first, Animal second) {
+    }
+
+    @Nullable
+    private Pair pair(ServerLevel level, Pen pen) {
+        if (!(level.getEntity(subject()) instanceof Animal first) || !(level.getEntity(mate) instanceof Animal second)
+                || !willing(first) || !willing(second) || first.getType() != second.getType()
+                || !pen.keeps(first) || !pen.keeps(second) || first.distanceToSqr(second) > PARTNER_RANGE_SQR) {
+            return null;
+        }
+        return new Pair(first, second);
+    }
+}

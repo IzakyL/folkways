@@ -13,7 +13,7 @@ import { BUDGET } from "../shared/harness/budgets";
 import { frames, safeAction, safeScreen, screenName, screenOpen, tryCommand, softly } from "../shared/harness/bw-helpers";
 import { newRunId } from "../shared/harness/run-id";
 
-const BOOK_ITEM = "folkways:colony_book";
+const BOOK_ITEM = "folkways_core:colony_book";
 const TARGET_RESIDENTS = 2;
 
 test("the colony panel on LDLib2, on camera", async ({}, testInfo) => {

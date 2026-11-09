@@ -1,7 +1,7 @@
 package io.github.izakyl.folkways.carts;
 
-import io.github.izakyl.folkways.front.api.ponder.PonderScenery;
-import io.github.izakyl.folkways.front.api.ponder.Scenes;
+import io.github.izakyl.folkways.core.front.api.ponder.PonderScenery;
+import io.github.izakyl.folkways.core.front.api.ponder.Scenes;
 import net.createmod.ponder.api.scene.SceneBuilder;
 import net.createmod.ponder.api.scene.SceneBuildingUtil;
 import net.minecraft.core.Direction;
@@ -20,7 +20,7 @@ public final class CartsScene {
     public static void declare(FMLClientSetupEvent event) {
         event.enqueueWork(() -> Scenes.folder(FolkwaysCartsMod.OWNER, "folkways.lessons.carts",
             ResourceLocation.fromNamespaceAndPath("astikorcartsredux", "oak_hand_cart"),
-            Scenes.scene("carts", CartsScene::program)));
+            Scenes.scene("folkways_carts", "carts", CartsScene::program)));
     }
 
     public static void program(SceneBuilder scene, SceneBuildingUtil util) {

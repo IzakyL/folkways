@@ -5,6 +5,6 @@ public final class CartsUpgrades {
     }
 
     public static void register() {
-        // Register immutable Vn steps here when this module first changes a saved format.
+        V3_Namespaces.register();
     }
 }

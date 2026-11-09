@@ -123,33 +123,33 @@ export function newUuids(n: number): string[] {
 }
 
 export const SCOPE = {
-  core: "folkways:colony",
-  wares: "folkways:wares",
-  living: "folkways:living",
+  core: "folkways_core:colony",
+  wares: "folkways_vanilla:wares",
+  living: "folkways_vanilla:living",
 } as const;
 
 export const KEEP = {
-  front: "folkways:front",
-  orders: "folkways:orders",
-  build: "folkways:build",
-  living: "folkways:living",
+  front: "folkways_core:front",
+  orders: "folkways_vanilla:orders",
+  build: "folkways_vanilla:build",
+  living: "folkways_vanilla:living",
 } as const;
 
-export const PERSON_KIND = "folkways:resident";
+export const PERSON_KIND = "folkways_vanilla:resident";
 
 // Whom a held block is held for: the delegation the book would hand it over under.
 export const HELD = {
-  store: "folkways:store",
-  station: "folkways:station",
-  bed: "folkways:bed",
+  store: "folkways_vanilla:store",
+  station: "folkways_vanilla:station",
+  bed: "folkways_vanilla:bed",
 } as const;
 
-const PERSON_OWNER = "folkways:person";
+const PERSON_OWNER = "folkways_vanilla:person";
 
 const ZONE_DELEGATION = {
-  farm: "folkways:farm",
-  pasture: "folkways:pasture",
-  fish: "folkways:fish",
+  farm: "folkways_vanilla:farm",
+  pasture: "folkways_vanilla:pasture",
+  fish: "folkways_vanilla:fish",
 } as const;
 
 export type Vec3 = { x: number; y: number; z: number };

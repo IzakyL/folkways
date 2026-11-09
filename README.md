@@ -45,31 +45,33 @@ versions. Back up your world before trying a nightly build.
   rooms, and mood moves work speed between 75% and 115%. Idle residents stroll,
   chat and pet animals; cats, wolves and parrots move in as the colony grows.
 - **Equip and defend.** Assign loadout profiles with weapons, armor and supplies,
-  then staff patrol routes and sentry posts. RTS adds direct resident commands;
-  the TACZ and Superb Warfare extensions add supported firearms.
+  then staff patrol routes and sentry posts, or command people and golems directly;
+  Firearms integrations for TACZ and Superb Warfare add supported firearms.
 - **Protect and restore buildings.** Mark damage-control areas for residents to
   put out fires. Record a baseline and enable repairs to replace missing building
   blocks with materials from colony stores.
 
 ## Mods
 
-This repository builds twelve mods, one per directory under `mods/`. Each ships as
+This repository builds nine mods, one per directory under `mods/`. Each ships as
 `folkways-<directory>-*.jar`. Every extension requires Core; extensions other than Carts also require Vanilla.
 
 | Mod                                       | Directory            | Also requires                                                                       | What it does                                                                                                                    |
 | ----------------------------------------- | -------------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| Folkways Core                             | `mods/core`          | —                                                                                   | The colony engine: residents who plan their own work, their pathfinding, and the Colony Book and panel. Adds no work on its own |
-| Folkways Vanilla                          | `mods/vanilla`       | Core                                                                                | Residents and their trades among vanilla blocks: farming, herding, fishing, crafting, hauling and building                      |
-| Folkways × Chisels & Bits                 | `mods/chiselsandbits` | Chisels & Bits 21.1.33                                             | Residents build and reshape carvings using whole blocks, with a small rounding loss                                                 |
-| Folkways × Create                         | `mods/create`        | Create 6.0+                                                                         | Residents drive trains, send parcels through packaging and postboxes, lay track and build from schematics                       |
-| Folkways × Modular Golems                 | `mods/modulargolems` | Modular Golems 3.1.43+                                                              | Golems join the roster and take trades like people                                                                              |
+| Folkways Core                             | `mods/core`          | —                                                                                   | The colony engine: residents who plan their own work, their pathfinding, the Colony Book and panel, and direct commands and squads for any resident kind. Adds no work on its own |
+| Folkways Vanilla                          | `mods/vanilla`       | Core                                                                                | Residents and their trades among vanilla blocks: farming, herding, fishing, crafting, hauling and building; weapons, loadouts and patrols |
+| Folkways Carving                          | `mods/carving` | Chisels & Bits 21.1.33                                             | Residents build and reshape carvings using whole blocks, with a small rounding loss                                                 |
+| Folkways × Create | `mods/create` | Create 6.0+; FireFighting Additions 0.2.5-beta-fix2 optional (requires Create [6.0.10,6.1)) | Trains, parcels, track and schematics; with the addon, residents fight fires with extinguishers and hydrant hoses and refill extinguishers |
+| Folkways × Modular Golems                 | `mods/golems` | Modular Golems 3.1.43+                                                              | Golems join the roster and take trades like people                                                                              |
 | Folkways × Kaleidoscope Cookery           | `mods/cookery`       | Kaleidoscope Cookery 1.6.x; Kaleidoscope Tavern 1.2.x optional                      | Residents grow, prepare, cook and store food with its native appliances; with Tavern, they make and serve wine                  |
-| Folkways RTS                              | `mods/rts`           | —                                                                                   | Resident commands, squads and real-time controls                                                                                |
-| Folkways × TACZ                           | `mods/tacz`          | TACZ 1.21.1 NeoForge port 1.1.8-hotfix-r7                                            | Residents use supported TACZ guns with physical ammunition from colony supplies                                                 |
-| Folkways × Superb Warfare                 | `mods/warfare`       | Superb Warfare 0.8.9.2, Kotlin for Forge 5.12.0+ (below 6)                           | Residents use supported firearms and emplacements with ammunition from colony stores                                        |
-| Folkways × Create: FireFighting Additions | `mods/firefighting`  | Folkways × Create, Create 6.0.10+ (below 6.1), Create: FireFighting Additions 0.2.5-beta-fix2 | Residents fight fires with portable extinguishers and hydrant hoses, and refill extinguishers                                           |
+| Folkways Firearms | `mods/firearms` | Optional: TACZ 1.1.8-hotfix-r7; Superb Warfare 0.8.9.2 and Kotlin for Forge [5.12.0,6) | Residents use native firearms and emplacements with physical ammunition when their target mod is installed |
 | Folkways × AstikorCarts Redux | `mods/carts` | AstikorCarts Redux 1.2.4 | Haulers hitch hand and supply carts and carry store deliveries in the cart storage, separately from their packs |
-| Folkways × Epic Fight                     | `mods/epicfite` (jar: `folkways-epicfight`) | Epic Fight 21.17.3.1 exactly; Core and Vanilla from the same Folkways build. RTS is optional and not required | Residents use native Epic Fight melee, hit reactions, everyday movement and GEO rendering |
+| Folkways × Epic Fight                     | `mods/epicfight` (jar: `folkways-epicfight`) | Epic Fight 21.17.3.1 exactly; Core and Vanilla from the same Folkways build | Residents use native Epic Fight melee, hit reactions, everyday movement and GEO rendering |
+
+When updating to Carving, remove the old `folkways-chiselsandbits-*.jar` before installing
+`folkways-carving-*.jar`; keeping both causes duplicate registrations and a crash.
+Carving currently supports Chisels & Bits. Existing patterns and exported blueprints remain readable;
+server settings keep using `serverconfig/folkways_chiselsandbits-server.toml`.
 
 With the colony book in Point mode, left-click a placed cargo cart to admit it; click again to withdraw it.
 Admission includes putting existing cargo into colony stores. Withdrawal detaches the resident and leaves the cart
@@ -95,9 +97,10 @@ Install **Core and Vanilla**, then add extensions for the mods you use.
 **All Folkways jars must come from the same build.**
 
 See [Mods](#mods) for what each jar adds and what it needs.
-TACZ 1.1.8-hotfix-r7, Superb Warfare 0.8.9.2 and FireFighting Additions
-0.2.5-beta-fix2 are exact requirements, not minimum versions. RTS is optional
-for these integrations and for autonomous patrol and damage-control work.
+Firearms activates each integration only when TACZ or Superb Warfare is installed;
+Create activates firefighting only when FireFighting Additions is installed.
+When present, TACZ 1.1.8-hotfix-r7, Superb Warfare 0.8.9.2 and FireFighting Additions
+0.2.5-beta-fix2 must match these exact versions. Direct commands and squads are part of Core.
 
 Ponder and Flywheel are bundled in Core; the Starlark interpreter is bundled in
 Vanilla. They do not need separate installation.
@@ -117,7 +120,7 @@ The panel's **Lessons** tab contains Ponder tutorials for the rest of the mod.
 For combat, open **Loadout profiles**, create a profile and assign human residents.
 Keep the selected weapons, armor and matching ammunition in registered stores
 that allow taking items. Enable the **Patrol** trade and staff patrol routes
-or sentry posts for autonomous defense; install RTS for direct commands.
+or sentry posts for autonomous defense, or select residents and command them directly.
 
 For damage control, hold the Colony Book, press **V** and choose **Damage Control**.
 Mark two corners, protect the area and allow residents to work in **Damage control**.
@@ -134,11 +137,11 @@ different blocks already occupying a recorded cell are reported as conflicts.
 | [Modular Golems](https://modrinth.com/mod/modular-golems) 3.1.43+, with Folkways × Modular Golems                           | Golems join the roster and take trades alongside people                                                                                                                                  |
 | [Kaleidoscope Cookery](https://github.com/KaleidoscopeMods/KaleidoscopeCookery) 1.6.x, with Folkways × Kaleidoscope Cookery | Flooded-rice farming, ingredient preparation, native appliances, shared tools, kitchen racks, grass-seed gathering and thirteen lessons                                                  |
 | [Kaleidoscope Tavern](https://github.com/KaleidoscopeMods/KaleidoscopeTavern) 1.2.x, with the Cookery extension             | Grape vineyards under pergolas, pressing, fermenting and bottling wine, and dining-area bar counters residents stock and drink at; one lesson                                            |
-| [TACZ 1.21.1 NeoForge port](https://modrinth.com/mod/OypNE65K) 1.1.8-hotfix-r7, with Folkways × TACZ | Residents fire and reload supported guns using physical matching ammunition; weapon choices preserve the gun model rather than matching only its shared item ID |
-| [Superb Warfare](https://modrinth.com/mod/superb-warfare) 0.8.9.2, with Folkways × Superb Warfare and Kotlin for Forge 5.12.0+ (below 6) | Residents use supported firearms and emplacements, consuming ammunition from colony stores |
-| [Create: FireFighting Additions](https://modrinth.com/mod/create-firefighting-additions) 0.2.5-beta-fix2, with Folkways × Create: FireFighting Additions and its dependencies listed above | Damage-control workers use and refill water-filled portable extinguishers, or use a hydrant cabinet supplied with a hose, nozzle and water |
+| [TACZ 1.21.1 NeoForge port](https://modrinth.com/mod/OypNE65K) 1.1.8-hotfix-r7, with Folkways Firearms | Residents fire and reload supported guns using physical matching ammunition; weapon choices preserve the gun model rather than matching only its shared item ID |
+| [Superb Warfare](https://modrinth.com/mod/superb-warfare) 0.8.9.2, with Folkways Firearms and Kotlin for Forge 5.12.0+ (below 6) | Residents use supported firearms and emplacements, consuming ammunition from colony stores |
+| [Create: FireFighting Additions](https://modrinth.com/mod/create-firefighting-additions) 0.2.5-beta-fix2, with Folkways × Create and its dependencies listed above | Damage-control workers use and refill water-filled portable extinguishers, or use a hydrant cabinet supplied with a hose, nozzle and water |
 | [AstikorCarts Redux](https://modrinth.com/mod/astikorcarts-redux) 1.2.4, with Folkways × AstikorCarts Redux | Use the colony book to admit placed cargo carts; haulers walk to free admitted carts and stow their existing goods |
-| [Epic Fight](https://modrinth.com/mod/epic-fight) 21.17.3.1 exactly, with Folkways × Epic Fight                            | Residents use native melee strikes, hit reactions and everyday movement animations; Epic Fight renders their Bedrock-format GEO models. RTS is optional                          |
+| [Epic Fight](https://modrinth.com/mod/epic-fight) 21.17.3.1 exactly, with Folkways × Epic Fight                            | Residents use native melee strikes, hit reactions and everyday movement animations; Epic Fight renders their Bedrock-format GEO models.                          |
 | [GeckoLib](https://modrinth.com/mod/geckolib) 4.9+                                                                          | Bedrock-format resident models                                                                                                                                                           |
 | [Touhou Little Maid](https://modrinth.com/mod/touhou-little-maid) 1.5+, with GeckoLib                                       | Built-in and installed add-on models become selectable resident looks, individually or by pack                                                                                           |
 | [Shoulder Surfing Reloaded](https://modrinth.com/mod/shoulder-surfing-reloaded) 5.2.0+                                      | Colony Book aiming follows its third-person crosshair                                                                                                                                    |
@@ -168,7 +171,7 @@ npm run setup
 ```
 
 Setup downloads the pinned integration dependencies and writes the manifest
-required by Gradle. The ten mod jars are collected in `build/libs/`.
+required by Gradle. The nine mod jars are collected in `build/libs/`.
 Blockwright's native Windows support is available in its source tree; the pinned
 npm release predates it. For Windows builds using a source-built SDK and
 `gradlew.bat`, see [development setup](CONTRIBUTING.md#development-setup).

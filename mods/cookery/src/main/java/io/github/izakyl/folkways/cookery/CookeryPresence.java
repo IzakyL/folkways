@@ -12,9 +12,9 @@ import io.github.izakyl.folkways.core.plan.api.Grown;
 import io.github.izakyl.folkways.core.plan.api.Workshop;
 import io.github.izakyl.folkways.core.work.api.Stances;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
-import io.github.izakyl.folkways.front.api.Facing;
-import io.github.izakyl.folkways.front.api.notice.Line;
-import io.github.izakyl.folkways.front.api.panel.Board;
+import io.github.izakyl.folkways.core.front.api.Facing;
+import io.github.izakyl.folkways.core.front.api.notice.Line;
+import io.github.izakyl.folkways.core.front.api.panel.Board;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -261,7 +261,7 @@ public final class CookeryPresence implements Facing, Claim.Watch {
     }
 
     @Override
-    public List<Line> zoneLines(io.github.izakyl.folkways.front.api.ZoneView zone, ColonyView view) {
+    public List<Line> zoneLines(io.github.izakyl.folkways.core.front.api.ZoneView zone, ColonyView view) {
         return colony.service(io.github.izakyl.folkways.cookery.seeds.SeedPresence.ID,
             io.github.izakyl.folkways.cookery.seeds.SeedPresence.class)
             .map(seeds -> seeds.zoneLines(zone, view)).orElseGet(List::of);

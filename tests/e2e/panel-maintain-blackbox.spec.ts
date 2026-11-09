@@ -16,7 +16,7 @@ import { newRunId } from "../shared/harness/run-id";
 import { waitForResourceReload } from "../shared/harness/resource-reload";
 import { cover, twins } from "../shared/harness/stage";
 
-const RESIDENT_TYPE = "folkways:resident";
+const RESIDENT_TYPE = "folkways_vanilla:resident";
 const ITEM_TYPE = "minecraft:item";
 const DEMAND_ITEM = "minecraft:cobblestone";
 const MAINTAIN_COUNT = 1;
@@ -118,11 +118,11 @@ for (const stage of twins()) test(stage.title("container panel carry-set MAINTAI
     const orderedRules = await openContainerRules(server, client, playerName, targetChest, stage);
     await assertFilterState(client, orderedRules, "white", 1);
     for (const mode of ["black", "white"] as const) {
-      await clickBoardAction(client, (await boardAct(client, "do", "folkways.orders", orderedRules.admission, 0)).id);
+      await clickBoardAction(client, (await boardAct(client, "do", "folkways_vanilla.orders", orderedRules.admission, 0)).id);
       await settlePanel(server, client);
       await assertFilterState(client, orderedRules, mode, 1);
     }
-    await clickBoardAction(client, (await boardAct(client, "edit", "folkways.orders", orderedRules.filter)).id);
+    await clickBoardAction(client, (await boardAct(client, "edit", "folkways_vanilla.orders", orderedRules.filter)).id);
     await waitForElement(client, { id: "folkways.selector.close" });
     await filterSearch(server, client, "*minecraft:dirt");
     await waitForElement(client, { id: "folkways.selector.result.minecraft.dirt" });
@@ -196,7 +196,7 @@ async function openContainerRules(server: any, client: any, playerName: string, 
   const seen = stage.stand(chest);
   await tryCommand(server, `tp ${playerName} ${seen.x + 0.5} ${seen.y} ${seen.z + 1.5} 180 30`);
   await openSite(server, client, chest, stage);
-  const edits = await boardActs(client, "edit", "folkways.orders");
+  const edits = await boardActs(client, "edit", "folkways_vanilla.orders");
   expect(edits.length, "only filter and the three order draft fields are editable").toBe(4);
   const byRow = new Map<number, number>();
   for (const edit of edits) byRow.set(edit.row, (byRow.get(edit.row) ?? 0) + 1);
@@ -204,7 +204,7 @@ async function openContainerRules(server: any, client: any, playerName: string, 
   const draft = [...byRow].find(([, count]) => count === 3)?.[0];
   expect(filter, "the filter has its own picker").toBeDefined();
   expect(draft, "the order draft has item, threshold, and target fields").toBeDefined();
-  const actions = await boardActs(client, "do", "folkways.orders");
+  const actions = await boardActs(client, "do", "folkways_vanilla.orders");
   const admission = actions.find(act => act.row > filter! && act.row < draft!)?.row;
   expect(admission, "filter actions belong between the filter picker and order form").toBeDefined();
   return { first: 1, filter: filter!, admission: admission!, draft: draft! };
@@ -214,7 +214,7 @@ async function containerAccess(server: any, client: any, playerName: string, che
   mode: "take" | "store") {
   const rules = await openContainerRules(server, client, playerName, chest, stage);
   const row = rules.first + ["take", "store"].indexOf(mode);
-  await clickBoardAction(client, (await boardAct(client, "do", "folkways.orders", row)).id);
+  await clickBoardAction(client, (await boardAct(client, "do", "folkways_vanilla.orders", row)).id);
   await settlePanel(server, client);
   await screen.dismiss(client);
 }
@@ -222,7 +222,7 @@ async function containerAccess(server: any, client: any, playerName: string, che
 async function exerciseFilterPicker(server: any, client: any, playerName: string, chest: any, source: any, stage: any) {
   const rules = await openContainerRules(server, client, playerName, chest, stage);
   if (stage.kind === "ground") await assertContainerForm(client, rules);
-  const opener = (await boardAct(client, "edit", "folkways.orders", rules.filter)).id;
+  const opener = (await boardAct(client, "edit", "folkways_vanilla.orders", rules.filter)).id;
   const result = (item: string) => `folkways.selector.result.minecraft.${item}`;
   await assertFilterState(client, rules, "black", 0);
   await clickBoardAction(client, opener);
@@ -237,7 +237,7 @@ async function exerciseFilterPicker(server: any, client: any, playerName: string
   await waitForElement(client, { id: "folkways.selector.close" }, { state: "absent" });
   await settlePanel(server, client);
   await assertFilterState(client, rules, "black", 2);
-  await clickBoardAction(client, (await boardAct(client, "do", "folkways.orders", rules.admission, 0)).id);
+  await clickBoardAction(client, (await boardAct(client, "do", "folkways_vanilla.orders", rules.admission, 0)).id);
   await settlePanel(server, client);
   await assertFilterState(client, rules, "white", 2);
   // Reopen to prove the common picker keeps a multi-selection; cancel a staged removal.
@@ -261,23 +261,23 @@ async function exerciseFilterPicker(server: any, client: any, playerName: string
   await settlePanel(server, client);
   await assertFilterState(client, rules, "white", 1);
   // Changing mode keeps dirt selected; cobblestone must still enter for the order.
-  await clickBoardAction(client, (await boardAct(client, "do", "folkways.orders", rules.admission, 0)).id);
+  await clickBoardAction(client, (await boardAct(client, "do", "folkways_vanilla.orders", rules.admission, 0)).id);
   await settlePanel(server, client);
   await assertFilterState(client, rules, "black", 1);
   // Filters belong to a container, rather than the shared settings page.
   const sourceRules = await openContainerRules(server, client, playerName, source, stage);
   await assertFilterState(client, sourceRules, "black", 0);
-  await clickBoardAction(client, (await boardAct(client, "edit", "folkways.orders", sourceRules.filter)).id);
+  await clickBoardAction(client, (await boardAct(client, "edit", "folkways_vanilla.orders", sourceRules.filter)).id);
   await waitForElement(client, { id: "folkways.selector.close" });
   expect(await selectedFilterRules(client), "the source does not inherit the target's filter").toEqual([]);
   await clickElement(client, { id: "folkways.selector.close" });
   const reopened = await openContainerRules(server, client, playerName, chest, stage);
   await assertFilterState(client, reopened, "black", 1);
-  await clickBoardAction(client, (await boardAct(client, "edit", "folkways.orders", reopened.filter)).id);
+  await clickBoardAction(client, (await boardAct(client, "edit", "folkways_vanilla.orders", reopened.filter)).id);
   await waitForElement(client, { id: "folkways.selector.close" });
   expect(await selectedFilterRules(client), "reopening the target keeps its own filter").toEqual(["minecraft:dirt"]);
   await clickElement(client, { id: "folkways.selector.close" });
-  await clickBoardAction(client, (await boardAct(client, "do", "folkways.orders", reopened.admission, 0)).id);
+  await clickBoardAction(client, (await boardAct(client, "do", "folkways_vanilla.orders", reopened.admission, 0)).id);
   await settlePanel(server, client);
   await assertFilterState(client, reopened, "white", 1);
 
@@ -285,18 +285,18 @@ async function exerciseFilterPicker(server: any, client: any, playerName: string
 }
 
 async function assertFilterState(client: any, rules: { filter: number; admission: number }, mode: "black" | "white", count: number) {
-  const actions = (await boardActs(client, "do", "folkways.orders")).filter(action => action.row === rules.admission);
+  const actions = (await boardActs(client, "do", "folkways_vanilla.orders")).filter(action => action.row === rules.admission);
   expect(actions.length, "blacklist and whitelist share one mutually exclusive mode button").toBe(1);
   await scrollElementIntoView(client, { id: actions[0].id });
   const tree = await panelElements(client);
-  const summary = descendantsText(tree, `folkways.board.row.folkways.orders.${rules.filter}`);
+  const summary = descendantsText(tree, `folkways.board.row.folkways_vanilla.orders.${rules.filter}`);
   expect(summary, "filter summary names the current mode").toMatch(mode === "black" ? /blacklist/i : /whitelist/i);
   expect(summary.match(/[0-9]+/g), "filter summary counts selected items").toContain(String(count));
 }
 
 async function assertContainerForm(client: any, rules: { first: number; filter: number; admission: number; draft: number }, expectedOrders = 0) {
-  const accessHeading = `folkways.board.row.folkways.orders.${rules.first - 1}`;
-  const filterHeading = `folkways.board.row.folkways.orders.${rules.filter - 1}`;
+  const accessHeading = `folkways.board.row.folkways_vanilla.orders.${rules.first - 1}`;
+  const filterHeading = `folkways.board.row.folkways_vanilla.orders.${rules.filter - 1}`;
   await scrollElementIntoView(client, { id: accessHeading });
   const elements = await panelElements(client);
   const access = elements.find(element => element.id === accessHeading)!;
@@ -304,11 +304,11 @@ async function assertContainerForm(client: any, rules: { first: number; filter: 
   expect(Math.abs(access.y - filter.y), "access and filter sections should share the top row").toBeLessThanOrEqual(1);
   expect(filter.x, "the filter section belongs beside access controls").toBeGreaterThan(access.x);
   for (const row of [rules.first, rules.first + 1]) {
-    const toggle = await boardAct(client, "do", "folkways.orders", row);
+    const toggle = await boardAct(client, "do", "folkways_vanilla.orders", row);
     await scrollElementIntoView(client, { id: toggle.id });
     assertDrawnText(await panelElements(client), toggle.id, "access status button");
   }
-  const filterActions = (await boardActs(client, "do", "folkways.orders"))
+  const filterActions = (await boardActs(client, "do", "folkways_vanilla.orders"))
     .filter(act => act.row === rules.admission);
   for (const action of filterActions) {
     await scrollElementIntoView(client, { id: action.id });
@@ -317,7 +317,7 @@ async function assertContainerForm(client: any, rules: { first: number; filter: 
     expect(tree.find(element => element.id === action.id)!.width,
       "mode button should fit its short content, rather than stretching across the form").toBeLessThanOrEqual(110);
   }
-  const fields = (await boardActs(client, "edit", "folkways.orders"))
+  const fields = (await boardActs(client, "edit", "folkways_vanilla.orders"))
     .filter(act => act.row === rules.draft);
   for (const field of fields) {
     await scrollElementIntoView(client, { id: field.id });
@@ -341,9 +341,9 @@ async function assertContainerForm(client: any, rules: { first: number; filter: 
   expect(numbers.length, "the order form needs threshold and target inputs").toBe(2);
   expect(Math.abs(numbers[0].y - numbers[1].y), "threshold and target inputs should align horizontally")
     .toBeLessThanOrEqual(1);
-  const actions = await boardActs(client, "do", "folkways.orders");
+  const actions = await boardActs(client, "do", "folkways_vanilla.orders");
   const submit = actions.find(action => action.row > rules.draft)!.row;
-  const picker = await boardAct(client, "edit", "folkways.orders", rules.filter);
+  const picker = await boardAct(client, "edit", "folkways_vanilla.orders", rules.filter);
   for (const button of [picker, ...actions.filter(action => action.row === submit)]) {
     await scrollElementIntoView(client, { id: button.id });
     const tree = await panelElements(client);
@@ -352,11 +352,11 @@ async function assertContainerForm(client: any, rules: { first: number; filter: 
   const orderRows = [...new Set(actions.filter(action => action.row > submit).map(action => action.row))];
   expect(orderRows.length, "filing another item must preserve each independent order").toBe(expectedOrders);
   for (const row of orderRows) {
-    const token = `folkways.board.row.folkways.orders.${row}`;
+    const token = `folkways.board.row.folkways_vanilla.orders.${row}`;
     await scrollElementIntoView(client, { id: token });
     const tree = await panelElements(client);
     const entry = tree.find(element => element.id === token)!;
-    const heading = tree.find(element => element.id === `folkways.board.row.folkways.orders.${submit + 1}`)!;
+    const heading = tree.find(element => element.id === `folkways.board.row.folkways_vanilla.orders.${submit + 1}`)!;
     expect(entry.visible, "existing order must be visible after scrolling to it").toBe(true);
     expect(entry.height, "existing order must occupy a nonempty row").toBeGreaterThan(0);
     expect(entry.width, "each existing order needs the full section width").toBeGreaterThanOrEqual(heading.width - 2);
@@ -430,7 +430,7 @@ async function previewChineseContainer(server: any, client: any, playerName: str
     const rules = await openContainerRules(server, client, playerName, chest, stage);
     if (scale === 1) await assertContainerForm(client, rules, 2);
     for (const row of [rules.first, rules.first + 1]) {
-      const action = await boardAct(client, "do", "folkways.orders", row);
+      const action = await boardAct(client, "do", "folkways_vanilla.orders", row);
       await scrollElementIntoView(client, { id: action.id });
       const elements = await panelElements(client);
       const control = elements.find(element => element.id === action.id)!;
@@ -443,7 +443,7 @@ async function previewChineseContainer(server: any, client: any, playerName: str
       assertDrawnText(elements, action.id, `Chinese access button at GUI scale ${scale}`);
     }
     if (scale === 3) {
-      const token = (await boardAct(client, "do", "folkways.orders", rules.first + 1)).id;
+      const token = (await boardAct(client, "do", "folkways_vanilla.orders", rules.first + 1)).id;
       const initial = await panelElements(client);
       const originalText = descendantsText(initial, token);
       await clickBoardAction(client, token);

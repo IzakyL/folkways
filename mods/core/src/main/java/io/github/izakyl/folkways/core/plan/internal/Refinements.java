@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.core.plan.internal;
 
-import io.github.izakyl.folkways.base.Ledger;
+import io.github.izakyl.folkways.core.base.Ledger;
 import io.github.izakyl.folkways.core.plan.api.Refinement;
 import java.util.List;
 

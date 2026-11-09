@@ -47,9 +47,9 @@ const MAID_SUB = "folkways.looks.folder.touhou_little_maid.maid.geckolib";
 const POOL_MAID_FOLDER = "folkways.pool.looks.folder.touhou_little_maid.maid";
 const POOL_MAID_SUB = "folkways.pool.looks.folder.touhou_little_maid.maid.geckolib";
 const POOL_MAID_SET = "folkways.pool.looks.replace.touhou_little_maid.maids.geckolib";
-const SWEEP_OFFER = "folkways.zoneconfig.offer.folkways.sweep";
-const SWEEP_STORES = "folkways.sweep.kind.folkways.store";
-const SWEEP_STATIONS = "folkways.sweep.kind.folkways.station";
+const SWEEP_OFFER = "folkways.zoneconfig.offer.folkways_core.sweep";
+const SWEEP_STORES = "folkways.sweep.kind.folkways_vanilla.store";
+const SWEEP_STATIONS = "folkways.sweep.kind.folkways_vanilla.station";
 const SWEEP_TAKE = "folkways.sweep.take";
 const GROUND_KIND = zoneKindToken("ground");
 const ZONE_CONFIRM = "folkways.zoneconfig.confirm";
@@ -95,7 +95,7 @@ test("what is new: UI and pickers, maid models, .nbt blueprints, groundwork, swe
 
     // One flat yard outside the founding walls holds every scene, so each shot is staged by clearing its own patch.
     await tryCommand(server, `gamemode creative ${player}`);
-    await tryCommand(server, `item replace entity ${player} weapon.mainhand with folkways:colony_book`);
+    await tryCommand(server, `item replace entity ${player} weapon.mainhand with folkways_core:colony_book`);
     await tick.sprint(server, 5);
     await tryCommand(server, `gamemode survival ${player}`);
 
@@ -258,7 +258,7 @@ async function settle(server: any, client: MinecraftClient, n = 5) {
 }
 
 async function residentsOf(server: any): Promise<Array<{ uuid: string; name: string }>> {
-  const listed = await world.entities(server, { dimension: "minecraft:overworld", types: ["folkways:resident"], limit: 32 });
+  const listed = await world.entities(server, { dimension: "minecraft:overworld", types: ["folkways_vanilla:resident"], limit: 32 });
   return (listed.entities ?? []).map((one: any) => ({ uuid: one.uuid, name: String(one.name ?? "") }));
 }
 
@@ -546,8 +546,8 @@ async function stageMaids(run: VisualRun, server: any, client: any, player: stri
       await openBook(server, client);
       await openTab(server, client, "folkways.page.person");
       await settle(server, client, 8);
-      await click(client, "folkways.board.open.folkways.person.3.0");
-      await waitFor(client, "folkways.window.folkways.looks");
+      await click(client, "folkways.board.open.folkways_vanilla.person.3.0");
+      await waitFor(client, "folkways.window.folkways_vanilla.looks");
       await settle(server, client, 8);
       mark("pool");
       await sleepMs(1_200);
@@ -567,7 +567,7 @@ async function stageMaids(run: VisualRun, server: any, client: any, player: stri
       await settle(server, client, 8);
       mark("pool_set");
       await sleepMs(1_600);
-      await click(client, "folkways.window.close.folkways.looks");
+      await click(client, "folkways.window.close.folkways_vanilla.looks");
       await settle(server, client, 8);
       await openTab(server, client, "folkways.tab.residents");
       await settle(server, client, 5);
@@ -627,8 +627,8 @@ async function stageBlueprint(run: VisualRun, server: any, client: any, player: 
       await settle(server, client, 8);
       mark("build");
       await sleepMs(1_200);
-      await click(client, "folkways.board.open.folkways.build.0.0");
-      await waitFor(client, "folkways.window.folkways.blueprints");
+      await click(client, "folkways.board.open.folkways_vanilla.build.0.0");
+      await waitFor(client, "folkways.window.folkways_vanilla.blueprints");
       await click(client, "folkways.blueprints.choose");
       await settle(server, client, 8);
       mark("shelf");
@@ -760,7 +760,7 @@ test("what is new: groundwork on real ground", async ({}, testInfo) => {
     await tryCommand(server, `setblock ${commandPos(store)} minecraft:chest[facing=south]`);
     await tryCommand(server, `item replace block ${commandPos(store)} container.0 with minecraft:dirt 64`);
     // The colony is bound to the book in the player's hand.
-    await tryCommand(server, `item replace entity ${player} weapon.mainhand with folkways:colony_book`);
+    await tryCommand(server, `item replace entity ${player} weapon.mainhand with folkways_core:colony_book`);
     const beds = (await runColonyTask(server, BED_CELLAR, { x: 92, z: -46, y: Math.min(...tops) - 12, count: 6 })).beds as Vec[];
     const founded = await foundPromoColonyFast(server, player, [store, ...beds]);
     const colony_id = founded.colony_id;
@@ -811,7 +811,7 @@ async function stageGroundwork(run: VisualRun, server: any, client: any, player:
     await placeResident(server, one.uuid, on(REAL.crew[i]), 180, 0);
   }
   await tryCommand(server, `gamemode survival ${player}`);
-  await tryCommand(server, `item replace entity ${player} weapon.mainhand with folkways:colony_book`);
+  await tryCommand(server, `item replace entity ${player} weapon.mainhand with folkways_core:colony_book`);
 
   await setBookGesture(server, client, player, "point");
   const feet = on(REAL.feet);
@@ -915,10 +915,10 @@ const DRAW_ZONE = defineTask<Record<string, any>, Record<string, any>>({
   timeoutMs: 20_000,
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.front.engine.colony.ColonyFront",
-      "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
-      "io.github.izakyl.folkways.front.engine.colony.ColonySchemas",
-      "io.github.izakyl.folkways.front.engine.colony.ColonySettings",
+      "io.github.izakyl.folkways.core.front.engine.colony.ColonyFront",
+      "io.github.izakyl.folkways.core.front.engine.colony.ColonyGround",
+      "io.github.izakyl.folkways.core.front.engine.colony.ColonySchemas",
+      "io.github.izakyl.folkways.core.front.engine.colony.ColonySettings",
       "net.minecraft.core.BlockPos",
       "net.minecraft.resources.ResourceLocation",
       "java.util.Arrays",
@@ -927,7 +927,7 @@ const DRAW_ZONE = defineTask<Record<string, any>, Record<string, any>>({
 Args args = Args.of(ctx);
 var colony = ColonyGround.of(ctx.server(), UUID.fromString(args.string("colony_id")))
     .orElseThrow(() -> Fail.notFound("no colony"));
-ResourceLocation ground = ResourceLocation.fromNamespaceAndPath("folkways", "ground");
+ResourceLocation ground = ResourceLocation.fromNamespaceAndPath("folkways_vanilla", "ground");
 List<?> box = (List<?>) ctx.arg("box");
 int[] c = new int[6];
 for (int i = 0; i < 6; i++) c[i] = ((Number) box.get(i)).intValue();
@@ -951,15 +951,15 @@ const ERASE_GROUND = defineTask<Record<string, any>, Record<string, any>>({
   timeoutMs: 20_000,
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.front.engine.colony.ColonyFront",
-      "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
+      "io.github.izakyl.folkways.core.front.engine.colony.ColonyFront",
+      "io.github.izakyl.folkways.core.front.engine.colony.ColonyGround",
       "net.minecraft.resources.ResourceLocation",
     ],
     body: `
 var colony = ColonyGround.of(ctx.server(), UUID.fromString(Args.of(ctx).string("colony_id")))
     .orElseThrow(() -> Fail.notFound("no colony"));
 var front = ColonyFront.of(colony);
-var ground = ResourceLocation.fromNamespaceAndPath("folkways", "ground");
+var ground = ResourceLocation.fromNamespaceAndPath("folkways_vanilla", "ground");
 int erased = 0;
 for (var zone : front.zones()) {
     if (zone.delegation().equals(ground) && front.erase(zone.id())) erased++;
@@ -1050,7 +1050,7 @@ const MARKED_BOX = defineTask<Record<string, any>, Record<string, any>>({
   source: javaTask({
     imports: ["net.minecraft.core.BlockPos"],
     body: `
-var type = Class.forName("io.github.izakyl.folkways.front.client.ZoneSelection");
+var type = Class.forName("io.github.izakyl.folkways.core.front.client.ZoneSelection");
 var minField = type.getDeclaredField("min"); minField.setAccessible(true);
 var maxField = type.getDeclaredField("max"); maxField.setAccessible(true);
 var min = (BlockPos) minField.get(null); var max = (BlockPos) maxField.get(null);
@@ -1336,7 +1336,7 @@ async function stagePacking(run: VisualRun, server: any, client: any, player: st
   const railOrigin = at(post, 0, 0);
   const playerUuid = (await world.players(server)).find((one: any) => one.name === player)?.uuid;
   expect(playerUuid, "the player uuid is needed to hand the train over").toBeTruthy();
-  await tryCommand(server, `item replace entity ${player} inventory.0 with folkways:colony_book`);
+  await tryCommand(server, `item replace entity ${player} inventory.0 with folkways_core:colony_book`);
   const rail = await buildRailLine(server, client, player, String(playerUuid), railOrigin, 56, "inventory.0", {
     cyclic: true,
     // Short stops, so the train brings a parcel sooner than a walk the length of the line would.
@@ -1459,8 +1459,8 @@ async function orderBlueprint(server: any, client: MinecraftClient, player: stri
   await openColonyPanelViaBook(server, client, player, standBlock);
   await openTab(server, client, "folkways.page.build");
   await settle(server, client, 8);
-  await click(client, "folkways.board.open.folkways.build.0.0");
-  await waitFor(client, "folkways.window.folkways.blueprints");
+  await click(client, "folkways.board.open.folkways_vanilla.build.0.0");
+  await waitFor(client, "folkways.window.folkways_vanilla.blueprints");
       await click(client, "folkways.blueprints.choose");
   await settle(server, client, 8);
   await click(client, `folkways.blueprints.entry.local.blueprint.${name}`);
@@ -1573,8 +1573,8 @@ const FEED_CREW = defineTask<Record<string, any>, Record<string, any>>({
   source: javaTask({
     imports: [
       "io.github.izakyl.folkways.core.colony.api.Colony",
-      "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
-      "io.github.izakyl.folkways.plugins.person.living.LivingContent",
+      "io.github.izakyl.folkways.core.front.engine.colony.ColonyGround",
+      "io.github.izakyl.folkways.vanilla.person.living.LivingContent",
       "java.lang.reflect.AccessibleObject",
       "java.lang.reflect.Constructor",
     ],
@@ -1586,8 +1586,8 @@ Object presence = colony.service(LivingContent.ID, Object.class).orElseThrow();
 Map<UUID,Object> bellies = (Map<UUID,Object>) open(presence.getClass().getDeclaredField("bellies")).get(presence);
 @SuppressWarnings("unchecked")
 Map<UUID,Object> wear = (Map<UUID,Object>) open(presence.getClass().getDeclaredField("wear")).get(presence);
-Class<?> hungerType = Class.forName("io.github.izakyl.folkways.plugins.person.living.Hunger");
-Class<?> restType = Class.forName("io.github.izakyl.folkways.plugins.person.living.Rest");
+Class<?> hungerType = Class.forName("io.github.izakyl.folkways.vanilla.person.living.Hunger");
+Class<?> restType = Class.forName("io.github.izakyl.folkways.vanilla.person.living.Rest");
 Constructor<?> newHunger = open(hungerType.getDeclaredConstructor());
 Constructor<?> newRest = open(restType.getDeclaredConstructor());
 for (var raw : args.list("crew")) {
@@ -1882,7 +1882,7 @@ const DISPATCH_STATE = defineTask<Record<string, any>, Record<string, any>>({
       "io.github.izakyl.folkways.core.colony.internal.ColonyWorks",
       "io.github.izakyl.folkways.create.dispatch.DispatchContent",
       "io.github.izakyl.folkways.create.dispatch.DispatchPresence",
-      "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
+      "io.github.izakyl.folkways.core.front.engine.colony.ColonyGround",
       "net.minecraft.resources.ResourceLocation",
       "net.minecraft.server.MinecraftServer",
     ],
@@ -1916,7 +1916,7 @@ var ports = colony.claims(DispatchContent.PORT).size();
 return Map.of("workshops", workshops,
   "held", network != null && dispatch.holds(network),
   "flaw", network == null ? "" : dispatch.flawOf(network),
-  "ports", ports, "orders", colony.kept(ResourceLocation.fromNamespaceAndPath("folkways", "orders")).toString());
+  "ports", ports, "orders", colony.kept(ResourceLocation.fromNamespaceAndPath("folkways_vanilla", "orders")).toString());
 `,
   }),
 });
@@ -1928,8 +1928,8 @@ const RESIDENT_STATE = defineTask<Record<string, any>, Record<string, any>>({
   source: javaTask({
     imports: [
       "io.github.izakyl.folkways.core.resident.api.Bodies",
-      "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
-      "io.github.izakyl.folkways.plugins.person.ResidentEntity",
+      "io.github.izakyl.folkways.core.front.engine.colony.ColonyGround",
+      "io.github.izakyl.folkways.vanilla.person.ResidentEntity",
       "net.minecraft.server.MinecraftServer",
     ],
     body: `

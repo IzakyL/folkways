@@ -1,0 +1,15 @@
+{
+  "folkways.doing.folkways_golems.mending": "Mending a golem",
+  "folkways.lessons.golem": "Golems",
+  "folkways.refusal.golem.already_settled_elsewhere": "that one already belongs to another colony",
+  "folkways.refusal.golem.not_yours_to_hand_over": "that one is not yours to hand over",
+  "folkways.refusal.golem.nothing_to_mend_with": "Nothing left in the pack to mend with",
+  "folkways.urge.folkways_golems.mend": "Mend",
+  "folkways_golems.ponder.golems.header": "Golems: put your Modular Golems to work",
+  "folkways_golems.ponder.golems.text_1": "With the book on pointing, left click a Modular Golem you own. It joins the colony as a resident; click it again and it leaves.",
+  "folkways_golems.ponder.golems.text_2": "Only the golem's owner can hand it over, and one that already belongs to another colony stays there.",
+  "folkways_golems.ponder.golems.text_3": "In the colony it drops its own goals and picks no fights, and golem command items do nothing to it. When it leaves, it gets its own ways back.",
+  "folkways_golems.ponder.golems.text_4": "It works in the trades its body allows: a metal golem hauls and builds, a dog golem only hauls, and a humanoid golem can also craft, drive and dispatch.",
+  "folkways_golems.ponder.golems.text_5": "It never eats or sleeps. Its knacks are built in, so it does not get better with practice.",
+  "folkways_golems.ponder.golems.text_6": "Below 60 percent of its health, a golem carrying something golems are repaired with, such as iron ingots, spends one from its pack to mend itself."
+}

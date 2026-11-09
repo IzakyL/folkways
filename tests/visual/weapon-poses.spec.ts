@@ -22,7 +22,7 @@ test("SBW residents use native two-arm poses during combat and clear them on rel
         config: "blockwright.toml#weapon_poses",
         server: { instance: `weapon-poses-server-${run}`, startFrozen: false },
         client: { instance: `weapon-poses-client-${run}` },
-        snapshot: { entityTypes: ["folkways:resident", "minecraft:zombie"] },
+        snapshot: { entityTypes: ["folkways_vanilla:resident", "minecraft:zombie"] },
       });
       const player = await waitForGroundedPlayer(pair.server);
       await world.command(pair.server, "gamerule doMobSpawning false");
@@ -96,14 +96,14 @@ const IMPORTS = [
   "com.tacz.guns.api.item.IGun", "com.tacz.guns.api.item.IAmmo", "com.tacz.guns.api.item.gun.FireMode",
   "com.tacz.guns.init.ModItems", "io.github.izakyl.folkways.core.colony.api.Colonies",
   "io.github.izakyl.folkways.core.colony.api.Claimed", "io.github.izakyl.folkways.core.world.api.WorldPos",
-  "io.github.izakyl.folkways.plugins.person.PersonBody", "io.github.izakyl.folkways.plugins.person.PersonContent",
-  "io.github.izakyl.folkways.plugins.person.ResidentEntity",
-  "io.github.izakyl.folkways.plugins.person.look.ResidentLooks",
-  "io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfiles",
-  "io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfile",
-  "io.github.izakyl.folkways.plugins.combat.weapon.LoadoutRegistry",
-  "io.github.izakyl.folkways.plugins.patrol.SentryPosts",
-  "io.github.izakyl.folkways.plugins.patrol.PatrolStaffing",
+  "io.github.izakyl.folkways.vanilla.person.PersonBody", "io.github.izakyl.folkways.vanilla.person.PersonContent",
+  "io.github.izakyl.folkways.vanilla.person.ResidentEntity",
+  "io.github.izakyl.folkways.vanilla.person.look.ResidentLooks",
+  "io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutProfiles",
+  "io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutProfile",
+  "io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutRegistry",
+  "io.github.izakyl.folkways.vanilla.patrol.SentryPosts",
+  "io.github.izakyl.folkways.vanilla.patrol.PatrolStaffing",
   "net.neoforged.neoforge.common.NeoForge", "net.neoforged.neoforge.event.tick.EntityTickEvent",
   "net.minecraft.world.entity.monster.Zombie",
 ];
@@ -137,7 +137,7 @@ for (int n = 0; n < weapons.length; n++) {
     var body = PersonBody.RESIDENT.get().create(level);
     // Separate firing lanes so each sentry's nearest target stays in its own lane.
     body.moveTo(origin.getX() + .5, origin.getY(), origin.getZ() + n * 12 + .5);
-    body.setLookId(ResourceKey.create(ResidentLooks.REGISTRY, ResourceLocation.parse("folkways:test_skin_fallback")));
+    body.setLookId(ResourceKey.create(ResidentLooks.REGISTRY, ResourceLocation.parse("folkways_vanilla:test_skin_fallback")));
     level.addFreshEntity(body);
     colony.hold(PersonContent.ID, Claimed.Entity.of(body)).orElseThrow();
     body.joinColony(colony.id());
@@ -245,11 +245,11 @@ const CLIENT_IMPORTS = [
   "net.minecraft.world.entity.EquipmentSlot", "net.minecraft.world.item.ItemStack", "net.minecraft.world.item.Items",
   "net.minecraft.util.Mth", "net.minecraft.resources.ResourceLocation",
   "net.neoforged.neoforge.client.extensions.common.IClientItemExtensions",
-  "io.github.izakyl.folkways.plugins.person.ResidentEntity",
-  "io.github.izakyl.folkways.plugins.person.PersonBody",
-  "io.github.izakyl.folkways.plugins.person.ResidentWeaponPoses",
-  "io.github.izakyl.folkways.plugins.person.ResidentSkinRenderer",
-  "io.github.izakyl.folkways.warfare.WarfareWeapons", "com.atsuishio.superbwarfare.data.gun.GunData",
+  "io.github.izakyl.folkways.vanilla.person.ResidentEntity",
+  "io.github.izakyl.folkways.vanilla.person.PersonBody",
+  "io.github.izakyl.folkways.vanilla.person.ResidentWeaponPoses",
+  "io.github.izakyl.folkways.vanilla.person.ResidentSkinRenderer",
+  "io.github.izakyl.folkways.firearms.warfare.WarfareWeapons", "com.atsuishio.superbwarfare.data.gun.GunData",
   "com.tacz.guns.api.item.IGun", "net.minecraft.core.registries.BuiltInRegistries",
 ];
 

@@ -22,7 +22,7 @@ export function prepareCookeryModels() {
 
 type ResidentLook = { uuid: string; look: string };
 type CastEvidence = { residents: ResidentLook[] };
-const geometry = (name: string) => `assets/folkways/geo/resident_models/${name}.geo.json`;
+const geometry = (name: string) => `assets/folkways_vanilla/geo/resident_models/${name}.geo.json`;
 
 /** Give every actor a fixed Wine Fox appearance, and verify the client receives the same entity data. */
 export async function applyCookeryLooks(server: MinecraftServer, client: MinecraftClient, uuids: string[]) {
@@ -54,8 +54,8 @@ const APPLY_LOOKS = defineTask<{ uuids: string[]; names: string[] }, CastEvidenc
   timeoutMs: 20_000,
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.plugins.person.ResidentEntity",
-      "io.github.izakyl.folkways.plugins.person.look.ResidentLooks",
+      "io.github.izakyl.folkways.vanilla.person.ResidentEntity",
+      "io.github.izakyl.folkways.vanilla.person.look.ResidentLooks",
       "net.minecraft.resources.ResourceKey",
     ],
     body: `
@@ -68,7 +68,7 @@ for(int index=0;index<uuids.size();index++){
         throw new IllegalStateException("Missing cookery resident "+uuid);
     String prefix="model/"+names.get(index%names.size())+"/";
     var id=ResidentLooks.pool(level.registryAccess()).keySet().stream()
-        .filter(key->key.getNamespace().equals("folkways")&&key.getPath().startsWith(prefix))
+        .filter(key->key.getNamespace().equals("folkways_vanilla")&&key.getPath().startsWith(prefix))
         .sorted(Comparator.comparing(Object::toString)).findFirst()
         .orElseThrow(()->new IllegalStateException("Missing Wine Fox model "+prefix));
     resident.setLookId(ResourceKey.create(ResidentLooks.REGISTRY,id));
@@ -86,7 +86,7 @@ const READ_CLIENT_LOOKS = defineTask<{ uuids: string[] }, CastEvidence>({
   source: javaTask({
     imports: [
       "net.minecraft.client.Minecraft",
-      "io.github.izakyl.folkways.plugins.person.ResidentEntity",
+      "io.github.izakyl.folkways.vanilla.person.ResidentEntity",
     ],
     body: `
 var level=Minecraft.getInstance().level;

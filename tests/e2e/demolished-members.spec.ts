@@ -28,7 +28,7 @@ return Map.of("held",held);
 
 const OUTLINES = defineTask<void, Vec[]>({
   name: "folkways.demolished-members.read-client-outlines", side: "client",
-  source: javaTask({ imports: ["io.github.izakyl.folkways.front.client.ColonyHighlightState"], body: `
+  source: javaTask({ imports: ["io.github.izakyl.folkways.core.front.client.ColonyHighlightState"], body: `
 return ColonyHighlightState.members().stream().map(cell->Map.of("x",cell.getX(),"y",cell.getY(),"z",cell.getZ())).toList();
 ` }),
 });
@@ -55,7 +55,7 @@ for (const stage of twins()) test(stage.title("demolished members leave the ledg
     await world.command(server, "fill " + at({ ...box.min, y: origin.y - 1 }) + " " + at({ ...box.max, y: origin.y - 1 }) + " minecraft:smooth_stone");
     await world.command(server, "setblock " + at(origin) + " minecraft:smooth_stone");
     await world.command(server, "gamemode survival " + player.name);
-    await world.command(server, "item replace entity " + player.name + " weapon.mainhand with folkways:colony_book");
+    await world.command(server, "item replace entity " + player.name + " weapon.mainhand with folkways_core:colony_book");
     // No resident is recruited: demolition bookkeeping cannot depend on an active workforce.
     evidence.founding = await createColonyViaBook(server, client, player.name, origin, stage);
     const barrel = { x: origin.x + 3, y: origin.y, z: origin.z + 3 };

@@ -1,8 +1,8 @@
 import blockwright.minecraft.core.Args;
 import blockwright.minecraft.core.Sync;
 import dev.blockwright.api.Context;
-import io.github.izakyl.folkways.plugins.build.draft.*;
-import io.github.izakyl.folkways.front.api.Settings;
+import io.github.izakyl.folkways.vanilla.build.draft.*;
+import io.github.izakyl.folkways.core.front.api.Settings;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -44,7 +44,7 @@ public final class Task {
     private static Object build(Context ctx) {
         var args = Args.of(ctx);
         ServerLevel level = ctx.server().overworld();
-        var pattern = Pattern.parse(ResourceLocation.parse("folkways:city_wall"), args.string("source")).orElseThrow();
+        var pattern = Pattern.parse(ResourceLocation.parse("folkways_vanilla:city_wall"), args.string("source")).orElseThrow();
         var air = Blocks.AIR.defaultBlockState();
         for (int x = -72; x <= 72; x++) for (int z = -72; z <= 72; z++) {
             int top = hill(x, z);

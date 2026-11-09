@@ -21,7 +21,7 @@ import { commandPos, tryCommand, waitMatched } from "../shared/harness/bw-helper
 import { newRunId } from "../shared/harness/run-id";
 import { around, cover, twins, type Stage } from "../shared/harness/stage";
 
-const RESIDENT_TYPE = "folkways:resident";
+const RESIDENT_TYPE = "folkways_vanilla:resident";
 const RESIDENT_COUNT = 6;
 const FARM_CROP_BLOCK = "minecraft:wheat";
 const FARM_SEED_ITEM = "minecraft:wheat_seeds";

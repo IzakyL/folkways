@@ -2,7 +2,7 @@ package io.github.izakyl.folkways.cookery;
 
 import com.github.ysbbbbbb.kaleidoscopecookery.block.kitchen.MillstoneBlock;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks;
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.colony.api.Colonies;
 import io.github.izakyl.folkways.core.colony.api.Colony;
 import io.github.izakyl.folkways.core.colony.internal.ColonyWorks;
@@ -25,10 +25,10 @@ import io.github.izakyl.folkways.core.work.api.Stances;
 import io.github.izakyl.folkways.core.work.api.WorkSite;
 import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.core.work.api.Workload;
-import io.github.izakyl.folkways.front.engine.colony.MemberToggle;
-import io.github.izakyl.folkways.plugins.supply.SupplyBox;
-import io.github.izakyl.folkways.plugins.supply.SupplyContent;
-import io.github.izakyl.folkways.plugins.wares.WaresContent;
+import io.github.izakyl.folkways.core.front.engine.colony.MemberToggle;
+import io.github.izakyl.folkways.vanilla.supply.SupplyBox;
+import io.github.izakyl.folkways.vanilla.supply.SupplyContent;
+import io.github.izakyl.folkways.vanilla.wares.WaresContent;
 import java.lang.reflect.InvocationTargetException;
 import java.util.List;
 import java.util.Map;
@@ -52,7 +52,7 @@ import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
 @EventBusSubscriber(modid = "folkways_cookery", bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@GameTestHolder("folkways_cookery")
 @PrefixGameTestTemplate(false)
 public final class CookeryChainPlanningGameTests {
     private static final String K = "kaleidoscope_cookery:";
@@ -65,8 +65,8 @@ public final class CookeryChainPlanningGameTests {
     @GameTestGenerator
     public static List<TestFunction> theWholePublishedCataloguePlansEveryStageOfTheSixIngredientFinalOrder() {
         return List.of("oil", "rice", "cooked_rice", "fish_flavored_shredded_pork", "fish_flavored_shredded_pork_rice_bowl")
-            .stream().map(product -> new TestFunction("cookery_chain_planning", "folkways:cookery_chain_planning_" + product,
-                "folkways:empty", 100, 0L, true, helper -> plan(helper, product))).toList();
+            .stream().map(product -> new TestFunction("cookery_chain_planning", "folkways_cookery:cookery_chain_planning_" + product,
+                "folkways_core:empty", 100, 0L, true, helper -> plan(helper, product))).toList();
     }
 
     private static void plan(GameTestHelper helper, String product) {
@@ -100,12 +100,12 @@ public final class CookeryChainPlanningGameTests {
             for (var at : List.of(source, table, board, mill, pot, stockpot, store))
                 helper.assertTrue(MemberToggle.toggleAt(level, colony, at, player).refusal().isEmpty(),
                     "real book membership accepts the source, workstations and store: " + at);
-            refresh(colony, SupplyContent.ID, "io.github.izakyl.folkways.plugins.supply.SupplyPresence", "tick", level.getServer());
-            refresh(colony, WaresContent.ID, "io.github.izakyl.folkways.plugins.wares.WaresPresence", "refresh", level.getServer());
+            refresh(colony, SupplyContent.ID, "io.github.izakyl.folkways.vanilla.supply.SupplyPresence", "tick", level.getServer());
+            refresh(colony, WaresContent.ID, "io.github.izakyl.folkways.vanilla.wares.WaresPresence", "refresh", level.getServer());
             colony.service(CookeryContent.ID, CookeryPresence.class).orElseThrow().refresh(level.getServer());
             var catalogue = ((ColonyWorks) colony).workshopsIn(level.dimension());
             helper.assertValueEqual(catalogue.size(), 6, "all six actual published workshops remain in the cost catalogue");
-            var body = (io.github.izakyl.folkways.plugins.person.ResidentEntity) fixture.worker.body();
+            var body = (io.github.izakyl.folkways.vanilla.person.ResidentEntity) fixture.worker.body();
             var crafting = body.licences().of(WaresContent.trade()).orElseThrow();
             var hauling = body.licences().of(Vocations.required(Vocations.HAULING)).orElseThrow();
             var hand = new Crew.Hand(body.resident(), fixture.source, 36, 36, 1,

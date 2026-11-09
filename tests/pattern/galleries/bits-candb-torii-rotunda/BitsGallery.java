@@ -6,7 +6,7 @@ public final class Task {
         var report = new ArrayList<Object>();
         int x = 0;
         for (String name : new String[] {"torii", "rotunda"}) {
-            var pattern = Patterns.find(ResourceLocation.fromNamespaceAndPath("folkways_chiselsandbits", name))
+            var pattern = Patterns.find(ResourceLocation.fromNamespaceAndPath("folkways_carving", name))
                 .orElseThrow();
             var defaults = new CompoundTag();
             for (var setting : pattern.knobs().settings()) {

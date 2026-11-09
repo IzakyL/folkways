@@ -59,7 +59,7 @@ test("a colony train runs a loop drawn with the railway pattern", async ({}, tes
       ] });
     expect(line.ok, `the line should be built and handed over: ${JSON.stringify(line.steps).slice(0, 800)}`).toBe(true);
 
-    const crew = (await world.entities(server, { types: ["folkways:resident"] })).entities ?? [];
+    const crew = (await world.entities(server, { types: ["folkways_vanilla:resident"] })).entities ?? [];
     await tryCommand(server, `tp ${crew[0].uuid} ${line.stationA.x + 3.5} ${y} ${line.stationA.z + 4.5}`);
     await tryCommand(server, `gamemode spectator ${player.name}`);
     const visited = new Set<string>();

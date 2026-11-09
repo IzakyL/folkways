@@ -20,7 +20,7 @@ import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.core.work.api.Xp;
 import io.github.izakyl.folkways.core.work.support.Leaves;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
-import io.github.izakyl.folkways.plugins.wares.WaresContent;
+import io.github.izakyl.folkways.vanilla.wares.WaresContent;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;

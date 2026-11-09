@@ -12,7 +12,7 @@ import { GROUND, type Stage } from "../harness/stage";
 
 type Vec = { x: number; y: number; z: number };
 
-const ORDERS_PAGE = "folkways.orders";
+const ORDERS_PAGE = "folkways_vanilla.orders";
 const ACT_MAINTAIN = 0;
 const ACT_DELIVER = 1;
 const FILED_POLLS = 12;
@@ -22,10 +22,10 @@ const READ_ORDER_DRAFT = defineTask<{ player: string | null; chest: Vec; item: s
 }>({
   name: "folkways.orders.read-draft", side: "server", timeoutMs: 20_000,
   source: javaTask({
-    imports: ["io.github.izakyl.folkways.front.api.Books", "io.github.izakyl.folkways.core.item.api.Goods",
+    imports: ["io.github.izakyl.folkways.core.front.api.Books", "io.github.izakyl.folkways.core.item.api.Goods",
       "io.github.izakyl.folkways.core.world.api.WorldPos", "io.github.izakyl.folkways.core.item.api.Containers",
-      "io.github.izakyl.folkways.plugins.orders.Orders", "net.minecraft.core.BlockPos",
-      "io.github.izakyl.folkways.front.api.Fronts", "net.minecraft.core.registries.BuiltInRegistries",
+      "io.github.izakyl.folkways.vanilla.orders.Orders", "net.minecraft.core.BlockPos",
+      "io.github.izakyl.folkways.core.front.api.Fronts", "net.minecraft.core.registries.BuiltInRegistries",
       "net.minecraft.resources.ResourceLocation"],
     body: `
 var args = Args.of(ctx);
@@ -35,7 +35,7 @@ var actors = ctx.server().getPlayerList().getPlayers().stream()
     .filter(player -> Books.acting(player).isPresent()).toList();
 var colonies = actors.stream().map(Books::acting).flatMap(Optional::stream).distinct().toList();
 if (colonies.size() != 1) throw new IllegalStateException("order draft needs exactly one acting colony");
-var settings = Fronts.of(colonies.getFirst()).settings(ResourceLocation.fromNamespaceAndPath("folkways", "orders"));
+var settings = Fronts.of(colonies.getFirst()).settings(ResourceLocation.fromNamespaceAndPath("folkways_vanilla", "orders"));
 var items = settings.items("item").map(Goods::members).orElse(Set.of()).stream()
     .map(item -> BuiltInRegistries.ITEM.getKey(item).toString()).sorted().toList();
 var chest = (Map<?,?>) args.value("chest");

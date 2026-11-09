@@ -65,7 +65,7 @@ for (const stage of twins()) test(stage.title("pasture end-to-end: player carves
       server: { trace: serverTrace, instance: seededServer(stage.name(`pasture-server-${runId}`)) },
       client: { trace: clientTrace, instance: clientInstance },
       snapshot: () => ({ containers: [pen?.supplyChest, founding?.foodChest].map((chest) => chest && stage.at(chest)),
-        entityTypes: ["folkways:resident", "minecraft:sheep", "minecraft:chicken", "minecraft:item"] }),
+        entityTypes: ["folkways_vanilla:resident", "minecraft:sheep", "minecraft:chicken", "minecraft:item"] }),
     });
     ({ server, client } = pair);
 
@@ -222,8 +222,8 @@ async function observeEggs(server: MinecraftServer, pen: Pen, stores: Vec[]) {
       inPen: Math.floor(e.position.x) >= pen.min.x && Math.floor(e.position.x) <= pen.max.x
         && Math.floor(e.position.z) >= pen.min.z && Math.floor(e.position.z) <= pen.max.z
         && Math.floor(e.position.y) >= pen.min.y && Math.floor(e.position.y) <= pen.max.y + 4 }));
-  const packed = entities.filter((e: any) => e.type === "folkways:resident")
-    .flatMap((e: any) => e.nbt?.["neoforge:attachments"]?.["folkways:body_state"]?.Pack?.Items ?? [])
+  const packed = entities.filter((e: any) => e.type === "folkways_vanilla:resident")
+    .flatMap((e: any) => e.nbt?.["neoforge:attachments"]?.["folkways_core:body_state"]?.Pack?.Items ?? [])
     .reduce((n: number, item: any) => n + (item.Stack?.id === EGG_ITEM ? item.Stack.count : 0), 0);
   let chested = 0;
   for (const store of stores) {

@@ -21,7 +21,7 @@ for (const stage of twins()) test(stage.title("residents use idle activities and
       config: stage.config,
       server: { instance: seededServer(stage.name(`living-server-${run}`)), trace: tracePath("e2e", stage.name("living-server")) },
       client: { instance: stage.name(`living-client-${run}`), trace: tracePath("e2e", stage.name("living-client")) },
-      snapshot: { containers: [], entityTypes: ["folkways:resident"] },
+      snapshot: { containers: [], entityTypes: ["folkways_vanilla:resident"] },
     });
     const { server, client } = pair;
     const player = await waitForGroundedPlayer(server);
@@ -33,7 +33,7 @@ for (const stage of twins()) test(stage.title("residents use idle activities and
     await foundColonyFast(server, client, player.name, { origin, residentCount: 2, stage });
     // Complete a survey before building, so the test exercises the periodic refresh of command changes.
     await tick.sprint(server, 100);
-    const residents = await world.entities(server, { dimension: "minecraft:overworld", types: ["folkways:resident"], limit: 10 });
+    const residents = await world.entities(server, { dimension: "minecraft:overworld", types: ["folkways_vanilla:resident"], limit: 10 });
     expect(residents.entities.length).toBe(2);
     expect((await details(server, residents.entities[0].uuid)).join("\n")).toContain("Basic bed");
     const { x, y, z } = origin;
@@ -84,8 +84,8 @@ const READING = defineTask<{ uuid: string }, { lines: string }>({
   side: "server",
   source: javaTask({
     imports: ["net.minecraft.server.MinecraftServer", "net.minecraft.network.chat.Component",
-      "io.github.izakyl.folkways.core.resident.api.Body", "io.github.izakyl.folkways.front.api.ui.Pages",
-      "io.github.izakyl.folkways.plugins.person.living.LivingContent"],
+      "io.github.izakyl.folkways.core.resident.api.Body", "io.github.izakyl.folkways.core.front.api.ui.Pages",
+      "io.github.izakyl.folkways.vanilla.person.living.LivingContent"],
     body: `
 var level = ((MinecraftServer)ctx.server()).overworld();
 var body = (Body)level.getEntity(UUID.fromString(Args.of(ctx).string("uuid")));

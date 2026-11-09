@@ -42,7 +42,7 @@ npm run setup
 **第一次运行 Gradle 前必须先执行 setup**，调整锁定依赖后也应重新执行。
 Gradle 编译时需要可选集成的 jar，即使某个测试环境并不加载这些模组。
 
-十个模组 jar 汇总到 `build/libs/`，运行时使用的 LDLib2 放在 `build/deps/`。
+九个模组 jar 汇总到 `build/libs/`，运行时使用的 LDLib2 放在 `build/deps/`。
 每个模组是 `mods/` 下的一个 Gradle 子项目，各自的作用见[模组一览](README.zh-CN.md#模组一览)。
 
 Windows 下请按 Blockwright 的[本地构建说明](https://github.com/IzakyL/blockwright/blob/master/CONTRIBUTING.md)
@@ -66,6 +66,9 @@ npm run typecheck
 
 CI 会运行构建检查、按模组划分的 GameTests，以及真实客户端的建村冒烟测试，
 但不会运行全部客户端和素材录制套件。完整矩阵见 `.github/workflows/build.yml`。
+
+Carving GameTests：`./gradlew --offline -PgameTestMod=carving -PchiselsTests=true runGameTestServer`。
+`chiselsTests` 开关加载当前 Chisels & Bits 后端的测试依赖。
 
 ## 提交 PR
 
@@ -98,7 +101,7 @@ feat(draft): add a dock pattern
 
 ### 翻译与建筑样式
 
-- 模组拥有的玩家可见文本统一加入 `mods/core/src/main/resources/assets/folkways/lang/` 的四份共享语言文件：
+- 模组拥有的玩家可见文本统一加入 `mods/core/src/main/resources/assets/folkways_core/lang/` 的四份共享语言文件：
   `en_us.json`、`zh_cn.json`、香港 `zh_hk.json` 与台湾 `zh_tw.json`。
   使用各地区 Minecraft 的术语，不能只做简繁字符转换。
 - 文本传到客户端前保留为 `Component`。界面同步使用 `Pages.text` / `Pages.readText`，信息卡使用 `Line.text`；
@@ -115,3 +118,6 @@ feat(draft): add a dock pattern
 
 同步更新英文和中文版，界面名称以游戏语言文件为准，命令、路径和 Java 符号保持原文。
 文档只保留概述层面：README 和贡献指南，不再添加详细参考页面。
+
+职业图标的字符网格与调色板位于 `tools/vocation-icons/icons.json`，运行
+`python3 tools/vocation-icons/generate.py` 重新生成（可加 `--sheet path.png` 输出对照表）。

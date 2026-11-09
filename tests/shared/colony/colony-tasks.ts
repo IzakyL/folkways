@@ -6,16 +6,16 @@ import { defineTask, javaTask, type MinecraftServer, type TaskTemplate } from "@
 const IMPORTS = [
   "io.github.izakyl.folkways.core.colony.api.Colony",
   "io.github.izakyl.folkways.core.shell.neoforge.FolkwaysAttachments",
-  "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
-  "io.github.izakyl.folkways.front.engine.colony.Endorsements",
-  "io.github.izakyl.folkways.front.engine.colony.MemberToggle",
-  "io.github.izakyl.folkways.front.engine.charter.Charters",
-  "io.github.izakyl.folkways.front.engine.charter.CurrentColony",
-  "io.github.izakyl.folkways.front.engine.item.ColonyBookItem",
-  "io.github.izakyl.folkways.front.api.notice.Attempt",
-  "io.github.izakyl.folkways.front.api.notice.Notice",
-  "io.github.izakyl.folkways.plugins.person.PersonBody",
-  "io.github.izakyl.folkways.plugins.person.PersonContent",
+  "io.github.izakyl.folkways.core.front.engine.colony.ColonyGround",
+  "io.github.izakyl.folkways.core.front.engine.colony.Endorsements",
+  "io.github.izakyl.folkways.core.front.engine.colony.MemberToggle",
+  "io.github.izakyl.folkways.core.front.engine.charter.Charters",
+  "io.github.izakyl.folkways.core.front.engine.charter.CurrentColony",
+  "io.github.izakyl.folkways.core.front.engine.item.ColonyBookItem",
+  "io.github.izakyl.folkways.core.front.api.notice.Attempt",
+  "io.github.izakyl.folkways.core.front.api.notice.Notice",
+  "io.github.izakyl.folkways.vanilla.person.PersonBody",
+  "io.github.izakyl.folkways.vanilla.person.PersonContent",
   "net.minecraft.core.BlockPos",
   "net.minecraft.resources.ResourceLocation",
   "net.minecraft.server.MinecraftServer",
@@ -59,7 +59,7 @@ ServerPlayer player = player(server, args.string("player"));
 
 ItemStack book = player.getMainHandItem();
 if (!(book.getItem() instanceof ColonyBookItem)) {
-    throw Fail.invalid("main hand holds " + book.getItem() + ", not a folkways:colony_book");
+    throw Fail.invalid("main hand holds " + book.getItem() + ", not a folkways_core:colony_book");
 }
 
 Optional<UUID> already = CurrentColony.of(player).map(Colony::id);
@@ -174,7 +174,7 @@ int want = (int) args.integer("count");
 
 Object presence = colony.service(PersonContent.ID, Object.class).orElse(null);
 if (presence == null) {
-    throw Fail.unavailable("colony " + colonyId + " has no folkways:person presence settled on it;"
+    throw Fail.unavailable("colony " + colonyId + " has no folkways_vanilla:person presence settled on it;"
         + " nothing holds a settler queue, so nobody can be admitted");
 }
 

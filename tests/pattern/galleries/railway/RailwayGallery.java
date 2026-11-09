@@ -1,9 +1,9 @@
 import blockwright.minecraft.core.Args;
 import blockwright.minecraft.core.Sync;
 import dev.blockwright.api.Context;
-import io.github.izakyl.folkways.plugins.build.draft.*;
-import io.github.izakyl.folkways.plugins.build.Joints;
-import io.github.izakyl.folkways.front.api.Settings;
+import io.github.izakyl.folkways.vanilla.build.draft.*;
+import io.github.izakyl.folkways.vanilla.build.Joints;
+import io.github.izakyl.folkways.core.front.api.Settings;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -76,7 +76,7 @@ public final class Task {
 
     private static Object build(Context ctx) {
         var args = Args.of(ctx);
-        var pattern = Pattern.parse(ResourceLocation.parse("folkways:railway"), args.string("source")).orElseThrow();
+        var pattern = Pattern.parse(ResourceLocation.parse("folkways_vanilla:railway"), args.string("source")).orElseThrow();
         ServerLevel level = ctx.server().overworld();
         Map<String, String> stone = Map.of("track", "create:track", "ballast", "minecraft:tuff",
             "bed", "minecraft:cobblestone", "masonry", "minecraft:bricks", "accent", "minecraft:polished_andesite");

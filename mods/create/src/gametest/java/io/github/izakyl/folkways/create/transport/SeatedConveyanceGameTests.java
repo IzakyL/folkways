@@ -1,12 +1,12 @@
 package io.github.izakyl.folkways.create.transport;
 
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.resident.api.Going;
 import io.github.izakyl.folkways.core.resident.api.RefusalKind;
 import io.github.izakyl.folkways.core.work.api.Stances;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.create.FolkwaysCreateMod;
-import io.github.izakyl.folkways.plugins.person.PersonBody;
+import io.github.izakyl.folkways.vanilla.person.PersonBody;
 import java.util.Optional;
 import java.util.Set;
 import net.minecraft.core.BlockPos;
@@ -25,7 +25,7 @@ import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
 @EventBusSubscriber(modid = FolkwaysCreateMod.ID, bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@GameTestHolder("folkways_create")
 @PrefixGameTestTemplate(false)
 public final class SeatedConveyanceGameTests {
 
@@ -34,7 +34,7 @@ public final class SeatedConveyanceGameTests {
         event.register(SeatedConveyanceGameTests.class);
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void aFullVehicleKeepsTheRiderWaitingUntilASeatOpens(GameTestHelper helper) {
         Fixture fixture = fixture(helper);
         StubRide ride = fixture.ride();
@@ -51,7 +51,7 @@ public final class SeatedConveyanceGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void aFailedBoardingAttemptCanBeRetried(GameTestHelper helper) {
         Fixture fixture = fixture(helper);
         StubRide ride = fixture.ride();
@@ -66,7 +66,7 @@ public final class SeatedConveyanceGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void leavingTheStopResetsAnUnfinishedBoarding(GameTestHelper helper) {
         Fixture fixture = fixture(helper);
         StubRide ride = fixture.ride();
@@ -82,7 +82,7 @@ public final class SeatedConveyanceGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void arrivalSkipsTheCloserLandingWhenItIsBlocked(GameTestHelper helper) {
         Fixture fixture = fixture(helper);
         ServerLevel level = helper.getLevel();
@@ -105,7 +105,7 @@ public final class SeatedConveyanceGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void arrivalWaitsForASafeLandingAndCancellationStillReleasesTheSeat(GameTestHelper helper) {
         Fixture fixture = fixture(helper);
         StubRide ride = fixture.ride();
@@ -164,8 +164,8 @@ public final class SeatedConveyanceGameTests {
         private int disembarks;
 
         private StubRide(Stances.Cells boarding, Stances.Cells landing, Entity vehicle) {
-            super(boarding, landing, () -> 3, ResourceLocation.fromNamespaceAndPath("folkways", "boarding"),
-                ResourceLocation.fromNamespaceAndPath("folkways", "riding"), () -> "test.seat_gone");
+            super(boarding, landing, () -> 3, ResourceLocation.fromNamespaceAndPath("folkways_create", "boarding"),
+                ResourceLocation.fromNamespaceAndPath("folkways_vanilla", "riding"), () -> "test.seat_gone");
             this.vehicle = vehicle;
         }
 

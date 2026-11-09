@@ -21,7 +21,7 @@ export async function markSouthRack(server: MinecraftServer, client: MinecraftCl
   await player.place(client, { yaw, pitch }); await frames(client, 3);
   const click = await player.click(client, { button: "left", expect: { pos: stage.at(rack) } });
   await tick.sprint(server, 5);
-  if (!await world.probe(server, "if data block " + commandPos(stage.at(rack)) + " \"neoforge:attachments\".\"folkways:colony_member\"")) {
+  if (!await world.probe(server, "if data block " + commandPos(stage.at(rack)) + " \"neoforge:attachments\".\"folkways_core:colony_member\"")) {
     throw new Error("the real book click hit the rack but did not register it: " + JSON.stringify(click));
   }
   return click;

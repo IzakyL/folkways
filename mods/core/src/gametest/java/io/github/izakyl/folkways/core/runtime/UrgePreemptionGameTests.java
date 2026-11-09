@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.core.runtime;
 
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.colony.api.Colonies;
 import io.github.izakyl.folkways.core.colony.api.Colony;
 import io.github.izakyl.folkways.core.colony.api.ColonyView;
@@ -30,7 +30,7 @@ import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.core.work.api.Workload;
 import io.github.izakyl.folkways.core.work.internal.BodyRunner;
 import io.github.izakyl.folkways.core.work.internal.LaborIncident;
-import io.github.izakyl.folkways.plugins.person.PersonBody;
+import io.github.izakyl.folkways.vanilla.person.PersonBody;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -57,8 +57,8 @@ import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
-@EventBusSubscriber(modid = FolkwaysMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@EventBusSubscriber(modid = FolkwaysCoreMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
+@GameTestHolder(FolkwaysCoreMod.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class UrgePreemptionGameTests {
     private static final ResourceLocation OWNER = id("preemption");
@@ -77,7 +77,7 @@ public final class UrgePreemptionGameTests {
         event.register(UrgePreemptionGameTests.class);
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void idleChoiceUsesWeightWithoutPreferringPreemption(GameTestHelper helper) throws Exception {
         try (Harness h = new Harness(helper)) {
             Urge light = h.urge("light", 0.01, true);
@@ -90,7 +90,7 @@ public final class UrgePreemptionGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void onlyExplicitPreemptionCanReplaceFiniteOrContinuousWork(GameTestHelper helper) throws Exception {
         for (Workload load : List.of(Workload.Once.of(1000),
                 (Workload.Continuous) (level, who) -> true)) {
@@ -116,7 +116,7 @@ public final class UrgePreemptionGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void personalWorkCanBePreemptedWithoutOscillating(GameTestHelper helper) throws Exception {
         try (Harness h = new Harness(helper)) {
             Urge first = h.urge("first", 0.1, false);
@@ -141,7 +141,7 @@ public final class UrgePreemptionGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void withdrawnPersonalWorkYieldsToQueuedWork(GameTestHelper helper) throws Exception {
         try (Harness h = new Harness(helper)) {
             h.offers(h.urge("wander", 100, false));
@@ -157,7 +157,7 @@ public final class UrgePreemptionGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void unreadyPreemptorDoesNotReleaseCurrentWork(GameTestHelper helper) throws Exception {
         try (Harness h = new Harness(helper)) {
             AtomicInteger released = new AtomicInteger();
@@ -172,7 +172,7 @@ public final class UrgePreemptionGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void passiveReservationReleasesPlannedWorkButAllowsPersonalUrges(GameTestHelper helper)
             throws Exception {
         for (Workload load : List.of(Workload.Once.of(1000), (Workload.Continuous) (level, who) -> true)) {
@@ -206,7 +206,7 @@ public final class UrgePreemptionGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void deliberateControlPreemptsAnArbitrarilyHeavyNeedAndKeepsOwnership(GameTestHelper helper)
             throws Exception {
         try (Harness h = new Harness(helper)) {
@@ -234,7 +234,7 @@ public final class UrgePreemptionGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void urgesSettleWithoutDuplicatingTheResidentRequest(GameTestHelper helper) throws Exception {
         try (Harness h = new Harness(helper)) {
             AtomicBoolean settled = new AtomicBoolean();
@@ -273,7 +273,7 @@ public final class UrgePreemptionGameTests {
         return ResourceLocation.fromNamespaceAndPath("folkways_test", path);
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void outerRevocationReleasesInnerBeforeAnotherStep(GameTestHelper helper) throws Exception {
         for (boolean continuous : List.of(false, true)) {
             try (Harness h = new Harness(helper)) {
@@ -326,7 +326,7 @@ public final class UrgePreemptionGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void interruptionAndPathFailureReportBeforeTheNextHeartbeat(GameTestHelper helper) throws Exception {
         try (Harness h = new Harness(helper)) {
             List<LaborIncident> events = new ArrayList<>();
@@ -365,7 +365,7 @@ public final class UrgePreemptionGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void expiredOneShotUrgeBackoffsDoNotAccumulate(GameTestHelper helper) throws Exception {
         Urges urges = new Urges();
         for (int n = 0; n < 128; n++) {
@@ -379,7 +379,7 @@ public final class UrgePreemptionGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void blockedCurrentWorkKeepsOwnershipAndToolWhileBusyTimeFreezes(GameTestHelper helper) {
         try (Harness h = new Harness(helper)) {
             AtomicInteger advances = new AtomicInteger();
@@ -420,7 +420,7 @@ public final class UrgePreemptionGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void cancellationWhileBlockedStillReleasesTaskToolExactlyOnce(GameTestHelper helper) {
         try (Harness h = new Harness(helper)) {
             AtomicInteger advances = new AtomicInteger();
@@ -447,7 +447,7 @@ public final class UrgePreemptionGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void blockedIdleRunnerCannotClaimQueuedWorkAndOtherBodiesStayAllowed(GameTestHelper helper) {
         try (Harness h = new Harness(helper); Harness other = new Harness(helper)) {
             AtomicInteger advances = new AtomicInteger();

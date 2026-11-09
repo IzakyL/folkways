@@ -49,7 +49,7 @@ test("GUARD survives two combat rounds, returns to its slot, then resumes real w
       config: "blockwright.toml#rts",
       server: { instance: `combat-endurance-server-${run}` },
       client: { instance: `combat-endurance-client-${run}` },
-      snapshot: { entityTypes: ["folkways:resident", "minecraft:zombie"] },
+      snapshot: { entityTypes: ["folkways_vanilla:resident", "minecraft:zombie"] },
     });
     const { server } = pair;
     const player = await waitForGroundedPlayer(server);
@@ -96,7 +96,7 @@ test("GUARD survives two combat rounds, returns to its slot, then resumes real w
 
     // Observe a real groundwork node before GUARD takes precedence; don't synthesize doing/navigation state.
     await waitFor("groundwork labor begins before combat", reading =>
-      reading.doing.startsWith("folkways:clearing") && reading.workBlock === "minecraft:dirt", 900, 5);
+      reading.doing.startsWith("folkways_vanilla:clearing") && reading.workBlock === "minecraft:dirt", 900, 5);
 
     let guardOrder = "";
     for (let round = 1; round <= 2; round++) {
@@ -140,7 +140,7 @@ test("GUARD survives two combat rounds, returns to its slot, then resumes real w
     for (let elapsed = 0; elapsed < 1200; elapsed += 4) {
       await tick.sprint(server, 4);
       const reading = await sample("after release: groundwork resumes");
-      laborObservedAgain ||= reading.doing.startsWith("folkways:clearing");
+      laborObservedAgain ||= reading.doing.startsWith("folkways_vanilla:clearing");
       if (reading.workBlock === "minecraft:air" && reading.dirtCount > 0) {
         completed = reading;
         break;
@@ -171,13 +171,13 @@ const IMPORTS = [
   "net.minecraft.world.phys.Vec3",
   "io.github.izakyl.folkways.core.colony.api.Colonies", "io.github.izakyl.folkways.core.colony.api.Claimed",
   "io.github.izakyl.folkways.core.resident.api.Body", "io.github.izakyl.folkways.core.world.api.WorldSpaces",
-  "io.github.izakyl.folkways.plugins.person.PersonBody", "io.github.izakyl.folkways.plugins.person.PersonContent",
-  "io.github.izakyl.folkways.plugins.person.ResidentEntity",
-  "io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfiles", "io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfile",
+  "io.github.izakyl.folkways.vanilla.person.PersonBody", "io.github.izakyl.folkways.vanilla.person.PersonContent",
+  "io.github.izakyl.folkways.vanilla.person.ResidentEntity",
+  "io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutProfiles", "io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutProfile",
   "io.github.izakyl.folkways.core.item.api.ItemSpec", "net.neoforged.neoforge.common.Tags",
-  "io.github.izakyl.folkways.rts.combat.command.ResidentCommands",
-  "io.github.izakyl.folkways.front.engine.colony.ColonyFront", "io.github.izakyl.folkways.front.engine.colony.ColonySchemas",
-  "io.github.izakyl.folkways.front.engine.colony.ColonySettings",
+  "io.github.izakyl.folkways.core.rts.combat.command.ResidentCommands",
+  "io.github.izakyl.folkways.core.front.engine.colony.ColonyFront", "io.github.izakyl.folkways.core.front.engine.colony.ColonySchemas",
+  "io.github.izakyl.folkways.core.front.engine.colony.ColonySettings",
 ];
 
 const SETUP = defineTask<{ x: string; y: string; z: string; workX: string; workY: string; workZ: string }, Scene>({
@@ -200,7 +200,7 @@ body.joinColony(colony.id());
 var profiles = LoadoutProfiles.of(colony);
 var melee = profiles.add(profiles.create("Melee").id(), LoadoutProfile.Entry.weapon(ItemSpec.of(Tags.Items.MELEE_WEAPON_TOOLS)));
 profiles.assign(List.of(body.id()), Optional.of(melee.id()));
-ResourceLocation ground = ResourceLocation.fromNamespaceAndPath("folkways", "ground");
+ResourceLocation ground = ResourceLocation.fromNamespaceAndPath("folkways_vanilla", "ground");
 var settings = ColonySettings.byDefault(ColonySchemas.ofDelegation(ground))
     .with("clear", new ColonySettings.Value.Flag(true));
 var zone = ColonyFront.of(colony).addZone(level, ground, Set.of(new BlockPos(workX, workY, workZ)), settings)

@@ -156,7 +156,7 @@ for (const shot of SHOTS) {
       if (shot.under) run.note("solid", await runColonyTask(server, SOLID, shot.under.solid));
       await world.command(server, `setblock ${chest.x} ${top(chest) + 1} ${chest.z} minecraft:chest`);
       await world.command(server, `tp ${player} ${stand.x + 0.5} ${top(stand) + 1} ${stand.z + 0.5} ${yaw} 14`);
-      await world.command(server, `item replace entity ${player} weapon.mainhand with folkways:colony_book`);
+      await world.command(server, `item replace entity ${player} weapon.mainhand with folkways_core:colony_book`);
       const founded = await foundPromoColonyFast(server, player, [{ x: chest.x, y: top(chest) + 1, z: chest.z }]);
       const colony_id = founded.colony_id;
       await tryCommand(server, "kill @e[type=minecraft:item]");

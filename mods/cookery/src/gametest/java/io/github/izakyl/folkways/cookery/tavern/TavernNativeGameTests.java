@@ -26,8 +26,8 @@ import io.github.izakyl.folkways.core.work.api.WorkSite;
 import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.core.world.api.ClimbableBlocks;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
-import io.github.izakyl.folkways.plugins.person.PersonBody;
-import io.github.izakyl.folkways.plugins.person.ResidentEntity;
+import io.github.izakyl.folkways.vanilla.person.PersonBody;
+import io.github.izakyl.folkways.vanilla.person.ResidentEntity;
 import java.util.List;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
@@ -46,7 +46,7 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
 @PrefixGameTestTemplate(false)
 public final class TavernNativeGameTests {
-    @GameTest(template = "empty_large", templateNamespace = "folkways", timeoutTicks = 3000)
+    @GameTest(template = "empty_large", templateNamespace = "folkways_core", timeoutTicks = 3000)
     public static void hardUrgesPreserveFermentationAndEveryPartialBottle(GameTestHelper helper) {
         Rig rig = new Rig(helper, true);
         TavernWork work = rig.plan();
@@ -93,7 +93,7 @@ public final class TavernNativeGameTests {
                 .thenSucceed();
     }
 
-    @GameTest(template = "empty_large", templateNamespace = "folkways")
+    @GameTest(template = "empty_large", templateNamespace = "folkways_core")
     public static void counterStockPreservesComponentsAcrossSaveSyncStateChangesAndDropsOnce(GameTestHelper helper) {
         var level = helper.getLevel(); var pos = helper.absolutePos(new BlockPos(3, 2, 3));
         level.setBlockAndUpdate(pos, ModBlocks.BAR_COUNTER.get().defaultBlockState());
@@ -118,7 +118,7 @@ public final class TavernNativeGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty_large", templateNamespace = "folkways")
+    @GameTest(template = "empty_large", templateNamespace = "folkways_core")
     public static void cabinetInventoryIsItsActualRenderedBottlesWithOriginalQualityAndNativeSaveData(GameTestHelper helper) {
         var level = helper.getLevel();
         var pos = helper.absolutePos(new BlockPos(3, 2, 3));
@@ -142,7 +142,7 @@ public final class TavernNativeGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty_large", templateNamespace = "folkways")
+    @GameTest(template = "empty_large", templateNamespace = "folkways_core")
     public static void irregularCabinetBottlesKeepTheirNativeSinglePositionAndNotificationFailureCannotDuplicateStock(GameTestHelper helper) {
         var level = helper.getLevel(); var pos = helper.absolutePos(new BlockPos(3, 2, 3));
         level.setBlockAndUpdate(pos, ModBlocks.BAR_CABINET.get().defaultBlockState()); level.removeBlockEntity(pos);
@@ -160,7 +160,7 @@ public final class TavernNativeGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty_large", templateNamespace = "folkways", timeoutTicks = 700)
+    @GameTest(template = "empty_large", templateNamespace = "folkways_core", timeoutTicks = 700)
     public static void realResidentJumpsPressEightGrapesIntoOneRealJuiceBucket(GameTestHelper helper) {
         Rig r = new Rig(helper, false);
         TavernWork work = r.plan();
@@ -184,13 +184,13 @@ public final class TavernNativeGameTests {
         }).thenSucceed();
     }
 
-    @GameTest(template = "empty_large", templateNamespace = "folkways", timeoutTicks = 400)
+    @GameTest(template = "empty_large", templateNamespace = "folkways_core", timeoutTicks = 400)
     public static void aResidentClimbsTheTavernStepladderOntoTheBarrelLid(GameTestHelper helper) {
         climbsTheStepladder(helper, ladder -> ladder.south(2));
     }
 
     // Only the low side of a stepladder is stepped; its sides stand a block high, and one coming from there jumps on.
-    @GameTest(template = "empty_large", templateNamespace = "folkways", timeoutTicks = 400)
+    @GameTest(template = "empty_large", templateNamespace = "folkways_core", timeoutTicks = 400)
     public static void aResidentComingFromTheSideStillClimbsTheTavernStepladder(GameTestHelper helper) {
         climbsTheStepladder(helper, ladder -> ladder.west(2));
     }
@@ -224,7 +224,7 @@ public final class TavernNativeGameTests {
             .thenExecute(r::close).thenSucceed();
     }
 
-    @GameTest(template = "empty_large", templateNamespace = "folkways", timeoutTicks = 3000)
+    @GameTest(template = "empty_large", templateNamespace = "folkways_core", timeoutTicks = 3000)
     public static void savedAcceptedWineFermentsAndBottlesOnceAfterCancellation(GameTestHelper helper) {
         Rig r = new Rig(helper, true);
         TavernWork old = r.plan();
@@ -300,7 +300,7 @@ public final class TavernNativeGameTests {
             }).thenSucceed();
     }
 
-    @GameTest(template = "empty_large", templateNamespace = "folkways")
+    @GameTest(template = "empty_large", templateNamespace = "folkways_core")
     public static void playerChangesAndWithdrawalNeverAdoptOrDuplicateNativeIngredients(GameTestHelper helper) {
         Rig r = new Rig(helper, false);
         TavernWork work = r.plan();
@@ -317,7 +317,7 @@ public final class TavernNativeGameTests {
         r.close(); helper.succeed();
     }
 
-    @GameTest(template = "empty_large", templateNamespace = "folkways")
+    @GameTest(template = "empty_large", templateNamespace = "folkways_core")
     public static void vineyardBuildsFromRealStockGrowsNativeFruitAndHarvestsWithoutDestroyingVines(GameTestHelper helper) {
         try (Rig r = new Rig(helper, false)) {
             var grape = new TavernGrapes();
@@ -373,7 +373,7 @@ public final class TavernNativeGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty_large", templateNamespace = "folkways")
+    @GameTest(template = "empty_large", templateNamespace = "folkways_core")
     public static void fellingClaimsHangingWildGrapesBeforeTheirSupportingLeaves(GameTestHelper helper) {
         var level = helper.getLevel();
         BlockPos trunk = helper.absolutePos(new BlockPos(3, 2, 3));
@@ -383,13 +383,13 @@ public final class TavernNativeGameTests {
         level.setBlockAndUpdate(leaf, Blocks.OAK_LEAVES.defaultBlockState().setValue(net.minecraft.world.level.block.LeavesBlock.DISTANCE, 1));
         level.setBlockAndUpdate(leaf.below(), ModBlocks.WILD_GRAPEVINE.get().defaultBlockState());
         level.setBlockAndUpdate(leaf.below(2), ModBlocks.WILD_GRAPEVINE.get().defaultBlockState());
-        var canopy = io.github.izakyl.folkways.plugins.farming.Felling.canopy(level, List.of(trunk, trunk.above()));
+        var canopy = io.github.izakyl.folkways.vanilla.farming.Felling.canopy(level, List.of(trunk, trunk.above()));
         helper.assertTrue(canopy.contains(leaf.below()) && canopy.contains(leaf.below(2)), "felling includes every attached wild vine");
         helper.assertTrue(canopy.indexOf(leaf.below(2)) < canopy.indexOf(leaf.below()) && canopy.indexOf(leaf.below()) < canopy.indexOf(leaf), "bottom-first recovery precedes support removal");
         int recovered = 0;
         for (BlockPos cell : canopy) {
             var state = level.getBlockState(cell);
-            if (!io.github.izakyl.folkways.plugins.farming.Felling.attachment(state)) {
+            if (!io.github.izakyl.folkways.vanilla.farming.Felling.attachment(state)) {
                 continue;
             }
             recovered += net.minecraft.world.level.block.Block.getDrops(state, level, cell, null).stream().filter(stack -> stack.is(ModItems.GRAPEVINE.get())).mapToInt(ItemStack::getCount).sum();

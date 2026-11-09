@@ -38,7 +38,7 @@ test("bundled bits patterns compare geometry grain", async ({}, testInfo) => {
   const expected: string[] = [];
   try {
     pair = await launchPair({
-      config: "blockwright.toml#chiselsandbits",
+      config: "blockwright.toml#carving",
       server: { instance: seededOffThreadServer(`grain-server-${id}`), startFrozen: false },
       client: { instance: `grain-client-${id}` },
     });
@@ -54,7 +54,7 @@ test("bundled bits patterns compare geometry grain", async ({}, testInfo) => {
     await client.run(setup, undefined);
     for (const [name, cameras] of Object.entries(views)) {
       const original = readFileSync(
-        `mods/chiselsandbits/src/main/resources/data/folkways_chiselsandbits/folkways/pattern/${name}.star`, "utf8");
+        `mods/carving/src/main/resources/data/folkways_carving/folkways/pattern/${name}.star`, "utf8");
       for (const requested of final ? [undefined] : [16, 8, 4]) {
         const source = requested === undefined ? original : original.replace(/^grain\s*=.*\n/gm, "")
           .replace(/^(detail\s*=.*)$/m, `$1\ngrain = ${requested}`);

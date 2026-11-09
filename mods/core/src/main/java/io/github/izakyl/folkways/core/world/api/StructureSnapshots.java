@@ -1,8 +1,8 @@
 package io.github.izakyl.folkways.core.world.api;
 
-import io.github.izakyl.folkways.base.persist.Reader;
-import io.github.izakyl.folkways.base.persist.Required;
-import io.github.izakyl.folkways.base.persist.Writer;
+import io.github.izakyl.folkways.core.base.persist.Reader;
+import io.github.izakyl.folkways.core.base.persist.Required;
+import io.github.izakyl.folkways.core.base.persist.Writer;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;

@@ -157,9 +157,9 @@ test("colony orders arrive through a Create logistics network", async ({}, testI
     expect((readings[3] as any).flaw, "turning again, the network orders").toBe("Optional.empty");
     const roles = await runColonyTask(server, ASSIGN_ROLES, { colony_id, roles: ROLES,
       zones: [
-        ...fields.map(field => ({ kind: "folkways:farm", ...field, crop: "minecraft:wheat" })),
-        { kind: "folkways:pasture", ...pen, animal: "minecraft:sheep", target: 8 },
-        ...banks.map(bank => ({ kind: "folkways:fish", ...bank })),
+        ...fields.map(field => ({ kind: "folkways_vanilla:farm", ...field, crop: "minecraft:wheat" })),
+        { kind: "folkways_vanilla:pasture", ...pen, animal: "minecraft:sheep", target: 8 },
+        ...banks.map(bank => ({ kind: "folkways_vanilla:fish", ...bank })),
       ],
       stands: { crafting: at(14, 18), building: at(0, 12), farming: at(20, 10), herding: at(-2, -2), fishing: at(25, 18) } });
     run.note("roles", roles);
@@ -196,7 +196,7 @@ test("colony orders arrive through a Create logistics network", async ({}, testI
     await world.command(server, `tp ${player} ${at(-18, 2).x} ${origin.y} ${at(-18, 2).z} 180 -60`);
     run.note("tower", (await handOffSchematic(server, client, player, { asset: tower.asset, anchor: tower.anchor })).receipt);
     await tick.sprint(server, 100);
-    await world.command(server, `execute if items entity ${player} weapon.mainhand folkways:colony_book`);
+    await world.command(server, `execute if items entity ${player} weapon.mainhand folkways_core:colony_book`);
     await world.command(server, `gamemode spectator ${player}`);
     // Anyone left without work for a few seconds goes to bed far behind the yard, so only work stays in shot.
     const benched: string[] = [];
@@ -270,7 +270,7 @@ test("colony orders arrive through a Create logistics network", async ({}, testI
   }
 });
 
-const LEISURE = new Set(["idle", "folkways:chatting", "folkways:eating", "folkways:sleeping"]);
+const LEISURE = new Set(["idle", "folkways_vanilla:chatting", "folkways_vanilla:eating", "folkways_vanilla:sleeping"]);
 
 const CREW = defineTask<Record<string, any>, Record<string, any>>({
   name: "folkways.promo.logistics-crew",
@@ -278,7 +278,7 @@ const CREW = defineTask<Record<string, any>, Record<string, any>>({
   timeoutMs: 20_000,
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
+      "io.github.izakyl.folkways.core.front.engine.colony.ColonyGround",
       "io.github.izakyl.folkways.core.resident.api.Bodies",
       "net.minecraft.server.MinecraftServer",
     ],
@@ -343,7 +343,7 @@ const ASSIGN_ROLES = defineTask<Record<string, any>, Record<string, any>>({
   timeoutMs: 20_000,
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.front.engine.colony.*",
+      "io.github.izakyl.folkways.core.front.engine.colony.*",
       "io.github.izakyl.folkways.core.resident.api.Bodies",
       "io.github.izakyl.folkways.core.vocation.api.Vocations",
       "net.minecraft.server.MinecraftServer",
@@ -446,7 +446,7 @@ const KIT_UP = defineTask<Record<string, any>, Record<string, any>>({
   timeoutMs: 20_000,
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.front.engine.colony.*",
+      "io.github.izakyl.folkways.core.front.engine.colony.*",
       "io.github.izakyl.folkways.core.resident.api.Bodies",
       "io.github.izakyl.folkways.core.vocation.api.Vocations",
       "io.github.izakyl.folkways.core.world.api.*",
@@ -549,8 +549,8 @@ const POINT_BOOK = defineTask<Record<string, any>, Record<string, any>>({
   source: javaTask({
     imports: [
       "io.github.izakyl.folkways.core.colony.internal.ColonyMembership",
-      "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
-      "io.github.izakyl.folkways.front.engine.colony.MemberToggle",
+      "io.github.izakyl.folkways.core.front.engine.colony.ColonyGround",
+      "io.github.izakyl.folkways.core.front.engine.colony.MemberToggle",
       "io.github.izakyl.folkways.create.dispatch.DispatchContent",
       "io.github.izakyl.folkways.create.dispatch.DispatchPresence",
       "net.minecraft.core.BlockPos",

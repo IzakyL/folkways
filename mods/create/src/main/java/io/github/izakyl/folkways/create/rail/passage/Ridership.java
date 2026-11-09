@@ -16,7 +16,7 @@ import net.minecraft.world.entity.Entity;
 
 public final class Ridership {
 
-    private static final String TAG_DESTINATION = "folkways:ride_destination";
+    private static final String TAG_DESTINATION = "folkways_create:ride_destination";
 
     private Ridership() {
     }

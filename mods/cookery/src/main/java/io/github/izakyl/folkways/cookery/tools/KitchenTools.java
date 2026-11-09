@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.cookery.tools;
 
-import io.github.izakyl.folkways.base.persist.Reader;
+import io.github.izakyl.folkways.core.base.persist.Reader;
 import io.github.izakyl.folkways.core.item.api.Goods;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import java.nio.charset.StandardCharsets;
@@ -309,7 +309,7 @@ public final class KitchenTools {
     }
 
     private static UUID replenishment(UUID colony, ItemSpec tools) {
-        return UUID.nameUUIDFromBytes(("folkways:shared_tool/" + colony + "/" + tools.describe())
+        return UUID.nameUUIDFromBytes(("folkways_cookery:shared_tool/" + colony + "/" + tools.describe())
             .getBytes(StandardCharsets.UTF_8));
     }
 }

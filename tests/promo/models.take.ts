@@ -35,7 +35,7 @@ const MODEL_NAMES = [
 ] as const;
 const CLIP_SECONDS = 45;
 const SWAP_MS = 2500;
-const GEOMETRY_PACK_PATH = "assets/folkways/geo/resident_models/wine_fox_wedding.geo.json";
+const GEOMETRY_PACK_PATH = "assets/folkways_vanilla/geo/resident_models/wine_fox_wedding.geo.json";
 
 // foundColonyFast rings its founding set with smooth stone walls this far out and this high.
 const FOUNDING_PAD = 20;
@@ -57,12 +57,12 @@ const RESIDENT_NAME = "Wine Fox";
 // before it has shown its work and left the resident standing about.
 type Stage = { name: string; from: number; trades: string[]; doing: string[] };
 const STAGES: Stage[] = [
-  { name: "fishing", from: 0, trades: ["fishing"], doing: ["folkways:fishing"] },
-  { name: "crafting", from: 4, trades: ["crafting", "hauling"], doing: ["folkways:crafting"] },
+  { name: "fishing", from: 0, trades: ["fishing"], doing: ["folkways_vanilla:fishing"] },
+  { name: "crafting", from: 4, trades: ["crafting", "hauling"], doing: ["folkways_vanilla:crafting"] },
   { name: "smelting", from: 8, trades: ["crafting", "hauling"],
-    doing: ["folkways:loading", "folkways:fueling", "folkways:unloading", "folkways:clearing_station"] },
+    doing: ["folkways_vanilla:loading", "folkways_vanilla:fueling", "folkways_vanilla:unloading", "folkways_vanilla:clearing_station"] },
   { name: "farming", from: 13, trades: ["farming", "hauling"],
-    doing: ["folkways:harvesting", "folkways:planting", "folkways:tilling"] },
+    doing: ["folkways_vanilla:harvesting", "folkways_vanilla:planting", "folkways_vanilla:tilling"] },
 ];
 const stageAt = (phase: number) => STAGES.filter((stage) => stage.from <= phase).at(-1)!;
 const YARD = { x0: -6, x1: 9, z0: -2, z1: 10 };
@@ -79,7 +79,7 @@ const CAMERA_UP = 10.5;
 const CAMERA_FOV = 40;
 const PREROLL_TICKS = 200;
 const WORK_WAIT_MS = 30_000;
-const LEISURE = new Set(["idle", "folkways:chatting", "folkways:eating", "folkways:sleeping"]);
+const LEISURE = new Set(["idle", "folkways_vanilla:chatting", "folkways_vanilla:eating", "folkways_vanilla:sleeping"]);
 
 test("one resident walks about a small colony at work, card up, while cycling through server YSM models", async ({}, testInfo) => {
   test.setTimeout(BUDGET.bench);
@@ -225,7 +225,7 @@ test("one resident walks about a small colony at work, card up, while cycling th
     await world.command(server, `tp ${resident.uuid} ${fishSpot.x + 0.5} ${fishSpot.y} ${fishSpot.z + 0.5}`);
 
     // The colony book stays in hand: holding it is what floats the resident's card over their head.
-    await world.command(server, `execute if items entity ${playerName} weapon.mainhand folkways:colony_book`);
+    await world.command(server, `execute if items entity ${playerName} weapon.mainhand folkways_core:colony_book`);
     await world.command(server, `gamemode spectator ${playerName}`);
     await safeAction(() => frames(client, 10));
     await safeAction(() => screen.dismiss(client));
@@ -385,8 +385,8 @@ const CYCLE_MODELS = defineTask<Record<string, any>, Record<string, any>>({
     imports: [
       "io.github.izakyl.folkways.core.resident.api.Bodies",
       "io.github.izakyl.folkways.core.vocation.api.Vocations",
-      "io.github.izakyl.folkways.plugins.person.ResidentEntity",
-      "io.github.izakyl.folkways.plugins.person.look.ResidentLooks",
+      "io.github.izakyl.folkways.vanilla.person.ResidentEntity",
+      "io.github.izakyl.folkways.vanilla.person.look.ResidentLooks",
       "net.minecraft.resources.*",
       "net.minecraft.server.MinecraftServer",
     ],
@@ -397,7 +397,7 @@ int phase=(int) args.integer("phase");
 var resident=(ResidentEntity)level.getEntity(UUID.fromString(args.string("uuid")));
 String prefix="model/"+args.string("name")+"/";
 var id=ResidentLooks.pool(level.registryAccess()).keySet().stream()
-    .filter(key -> key.getNamespace().equals("folkways") && key.getPath().startsWith(prefix))
+    .filter(key -> key.getNamespace().equals("folkways_vanilla") && key.getPath().startsWith(prefix))
     .sorted(Comparator.comparing(Object::toString)).findFirst()
     .orElseThrow(() -> new IllegalStateException("Missing YSM model "+prefix));
 resident.setLookId(ResourceKey.create(ResidentLooks.REGISTRY,id));
@@ -421,9 +421,9 @@ const RIG_RESIDENT = defineTask<Record<string, any>, Record<string, any>>({
     imports: [
       "io.github.izakyl.folkways.core.resident.api.Bodies",
       "io.github.izakyl.folkways.core.vocation.api.Vocations",
-      "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
-      "io.github.izakyl.folkways.front.engine.colony.ColonySettings",
-      "io.github.izakyl.folkways.front.engine.colony.ZoneDrafts",
+      "io.github.izakyl.folkways.core.front.engine.colony.ColonyGround",
+      "io.github.izakyl.folkways.core.front.engine.colony.ColonySettings",
+      "io.github.izakyl.folkways.core.front.engine.colony.ZoneDrafts",
       "net.minecraft.core.BlockPos",
       "net.minecraft.resources.ResourceLocation",
       "net.minecraft.world.item.*",
@@ -433,7 +433,7 @@ var server=ctx.server();var level=server.overworld();var args=Args.of(ctx);
 var colony=ColonyGround.of(server,UUID.fromString(args.string("colony_id"))).orElseThrow();
 var fish=(Map<?,?>)args.value("fish");
 var spot=new BlockPos(((Number)fish.get("x")).intValue(),((Number)fish.get("y")).intValue(),((Number)fish.get("z")).intValue());
-var zone=ZoneDrafts.zone(level,colony,ResourceLocation.parse("folkways:fish"),spot,spot,ColonySettings.empty())
+var zone=ZoneDrafts.zone(level,colony,ResourceLocation.parse("folkways_vanilla:fish"),spot,spot,ColonySettings.empty())
     .orElseThrow(()->new IllegalStateException("No fish zone at "+spot));
 var body=Bodies.of(level.getEntity(UUID.fromString(args.string("uuid")))).orElseThrow();
 var trades=args.list("trades").stream().map(String::valueOf).toList();
@@ -453,8 +453,8 @@ const CLOSE_ZONE = defineTask<Record<string, any>, Record<string, any>>({
   timeoutMs: 20_000,
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.front.engine.colony.ColonyFront",
-      "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
+      "io.github.izakyl.folkways.core.front.engine.colony.ColonyFront",
+      "io.github.izakyl.folkways.core.front.engine.colony.ColonyGround",
     ],
     body: `
 var args=Args.of(ctx);

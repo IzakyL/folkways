@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.core.plan.internal;
 
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.plan.api.Before;
 import io.github.izakyl.folkways.core.resident.api.Resident;
 import io.github.izakyl.folkways.core.travel.internal.Faring;
@@ -36,18 +36,18 @@ import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
-@EventBusSubscriber(modid = FolkwaysMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@EventBusSubscriber(modid = FolkwaysCoreMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
+@GameTestHolder(FolkwaysCoreMod.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class TravelPlanningGameTests {
-    private static final ResourceLocation KIND = ResourceLocation.fromNamespaceAndPath("folkways", "resident");
+    private static final ResourceLocation KIND = ResourceLocation.fromNamespaceAndPath("folkways_vanilla", "resident");
 
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) {
         event.register(TravelPlanningGameTests.class);
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void pendingTravelStaysPendingAndSchedulesWhenKnown(GameTestHelper helper) {
         WorldPos at = WorldPos.of(helper.getLevel(), helper.absolutePos(BlockPos.ZERO));
         Resident resident = new Resident(UUID.randomUUID(), KIND);
@@ -84,7 +84,7 @@ public final class TravelPlanningGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void repeatedRoutesQueryOnceAcrossResidentsPerSchedule(GameTestHelper helper) {
         WorldPos at = WorldPos.of(helper.getLevel(), helper.absolutePos(BlockPos.ZERO));
         List<Crew.Hand> hands = new ArrayList<>();
@@ -137,11 +137,11 @@ public final class TravelPlanningGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void sharedRoutesKeepKindsSeparate(GameTestHelper helper) {
         WorldPos at = WorldPos.of(helper.getLevel(), helper.absolutePos(BlockPos.ZERO));
-        ResourceLocation walking = ResourceLocation.fromNamespaceAndPath("folkways", "resident");
-        ResourceLocation flying = ResourceLocation.fromNamespaceAndPath("folkways", "flying_test");
+        ResourceLocation walking = ResourceLocation.fromNamespaceAndPath("folkways_vanilla", "resident");
+        ResourceLocation flying = ResourceLocation.fromNamespaceAndPath("folkways_core", "flying_test");
         Resident walker = new Resident(UUID.randomUUID(), walking);
         Resident flyer = new Resident(UUID.randomUUID(), flying);
         Crew crew = new Crew(List.of(hand(walker, at), hand(flyer, at)));
@@ -162,11 +162,11 @@ public final class TravelPlanningGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void sharedRoutesKeepCurrentLocomotionsSeparate(GameTestHelper helper) {
         WorldPos at = WorldPos.of(helper.getLevel(), helper.absolutePos(BlockPos.ZERO));
-        ResourceLocation walking = ResourceLocation.fromNamespaceAndPath("folkways", "resident");
-        ResourceLocation flying = ResourceLocation.fromNamespaceAndPath("folkways", "flying_test");
+        ResourceLocation walking = ResourceLocation.fromNamespaceAndPath("folkways_vanilla", "resident");
+        ResourceLocation flying = ResourceLocation.fromNamespaceAndPath("folkways_core", "flying_test");
         Resident walker = new Resident(UUID.randomUUID(), walking);
         Resident flyer = new Resident(UUID.randomUUID(), walking, flying);
         Crew crew = new Crew(List.of(
@@ -195,7 +195,7 @@ public final class TravelPlanningGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void travelReuseFollowsCursorAndStandingRoutesAskNothing(GameTestHelper helper) {
         WorldPos at = WorldPos.of(helper.getLevel(), helper.absolutePos(BlockPos.ZERO));
         WorldPos away = at.at(at.cell().offset(8, 0, 0));
@@ -232,7 +232,7 @@ public final class TravelPlanningGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void standingRoutesPlaceOnlyWhatChanged(GameTestHelper helper) {
         WorldPos at = WorldPos.of(helper.getLevel(), helper.absolutePos(BlockPos.ZERO));
         WorldPos away = at.at(at.cell().offset(8, 0, 0));

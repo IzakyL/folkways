@@ -19,7 +19,7 @@ test("residents construct bundled patterns from real commissions in accelerated 
   await world.command(server,"forceload add -32 -32 96 48");
   const setup=await runColonyTask(server,HEIGHT,{depth:Number(process.env.FOLKWAYS_PATTERN_GROUND_DEPTH??32)});const y=Number(setup.y);
   await world.command(server,`tp ${player} -4 ${y} 0`);
-  await world.command(server,`item replace entity ${player} weapon.mainhand with folkways:colony_book`);
+  await world.command(server,`item replace entity ${player} weapon.mainhand with folkways_core:colony_book`);
   const {colony_id}=await foundPromoColonyFast(server,player,setup.members);
   await admitPromoSettlersFast(server,player,colony_id,Number(process.env.FOLKWAYS_PATTERN_WORKERS??6));
   run.note("crew",await runColonyTask(server,CREW,{colony_id,y,stageX:0}));
@@ -73,15 +73,15 @@ type Vec={x:number;y:number;z:number};
 function cases(y:number):any[]{
  const p=(x:number,z:number,dy=0):Vec=>({x,y:y+dy,z});
  return [
-  {name:"arch_bridge",terrain:"channel",site:{pattern:"folkways:arch_bridge",points:[p(2,14),p(24,14)],knobs:{width:3}}},
-  {name:"dock",terrain:"shore",site:{pattern:"folkways:dock",points:[p(2,14),p(16,14)],knobs:{width:3}}},
-  {name:"arcade",site:{pattern:"folkways:arcade",points:[p(1,13),p(13,13)],knobs:{width:3,bay:4,height:3,pavilions:false}}},
-  {name:"city_wall",site:{pattern:"folkways:city_wall",points:[p(1,8),p(21,8)],knobs:{height:5,thickness:3,spacing:0,gate:false}}},
-  {name:"road",site:{pattern:"folkways:road",points:[p(1,8),p(13,8),p(25,18)]}},
-  {name:"terraced_field",terrain:"slope",site:{pattern:"folkways:terraced_field",min:p(2,5),max:p(11,16)}},
-  {name:"quarry",site:{pattern:"folkways:quarry",min:p(3,5),max:p(12,14),knobs:{depth:3}}},
-  {name:"mine",site:{pattern:"folkways:mine",min:p(3,5),max:p(13,15),knobs:process.env.FOLKWAYS_PATTERN_MINE_DEFAULTS==="1"?{}:{y:y-15,branch:4,pairs:1,spacing:2,chase:false}}},
-  {name:"railway",site:{pattern:"folkways:railway",points:[p(1,5),p(21,5),p(21,25)]}},
+  {name:"arch_bridge",terrain:"channel",site:{pattern:"folkways_vanilla:arch_bridge",points:[p(2,14),p(24,14)],knobs:{width:3}}},
+  {name:"dock",terrain:"shore",site:{pattern:"folkways_vanilla:dock",points:[p(2,14),p(16,14)],knobs:{width:3}}},
+  {name:"arcade",site:{pattern:"folkways_vanilla:arcade",points:[p(1,13),p(13,13)],knobs:{width:3,bay:4,height:3,pavilions:false}}},
+  {name:"city_wall",site:{pattern:"folkways_vanilla:city_wall",points:[p(1,8),p(21,8)],knobs:{height:5,thickness:3,spacing:0,gate:false}}},
+  {name:"road",site:{pattern:"folkways_vanilla:road",points:[p(1,8),p(13,8),p(25,18)]}},
+  {name:"terraced_field",terrain:"slope",site:{pattern:"folkways_vanilla:terraced_field",min:p(2,5),max:p(11,16)}},
+  {name:"quarry",site:{pattern:"folkways_vanilla:quarry",min:p(3,5),max:p(12,14),knobs:{depth:3}}},
+  {name:"mine",site:{pattern:"folkways_vanilla:mine",min:p(3,5),max:p(13,15),knobs:process.env.FOLKWAYS_PATTERN_MINE_DEFAULTS==="1"?{}:{y:y-15,branch:4,pairs:1,spacing:2,chase:false}}},
+  {name:"railway",site:{pattern:"folkways_vanilla:railway",points:[p(1,5),p(21,5),p(21,25)]}},
  ];
 }
 const HEIGHT = defineTask<Record<string, any>, Record<string, any>>({
@@ -108,7 +108,7 @@ return Sync.stamp(Map.of("y",y,"members",members));`,
 
 const CREW = defineTask<Record<string, any>, Record<string, any>>({
   name: "folkways.construction.crew", side: "server", source: javaTask({
-    imports: ["io.github.izakyl.folkways.front.engine.colony.ColonyGround",
+    imports: ["io.github.izakyl.folkways.core.front.engine.colony.ColonyGround",
       "io.github.izakyl.folkways.core.resident.api.Bodies", "io.github.izakyl.folkways.core.vocation.api.Vocations",
       "net.minecraft.world.item.*"],
     body: `
@@ -127,11 +127,11 @@ return Sync.stamp(Map.of("residents",index));`,
   }),
 });
 
-const imports = ["io.github.izakyl.folkways.front.engine.colony.ColonyGround",
-  "io.github.izakyl.folkways.plugins.build.*", "net.minecraft.core.BlockPos",
+const imports = ["io.github.izakyl.folkways.core.front.engine.colony.ColonyGround",
+  "io.github.izakyl.folkways.vanilla.build.*", "net.minecraft.core.BlockPos",
   "net.minecraft.core.registries.BuiltInRegistries", "net.minecraft.resources.ResourceLocation",
   "net.minecraft.world.item.ItemStack", "net.minecraft.world.level.block.Blocks", "net.minecraft.world.Container",
-  "io.github.izakyl.folkways.core.resident.api.Bodies", "io.github.izakyl.folkways.front.api.notice.Doings",
+  "io.github.izakyl.folkways.core.resident.api.Bodies", "io.github.izakyl.folkways.core.front.api.notice.Doings",
   "io.github.izakyl.folkways.core.work.api.Node"];
 const members = `
 static BlockPos pos(Map<?,?> raw){return new BlockPos(((Number)raw.get("x")).intValue(),((Number)raw.get("y")).intValue(),((Number)raw.get("z")).intValue());}
@@ -147,11 +147,11 @@ const COMMISSION = defineTask<Record<string, any>, Record<string, any>>({
   timeoutMs: 20_000,
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
-      "io.github.izakyl.folkways.plugins.build.Commissions",
-      "io.github.izakyl.folkways.plugins.build.draft.Hint",
-      "io.github.izakyl.folkways.plugins.build.draft.Patterns",
-      "io.github.izakyl.folkways.front.api.Schema",
+      "io.github.izakyl.folkways.core.front.engine.colony.ColonyGround",
+      "io.github.izakyl.folkways.vanilla.build.Commissions",
+      "io.github.izakyl.folkways.vanilla.build.draft.Hint",
+      "io.github.izakyl.folkways.vanilla.build.draft.Patterns",
+      "io.github.izakyl.folkways.core.front.api.Schema",
       "io.github.izakyl.folkways.core.item.api.ItemSpec",
       "net.minecraft.core.registries.Registries",
       "net.minecraft.tags.TagKey",
@@ -258,7 +258,7 @@ return Sync.stamp(Map.of("ok",true,"stocked",stocked));
 });
 
 
-const RESET=defineTask<Record<string,any>,Record<string,any>>({name:"folkways.patternfilm.reset",side:"server",timeoutMs:30_000,source:javaTask({imports:["net.minecraft.core.BlockPos","net.minecraft.world.level.block.Blocks","io.github.izakyl.folkways.front.engine.colony.ColonyGround"],body:`
+const RESET=defineTask<Record<string,any>,Record<string,any>>({name:"folkways.patternfilm.reset",side:"server",timeoutMs:30_000,source:javaTask({imports:["net.minecraft.core.BlockPos","net.minecraft.world.level.block.Blocks","io.github.izakyl.folkways.core.front.engine.colony.ColonyGround"],body:`
 var level=ctx.server().overworld();var args=Args.of(ctx);int y=(int)args.integer("y");String terrain=args.string("terrain");
 for(var raw:args.list("chests")){var m=(Map<?,?>)raw;var chest=(net.minecraft.world.Container)level.getBlockEntity(new BlockPos(((Number)m.get("x")).intValue(),((Number)m.get("y")).intValue(),((Number)m.get("z")).intValue()));chest.clearContent();chest.setChanged();}
 var colony=ColonyGround.of(ctx.server(),UUID.fromString(args.string("colony_id"))).orElseThrow();int residentIndex=0;
@@ -302,7 +302,7 @@ static boolean matches(BlockState actual,BlockState wanted){return wanted.isAir(
 `,body:`
 var level=ctx.server().overworld();var args=Args.of(ctx);var colony=ColonyGround.of(ctx.server(),UUID.fromString(args.string("colony_id"))).orElseThrow();
 if(!caseName.equals(args.string("name"))){caseName=args.string("name");expected.clear();expectedJoints.clear();placed.clear();if(heard!=null)heard.close();heard=null;heardFor=-1;}
-var presence=colony.service(ResourceLocation.parse("folkways:build"),Object.class).orElseThrow();var book=field(presence,"book");
+var presence=colony.service(ResourceLocation.parse("folkways_vanilla:build"),Object.class).orElseThrow();var book=field(presence,"book");
 var drawings=(Map<UUID,Blueprint>)field(book,"blueprints");var orders=(Map<UUID,BlueprintBuildOrder>)field(book,"orders");
 for(var order:orders.values()){
  var drawing=drawings.get(order.blueprintId());if(drawing==null)continue;
@@ -342,7 +342,7 @@ const STOCK_ALL = defineTask<Record<string, any>, Record<string, any>>({
   source: javaTask({
     imports: [
       "net.minecraft.core.BlockPos",
-      "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
+      "io.github.izakyl.folkways.core.front.engine.colony.ColonyGround",
       "net.minecraft.core.registries.BuiltInRegistries",
       "net.minecraft.resources.ResourceLocation",
       "net.minecraft.server.MinecraftServer",
@@ -357,7 +357,7 @@ var chests=new ArrayList<Container>();
 for(var raw:args.list("chests")){var m=(Map<?,?>)raw;
   chests.add((Container)level.getBlockEntity(new BlockPos(((Number)m.get("x")).intValue(),((Number)m.get("y")).intValue(),((Number)m.get("z")).intValue())));}
 var colony=ColonyGround.of(server,UUID.fromString(args.string("colony_id"))).orElseThrow();
-var presence=colony.service(ResourceLocation.parse("folkways:build"),Object.class).orElseThrow();
+var presence=colony.service(ResourceLocation.parse("folkways_vanilla:build"),Object.class).orElseThrow();
 var f=presence.getClass().getDeclaredField("owed");f.setAccessible(true);
 var items=new LinkedHashMap<String,Integer>();
 for(var owed:((Map<?,?>)f.get(presence)).values())for(var need:((Map<?,?>)owed).entrySet())items.merge(need.getKey().toString(),((Number)need.getValue()).intValue(),Integer::sum);
@@ -386,9 +386,9 @@ return Sync.stamp(Map.of("ok",true,"stocked",stocked,"unstocked",unstocked));
 
 const CANCEL=defineTask<Record<string,any>,Record<string,any>>({name:"folkways.patternfilm.cancel",side:"server",source:javaTask({imports,members,body:`
 var level=ctx.server().overworld();var args=Args.of(ctx);var colony=ColonyGround.of(ctx.server(),UUID.fromString(args.string("colony_id"))).orElseThrow();
-var presence=colony.service(ResourceLocation.parse("folkways:build"),Object.class).orElseThrow();var book=field(presence,"book");
+var presence=colony.service(ResourceLocation.parse("folkways_vanilla:build"),Object.class).orElseThrow();var book=field(presence,"book");
 var grown=new ArrayList<>(((Map<?,?>)field(presence,"growing")).keySet());var orders=new ArrayList<>(((Map<?,?>)field(book,"orders")).keySet());
-for(var id:grown)call(presence,"act",ResourceLocation.parse("folkways:build"),"stop:"+id,Optional.empty(),colony.view(level));
+for(var id:grown)call(presence,"act",ResourceLocation.parse("folkways_vanilla:build"),"stop:"+id,Optional.empty(),colony.view(level));
 for(var id:orders)call(presence,"cancel",id);
 return Sync.stamp(Map.of("cancelledAfterFailure",orders.size(),"stoppedGrowth",grown.size()));
 `})});

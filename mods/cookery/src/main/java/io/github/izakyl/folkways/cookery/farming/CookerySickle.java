@@ -13,10 +13,10 @@ import io.github.izakyl.folkways.core.work.api.WorkNoise;
 import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.core.work.api.Xp;
 import io.github.izakyl.folkways.core.work.support.Tools;
-import io.github.izakyl.folkways.plugins.farming.FarmRefusal;
-import io.github.izakyl.folkways.plugins.farming.FarmingContent;
-import io.github.izakyl.folkways.plugins.farming.HarvestMethod;
-import io.github.izakyl.folkways.plugins.farming.HarvestMethods;
+import io.github.izakyl.folkways.vanilla.farming.FarmRefusal;
+import io.github.izakyl.folkways.vanilla.farming.FarmingContent;
+import io.github.izakyl.folkways.vanilla.farming.HarvestMethod;
+import io.github.izakyl.folkways.vanilla.farming.HarvestMethods;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -39,9 +39,9 @@ import net.neoforged.neoforge.common.NeoForge;
 public final class CookerySickle implements HarvestMethod {
     public static final ResourceLocation MODE = ResourceLocation.fromNamespaceAndPath("kaleidoscope_cookery", "sickle");
     public static final TagKey<Item> TAG = TagKey.create(Registries.ITEM,
-        ResourceLocation.fromNamespaceAndPath("folkways", "cookery_sickles"));
+        ResourceLocation.fromNamespaceAndPath("folkways_cookery", "cookery_sickles"));
     public static final ToolNeed SICKLE = new ToolNeed.Tagged(TAG);
-    private static final String READY_AT = "folkways:sickle_ready_at";
+    private static final String READY_AT = "folkways_cookery:sickle_ready_at";
     private static boolean registered;
 
     public static synchronized void register() {

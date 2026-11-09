@@ -50,10 +50,21 @@ ordering = "AFTER"
 side = "BOTH"
 
 [[mixins]]
-config = "folkways-rail.mixins.json"
+config = "folkways-create-rail.mixins.json"
 
 [[mixins]]
-config = "folkways-dispatch.mixins.json"
+config = "folkways-create-dispatch.mixins.json"
 
 [[mixins]]
 config = "folkways-create-build.mixins.json"
+
+[[dependencies.${mod_id}]]
+# The addon reads Create's registered blocks during construction; keep its factories after Create.
+modId = "createfirefightingadd"
+type = "optional"
+versionRange = "[0.2.5-beta-fix2]"
+ordering = "BEFORE"
+side = "BOTH"
+
+[[mixins]]
+config = "folkways-create-firefighting.mixins.json"

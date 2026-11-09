@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.core.runtime;
 
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.colony.api.Claimed;
 import io.github.izakyl.folkways.core.colony.api.Colonies;
 import io.github.izakyl.folkways.core.colony.api.Colony;
@@ -25,11 +25,11 @@ import io.github.izakyl.folkways.core.work.api.WorkSite;
 import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.core.work.api.Workload;
 import io.github.izakyl.folkways.core.work.internal.Commit;
-import io.github.izakyl.folkways.plugins.compost.SeedBudget;
-import io.github.izakyl.folkways.plugins.compost.SeedSupport;
-import io.github.izakyl.folkways.plugins.person.PersonBody;
-import io.github.izakyl.folkways.plugins.person.PersonContent;
-import io.github.izakyl.folkways.plugins.person.ResidentEntity;
+import io.github.izakyl.folkways.vanilla.compost.SeedBudget;
+import io.github.izakyl.folkways.vanilla.compost.SeedSupport;
+import io.github.izakyl.folkways.vanilla.person.PersonBody;
+import io.github.izakyl.folkways.vanilla.person.PersonContent;
+import io.github.izakyl.folkways.vanilla.person.ResidentEntity;
 import java.lang.reflect.InvocationTargetException;
 import java.util.List;
 import java.util.Map;
@@ -51,8 +51,8 @@ import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
-@EventBusSubscriber(modid = FolkwaysMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@EventBusSubscriber(modid = FolkwaysCoreMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
+@GameTestHolder(FolkwaysCoreMod.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class SeedReservationGameTests {
     private static final ResourceLocation OWNER = ResourceLocation.fromNamespaceAndPath("folkways_test", "seed_reservations");
@@ -60,7 +60,7 @@ public final class SeedReservationGameTests {
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) { event.register(SeedReservationGameTests.class); }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void the129thActuallyFetchedSeedCannotBeComposted(GameTestHelper helper) {
         var real = InputReservationGameTests.fetched129(helper);
         var snapshot = new SeedBudget.Snapshot(List.of(new SeedBudget.Stock("actual fetched pack", SeedBudget.Location.pack(real.resident()), real.pack())),
@@ -74,7 +74,7 @@ public final class SeedReservationGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void repeatedSnapshotViewsPreserveDistinctHandoffsWithoutRepeatingThem(GameTestHelper helper) {
         try (var rig = new Rig(helper)) {
             rig.body.pack().setItem(0, new ItemStack(Items.WHEAT_SEEDS, 64));
@@ -96,7 +96,7 @@ public final class SeedReservationGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void anUnboundFutureHandoffDoesNotReserveAnUnrelatedPackAgain(GameTestHelper helper) {
         try (var rig = new Rig(helper)) {
             rig.body.pack().setItem(0, new ItemStack(Items.WHEAT_SEEDS, 64));
@@ -115,7 +115,7 @@ public final class SeedReservationGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void aWorkingProducerProtectsProductsMadeBeforeSettlement(GameTestHelper helper) {
         try (var rig = new Rig(helper)) {
             var seeds = Goods.specOf(Items.PUMPKIN_SEEDS.getDefaultInstance());

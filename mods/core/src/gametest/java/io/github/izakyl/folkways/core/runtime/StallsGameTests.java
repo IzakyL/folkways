@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.core.runtime;
 
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import io.github.izakyl.folkways.core.work.api.LaborRefusal;
 import io.github.izakyl.folkways.core.work.api.NodeSpec;
@@ -23,8 +23,8 @@ import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
 // What the player is told stands still: only what stays so, never a gap the next plan fills or a refusal met once.
-@EventBusSubscriber(modid = FolkwaysMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@EventBusSubscriber(modid = FolkwaysCoreMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
+@GameTestHolder(FolkwaysCoreMod.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class StallsGameTests {
 
@@ -38,7 +38,7 @@ public final class StallsGameTests {
         event.register(StallsGameTests.class);
     }
 
-    @GameTest(template = "empty", timeoutTicks = 20)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 20)
     public static void aPlannedStallIsToldOnlyOnceItHasStayed(GameTestHelper helper) {
         WorldPos at = WorldPos.of(helper.getLevel(), helper.absolutePos(BlockPos.ZERO));
         Stall stall = new Stall(at, LaborRefusal.NO_SOURCE,
@@ -55,7 +55,7 @@ public final class StallsGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 20)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 20)
     public static void aLastingRefusalIsToldOnceMetTwiceAndForgottenWhenWorkThereIsDone(GameTestHelper helper) {
         WorldPos at = WorldPos.of(helper.getLevel(), helper.absolutePos(BlockPos.ZERO));
         NodeSpec spec = NodeSpec.of(UUID.randomUUID(), OWNER, new WorkSite.AtBlock(at), Stances.WHEREVER,

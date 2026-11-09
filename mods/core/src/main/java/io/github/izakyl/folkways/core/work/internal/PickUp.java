@@ -29,7 +29,7 @@ import net.minecraft.world.item.ItemStack;
 public final class PickUp implements Node {
 
     public static final net.minecraft.resources.ResourceLocation DOMAIN =
-        net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("folkways", "salvage");
+        net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("folkways_core", "salvage");
 
     private final UUID drop;
     private final NodeSpec spec;

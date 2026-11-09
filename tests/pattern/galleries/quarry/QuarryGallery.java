@@ -1,9 +1,9 @@
 import blockwright.minecraft.core.Args;
 import blockwright.minecraft.core.Sync;
 import dev.blockwright.api.Context;
-import io.github.izakyl.folkways.plugins.build.draft.*;
-import io.github.izakyl.folkways.front.api.Schema;
-import io.github.izakyl.folkways.front.api.Settings;
+import io.github.izakyl.folkways.vanilla.build.draft.*;
+import io.github.izakyl.folkways.core.front.api.Schema;
+import io.github.izakyl.folkways.core.front.api.Settings;
 import io.github.izakyl.folkways.core.item.api.ItemFilter;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import net.minecraft.core.BlockPos;
@@ -67,7 +67,7 @@ public final class Task {
     private static Object build(Context ctx) {
         var args = Args.of(ctx);
         ServerLevel level = ctx.server().overworld();
-        var pattern = Pattern.parse(ResourceLocation.parse("folkways:quarry"), args.string("source")).orElseThrow();
+        var pattern = Pattern.parse(ResourceLocation.parse("folkways_vanilla:quarry"), args.string("source")).orElseThrow();
         BlockState air = Blocks.AIR.defaultBlockState();
         for (int x = -56; x <= 56; x++) for (int z = -32; z <= 32; z++) {
             int h = height(x, z);

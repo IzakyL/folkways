@@ -6,7 +6,7 @@ public final class Task {
 
     private static Object build(Context ctx) throws Exception {
         var level = ctx.server().overworld();
-        var id = ResourceLocation.parse("folkways_chiselsandbits:curved_gallery");
+        var id = ResourceLocation.parse("folkways_carving:curved_gallery");
         var pattern = Pattern.parse(id, Args.of(ctx).string("source")).orElseThrow();
         if (Patterns.find(id).isEmpty()) {
             throw new AssertionError("integration namespace was not loaded");

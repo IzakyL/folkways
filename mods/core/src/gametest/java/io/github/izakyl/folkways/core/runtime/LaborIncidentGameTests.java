@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.core.runtime;
 
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.inventory.api.Stash;
 import io.github.izakyl.folkways.core.item.api.Containers;
 import io.github.izakyl.folkways.core.item.api.Goods;
@@ -32,7 +32,7 @@ import io.github.izakyl.folkways.core.work.internal.PickUp;
 import io.github.izakyl.folkways.core.work.internal.Stowing;
 import io.github.izakyl.folkways.core.work.internal.TransferNode;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
-import io.github.izakyl.folkways.plugins.person.PersonBody;
+import io.github.izakyl.folkways.vanilla.person.PersonBody;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -59,14 +59,14 @@ import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
-@EventBusSubscriber(modid = FolkwaysMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@EventBusSubscriber(modid = FolkwaysCoreMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
+@GameTestHolder(FolkwaysCoreMod.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class LaborIncidentGameTests {
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) { event.register(LaborIncidentGameTests.class); }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void fullPackDoesNotReceivePickupUntilSpaceIsAvailable(GameTestHelper helper) {
         var level = helper.getLevel();
         var fixture = new PlanningFixture(helper, 1);
@@ -110,7 +110,7 @@ public final class LaborIncidentGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void aStoreLetsThePlannerEmptyThePackBeforePickup(GameTestHelper helper) {
         var level = helper.getLevel();
         var fixture = new PlanningFixture(helper, 1);
@@ -157,7 +157,7 @@ public final class LaborIncidentGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void pickupGoesToTheResidentWithSpace(GameTestHelper helper) {
         var level = helper.getLevel();
         var first = new PlanningFixture(helper, 1);
@@ -189,7 +189,7 @@ public final class LaborIncidentGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void pickupCanPlacePromisedOutputDirectlyIntoAStore(GameTestHelper helper) {
         var level = helper.getLevel();
         var fixture = new PlanningFixture(helper, 1);
@@ -277,7 +277,7 @@ public final class LaborIncidentGameTests {
         return new PickUp(drop.getUUID(), at, Goods.specOf(drop.getItem()), 1, Stances.at(at));
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void pickupDiagnosticsIdentifyTheActualDropAndKeepUnknownCausesExplicit(GameTestHelper helper) {
         var level = helper.getLevel();
         var body = PersonBody.RESIDENT.get().create(level);
@@ -308,7 +308,7 @@ public final class LaborIncidentGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void unsubscribedColoniesBuildNothingAndPostNoEvents(GameTestHelper helper) {
         UUID colony = UUID.randomUUID();
         AtomicInteger built = new AtomicInteger();

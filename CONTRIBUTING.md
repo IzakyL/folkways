@@ -49,7 +49,7 @@ pinned in [`blockwright.toml`](blockwright.toml) and writes `.blockwright/mods.j
 fixtures. Gradle compiles against optional integration jars even when a particular
 test profile does not load them.
 
-The build gathers the ten mod jars in `build/libs/` and runtime LDLib2 in `build/deps/`.
+The build gathers the nine mod jars in `build/libs/` and runtime LDLib2 in `build/deps/`.
 Each mod is a Gradle project under `mods/`; see [Mods](README.md#mods) for what each one does.
 
 For Windows, prepare a compatible source-built SDK using Blockwright's
@@ -77,6 +77,9 @@ suite.
 CI runs the build checks, per-mod GameTests and a focused real-client founding
 smoke test. It does not run every client or capture suite. See
 `.github/workflows/build.yml` for the exact matrix.
+
+Carving GameTests: `./gradlew --offline -PgameTestMod=carving -PchiselsTests=true runGameTestServer`.
+The `chiselsTests` switch loads the current Chisels & Bits backend fixtures.
 
 ## Pull requests
 
@@ -115,7 +118,7 @@ Keep native container and slot restrictions intact; player insertion is unaffect
 ### Translations and patterns
 
 - Add mod-owned player-facing strings to all four shared catalogs in
-  `mods/core/src/main/resources/assets/folkways/lang/`: `en_us.json`, `zh_cn.json`,
+  `mods/core/src/main/resources/assets/folkways_core/lang/`: `en_us.json`, `zh_cn.json`,
   `zh_hk.json` (Hong Kong) and `zh_tw.json` (Taiwan). Use each region's Minecraft
   terminology, rather than converting characters alone.
 - Keep translated text as a `Component` until it reaches the client. Use
@@ -138,3 +141,6 @@ Keep native container and slot restrictions intact; player insertion is unaffect
 Update English and Chinese pages together. Use the game's locale catalogs for UI
 names and keep commands, paths and Java symbols literal. Documentation stays at the
 overview level: the READMEs and contribution guides. Do not add detailed reference pages.
+
+Regenerate the vocation sprites from the character grids and palettes in `tools/vocation-icons/icons.json` with
+`python3 tools/vocation-icons/generate.py` (optional comparison sheet: `--sheet path.png`).

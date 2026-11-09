@@ -16,8 +16,8 @@ export const PAGES = defineTask<{ player?: string }, { ok: true; pages: Page[] }
   timeoutMs: 20_000,
   source: javaTask({
     imports: ["net.minecraft.server.MinecraftServer", "io.github.izakyl.folkways.core.colony.api.Colony",
-      "io.github.izakyl.folkways.front.api.ui.Pages",
-      "io.github.izakyl.folkways.front.ui.screen.PageKinds"],
+      "io.github.izakyl.folkways.core.front.api.ui.Pages",
+      "io.github.izakyl.folkways.core.front.ui.screen.PageKinds"],
     body: `
 var name = Args.of(ctx).string("player");
 var player = name.isEmpty() ? null : ((MinecraftServer)ctx.server()).getPlayerList().getPlayerByName(name);

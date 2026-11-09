@@ -21,7 +21,7 @@ import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.core.work.internal.HaulWork;
 import io.github.izakyl.folkways.core.world.api.Stand;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
-import io.github.izakyl.folkways.plugins.person.PersonBody;
+import io.github.izakyl.folkways.vanilla.person.PersonBody;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;

@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.core.runtime;
 
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.colony.api.Colonies;
 import io.github.izakyl.folkways.core.colony.api.Colony;
 import io.github.izakyl.folkways.core.colony.api.ColonyView;
@@ -30,7 +30,7 @@ import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.core.work.api.Workload;
 import io.github.izakyl.folkways.core.work.internal.BodyRunner;
 import io.github.izakyl.folkways.core.work.internal.HoldingRegistry;
-import io.github.izakyl.folkways.plugins.person.PersonBody;
+import io.github.izakyl.folkways.vanilla.person.PersonBody;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -47,11 +47,11 @@ import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
-@EventBusSubscriber(modid = FolkwaysMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@EventBusSubscriber(modid = FolkwaysCoreMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
+@GameTestHolder(FolkwaysCoreMod.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class HoldingGameTests {
-    static final ResourceLocation OWNER = ResourceLocation.fromNamespaceAndPath("folkways", "holding_tests");
+    static final ResourceLocation OWNER = ResourceLocation.fromNamespaceAndPath("folkways_core", "holding_tests");
     static final Map<UUID, List<Urge>> OFFERS = new HashMap<>();
 
     @SubscribeEvent
@@ -65,7 +65,7 @@ public final class HoldingGameTests {
         event.register(HoldingGameTests.class);
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void holdingTracksCompletionFailureAndLetGo(GameTestHelper helper) {
         try (Harness h = new Harness(helper)) {
             AtomicInteger commits = new AtomicInteger();
@@ -94,7 +94,7 @@ public final class HoldingGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void urgeTakesAndReleasesActiveHolding(GameTestHelper helper) throws Exception {
         try (Harness h = new Harness(helper)) {
             Node work = h.node(Workload.Once.of(1000), new AtomicInteger(), false);
@@ -119,7 +119,7 @@ public final class HoldingGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void completedUrgeReleasesItsHolding(GameTestHelper helper) throws Exception {
         try (Harness h = new Harness(helper)) {
             AtomicInteger commits = new AtomicInteger();
@@ -134,7 +134,7 @@ public final class HoldingGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void staleReleaseCannotClearNewGeneration(GameTestHelper helper) {
         HoldingRegistry registry = new HoldingRegistry();
         UUID resident = UUID.randomUUID();
@@ -152,7 +152,7 @@ public final class HoldingGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void privateActionRetainsOuterHoldingAcrossUrge(GameTestHelper helper) throws Exception {
         try (Harness h = new Harness(helper)) {
             Node piece = h.node(Workload.Once.of(1000), new AtomicInteger(), false);
@@ -203,7 +203,7 @@ public final class HoldingGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void standardHoldingsCommitOnlyOnce(GameTestHelper helper) {
         try (Harness h = new Harness(helper)) {
             for (Workload load : List.of(Workload.Once.of(0), (Workload.Continuous) (level, who) -> false)) {

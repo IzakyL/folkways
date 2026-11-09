@@ -1,8 +1,9 @@
 package io.github.izakyl.folkways.core.shell.neoforge;
 
 import com.mojang.serialization.Codec;
-import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.base.persist.upgrade.RawUpgrades;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
+import io.github.izakyl.folkways.core.base.persist.upgrade.RawUpgrades;
+import io.github.izakyl.folkways.core.base.persist.upgrade.RegistryAliases;
 import io.github.izakyl.folkways.core.resident.api.Bodies;
 import io.github.izakyl.folkways.core.resident.api.Body;
 import io.github.izakyl.folkways.core.resident.api.BodyStateAccess;
@@ -29,16 +30,16 @@ import net.neoforged.neoforge.registries.NeoForgeRegistries;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-@EventBusSubscriber(modid = FolkwaysMod.CORE_ID)
+@EventBusSubscriber(modid = FolkwaysCoreMod.CORE_ID)
 public final class FolkwaysAttachments {
     private static final Logger LOGGER = LoggerFactory.getLogger("folkways-persist");
-    private static final String TAG_BODY = "folkways:body";
-    private static final String TAG_STATE = "folkways:body_state";
-    private static final String TAG_LICENCES = "folkways:resident_capabilities";
+    private static final String TAG_BODY = "folkways_core:body";
+    private static final String TAG_STATE = "folkways_core:body_state";
+    private static final String TAG_LICENCES = "folkways_core:resident_capabilities";
 
     private static final DeferredRegister<AttachmentType<?>> ATTACHMENTS = DeferredRegister.create(
         NeoForgeRegistries.ATTACHMENT_TYPES,
-        FolkwaysMod.MOD_ID
+        FolkwaysCoreMod.MOD_ID
     );
 
     public static final DeferredHolder<AttachmentType<?>, AttachmentType<Licences>> LICENCES = ATTACHMENTS.register(
@@ -50,7 +51,7 @@ public final class FolkwaysAttachments {
         ATTACHMENTS.register("body_state", () -> AttachmentType.serializable(BodyState::new).build());
 
     private static final ResourceLocation NOT_A_BODY =
-        ResourceLocation.fromNamespaceAndPath(FolkwaysMod.MOD_ID, "not_a_body");
+        ResourceLocation.fromNamespaceAndPath(FolkwaysCoreMod.MOD_ID, "not_a_body");
 
     private static Licences licencesFor(IAttachmentHolder holder) {
         return new ResidentLicences(holder instanceof Entity entity
@@ -130,6 +131,6 @@ public final class FolkwaysAttachments {
                 return body.mob().getData(LICENCES);
             }
         });
-        ATTACHMENTS.register(modBus);
+        RegistryAliases.register(ATTACHMENTS, modBus);
     }
 }

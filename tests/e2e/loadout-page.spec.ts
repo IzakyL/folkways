@@ -17,8 +17,8 @@ const READ = defineTask<void, { profiles: string[]; assignments: string[]; targe
   name: "folkways.loadout-ux.read", side: "server",
   source: javaTask({ imports: [
     "io.github.izakyl.folkways.core.colony.api.Colonies",
-    "io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfiles",
-    "io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfile",
+    "io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutProfiles",
+    "io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutProfile",
   ], body: `
 var colony = Colonies.all(ctx.server()).getFirst(); var profiles = LoadoutProfiles.of(colony);
 var supply = profiles.all().stream().flatMap(p -> p.entries().stream())

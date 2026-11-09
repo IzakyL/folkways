@@ -1,12 +1,12 @@
 package io.github.izakyl.folkways.core.resident.internal;
 
-import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.effect.Stats;
-import io.github.izakyl.folkways.effect.perk.GlobalPerks;
-import io.github.izakyl.folkways.effect.perk.PerkPool;
-import io.github.izakyl.folkways.effect.perk.Perks;
-import io.github.izakyl.folkways.plugins.build.BuildContent;
-import io.github.izakyl.folkways.plugins.farming.FarmingContent;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
+import io.github.izakyl.folkways.core.effect.Stats;
+import io.github.izakyl.folkways.core.effect.perk.GlobalPerks;
+import io.github.izakyl.folkways.core.effect.perk.PerkPool;
+import io.github.izakyl.folkways.core.effect.perk.Perks;
+import io.github.izakyl.folkways.vanilla.build.BuildContent;
+import io.github.izakyl.folkways.vanilla.farming.FarmingContent;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
@@ -21,13 +21,13 @@ import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
-@EventBusSubscriber(modid = FolkwaysMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@EventBusSubscriber(modid = FolkwaysCoreMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
+@GameTestHolder(FolkwaysCoreMod.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class PerkGrowthGameTests {
     @SubscribeEvent public static void register(RegisterGameTestsEvent event) { event.register(PerkGrowthGameTests.class); }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void malformedTracksFailInsteadOfRepairingProgressOrRanks(GameTestHelper helper) {
         BodyPerks grown = new BodyPerks();
         grown.addXp(FarmingContent.VOCATION, BodyPerks.xpForLevel(3), RandomSource.create(9));
@@ -75,7 +75,7 @@ public final class PerkGrowthGameTests {
         return tag.getCompound("vocations").getCompound(FarmingContent.VOCATION.toString());
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void tracksExposeExperienceAndKeepSharedRanksSeparate(GameTestHelper helper) {
         BodyPerks grown = new BodyPerks();
         RandomSource random = RandomSource.create(29);
@@ -102,7 +102,7 @@ public final class PerkGrowthGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void tenOccupationalDrawsAndThreeSharedMilestones(GameTestHelper helper) {
         BodyPerks perks = new BodyPerks();
         perks.addXp(FarmingContent.VOCATION, BodyPerks.xpForLevel(10), RandomSource.create(17));
@@ -118,7 +118,7 @@ public final class PerkGrowthGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void everyResidentDiscoversThreeSpecialitiesByLevelFive(GameTestHelper helper) {
         for (int seed = 0; seed < 100; seed++) {
             BodyPerks perks = new BodyPerks();
@@ -129,7 +129,7 @@ public final class PerkGrowthGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void shortJobsAccumulateLaborSecondsAcrossSaveAndLoad(GameTestHelper helper) {
         BodyPerks perks = new BodyPerks();
         RandomSource random = RandomSource.create(1);
@@ -144,7 +144,7 @@ public final class PerkGrowthGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void sharedMilestonesSurviveReloadAndCarryBetweenTrades(GameTestHelper helper) {
         BodyPerks perks = new BodyPerks();
         RandomSource random = RandomSource.create(31);
@@ -157,7 +157,7 @@ public final class PerkGrowthGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void currentTracksPreserveLevelsXpAndGlobalRanks(GameTestHelper helper) {
         BodyPerks perks = new BodyPerks();
         perks.addXp(FarmingContent.VOCATION, BodyPerks.xpForLevel(3), RandomSource.create(9));
@@ -175,7 +175,7 @@ public final class PerkGrowthGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void occupationalSpeedDoesNotBundleUnrelatedAbilities(GameTestHelper helper) {
         helper.assertFalse(PerkPool.effects(Map.of(FarmingContent.QUICK_HANDS, 3)).has(FarmingContent.REPLANTS),
             "speed and replanting are independent");

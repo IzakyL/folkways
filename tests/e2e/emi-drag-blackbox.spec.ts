@@ -48,8 +48,8 @@ test("dragging an EMI index cell onto the order draft's item button names that i
     await tryCommand(server, `gamemode survival ${playerName}`);
 
     const standBlock: Vec = { x: origin.x, y: origin.y, z: origin.z };
-    await tryCommand(server, `give ${playerName} folkways:colony_book`);
-    await tryCommand(server, `item replace entity ${playerName} weapon.mainhand with folkways:colony_book`);
+    await tryCommand(server, `give ${playerName} folkways_core:colony_book`);
+    await tryCommand(server, `item replace entity ${playerName} weapon.mainhand with folkways_core:colony_book`);
     await tick.sprint(server, 5);
     evidence.found = await createColonyViaBook(server, client, playerName, standBlock);
 
@@ -99,16 +99,16 @@ test("dragging an EMI index cell onto the order draft's item button names that i
     evidence.row_text_after = named;
     expect(named, "after the EMI drop the order draft should name the dragged item").toContain(draggedName);
 
-    const submit = (await boardActs(client, "do", "folkways.orders"))
+    const submit = (await boardActs(client, "do", "folkways_vanilla.orders"))
       .find((act) => act.row > evidence.enter.row && act.act === 0);
     expect(submit, "the draft should offer a Maintain action").toBeTruthy();
     await clickElement(client, { id: submit!.id }, { scrollIntoView: true });
     await expect.poll(async () => {
       await tick.sprint(server, 10);
       await frames(client, 3);
-      const actions = (await boardActs(client, "do", "folkways.orders")).filter(act => act.row > submit!.row);
+      const actions = (await boardActs(client, "do", "folkways_vanilla.orders")).filter(act => act.row > submit!.row);
       const words = (await Promise.all(actions.map(act =>
-        controlText(client, `folkways.board.row.folkways.orders.${act.row}`)))).flat();
+        controlText(client, `folkways.board.row.folkways_vanilla.orders.${act.row}`)))).flat();
       evidence.order_text = words;
       return words;
     }, { message: "the dropped item must be filed as an order", timeout: 10_000 }).toContain(draggedName);

@@ -2,10 +2,10 @@
 public final class Task {
 
     public static Object run(Context ctx) throws Exception {
-        var pattern = Patterns.find(ResourceLocation.parse("folkways_chiselsandbits:gothic_cloister")).orElseThrow();
+        var pattern = Patterns.find(ResourceLocation.parse("folkways_carving:gothic_cloister")).orElseThrow();
         var defaults = new CompoundTag();
         for (var setting : pattern.knobs().settings()) {
-            if (setting instanceof io.github.izakyl.folkways.front.api.Schema.Setting.Items items) {
+            if (setting instanceof io.github.izakyl.folkways.core.front.api.Schema.Setting.Items items) {
                 defaults.put(items.key(), io.github.izakyl.folkways.core.item.api.ItemSpec.of(
                     items.byDefault().getFirst().id()).save());
             }

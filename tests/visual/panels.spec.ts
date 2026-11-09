@@ -4,6 +4,7 @@ import { camera, defineTask, input, javaTask, player, screen, tick, type Minecra
 import { ancestorsOf, clickElement, panelElements, visibleBox } from "../ldlib2";
 import { foundColonyFast, openColonyPanelViaBook, optInViaBook, setBookGesture, waitForGroundedPlayer, type Vec } from "../shared/colony/colony-founding";
 import { boardActs, enterSitePanel } from "../shared/ui/site-panel";
+import { showVocationColumn } from "../shared/ui/vocation-groups";
 import { CONFIG_PATH, VisualRun } from "../shared/capture/visual-kit";
 import { discoverPages, capturePageWindows, clickTab } from "./ui-catalog";
 import { LayoutProbe } from "../shared/capture/layout-lint";
@@ -15,13 +16,13 @@ import { newRunId } from "../shared/harness/run-id";
 import { waitForResourceReload } from "../shared/harness/resource-reload";
 import { stockColony, stockDispatch, stockRail } from "./colony-stock";
 
-const BOOK_ITEM = "folkways:colony_book";
+const BOOK_ITEM = "folkways_core:colony_book";
 const TARGET_RESIDENTS = 6;
 // Long enough for residents to take up the work the stocked colony offers, so "Current work" is not all unassigned.
 const SETTLE_TICKS = 200;
 const CITIZEN_ROW = "folkways.resident.row.";
-const FARMING = "folkways.farming";
-const PERSON_PAGE = "folkways.person";
+const FARMING = "folkways_vanilla.farming";
+const PERSON_PAGE = "folkways_vanilla.person";
 const BREAD_RESULT = "folkways.selector.result.minecraft.bread";
 const LOCALES = ["en_us", "zh_cn"] as const;
 const GUI_SCALE = 3;
@@ -181,14 +182,14 @@ test("panels and item models on camera", async ({}, testInfo) => {
         hard: true,
       });
       await run.lint(probe, `tab:${tab.name}`);
-      if (tab.name === "folkways.farming" || tab.name === "folkways.damage_control") {
+      if (tab.name === "folkways_vanilla.farming" || tab.name === "folkways_vanilla.damage_control") {
         const elements = await panelElements(client);
         const visible = elements.filter(element => visibleBox(elements, element)
           && [element, ...ancestorsOf(elements, element)].every(one => one.displayed && one.visible));
         const navigation = elements.find(element => element.id === "folkways.navigation")!;
         const labels = visible.filter(element => element.className.endsWith(".Label")
           && element.x >= navigation.x + navigation.width
-          && (tab.name === "folkways.farming" ? /^\d+ cells ·/.test(element.text ?? "")
+          && (tab.name === "folkways_vanilla.farming" ? /^\d+ cells ·/.test(element.text ?? "")
             : element.text === "Damage Control"));
         expect(labels.length, `${tab.name} must expose the inspected text`).toBeGreaterThan(0);
         for (const label of labels) {
@@ -202,18 +203,18 @@ test("panels and item models on camera", async ({}, testInfo) => {
     await client.run(defineTask<void, boolean>({
       name: "folkways.visual.open-sentry-window", side: "client",
       source: javaTask({ imports: ["net.minecraft.client.Minecraft", "net.minecraft.resources.ResourceLocation",
-        "net.minecraft.world.entity.player.Player", "io.github.izakyl.folkways.front.ui.screen.ColonyShell"], body: `
+        "net.minecraft.world.entity.player.Player", "io.github.izakyl.folkways.core.front.ui.screen.ColonyShell"], body: `
 var open = ColonyShell.class.getDeclaredMethod("openPage", Player.class, ResourceLocation.class);
 open.setAccessible(true);
-open.invoke(null, Minecraft.getInstance().player, ResourceLocation.parse("folkways:sentry_posts"));
+open.invoke(null, Minecraft.getInstance().player, ResourceLocation.parse("folkways_vanilla:sentry_posts"));
 return true;
 ` }),
     }));
-    await waitForElement(client, { id: "folkways.window.close.folkways.sentry_posts" });
+    await waitForElement(client, { id: "folkways.window.close.folkways_vanilla.sentry_posts" });
     await run.shot(client, "sentry-posts-window", {
       subject: "Registered sentry posts window", worldState: {}, hard: true,
     });
-    await clickUnverified(client, { id: "folkways.window.close.folkways.sentry_posts" });
+    await clickUnverified(client, { id: "folkways.window.close.folkways_vanilla.sentry_posts" });
 
     if (await run.hover(client, "folkways.panel.orders")) {
       await run.shot(client, "05-0-tab-hover", {
@@ -228,6 +229,16 @@ return true;
     const citizenId = citizen ? citizen.slice(CITIZEN_ROW.length) : null;
 
     const farmingCell = citizenId ? `folkways.resident.vocation.${FARMING}.${citizenId}` : null;
+    const gatheringCell = citizenId ? `folkways.resident.group.folkways_core.gathering.${citizenId}` : null;
+    if (gatheringCell && (await run.hover(client, gatheringCell))) {
+      await run.shot(client, "05-1a0-citizens-group-hover", {
+        subject: "Citizens · hovering a vocation group's cell: how each of its vocations stands, and that a click or the wheel sets them all",
+        worldState: { token: gatheringCell },
+      });
+    }
+    if (farmingCell) {
+      await safeAction(() => showVocationColumn(server, client, "folkways.resident", FARMING.replace(".", ":"), farmingCell));
+    }
     if (farmingCell && (await run.hover(client, farmingCell))) {
       await run.shot(client, "05-1a-citizens-priority-hover", {
         subject: "Citizens · hovering a priority cell: a centered inset square in the cell, plus everything that job means for this person: level, and each perk in the pool with its tier and effect",
@@ -295,9 +306,9 @@ return true;
     });
     await run.lint(probe, "window:looks");
     await clickElement(client, { id: "folkways.pool.looks.close" });
-    await clickUnverified(client, { id: "folkways.window.close.folkways.looks" });
+    await clickUnverified(client, { id: "folkways.window.close.folkways_vanilla.looks" });
     await expect.poll(async () => (await panelElements(client))
-      .find(element => element.id === "folkways.window.folkways.looks")?.displayed,
+      .find(element => element.id === "folkways.window.folkways_vanilla.looks")?.displayed,
       { timeout: 5_000 }).toBe(false);
     await tick.sprint(server, 5);
     await safeAction(() => frames(client, 3));
@@ -310,16 +321,16 @@ return true;
       worldState: { via: opens[0].id, tokens: await tokensOf(client) },
     });
     await run.lint(probe, "window:names");
-    await clickUnverified(client, { id: "folkways.window.close.folkways.names" });
+    await clickUnverified(client, { id: "folkways.window.close.folkways_vanilla.names" });
     await expect.poll(async () => (await panelElements(client))
-      .find(element => element.id === "folkways.window.folkways.names")?.displayed,
+      .find(element => element.id === "folkways.window.folkways_vanilla.names")?.displayed,
       { timeout: 5_000 }).toBe(false);
     await tick.sprint(server, 5);
     await safeAction(() => frames(client, 3));
 
     await clickTab(client, "folkways.page.wares");
     await safeAction(() => frames(client, 2));
-    await clickElement(client, { id: "folkways.settings.open.tool.folkways.crafting.folkways.wares" });
+    await clickElement(client, { id: "folkways.settings.open.tool.folkways_vanilla.crafting.folkways_vanilla.wares" });
     await softly(() => waitForElement(client, { id: "folkways.selector.close" }, { timeoutMs: 8_000 }));
     await tick.sprint(server, 5);
     await safeAction(() => frames(client, 3));

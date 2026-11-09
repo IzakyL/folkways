@@ -42,7 +42,7 @@ test("a train becomes the colony's on one click of the conductor seat, and stops
       config: CONFIG_PATH,
       server: { trace: tracePath("e2e", "rail-server"), instance: seededServer(`rail-server-${runId}`) },
       client: { trace: tracePath("e2e", "rail-client"), instance: `rail-client-${runId}` },
-      snapshot: () => ({ containers: [], entityTypes: ["folkways:resident"] }),
+      snapshot: () => ({ containers: [], entityTypes: ["folkways_vanilla:resident"] }),
     });
     ({ server, client } = pair);
 
@@ -59,8 +59,8 @@ test("a train becomes the colony's on one click of the conductor seat, and stops
       z: Math.round(player.pos.z) + 4,
     };
     await tryCommand(server, `fill ${origin.x - 8} ${origin.y} ${origin.z - 8} ${origin.x + 8} ${origin.y + 4} ${origin.z + 8} minecraft:air`);
-    await tryCommand(server, `give ${player.name} folkways:colony_book`);
-    await tryCommand(server, `item replace entity ${player.name} weapon.mainhand with folkways:colony_book`);
+    await tryCommand(server, `give ${player.name} folkways_core:colony_book`);
+    await tryCommand(server, `item replace entity ${player.name} weapon.mainhand with folkways_core:colony_book`);
     await tick.sprint(server, 5);
     report.create = await createColonyViaBook(server, client, player.name, origin);
     const backup = await tryCommand(server, `item replace entity ${player.name} inventory.0 from entity ${player.name} weapon.mainhand`);

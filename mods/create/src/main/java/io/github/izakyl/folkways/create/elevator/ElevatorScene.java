@@ -1,9 +1,9 @@
 package io.github.izakyl.folkways.create.elevator;
 
-import io.github.izakyl.folkways.front.api.Shape;
-import io.github.izakyl.folkways.front.api.ponder.PonderScenery;
-import io.github.izakyl.folkways.front.api.ponder.Scenes;
-import io.github.izakyl.folkways.plugins.person.PersonBody;
+import io.github.izakyl.folkways.core.front.api.Shape;
+import io.github.izakyl.folkways.core.front.api.ponder.PonderScenery;
+import io.github.izakyl.folkways.core.front.api.ponder.Scenes;
+import io.github.izakyl.folkways.vanilla.person.PersonBody;
 import net.createmod.catnip.math.Pointing;
 import net.createmod.ponder.api.PonderPalette;
 import net.createmod.ponder.api.scene.SceneBuilder;
@@ -23,7 +23,7 @@ public final class ElevatorScene {
     public static void declare(FMLClientSetupEvent event) {
         event.enqueueWork(() -> Scenes.folder(ElevatorPlugin.ID, "folkways.lessons.elevator",
             ResourceLocation.fromNamespaceAndPath("create", "elevator_pulley"),
-            Scenes.scene("elevator", ElevatorScene::program)));
+            Scenes.scene("folkways_create", "elevator", ElevatorScene::program)));
     }
 
     public static void program(SceneBuilder scene, SceneBuildingUtil util) {

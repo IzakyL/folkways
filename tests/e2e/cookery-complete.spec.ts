@@ -57,7 +57,7 @@ for (const scenario of CASES) for (const stage of scenario.aboard ? twins() : [G
       config: "blockwright.toml#" + (stage.kind === "ground" ? "cookery" : "cookery-sable"),
       server: { trace: tracePath("e2e", stage.name("complete-cookery-server-" + runId)), instance: seededServer(stage.name("complete-cookery-server-" + runId)) },
       client: { trace: tracePath("e2e", stage.name("complete-cookery-client-" + runId)), instance: stage.name("complete-cookery-client-" + runId) },
-      snapshot: () => ({ containers: cells ? [stage.at(cells.target), stage.at(cells.store)] : [], entityTypes: ["folkways:resident", "minecraft:item"] }),
+      snapshot: () => ({ containers: cells ? [stage.at(cells.target), stage.at(cells.store)] : [], entityTypes: ["folkways_vanilla:resident", "minecraft:item"] }),
     });
     const { server, client } = pair;
     const grounded = await waitForGroundedPlayer(server);
@@ -74,7 +74,7 @@ for (const scenario of CASES) for (const stage of scenario.aboard ? twins() : [G
     const block = (at: Vec) => commandPos(stage.at(at));
     for (const chest of [cells.store, cells.target]) await world.command(server, "setblock " + block(chest) + " minecraft:chest{Items:[]}");
     // Configuration is a fixture input; permission/picker/all-items/revision behavior is separately tested through the real UI.
-    await world.command(server, "setblock " + block(cells.source) + " folkways:creative_supply_box{all:0b,whitelist:"
+    await world.command(server, "setblock " + block(cells.source) + " folkways_vanilla:creative_supply_box{all:0b,whitelist:"
       + JSON.stringify([...scenario.food, ...MATERIALS].map(id => "i" + id)) + "}");
     await world.command(server, "setblock " + block(cells.table) + " minecraft:crafting_table");
     await world.command(server, "setblock " + block(cells.board) + " " + K + "chopping_board");
@@ -187,10 +187,10 @@ function kitchen(origin: Vec) {
 async function physical(server: MinecraftServer, stage: Stage, cells: ReturnType<typeof kitchen>) {
   const blocks = await Promise.all(Object.entries(cells).map(async ([key, at]) => [key, await world.block(server, stage.at(at), { nbt: true })] as const));
   const state = Object.fromEntries(blocks);
-  const sampled = await world.entities(server, { dimension: "minecraft:overworld", types: ["folkways:resident", "minecraft:item"], nbt: true, limit: 1000 });
+  const sampled = await world.entities(server, { dimension: "minecraft:overworld", types: ["folkways_vanilla:resident", "minecraft:item"], nbt: true, limit: 1000 });
   expect(sampled.limited).toBe(false); expect(sampled.nbtTruncated).not.toBe(true);
-  const residents = sampled.entities.filter(entity => entity.type === "folkways:resident").map(entity => {
-    const nbt = entity.nbt as any; const pack = nbt?.["neoforge:attachments"]?.["folkways:body_state"]?.Pack?.Items;
+  const residents = sampled.entities.filter(entity => entity.type === "folkways_vanilla:resident").map(entity => {
+    const nbt = entity.nbt as any; const pack = nbt?.["neoforge:attachments"]?.["folkways_core:body_state"]?.Pack?.Items;
     expect(Array.isArray(pack)).toBe(true);
     return { uuid: entity.uuid, position: entity.position, pack, armor: nbt.ArmorItems };
   });

@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.core.resident.internal;
 
-import io.github.izakyl.folkways.base.Ledger;
+import io.github.izakyl.folkways.core.base.Ledger;
 import io.github.izakyl.folkways.core.colony.api.Colony;
 import io.github.izakyl.folkways.core.colony.api.Equipment.Demand;
 import io.github.izakyl.folkways.core.colony.api.Equipment.Provider;
@@ -20,7 +20,7 @@ import net.minecraft.world.item.ItemStack;
 
 /** Real clothing slots, independent from borrowed tools and the copies shown in a working hand. */
 public final class EquipmentCoordinator implements Equipment.Access {
-    private static final String TAG = "folkways:managed_equipment";
+    private static final String TAG = "folkways_core:managed_equipment";
     private static volatile Map<ResourceLocation, Provider> providers = Map.of();
 
     private EquipmentCoordinator() {

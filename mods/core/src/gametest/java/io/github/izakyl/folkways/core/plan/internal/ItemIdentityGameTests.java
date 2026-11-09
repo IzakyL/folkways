@@ -1,7 +1,7 @@
 package io.github.izakyl.folkways.core.plan.internal;
 
-import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.base.persist.Reader;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
+import io.github.izakyl.folkways.core.base.persist.Reader;
 import io.github.izakyl.folkways.core.colony.api.Claimed;
 import io.github.izakyl.folkways.core.colony.api.Colonies;
 import io.github.izakyl.folkways.core.colony.internal.ColonyData;
@@ -26,8 +26,8 @@ import io.github.izakyl.folkways.core.work.api.Workload;
 import io.github.izakyl.folkways.core.work.internal.Commit;
 import io.github.izakyl.folkways.core.work.internal.TransferNode;
 import io.github.izakyl.folkways.core.work.support.Leaves;
-import io.github.izakyl.folkways.effect.Effects;
-import io.github.izakyl.folkways.front.engine.colony.ColonyMetrics;
+import io.github.izakyl.folkways.core.effect.Effects;
+import io.github.izakyl.folkways.core.front.engine.colony.ColonyMetrics;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -58,8 +58,8 @@ import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
-@EventBusSubscriber(modid = FolkwaysMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@EventBusSubscriber(modid = FolkwaysCoreMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
+@GameTestHolder(FolkwaysCoreMod.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class ItemIdentityGameTests {
     @SubscribeEvent
@@ -67,7 +67,7 @@ public final class ItemIdentityGameTests {
         event.register(ItemIdentityGameTests.class);
     }
 
-    @GameTest(template = "empty", timeoutTicks = 10)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 10)
     public static void componentSubsetsKeepUnspecifiedValuesAndOldRequirementsFree(GameTestHelper helper) {
         ItemStack first = ammo("tacz:45acp", 7);
         CompoundTag extra = first.get(DataComponents.CUSTOM_DATA).copyTag();
@@ -90,7 +90,7 @@ public final class ItemIdentityGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 10)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 10)
     public static void customDataSubsetsRecurseThroughCompoundsAndLists(GameTestHelper helper) throws Exception {
         CompoundTag expected = TagParser.parseTag("{ammo:{id:'tacz:45acp'},lots:[{maker:'test'}]}");
         CompoundTag actual =
@@ -111,7 +111,7 @@ public final class ItemIdentityGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 10)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 10)
     public static void exactIdentityIncludesDefaultsRemovalsAndIgnoresCount(GameTestHelper helper) {
         ItemStack first = ammo("tacz:45acp", 2);
         first.remove(DataComponents.RARITY);
@@ -132,7 +132,7 @@ public final class ItemIdentityGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 10)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 10)
     public static void constraintsRoundTripThroughCodecAndNbt(GameTestHelper helper) {
         ItemStack stack = ammo("tacz:45acp", 7);
         stack.remove(DataComponents.RARITY);
@@ -153,7 +153,7 @@ public final class ItemIdentityGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 10)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 10)
     public static void missingConstraintsDefaultToUnconstrainedAndInvalidConstraintsDoNotBroaden(
         GameTestHelper helper) {
         CompoundTag item = new CompoundTag();
@@ -176,7 +176,7 @@ public final class ItemIdentityGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 10)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 10)
     public static void overlapsDistinguishIdentitiesAndCombineCompatibleSubsets(GameTestHelper helper) {
         ItemSpec first = subset("tacz:45acp");
         ItemSpec second = subset("tacz:9mm");
@@ -196,7 +196,7 @@ public final class ItemIdentityGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 10)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 10)
     public static void stockClaimsManifestsAndPackCellsKeepVariantsSeparate(GameTestHelper helper) {
         var f = new PlanningFixture(helper);
         Stash source = new Stash(f.source);
@@ -224,7 +224,7 @@ public final class ItemIdentityGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void plannerHaulsAndCommitConsumesEachAmmoIdentitySeparately(GameTestHelper helper) {
         var f = new PlanningFixture(helper);
         var level = helper.getLevel();
@@ -278,7 +278,7 @@ public final class ItemIdentityGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 10)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 10)
     public static void failedCommitReturnsComponentsWithoutMergingVariants(GameTestHelper helper) {
         var f = new PlanningFixture(helper);
         f.worker.pack().setItem(0, ammo("tacz:9mm", 4));
@@ -305,7 +305,7 @@ public final class ItemIdentityGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 10)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 10)
     public static void stockListsKeepSeparateComponentStacks(GameTestHelper helper) {
         var f = new PlanningFixture(helper);
         var level = helper.getLevel();
@@ -331,7 +331,7 @@ public final class ItemIdentityGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 10)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 10)
     public static void transientComponentConstraintsRefuseSerializationWithoutChangingTheirMeaning(
             GameTestHelper helper) {
         var values = DataComponentMap.builder().set(DataComponents.CREATIVE_SLOT_LOCK, Unit.INSTANCE).build();

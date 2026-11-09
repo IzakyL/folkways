@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.core.work.support;
 
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.item.api.Goods;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import io.github.izakyl.folkways.core.work.api.Amount;
@@ -26,7 +26,7 @@ import net.minecraft.world.level.block.state.BlockState;
 public final class Leaves {
 
     // Goods that cannot be told beforehand. Each one is a cell of its own, shared with nothing.
-    public static final ItemSpec UNSEEN = ItemSpec.of(ResourceLocation.fromNamespaceAndPath(FolkwaysMod.MOD_ID,
+    public static final ItemSpec UNSEEN = ItemSpec.of(ResourceLocation.fromNamespaceAndPath(FolkwaysCoreMod.MOD_ID,
         "unseen"));
 
     private Leaves() {

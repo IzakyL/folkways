@@ -35,7 +35,7 @@ const SPEC: ColonySpec = {
     blocks: [{ offset: { x: 0, y: 0, z: 0 }, block: "minecraft:oak_planks" }],
   }],
   buildOrders: [{ blueprintId: BLUEPRINT_ID, anchor: { x: 30, y: 64, z: 30 } }],
-  settings: { "folkways:wares": { fuel: { items: [{ item: "minecraft:oak_planks" }] } } },
+  settings: { "folkways_vanilla:wares": { fuel: { items: [{ item: "minecraft:oak_planks" }] } } },
 };
 
 async function serviceTally(server: any, registry: string): Promise<number> {
@@ -110,21 +110,21 @@ test("the mod reads back every section of a colony save the test writes", async 
     expect(roster, `the roster kind should be ${PERSON_KIND}`).toContain(PERSON_KIND);
 
     expect(await zoneCount(server, registry)).toBe(2);
-    expect(await zoneKindAt(server, registry, 0)).toBe("folkways:farm");
+    expect(await zoneKindAt(server, registry, 0)).toBe("folkways_vanilla:farm");
     expect(await zoneCellsAt(server, registry, 0)).toBe(9);
     expect(await zoneChoiceSettingAt(server, registry, "crop", 0)).toBe("minecraft:wheat");
-    expect(await zoneKindAt(server, registry, 1)).toBe("folkways:pasture");
+    expect(await zoneKindAt(server, registry, 1)).toBe("folkways_vanilla:pasture");
     expect(await zoneCountSettingAt(server, registry, "target", 1)).toBe(6);
 
-    const orders = await serviceOf(server, registry, "folkways:orders");
+    const orders = await serviceOf(server, registry, "folkways_vanilla:orders");
     expect(orders, "orders should read back with their positions").toContain("BlockPos{x=4, y=64, z=5}");
     expect(orders).toContain("minecraft:bread");
 
-    const living = await serviceOf(server, registry, "folkways:living");
+    const living = await serviceOf(server, registry, "folkways_vanilla:living");
     expect(living, "bed claims should read back").toContain("BlockPos{x=6, y=64, z=6}");
     expect(living).toContain(RESIDENTS[0]);
 
-    const build = await serviceOf(server, registry, "folkways:build");
+    const build = await serviceOf(server, registry, "folkways_vanilla:build");
     expect(build, "the blueprint should read back").toContain(BLUEPRINT_ID);
     expect(build, "the build order anchor should read back").toContain("minecraft:overworld@30, 64, 30");
 
@@ -141,7 +141,7 @@ test("the mod reads back every section of a colony save the test writes", async 
     const afterReload = await colonyRegistry(server);
     expect(await serviceTally(server, afterReload), "a colony read back on reload should settle too")
       .toBe(settled);
-    const ordersAgain = await serviceOf(server, afterReload, "folkways:orders");
+    const ordersAgain = await serviceOf(server, afterReload, "folkways_vanilla:orders");
     expect(ordersAgain, "after reload the orders should still belong to this domain").toContain("minecraft:bread");
   } catch (error) {
     pair?.failing(error);

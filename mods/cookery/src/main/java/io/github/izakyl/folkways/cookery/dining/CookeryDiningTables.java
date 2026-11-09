@@ -4,8 +4,8 @@ import com.github.ysbbbbbb.kaleidoscopecookery.block.decoration.ChairBlock;
 import com.github.ysbbbbbb.kaleidoscopecookery.blockentity.decoration.TableBlockEntity;
 import com.github.ysbbbbbb.kaleidoscopecookery.entity.SitEntity;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks;
-import io.github.izakyl.folkways.plugins.person.living.DiningDrinks;
-import io.github.izakyl.folkways.plugins.person.living.DiningTables;
+import io.github.izakyl.folkways.vanilla.person.living.DiningDrinks;
+import io.github.izakyl.folkways.vanilla.person.living.DiningTables;
 import java.util.Optional;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
@@ -23,7 +23,7 @@ public final class CookeryDiningTables {
     private CookeryDiningTables() { }
     public static synchronized void register() {
         if (registered) { return; }
-        ResourceLocation id = ResourceLocation.fromNamespaceAndPath("folkways", "cookery_dining");
+        ResourceLocation id = ResourceLocation.fromNamespaceAndPath("folkways_cookery", "cookery_dining");
         DiningTables.register(id, new DiningTables.Table() {
             public boolean stable() { return true; }
             public Optional<BlockState> sample() { return Optional.of(ModBlocks.TABLE_OAK.get().defaultBlockState()); }

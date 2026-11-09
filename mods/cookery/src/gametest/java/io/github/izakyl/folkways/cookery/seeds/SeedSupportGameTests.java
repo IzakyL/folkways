@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.cookery.seeds;
 
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.cookery.CookeryContent;
 import io.github.izakyl.folkways.core.colony.api.Claimed;
 import io.github.izakyl.folkways.core.colony.api.Colonies;
@@ -11,24 +11,24 @@ import io.github.izakyl.folkways.core.item.api.Containers;
 import io.github.izakyl.folkways.core.item.api.ItemFilter;
 import io.github.izakyl.folkways.core.work.api.Stances;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
-import io.github.izakyl.folkways.front.api.Facings;
-import io.github.izakyl.folkways.front.api.Schema;
-import io.github.izakyl.folkways.front.api.Shape;
-import io.github.izakyl.folkways.front.engine.Enrollments;
-import io.github.izakyl.folkways.front.engine.colony.ColonyFront;
-import io.github.izakyl.folkways.front.engine.colony.ColonySettings;
-import io.github.izakyl.folkways.plugins.compost.CompostBookings;
-import io.github.izakyl.folkways.plugins.compost.CompostContent;
-import io.github.izakyl.folkways.plugins.compost.CompostPresence;
-import io.github.izakyl.folkways.plugins.compost.CompostSettings;
-import io.github.izakyl.folkways.plugins.compost.SeedReserves;
-import io.github.izakyl.folkways.plugins.compost.SeedSupport;
-import io.github.izakyl.folkways.plugins.farming.FarmingContent;
-import io.github.izakyl.folkways.plugins.orders.Orders;
-import io.github.izakyl.folkways.plugins.orders.OrdersContent;
-import io.github.izakyl.folkways.plugins.person.PersonBody;
-import io.github.izakyl.folkways.plugins.person.PersonContent;
-import io.github.izakyl.folkways.plugins.person.ResidentEntity;
+import io.github.izakyl.folkways.core.front.api.Facings;
+import io.github.izakyl.folkways.core.front.api.Schema;
+import io.github.izakyl.folkways.core.front.api.Shape;
+import io.github.izakyl.folkways.core.front.engine.Enrollments;
+import io.github.izakyl.folkways.core.front.engine.colony.ColonyFront;
+import io.github.izakyl.folkways.core.front.engine.colony.ColonySettings;
+import io.github.izakyl.folkways.vanilla.compost.CompostBookings;
+import io.github.izakyl.folkways.vanilla.compost.CompostContent;
+import io.github.izakyl.folkways.vanilla.compost.CompostPresence;
+import io.github.izakyl.folkways.vanilla.compost.CompostSettings;
+import io.github.izakyl.folkways.vanilla.compost.SeedReserves;
+import io.github.izakyl.folkways.vanilla.compost.SeedSupport;
+import io.github.izakyl.folkways.vanilla.farming.FarmingContent;
+import io.github.izakyl.folkways.vanilla.orders.Orders;
+import io.github.izakyl.folkways.vanilla.orders.OrdersContent;
+import io.github.izakyl.folkways.vanilla.person.PersonBody;
+import io.github.izakyl.folkways.vanilla.person.PersonContent;
+import io.github.izakyl.folkways.vanilla.person.ResidentEntity;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -52,13 +52,13 @@ import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
 @EventBusSubscriber(modid = "folkways_cookery", bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@GameTestHolder("folkways_cookery")
 @PrefixGameTestTemplate(false)
 public final class SeedSupportGameTests {
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) { event.register(SeedSupportGameTests.class); }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void mintingAColonyRegistersOneSeedServiceAndCompostDoesNotRequireAHat(GameTestHelper helper) {
         try (var rig = new Fixture(helper)) {
             var delegation = Enrollments.of(CookeryContent.ID).delegations().stream()
@@ -93,7 +93,7 @@ public final class SeedSupportGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void compostPreferencesPersistPerColonyAndDriveTheActualSeedBudget(GameTestHelper helper) {
         try (var rig = new Fixture(helper)) {
             rig.body.pack().setItem(0, new ItemStack(Items.WHEAT_SEEDS, 64));
@@ -139,7 +139,7 @@ public final class SeedSupportGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void compostRowsDiscoverOnlyOwnedSeedsAndConfiguredCrops(GameTestHelper helper) {
         try (var rig = new Fixture(helper)) {
             helper.assertTrue(CompostSettings.discovered(rig.colony, rig.level.getServer()).isEmpty(),
@@ -169,7 +169,7 @@ public final class SeedSupportGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void riceSharesOneVisibleRowAndReserve(GameTestHelper helper) {
         try (var rig = new Fixture(helper)) {
             var wild = com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems.WILD_RICE_SEED.get();
@@ -189,7 +189,7 @@ public final class SeedSupportGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void realDoubleChestAliasesAndPlayerSlotsCountOnlyPhysicalAccessibleSeeds(GameTestHelper helper) {
         try (var rig = new Fixture(helper)) {
             BlockPos left = helper.absolutePos(new BlockPos(2, 1, 2));
@@ -218,7 +218,7 @@ public final class SeedSupportGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void playerFiledStandingTargetsProtectTheirHighWaterCountsAcrossBoxes(GameTestHelper helper) {
         try (var rig = new Fixture(helper)) {
             BlockPos first = helper.absolutePos(new BlockPos(1, 1, 1));
@@ -248,7 +248,7 @@ public final class SeedSupportGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void inventoriesFromOtherDimensionsJoinOneGlobalPhysicalReserve(GameTestHelper helper) {
         try (var rig = new Fixture(helper)) {
             ServerLevel nether = rig.level.getServer().getLevel(Level.NETHER);
@@ -272,7 +272,7 @@ public final class SeedSupportGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void anUnloadedHeldResidentMakesAllCompostAllowancesConservative(GameTestHelper helper) {
         try (var rig = new Fixture(helper)) {
             rig.body.pack().setItem(0, new ItemStack(Items.WHEAT_SEEDS, 64));
@@ -290,7 +290,7 @@ public final class SeedSupportGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void loadedMultiResidentWarehouseSnapshotsKeepOnePhysicalReserveAtScale(GameTestHelper helper) throws Exception {
         var level = helper.getLevel(); var colony = Colonies.mint(level.getServer());
         var bodies = new java.util.ArrayList<ResidentEntity>();

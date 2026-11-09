@@ -16,7 +16,7 @@ public record ElevatorRef(ResourceKey<Level> dimension, BlockPos pulley) {
 
     public ResourceLocation service() {
         String identity = dimension.location() + "/" + pulley.asLong();
-        return ResourceLocation.fromNamespaceAndPath("folkways", "elevator/"
+        return ResourceLocation.fromNamespaceAndPath("folkways_create", "elevator/"
             + UUID.nameUUIDFromBytes(identity.getBytes(StandardCharsets.UTF_8)));
     }
 }

@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.core.runtime;
 
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import io.github.izakyl.folkways.core.resident.api.Doing;
 import io.github.izakyl.folkways.core.work.api.ActionSpec;
@@ -45,8 +45,8 @@ import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
-@EventBusSubscriber(modid = FolkwaysMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@EventBusSubscriber(modid = FolkwaysCoreMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
+@GameTestHolder(FolkwaysCoreMod.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class SuppliedHoldingGameTests {
     @SubscribeEvent
@@ -54,7 +54,7 @@ public final class SuppliedHoldingGameTests {
         event.register(SuppliedHoldingGameTests.class);
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void customHoldingAloneControlsActions(GameTestHelper helper) {
         for (boolean fail : List.of(false, true)) {
             try (HoldingGameTests.Harness h = new HoldingGameTests.Harness(helper)) {
@@ -133,7 +133,7 @@ public final class SuppliedHoldingGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void privateActionsCommitWithoutNodesOrPhases(GameTestHelper helper) {
         try (HoldingGameTests.Harness h = new HoldingGameTests.Harness(helper)) {
             SequenceNode node = start(h, 3);
@@ -165,7 +165,7 @@ public final class SuppliedHoldingGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void failedPrivateActionRestoresInputsAndFailsOuterNode(GameTestHelper helper) {
         try (HoldingGameTests.Harness h = new HoldingGameTests.Harness(helper)) {
             SequenceNode node = start(h, 0);
@@ -184,7 +184,7 @@ public final class SuppliedHoldingGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void suppliedHoldingAcquiresAfterApproach(GameTestHelper helper) {
         try (HoldingGameTests.Harness h = new HoldingGameTests.Harness(helper)) {
             SequenceNode node = new SequenceNode(h, 3, Stances.at(h.level, h.at));
@@ -205,7 +205,7 @@ public final class SuppliedHoldingGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void privateActionApproachesBeforeStartingItsClock(GameTestHelper helper) {
         try (HoldingGameTests.Harness h = new HoldingGameTests.Harness(helper)) {
             SequenceNode node = new SequenceNode(h, 3, Stances.WHEREVER, Stances.at(h.level, h.at));
@@ -230,7 +230,7 @@ public final class SuppliedHoldingGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void softSuspendResumesSuppliedHolding(GameTestHelper helper) {
         for (HoldingFactory factory : HoldingFactory.values()) {
             try (HoldingGameTests.Harness h = new HoldingGameTests.Harness(helper)) {
@@ -272,7 +272,7 @@ public final class SuppliedHoldingGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void hardSuspendReleasesSuppliedHoldingOncePerGeneration(GameTestHelper helper) {
         for (HoldingFactory factory : HoldingFactory.values()) {
             try (HoldingGameTests.Harness h = new HoldingGameTests.Harness(helper)) {
@@ -302,7 +302,7 @@ public final class SuppliedHoldingGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void softEndEndsSuppliedHoldingAfterCleanup(GameTestHelper helper) {
         for (HoldingFactory factory : HoldingFactory.values()) {
             try (HoldingGameTests.Harness h = new HoldingGameTests.Harness(helper)) {
@@ -319,7 +319,7 @@ public final class SuppliedHoldingGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void hardEndEndsSuppliedHoldingSynchronously(GameTestHelper helper) {
         for (HoldingFactory factory : HoldingFactory.values()) {
             try (HoldingGameTests.Harness h = new HoldingGameTests.Harness(helper)) {
@@ -334,7 +334,7 @@ public final class SuppliedHoldingGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void controllerTakeoverSoftEndsAndRequeuesSuppliedHolding(GameTestHelper helper) {
         for (HoldingFactory factory : HoldingFactory.values()) {
             try (HoldingGameTests.Harness h = new HoldingGameTests.Harness(helper)) {
@@ -359,7 +359,7 @@ public final class SuppliedHoldingGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void controllerOrderEscalatesSuppliedCleanupOnce(GameTestHelper helper) {
         for (HoldingFactory factory : HoldingFactory.values()) {
             try (HoldingGameTests.Harness h = new HoldingGameTests.Harness(helper)) {
@@ -387,7 +387,7 @@ public final class SuppliedHoldingGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void controllerEndsSuspendedSuppliedHoldingWithoutSecondRelease(GameTestHelper helper) {
         for (HoldingFactory factory : HoldingFactory.values()) {
             try (HoldingGameTests.Harness h = new HoldingGameTests.Harness(helper)) {
@@ -407,7 +407,7 @@ public final class SuppliedHoldingGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void softDeadlineHardReleasesSuppliedHoldingOnce(GameTestHelper helper) {
         for (HoldingFactory factory : HoldingFactory.values()) {
             try (HoldingGameTests.Harness h = new HoldingGameTests.Harness(helper)) {
@@ -429,7 +429,7 @@ public final class SuppliedHoldingGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void preemptBeforeAcquireDoesNotStartPrivateActions(GameTestHelper helper) {
         try (HoldingGameTests.Harness h = new HoldingGameTests.Harness(helper)) {
             SequenceNode node = start(h, 20);
@@ -445,7 +445,7 @@ public final class SuppliedHoldingGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void acquireFailureFailsOuterNode(GameTestHelper helper) {
         try (HoldingGameTests.Harness h = new HoldingGameTests.Harness(helper)) {
             Node original = h.node(new Workload.Custom(), new AtomicInteger(), false);

@@ -7,7 +7,7 @@ license text ships in that jar under `META-INF/licenses/`, and in this repositor
 that mod's `src/main/resources/META-INF/licenses/`
 ([core](mods/core/src/main/resources/META-INF/licenses/),
 [vanilla](mods/vanilla/src/main/resources/META-INF/licenses/),
-[chiselsandbits](mods/chiselsandbits/src/main/resources/META-INF/licenses/)).
+[carving](mods/carving/src/main/resources/META-INF/licenses/)).
 
 | Component                | Version         | In                        | License    | Copyright         | Source                                                                                                |
 | ------------------------ | --------------- | ------------------------- | ---------- | ----------------- | ----------------------------------------------------------------------------------------------------- |
@@ -31,8 +31,12 @@ Players install these separately. Folkways only compiles against them.
 | Kaleidoscope Cookery                              | code BSD-3-Clause, assets CC BY-NC-SA 4.0 | Required by Folkways × Kaleidoscope Cookery: native appliances, crops and equipment. Models and textures stay in the player-installed mod; none are bundled     |
 | Chisels & Bits, Scena                             | MIT                                       | Required by Folkways × Chisels & Bits; the pinned C&B jar supplies Scena and the remaining runtime dependencies                                                 |
 | Touhou Little Maid                                | code MIT, assets CC BY-NC-SA 4.0          | Optional: its maid models are drawn on residents straight from the player's own copy of that mod. Folkways ships none of them and a server sends only their ids |
-
 | [AstikorCarts Redux](https://github.com/jusipat/astikor-carts-redux) | MIT | Required by Folkways × AstikorCarts Redux; native cargo carts and their storage. Installed separately, not bundled |
+
+TACZ and Superb Warfare (with Kotlin for Forge) are optional, separately installed
+integrations in **Folkways Firearms**. Create: FireFighting Additions is an optional,
+separately installed integration in **Folkways × Create**. Their models, textures and
+other native assets are not bundled in Folkways jars.
 
 ## Repository assets, not shipped in the mod
 

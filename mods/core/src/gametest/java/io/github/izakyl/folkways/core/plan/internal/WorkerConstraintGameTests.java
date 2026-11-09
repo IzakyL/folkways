@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.core.plan.internal;
 
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.inventory.api.Stash;
 import io.github.izakyl.folkways.core.item.api.Goods;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
@@ -25,7 +25,7 @@ import io.github.izakyl.folkways.core.work.api.WorkSite;
 import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.core.work.api.Workload;
 import io.github.izakyl.folkways.core.work.internal.TransferNode;
-import io.github.izakyl.folkways.plugins.person.PersonBody;
+import io.github.izakyl.folkways.vanilla.person.PersonBody;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -46,19 +46,19 @@ import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
-@EventBusSubscriber(modid = FolkwaysMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@EventBusSubscriber(modid = FolkwaysCoreMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
+@GameTestHolder(FolkwaysCoreMod.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class WorkerConstraintGameTests {
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) { event.register(WorkerConstraintGameTests.class); }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void multiVocationFitnessUsesHeldToolsAcrossVocations(GameTestHelper helper) {
         var fixture = new PlanningFixture(helper);
         var base = fixture.crew.hands().getFirst();
-        var building = Vocations.required(ResourceLocation.fromNamespaceAndPath("folkways", "building"));
-        var patrol = Vocations.required(ResourceLocation.fromNamespaceAndPath("folkways", "patrolling"));
+        var building = Vocations.required(ResourceLocation.fromNamespaceAndPath("folkways_vanilla", "building"));
+        var patrol = Vocations.required(ResourceLocation.fromNamespaceAndPath("folkways_vanilla", "patrolling"));
         var resident = PersonBody.RESIDENT.get().create(helper.getLevel());
         var licences = List.of(resident.licences().of(building).orElseThrow(), resident.licences().of(patrol).orElseThrow());
         var rules = new ToolPolicy(Map.of(
@@ -78,7 +78,7 @@ public final class WorkerConstraintGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void workNoOneWasFitForGrowsOnceSomeoneIs(GameTestHelper helper) throws Exception {
         var f = new PlanningFixture(helper);
         var hand = f.crew.hands().getFirst();
@@ -104,12 +104,12 @@ public final class WorkerConstraintGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void choosesWorkerForEntireConstraintGroup(GameTestHelper helper) throws Exception {
         var f = new PlanningFixture(helper);
         var g = new PlanningFixture(helper);
         var hauling = Vocations.required(Vocations.HAULING);
-        var building = Vocations.required(ResourceLocation.fromNamespaceAndPath("folkways", "building"));
+        var building = Vocations.required(ResourceLocation.fromNamespaceAndPath("folkways_vanilla", "building"));
         var haul = licence(hauling, Keenness.FIRST);
         var build = licence(building, Keenness.FIRST);
         var lessKeenHaul = licence(hauling, Keenness.THIRD);
@@ -132,7 +132,7 @@ public final class WorkerConstraintGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void appliesTransitiveWorkerPinsAcrossGroups(GameTestHelper helper) {
         var f = new PlanningFixture(helper);
         var g = new PlanningFixture(helper);
@@ -160,7 +160,7 @@ public final class WorkerConstraintGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void smallLoadsOfOneKindShareTheirStackInThePack(GameTestHelper helper) {
         var f = new PlanningFixture(helper);
         var one = f.crew.hands().getFirst();
@@ -193,7 +193,7 @@ public final class WorkerConstraintGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void aHandHoldingEndlessWorkOffItsRouteTakesNothingElse(GameTestHelper helper) {
         var f = new PlanningFixture(helper);
         var g = new PlanningFixture(helper);
@@ -220,7 +220,7 @@ public final class WorkerConstraintGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void conflictingWorkerPinsLeaveWholeGroupUnassigned(GameTestHelper helper) {
         var f = new PlanningFixture(helper);
         var g = new PlanningFixture(helper);
@@ -245,7 +245,7 @@ public final class WorkerConstraintGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void aFetchIsGrownOnlyForSomeoneWhoCanAlsoDoItsConsumer(GameTestHelper helper) throws Exception {
         var scene = new Wall(helper);
         var solver = new PlanningFixture.Rounds();
@@ -270,7 +270,7 @@ public final class WorkerConstraintGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void workNoOneIsFitForAnyMoreGoesBackToWhatAskedForIt(GameTestHelper helper) throws Exception {
         var scene = new Wall(helper);
         var solver = new PlanningFixture.Rounds();
@@ -315,7 +315,7 @@ public final class WorkerConstraintGameTests {
             f = new PlanningFixture(helper);
             var g = new PlanningFixture(helper);
             var hauling = Vocations.required(Vocations.HAULING);
-            var building = Vocations.required(ResourceLocation.fromNamespaceAndPath("folkways", "building"));
+            var building = Vocations.required(ResourceLocation.fromNamespaceAndPath("folkways_vanilla", "building"));
             var haul = licence(hauling, Keenness.FIRST);
             var build = licence(building, Keenness.FIRST);
             var one = f.crew.hands().getFirst();

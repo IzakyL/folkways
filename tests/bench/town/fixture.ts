@@ -330,7 +330,7 @@ export type Staffing = Array<{ trade: Trade; start: number; size: number; basis:
 function trade(name: string, keen: string[], tools: string[], hauls = true): Trade {
   const priorities: Record<string, number> = {};
   for (const vocation of keen) priorities[vocation] = 1;
-  if (hauls && !priorities["folkways:hauling"]) priorities["folkways:hauling"] = 3;
+  if (hauls && !priorities["folkways_core:hauling"]) priorities["folkways_core:hauling"] = 3;
   return { name, priorities, tools };
 }
 
@@ -351,11 +351,11 @@ export function staffing(l: Layout, humans: number): Staffing {
   const blocks = l.houses.reduce((n, h) => n + h.blocks.length, 0) + 2000 * l.orders.length;
   const drivers = Math.min(humans, 2 * trains), haulers = Math.round((humans - drivers) * HAULER_SHARE);
   const work: Array<[Trade, number, string]> = [
-    [trade("farmer", ["folkways:farming"], [mc("iron_hoe"), mc("iron_axe")]), fieldCells / 45, `${fieldCells} field cells / 45`],
-    [trade("herder", ["folkways:herding"], [mc("shears")]), l.pens.length / 2, `${l.pens.length} pens / 2`],
-    [trade("fisher", ["folkways:fishing"], [mc("fishing_rod")]), l.fishing.length, `${l.fishing.length} fishing spots`],
-    [trade("crafter", ["folkways:crafting"], []), stations * 0.4, `${stations} stations x 0.4`],
-    [trade("builder", ["folkways:building"], [mc("iron_pickaxe"), mc("iron_axe"), mc("iron_shovel")]), blocks / 50, `${blocks} blocks on order / 50`],
+    [trade("farmer", ["folkways_vanilla:farming"], [mc("iron_hoe"), mc("iron_axe")]), fieldCells / 45, `${fieldCells} field cells / 45`],
+    [trade("herder", ["folkways_vanilla:herding"], [mc("shears")]), l.pens.length / 2, `${l.pens.length} pens / 2`],
+    [trade("fisher", ["folkways_vanilla:fishing"], [mc("fishing_rod")]), l.fishing.length, `${l.fishing.length} fishing spots`],
+    [trade("crafter", ["folkways_vanilla:crafting"], []), stations * 0.4, `${stations} stations x 0.4`],
+    [trade("builder", ["folkways_vanilla:building"], [mc("iron_pickaxe"), mc("iron_axe"), mc("iron_shovel")]), blocks / 50, `${blocks} blocks on order / 50`],
   ];
   // Each trade's whole share, then the hands left over one by one to the trades cut shortest by the rounding.
   const wanted = work.reduce((n, [, k]) => n + k, 0), shared = humans - drivers - haulers;
@@ -364,8 +364,8 @@ export function staffing(l: Layout, humans: number): Staffing {
   for (let left = shared - sizes.reduce((n, k) => n + k, 0), k = 0; left > 0; left--, k++) sizes[short[k % short.length].i]++;
   const want: Array<[Trade, number, string]> = [
     ...work.map(([t, , basis], i): [Trade, number, string] => [t, sizes[i], `${basis}, of ${shared} shared by the work`]),
-    ...(haulers ? [[trade("hauler", ["folkways:hauling"], []), haulers, `${HAULER_SHARE} of everyone but the drivers`] as [Trade, number, string]] : []),
-    [trade("driver", ["folkways:conducting"], [], false), drivers, `${trains} trains x 2`],
+    ...(haulers ? [[trade("hauler", ["folkways_core:hauling"], []), haulers, `${HAULER_SHARE} of everyone but the drivers`] as [Trade, number, string]] : []),
+    [trade("driver", ["folkways_create:conducting"], [], false), drivers, `${trains} trains x 2`],
   ];
   let start = 0;
   return want.map(([t, size, basis]) => { const seg = { trade: t, start, size, basis }; start += size; return seg; });

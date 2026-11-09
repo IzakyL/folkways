@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.create.rail.passage;
 
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.resident.api.Going;
 import io.github.izakyl.folkways.core.testing.Proxies;
 import io.github.izakyl.folkways.core.work.api.LaborRefusal;
@@ -12,8 +12,8 @@ import io.github.izakyl.folkways.create.rail.domain.RailRefusal;
 import io.github.izakyl.folkways.create.rail.domain.SeatRef;
 import io.github.izakyl.folkways.create.rail.domain.TransitNetwork;
 import io.github.izakyl.folkways.create.rail.domain.TransitNetworks;
-import io.github.izakyl.folkways.plugins.person.PersonBody;
-import io.github.izakyl.folkways.plugins.person.walk.OnFoot;
+import io.github.izakyl.folkways.vanilla.person.PersonBody;
+import io.github.izakyl.folkways.vanilla.person.walk.OnFoot;
 import java.util.List;
 import java.util.Optional;
 import java.util.OptionalLong;
@@ -31,7 +31,7 @@ import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
 @EventBusSubscriber(modid = FolkwaysCreateMod.ID, bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@GameTestHolder("folkways_create")
 @PrefixGameTestTemplate(false)
 public final class BoardingArrivalGameTests {
     @SubscribeEvent
@@ -39,7 +39,7 @@ public final class BoardingArrivalGameTests {
         event.register(BoardingArrivalGameTests.class);
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void walkingArrivalAtTheEdgeOfAPlatformAllowsBoarding(GameTestHelper helper) {
         var level = helper.getLevel();
         var cell = helper.absolutePos(new BlockPos(1, 1, 1));
@@ -83,7 +83,7 @@ public final class BoardingArrivalGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void aRiderGivesUpOnceTheRunTheyCaughtHasLeft(GameTestHelper helper) {
         var level = helper.getLevel();
         var cell = helper.absolutePos(new BlockPos(1, 1, 1));

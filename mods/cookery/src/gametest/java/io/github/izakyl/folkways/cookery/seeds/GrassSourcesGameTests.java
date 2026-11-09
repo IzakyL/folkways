@@ -2,7 +2,7 @@ package io.github.izakyl.folkways.cookery.seeds;
 
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.tag.TagMod;
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.colony.api.ClaimRelease;
 import io.github.izakyl.folkways.core.colony.api.Claimed;
 import io.github.izakyl.folkways.core.colony.api.Closing;
@@ -23,13 +23,13 @@ import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.core.work.api.Workload;
 import io.github.izakyl.folkways.core.work.internal.Commit;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
-import io.github.izakyl.folkways.effect.Effects;
-import io.github.izakyl.folkways.front.engine.colony.ColonyFront;
-import io.github.izakyl.folkways.front.engine.colony.ColonySettings;
-import io.github.izakyl.folkways.plugins.compost.SeedBudget;
-import io.github.izakyl.folkways.plugins.person.PersonBody;
-import io.github.izakyl.folkways.plugins.person.PersonContent;
-import io.github.izakyl.folkways.plugins.person.ResidentEntity;
+import io.github.izakyl.folkways.core.effect.Effects;
+import io.github.izakyl.folkways.core.front.engine.colony.ColonyFront;
+import io.github.izakyl.folkways.core.front.engine.colony.ColonySettings;
+import io.github.izakyl.folkways.vanilla.compost.SeedBudget;
+import io.github.izakyl.folkways.vanilla.person.PersonBody;
+import io.github.izakyl.folkways.vanilla.person.PersonContent;
+import io.github.izakyl.folkways.vanilla.person.ResidentEntity;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -54,13 +54,13 @@ import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
 @EventBusSubscriber(modid = "folkways_cookery", bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@GameTestHolder("folkways_cookery")
 @PrefixGameTestTemplate(false)
 public final class GrassSourcesGameTests {
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) { event.register(GrassSourcesGameTests.class); }
 
-    @GameTest(template = "empty_large")
+    @GameTest(template = "empty_large", templateNamespace = "folkways_core")
     public static void realShortGrassNeedsTheRealHeadSlotAndDeliversNativeModSeeds(GameTestHelper helper) {
         try (Fixture rig = new Fixture(helper)) {
             rig.body.pack().setItem(0, new ItemStack(ModItems.STRAW_HAT.get()));
@@ -87,7 +87,7 @@ public final class GrassSourcesGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty_large")
+    @GameTest(template = "empty_large", templateNamespace = "folkways_core")
     public static void nativeBonemealSpendsOneActualItemAndOnlyRestoresTheAuthorizedPatch(GameTestHelper helper) {
         try (Fixture rig = new Fixture(helper)) {
             helper.assertTrue(GrassSources.safeRestore(rig.level, rig.center, rig.allowed), "the native random-walk footprint is fully authorized");
@@ -107,7 +107,7 @@ public final class GrassSourcesGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty_large")
+    @GameTest(template = "empty_large", templateNamespace = "folkways_core")
     public static void missingBoundaryOrNonFlatSoilRefusesGrowthAndReturnsBoneMeal(GameTestHelper helper) {
         try (Fixture rig = new Fixture(helper)) {
             rig.body.pack().setItem(0, new ItemStack(Items.BONE_MEAL));
@@ -122,7 +122,7 @@ public final class GrassSourcesGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty_large")
+    @GameTest(template = "empty_large", templateNamespace = "folkways_core")
     public static void realColonyGrassZonePublishesDemandBeforeBorrowingAndStillRequiresANativeHatAtCommit(GameTestHelper helper) {
         try (Fixture rig = new Fixture(helper)) {
             rig.mark(false);
@@ -145,7 +145,7 @@ public final class GrassSourcesGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty_large")
+    @GameTest(template = "empty_large", templateNamespace = "folkways_core")
     public static void unmarkAndRemarkCannotReviveAnOldGrassTask(GameTestHelper helper) {
         try (Fixture rig = new Fixture(helper)) {
             UUID zone = rig.mark(false);
@@ -168,7 +168,7 @@ public final class GrassSourcesGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty_large")
+    @GameTest(template = "empty_large", templateNamespace = "folkways_core")
     public static void stockRecoveredDuringTravelReturnsBoneMealWithoutGrowingGrass(GameTestHelper helper) {
         try (Fixture rig = new Fixture(helper)) {
             rig.mark(true);
@@ -188,7 +188,7 @@ public final class GrassSourcesGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty_large", batch = "cookery_grass_travel", timeoutTicks = 1200)
+    @GameTest(template = "empty_large", templateNamespace = "folkways_core", batch = "cookery_grass_travel", timeoutTicks = 1200)
     public static void anAdoptedGrassSourceRemainsWantedWhileItsResidentTravelsAcrossRepeatedSweeps(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         BlockPos travellingFeet = helper.absolutePos(new BlockPos(10, 1, 10)).offset(-41, 1, 0);
@@ -267,7 +267,7 @@ public final class GrassSourcesGameTests {
         }
     }
 
-    @GameTest(template = "empty_large")
+    @GameTest(template = "empty_large", templateNamespace = "folkways_core")
     public static void disablingRestorationWithdrawsABookedGrassSourceAndPreservesItsBoneMeal(GameTestHelper helper) {
         try (Fixture rig = new Fixture(helper)) {
             UUID zone = rig.mark(true); rig.wearHat(); rig.body.pack().setItem(1, new ItemStack(Items.BONE_MEAL));
@@ -286,7 +286,7 @@ public final class GrassSourcesGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty_large")
+    @GameTest(template = "empty_large", templateNamespace = "folkways_core")
     public static void aBookedSourceLosingTaskBorrowingPermissionOrFarmingLicenceCannotSpendBoneMeal(GameTestHelper helper) {
         for (boolean revokeLicence : List.of(false, true)) {
             try (Fixture rig = new Fixture(helper)) {
@@ -294,7 +294,7 @@ public final class GrassSourcesGameTests {
                 rig.presence.refresh(rig.level.getServer()); Node old = rig.source();
                 helper.assertTrue(old.planned(rig.level).isEmpty(), "the real source is adopted before the resident changes");
                 if (revokeLicence) {
-                    var trade = rig.body.licences().trade(io.github.izakyl.folkways.plugins.farming.FarmingContent.trade()).orElseThrow();
+                    var trade = rig.body.licences().trade(io.github.izakyl.folkways.vanilla.farming.FarmingContent.trade()).orElseThrow();
                     rig.body.licences().allow(trade, false);
                 } else {
                     ColonyFront.of(rig.colony).setSetting(io.github.izakyl.folkways.cookery.CookeryContent.ID, "wear_hat", new ColonySettings.Value.Flag(false));

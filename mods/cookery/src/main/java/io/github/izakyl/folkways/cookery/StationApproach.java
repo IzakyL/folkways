@@ -4,7 +4,7 @@ import io.github.izakyl.folkways.core.plan.api.Workshop;
 import io.github.izakyl.folkways.core.work.api.Stances;
 import io.github.izakyl.folkways.core.world.api.BlockChanges;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
-import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
+import io.github.izakyl.folkways.vanilla.FolkwaysVanillaConfig;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;

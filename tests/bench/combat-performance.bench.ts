@@ -40,7 +40,7 @@ test("combat entity populations: live tick cost and AI activity", async ({}, tes
       config: "blockwright.toml#rts",
       server: { instance: `combat-bench-server-${run}` },
       client: { instance: `combat-bench-client-${run}` },
-      snapshot: { entityTypes: ["folkways:resident", "minecraft:zombie"] },
+      snapshot: { entityTypes: ["folkways_vanilla:resident", "minecraft:zombie"] },
     });
     const { server } = pair;
     const player = await waitForGroundedPlayer(server);
@@ -130,10 +130,10 @@ const IMPORTS = [
   "io.github.izakyl.folkways.core.colony.api.Colonies",
   "io.github.izakyl.folkways.core.colony.api.Claimed",
   "io.github.izakyl.folkways.core.resident.api.Body",
-  "io.github.izakyl.folkways.plugins.person.PersonBody",
-  "io.github.izakyl.folkways.plugins.person.PersonContent",
-  "io.github.izakyl.folkways.plugins.person.ResidentEntity",
-  "io.github.izakyl.folkways.rts.combat.command.ResidentCommands",
+  "io.github.izakyl.folkways.vanilla.person.PersonBody",
+  "io.github.izakyl.folkways.vanilla.person.PersonContent",
+  "io.github.izakyl.folkways.vanilla.person.ResidentEntity",
+  "io.github.izakyl.folkways.core.rts.combat.command.ResidentCommands",
   "io.github.izakyl.folkways.core.world.api.WorldSpaces",
 ];
 

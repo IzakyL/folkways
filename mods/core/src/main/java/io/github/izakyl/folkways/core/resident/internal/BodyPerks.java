@@ -1,10 +1,10 @@
 package io.github.izakyl.folkways.core.resident.internal;
 
-import io.github.izakyl.folkways.base.persist.Required;
+import io.github.izakyl.folkways.core.base.persist.Required;
 import io.github.izakyl.folkways.core.vocation.api.Vocations;
-import io.github.izakyl.folkways.effect.Effects;
-import io.github.izakyl.folkways.effect.perk.PerkPool;
-import io.github.izakyl.folkways.effect.perk.Perks;
+import io.github.izakyl.folkways.core.effect.Effects;
+import io.github.izakyl.folkways.core.effect.perk.PerkPool;
+import io.github.izakyl.folkways.core.effect.perk.Perks;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;

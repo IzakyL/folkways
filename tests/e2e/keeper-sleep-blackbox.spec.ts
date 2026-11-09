@@ -13,7 +13,7 @@ import { BUDGET } from "../shared/harness/budgets";
 import { commandPos, tryCommand } from "../shared/harness/bw-helpers";
 import { newRunId } from "../shared/harness/run-id";
 
-const RESIDENT_TYPE = "folkways:resident";
+const RESIDENT_TYPE = "folkways_vanilla:resident";
 const SPENT = 1200;
 
 test("a keeper worn out at the desk gets up and goes to bed", async ({}, testInfo) => {

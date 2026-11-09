@@ -15,7 +15,7 @@ import { newRunId } from "../shared/harness/run-id";
 const OPEN_SELECTOR = defineTask<void, boolean>({
   name: "folkways.visual.picker.open-independent", side: "client",
   source: javaTask({
-    imports: ["io.github.izakyl.folkways.front.client.SelectorWindow"],
+    imports: ["io.github.izakyl.folkways.core.front.client.SelectorWindow"],
     body: `SelectorWindow.open(null, stack -> {}); return true;`,
   }),
 });
@@ -23,8 +23,8 @@ const OPEN_SELECTOR = defineTask<void, boolean>({
 const OPEN_CHOICE = defineTask<void, boolean>({
   name: "folkways.visual.picker.open-choice", side: "client",
   source: javaTask({ imports: [
-    "io.github.izakyl.folkways.front.client.SelectorWindow",
-    "io.github.izakyl.folkways.front.api.ui.Picker",
+    "io.github.izakyl.folkways.core.front.client.SelectorWindow",
+    "io.github.izakyl.folkways.core.front.api.ui.Picker",
     "net.minecraft.network.chat.Component",
     "net.minecraft.world.item.ItemStack",
     "net.minecraft.world.item.Items",
@@ -90,7 +90,7 @@ test("item picker states", async ({}, testInfo) => {
     await openColonyPanelViaBook(server, client, player, founding.standBlock);
     await clickTab(client, "folkways.page.build");
     await settle();
-    await click("folkways.settings.open.tool.folkways.building.folkways.build");
+    await click("folkways.settings.open.tool.folkways_vanilla.building.folkways_vanilla.build");
     await waitForElement(client, { id: "folkways.selector.close" }, { timeoutMs: 8_000 });
     await settle();
     await shot("01-many-tree", "Tools: a folder per mod, its count of items taken in; the rules held below");
@@ -126,7 +126,7 @@ test("item picker states", async ({}, testInfo) => {
 
     // A groundwork zone's fill block: one block, picked.
     const fixtures = await server.run(ZONE_FIXTURES, { player });
-    const ground = fixtures.zones.find(zone => zone.type === "folkways:ground");
+    const ground = fixtures.zones.find(zone => zone.type === "folkways_vanilla:ground");
     if (!ground) throw new Error("The groundwork fixture is missing");
     await server.run(OPEN_ZONE, { player, zone: ground.id });
     await waitForElement(client, { id: "folkways.zoneconfig.value.block" });

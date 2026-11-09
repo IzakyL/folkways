@@ -19,7 +19,7 @@ test("four armed residents patrol, initiate combat, reform, and resume their rou
       config: "blockwright.toml#rts",
       server: { instance: `formation-patrol-server-${run}` },
       client: { instance: `formation-patrol-client-${run}` },
-      snapshot: { entityTypes: ["folkways:resident", "minecraft:zombie"] },
+      snapshot: { entityTypes: ["folkways_vanilla:resident", "minecraft:zombie"] },
     });
     const { server } = pair;
     const player = await waitForGroundedPlayer(server);
@@ -113,7 +113,7 @@ const SPAWN_ENEMY = defineTask<Squad & { x: number; y: number; z: number }, stri
     imports: [
       "net.minecraft.server.MinecraftServer", "net.minecraft.world.entity.EntityType", "net.minecraft.world.entity.EquipmentSlot",
       "net.minecraft.world.entity.ai.attributes.Attributes", "net.minecraft.world.item.ItemStack", "net.minecraft.world.item.Items",
-      "io.github.izakyl.folkways.core.colony.api.Colonies", "io.github.izakyl.folkways.rts.combat.group.UnitGroups",
+      "io.github.izakyl.folkways.core.colony.api.Colonies", "io.github.izakyl.folkways.core.rts.combat.group.UnitGroups",
     ],
     body: `
 var args = Args.of(ctx);

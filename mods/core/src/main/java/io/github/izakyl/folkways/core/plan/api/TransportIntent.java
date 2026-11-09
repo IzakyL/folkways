@@ -13,7 +13,7 @@ import net.minecraft.resources.ResourceLocation;
 public record TransportIntent(NodeSpec spec, TransportEndpoint from, TransportEndpoint to, ItemSpec goods,
                               long count, long readyAt) implements Intent {
 
-    public static final ResourceLocation OWNER = ResourceLocation.fromNamespaceAndPath("folkways", "transport");
+    public static final ResourceLocation OWNER = ResourceLocation.fromNamespaceAndPath("folkways_core", "transport");
 
     public static TransportIntent of(TransportEndpoint from, TransportEndpoint to, ItemSpec goods,
                                      long count, long readyAt) {

@@ -5,7 +5,7 @@ import com.github.ysbbbbbb.kaleidoscopecookery.crafting.recipe.ChoppingBoardReci
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModRecipes;
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.cookery.CookeryContent;
 import io.github.izakyl.folkways.cookery.KitchenBookings;
 import io.github.izakyl.folkways.cookery.testing.NativeCookingMatrix;
@@ -22,8 +22,8 @@ import io.github.izakyl.folkways.core.work.api.Stances;
 import io.github.izakyl.folkways.core.work.api.WorkSite;
 import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
-import io.github.izakyl.folkways.plugins.person.PersonBody;
-import io.github.izakyl.folkways.plugins.person.ResidentEntity;
+import io.github.izakyl.folkways.vanilla.person.PersonBody;
+import io.github.izakyl.folkways.vanilla.person.ResidentEntity;
 import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
@@ -49,7 +49,7 @@ import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 
 @EventBusSubscriber(modid = "folkways_cookery", bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@GameTestHolder("folkways_cookery")
 public final class BoardRecipeMatrixGameTests {
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) { event.register(BoardRecipeMatrixGameTests.class); }
@@ -60,8 +60,8 @@ public final class BoardRecipeMatrixGameTests {
         if (ids.size() != 16) {
             throw new IllegalStateException("expected all 16 native chopping recipes, got " + ids.size());
         }
-        return ids.stream().map(id -> new TestFunction("cookery_board_matrix", "folkways:board_matrix_" + id.getPath().replace('/', '_'),
-            "folkways:empty", 200, 0L, true, helper -> run(helper, id))).toList();
+        return ids.stream().map(id -> new TestFunction("cookery_board_matrix", "folkways_cookery:board_matrix_" + id.getPath().replace('/', '_'),
+            "folkways_core:empty", 200, 0L, true, helper -> run(helper, id))).toList();
     }
 
     private static void run(GameTestHelper helper, ResourceLocation id) {

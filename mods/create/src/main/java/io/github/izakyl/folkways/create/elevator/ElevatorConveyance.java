@@ -8,7 +8,7 @@ import io.github.izakyl.folkways.core.work.api.Stances;
 import io.github.izakyl.folkways.core.world.api.Reach;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.create.transport.PassengerLanding;
-import io.github.izakyl.folkways.plugins.person.walk.ResidentMoveControl;
+import io.github.izakyl.folkways.vanilla.person.walk.ResidentMoveControl;
 import java.util.LinkedHashSet;
 import java.util.Optional;
 import java.util.Set;

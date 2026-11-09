@@ -14,7 +14,7 @@ export type ResidentState = {
   raw?: unknown;
 };
 
-const RESIDENT_TYPE = "folkways:resident";
+const RESIDENT_TYPE = "folkways_vanilla:resident";
 
 export async function residentStates(server: MinecraftServer): Promise<ResidentState[]> {
   const listed = await world
@@ -201,7 +201,7 @@ async function stateOf(server: MinecraftServer, uuid: string): Promise<ResidentS
 }
 
 function lookIdIn(tree: unknown): string {
-  const ids = [...JSON.stringify(tree).matchAll(/folkways:([a-z0-9_.-]+)/g)].map((m) => m[1]);
+  const ids = [...JSON.stringify(tree).matchAll(/folkways_vanilla:([a-z0-9_.-]+)/g)].map((m) => m[1]);
   return ids.find((id) => id !== "resident_look") ?? "";
 }
 

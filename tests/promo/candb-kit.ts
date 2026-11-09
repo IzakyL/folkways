@@ -83,7 +83,7 @@ return Sync.stamp(Map.of("y",y,"members",members));`,
 export const CREW = defineTask<Record<string, any>, Record<string, any>>({
   name: "folkways.construction.crew", side: "server", source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
+      "io.github.izakyl.folkways.core.front.engine.colony.ColonyGround",
       "io.github.izakyl.folkways.core.resident.api.Bodies",
       "io.github.izakyl.folkways.core.vocation.api.Vocations",
       "net.minecraft.world.item.Items",
@@ -113,11 +113,11 @@ export const COMMISSION = defineTask<Record<string, any>, Record<string, any>>({
   timeoutMs: 360_000,
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
-      "io.github.izakyl.folkways.plugins.build.Commissions",
-      "io.github.izakyl.folkways.plugins.build.draft.Hint",
-      "io.github.izakyl.folkways.plugins.build.draft.Patterns",
-      "io.github.izakyl.folkways.front.api.Schema",
+      "io.github.izakyl.folkways.core.front.engine.colony.ColonyGround",
+      "io.github.izakyl.folkways.vanilla.build.Commissions",
+      "io.github.izakyl.folkways.vanilla.build.draft.Hint",
+      "io.github.izakyl.folkways.vanilla.build.draft.Patterns",
+      "io.github.izakyl.folkways.core.front.api.Schema",
       "io.github.izakyl.folkways.core.item.api.ItemSpec",
       "net.minecraft.core.registries.Registries",
       "net.minecraft.tags.TagKey",
@@ -203,14 +203,14 @@ export const GALLERY = defineTask<Record<string, any>, Record<string, any>>({
   name: "folkways.promo.candb-gallery", side: "server", timeoutMs: 360_000,
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.plugins.build.draft.Patterns",
-      "io.github.izakyl.folkways.plugins.build.draft.Hint",
-      "io.github.izakyl.folkways.plugins.build.draft.Chosen",
-      "io.github.izakyl.folkways.plugins.build.draft.Commission",
-      "io.github.izakyl.folkways.plugins.build.draft.Drafting",
-      "io.github.izakyl.folkways.plugins.build.draft.Drawn",
-      "io.github.izakyl.folkways.plugins.build.draft.World",
-      "io.github.izakyl.folkways.front.api.Schema",
+      "io.github.izakyl.folkways.vanilla.build.draft.Patterns",
+      "io.github.izakyl.folkways.vanilla.build.draft.Hint",
+      "io.github.izakyl.folkways.vanilla.build.draft.Chosen",
+      "io.github.izakyl.folkways.vanilla.build.draft.Commission",
+      "io.github.izakyl.folkways.vanilla.build.draft.Drafting",
+      "io.github.izakyl.folkways.vanilla.build.draft.Drawn",
+      "io.github.izakyl.folkways.vanilla.build.draft.World",
+      "io.github.izakyl.folkways.core.front.api.Schema",
       "io.github.izakyl.folkways.core.item.api.ItemSpec",
       "io.github.izakyl.folkways.core.work.api.StructureCompat",
       "io.github.izakyl.folkways.core.work.api.Voxelizer",
@@ -265,9 +265,9 @@ export const AUDIT = defineTask<Record<string, any>, Record<string, any>>({
   name: "folkways.promo.candb-audit", side: "server", timeoutMs: 60_000,
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
-      "io.github.izakyl.folkways.plugins.build.Blueprint",
-      "io.github.izakyl.folkways.plugins.build.BlueprintBuildOrder",
+      "io.github.izakyl.folkways.core.front.engine.colony.ColonyGround",
+      "io.github.izakyl.folkways.vanilla.build.Blueprint",
+      "io.github.izakyl.folkways.vanilla.build.BlueprintBuildOrder",
       "io.github.izakyl.folkways.core.work.api.StructureCompat",
       "io.github.izakyl.folkways.core.world.api.StructurePayload",
       "io.github.izakyl.folkways.core.resident.api.Bodies",
@@ -303,7 +303,7 @@ static void count(Container inventory, Map<String, Integer> counts) {
 var args = Args.of(ctx);
 var level = ctx.server().overworld();
 var colony = ColonyGround.of(ctx.server(), UUID.fromString(args.string("colony_id"))).orElseThrow();
-var presence = colony.service(ResourceLocation.parse("folkways:build"), Object.class).orElseThrow();
+var presence = colony.service(ResourceLocation.parse("folkways_vanilla:build"), Object.class).orElseThrow();
 var book = field(presence, "book");
 var drawings = (Map<UUID, Blueprint>) field(book, "blueprints");
 var orders = (Map<UUID, BlueprintBuildOrder>) field(book, "orders");
@@ -434,7 +434,7 @@ export const STOCK_ALL = defineTask<Record<string, any>, Record<string, any>>({
   source: javaTask({
     imports: [
       "net.minecraft.core.BlockPos",
-      "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
+      "io.github.izakyl.folkways.core.front.engine.colony.ColonyGround",
       "net.minecraft.core.registries.BuiltInRegistries",
       "net.minecraft.resources.ResourceLocation",
       "net.minecraft.server.MinecraftServer",
@@ -451,7 +451,7 @@ for(var raw:args.list("chests")){var m=(Map<?,?>)raw;
     ((Number) m.get("y")).intValue(), ((Number) m.get("z")).intValue())));
 }
 var colony=ColonyGround.of(server,UUID.fromString(args.string("colony_id"))).orElseThrow();
-var presence=colony.service(ResourceLocation.parse("folkways:build"),Object.class).orElseThrow();
+var presence=colony.service(ResourceLocation.parse("folkways_vanilla:build"),Object.class).orElseThrow();
 var f=presence.getClass().getDeclaredField("owed");f.setAccessible(true);
 var items=new LinkedHashMap<String,Integer>();
 for (var owed : ((Map<?, ?>) f.get(presence)).values()) {
@@ -490,7 +490,7 @@ export const SIMPLE_CONSTRUCTION = defineTask<void, Record<string, any>>({
   name: "folkways.promo.candb-simple-construction", side: "server",
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig",
+      "io.github.izakyl.folkways.vanilla.FolkwaysVanillaConfig",
       "net.neoforged.neoforge.common.ModConfigSpec",
     ],
     body: `

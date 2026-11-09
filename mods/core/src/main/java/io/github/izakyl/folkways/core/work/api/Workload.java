@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.core.work.api;
 
-import io.github.izakyl.folkways.effect.Stats;
+import io.github.izakyl.folkways.core.effect.Stats;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 

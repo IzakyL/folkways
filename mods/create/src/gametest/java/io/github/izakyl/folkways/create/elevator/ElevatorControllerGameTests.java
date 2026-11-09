@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.create.elevator;
 
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.work.api.Stances;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.create.FolkwaysCreateMod;
@@ -25,7 +25,7 @@ import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
 @EventBusSubscriber(modid = FolkwaysCreateMod.ID, bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@GameTestHolder("folkways_create")
 @PrefixGameTestTemplate(false)
 public final class ElevatorControllerGameTests {
     @SubscribeEvent
@@ -33,7 +33,7 @@ public final class ElevatorControllerGameTests {
         event.register(ElevatorControllerGameTests.class);
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void reservationsBatchByDestinationAndRespectCapacity(GameTestHelper helper) {
         Fixture fixture = new Fixture(helper);
         UUID first = UUID.randomUUID();
@@ -65,7 +65,7 @@ public final class ElevatorControllerGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void departuresWaitForBoardingAndEveryPassengerToAlight(GameTestHelper helper) {
         Fixture fixture = new Fixture(helper);
         Mob body = mob(helper);
@@ -105,7 +105,7 @@ public final class ElevatorControllerGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void leasesOutagesAndRetirementDoNotHoldWaitingPassengersForever(GameTestHelper helper) {
         Fixture fixture = new Fixture(helper);
         UUID rider = UUID.randomUUID();
@@ -130,7 +130,7 @@ public final class ElevatorControllerGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void cancellationDuringTravelWaitsForActualWalkOutWithoutTeleporting(GameTestHelper helper) {
         Fixture fixture = new Fixture(helper);
         Mob body = mob(helper);
@@ -168,7 +168,7 @@ public final class ElevatorControllerGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void walkingInDoesNotLoseItsPlaceOrAllowPrematureDeparture(GameTestHelper helper) {
         Fixture fixture = new Fixture(helper);
         Mob body = mob(helper);
@@ -195,7 +195,7 @@ public final class ElevatorControllerGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void aLatePassengerCannotHoldAnAlreadyBoardedBatchForever(GameTestHelper helper) {
         Fixture fixture = new Fixture(helper);
         Mob body = mob(helper);
@@ -215,7 +215,7 @@ public final class ElevatorControllerGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void cancellingWhileWalkingInMustClearTheDoorBeforeAnAboardCompanionDeparts(GameTestHelper helper) {
         Fixture fixture = new Fixture(helper);
         Mob walking = mob(helper);
@@ -246,7 +246,7 @@ public final class ElevatorControllerGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void forecastsShareAvailableCapacityButAFullOrMissedTripNeedsAnotherJourney(GameTestHelper helper) {
         var open = new ElevatorForecast(0, 0, 0.5, 100, 2,
             List.of(new ElevatorForecast.Trip(0, 10, 1, false, true)));
@@ -271,7 +271,7 @@ public final class ElevatorControllerGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void forecastingIsAnImmutableObservationAndNeverDispatchesOrReserves(GameTestHelper helper) {
         Fixture fixture = new Fixture(helper);
         UUID rider = UUID.randomUUID();
@@ -298,7 +298,7 @@ public final class ElevatorControllerGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void aLaterPassengerAtTheSamePickupCanJoinAnOpenBatchWithAFreePlace(GameTestHelper helper) {
         Fixture fixture = new Fixture(helper);
         Mob first = mob(helper);
@@ -330,7 +330,7 @@ public final class ElevatorControllerGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void anUnregisteredBodyInTheDoorwayPreventsDepartureUntilTheDoorIsClear(GameTestHelper helper) {
         Fixture fixture = new Fixture(helper);
         Mob rider = mob(helper);
@@ -351,7 +351,7 @@ public final class ElevatorControllerGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void externallyMovingAnAlightingPassengerToAnotherFloorReleasesTheStaleJourney(GameTestHelper helper) {
         Fixture fixture = new Fixture(helper);
         Mob rider = mob(helper);
@@ -391,7 +391,7 @@ public final class ElevatorControllerGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void aBoardingPassengerMovedAwayOrDeadCannotHoldItsAboardCompanion(GameTestHelper helper) {
         for (boolean died : new boolean[] {false, true}) {
             abandonedWalkInReleasesTheCabin(helper, died);

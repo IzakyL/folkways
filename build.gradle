@@ -8,15 +8,12 @@ def modProjects = [
     folkways_core: ":core",
     folkways_vanilla: ":vanilla",
     folkways_create: ":create",
-    folkways_modulargolems: ":modulargolems",
+    folkways_golems: ":golems",
     folkways_cookery: ":cookery",
-    folkways_chiselsandbits: ":chiselsandbits",
-    folkways_rts: ":rts",
-    folkways_warfare: ":warfare",
-    folkways_tacz: ":tacz",
-    folkways_firefighting: ":firefighting",
+    folkways_carving: ":carving",
+    folkways_firearms: ":firearms",
     folkways_carts: ":carts",
-    folkways_epicfight: ":epicfite",
+    folkways_epicfight: ":epicfight",
 ]
 modProjects.values().each { evaluationDependsOn(it) }
 
@@ -28,7 +25,6 @@ def epicfightTests = providers.gradleProperty("epicfightTests").map { it.toBoole
 def cookeryTests = providers.gradleProperty("cookeryTests").map { it.toBoolean() }.getOrElse(false)
 def warfareTests = providers.gradleProperty("warfareTests").map { it.toBoolean() }.getOrElse(false)
 def taczTests = providers.gradleProperty("taczTests").map { it.toBoolean() }.getOrElse(false)
-def rtsTests = providers.gradleProperty("rtsTests").map { it.toBoolean() }.getOrElse(false)
 def chiselsTests = providers.gradleProperty("chiselsTests").map { it.toBoolean() }.getOrElse(false)
 def createPlacementTests = providers.gradleProperty("createPlacementTests").map { it.toBoolean() }.getOrElse(false)
 def tavernTests = providers.gradleProperty("tavernTests").map { it.toBoolean() }.getOrElse(false)
@@ -36,56 +32,40 @@ if (tavernTests && !cookeryTests) {
     throw new GradleException("Tavern GameTests require -PcookeryTests=true")
 }
 def gameTestMod = providers.gradleProperty("gameTestMod").getOrElse("")
-if (createPlacementTests && (gameTestMod != "chiselsandbits" || !chiselsTests)) {
-    throw new GradleException("Create placement GameTests require -PgameTestMod=chiselsandbits -PchiselsTests=true")
+if (createPlacementTests && (gameTestMod != "carving" || !chiselsTests)) {
+    throw new GradleException("Create placement GameTests require -PgameTestMod=carving -PchiselsTests=true")
 }
-def testedMods = modProjects.findAll { id, path -> (path != ":modulargolems" || modularGolemsTests)
-    && (path != ":create" || gameTestMod != "chiselsandbits" || createPlacementTests)
+def testedMods = modProjects.findAll { id, path -> (path != ":golems" || modularGolemsTests)
+    && (path != ":create" || gameTestMod != "carving" || createPlacementTests)
     && (path != ":cookery" || cookeryTests)
-    && (path != ":chiselsandbits" || chiselsTests)
-    && (path != ":rts" || rtsTests)
-    && (path != ":warfare" || warfareTests)
-    && (path != ":tacz" || taczTests)
-    && (path != ":firefighting" || firefightingTests)
+    && (path != ":carving" || chiselsTests)
     && (path != ":carts" || cartsTests)
-    && (path != ":epicfite" || epicfightTests) }
-if (gameTestMod && !(gameTestMod in ["core", "vanilla", "create", "cookery", "modulargolems",
-    "rts", "warfare", "tacz", "firefighting", "chiselsandbits", "carts", "epicfite"])) {
+    && (path != ":epicfight" || epicfightTests) }
+if (gameTestMod && !(gameTestMod in ["core", "vanilla", "create", "cookery", "golems",
+    "firearms", "carving", "carts", "epicfight"])) {
     throw new GradleException("Unknown GameTest mod '${gameTestMod}'; "
-        + "choose core, vanilla, create, cookery, modulargolems, rts, warfare, tacz, firefighting, chiselsandbits, carts or epicfite")
+        + "choose core, vanilla, create, cookery, golems, firearms, carving, carts or epicfight")
 }
-if (gameTestMod == "modulargolems" && !modularGolemsTests) {
-    throw new GradleException("Modular Golems GameTests require -PmodularGolemsTests=true")
+if (gameTestMod == "golems" && !modularGolemsTests) {
+    throw new GradleException("Golems GameTests require -PmodularGolemsTests=true")
 }
 if (gameTestMod == "cookery" && !cookeryTests) {
     throw new GradleException("Cookery GameTests require -PcookeryTests=true")
 }
-if (gameTestMod == "rts" && !rtsTests) {
-    throw new GradleException("RTS GameTests require -PrtsTests=true")
-}
-if (gameTestMod == "warfare" && !warfareTests) {
-    throw new GradleException("Warfare GameTests require -PwarfareTests=true")
-}
-if (gameTestMod == "tacz" && !taczTests) {
-    throw new GradleException("TACZ GameTests require -PtaczTests=true")
-}
-if (gameTestMod == "firefighting" && !firefightingTests) {
-    throw new GradleException("Firefighting GameTests require -PfirefightingTests=true")
-}
-if (gameTestMod == "chiselsandbits" && !chiselsTests) {
-    throw new GradleException("Chisels & Bits GameTests require -PchiselsTests=true")
+if (gameTestMod == "carving" && !chiselsTests) {
+    throw new GradleException("Carving GameTests require -PchiselsTests=true")
 }
 if (gameTestMod == "carts" && !cartsTests) {
     throw new GradleException("Carts GameTests require -PcartsTests=true")
 }
-if (gameTestMod == "epicfite" && !epicfightTests) {
+if (gameTestMod == "epicfight" && !epicfightTests) {
     throw new GradleException("Epic Fight GameTests require -PepicfightTests=true")
 }
 def suiteMods = testedMods.findAll { id, path -> !gameTestMod || path == ":${gameTestMod}" }
 // Every installed-mod combination owns its world, including Tavern's extra registries.
-def gameTestSuites = [cookery: cookeryTests, modulargolems: modularGolemsTests, tavern: tavernTests,
-    rts: rtsTests, warfare: warfareTests, tacz: taczTests, firefighting: firefightingTests,
-    chiselsandbits: chiselsTests, createPlacement: createPlacementTests, carts: cartsTests, epicfight: epicfightTests]
+def gameTestSuites = [cookery: cookeryTests, golems: modularGolemsTests, tavern: tavernTests,
+    warfare: warfareTests, tacz: taczTests, firefighting: firefightingTests,
+    carving: chiselsTests, createPlacement: createPlacementTests, carts: cartsTests, epicfight: epicfightTests]
     .findAll { suite, enabled -> enabled }.keySet().join("-") ?: "base"
 def gameTestDirectory = providers.gradleProperty("gameTestDirectory")
     .getOrElse("run/gametest/${gameTestMod ?: 'all'}/${gameTestSuites}")
@@ -119,12 +99,20 @@ neoForge {
                 }
                 if (warfareTests && path == ":vanilla") { sourceSet mod.sourceSets.warfareTest }
                 // Same-package construction tests belong to Vanilla's Java module.
-                if (path == ":vanilla" && chiselsTests && (!gameTestMod || gameTestMod == "chiselsandbits")) {
-                    sourceSet project(":chiselsandbits").sourceSets.gametest
+                if (path == ":vanilla" && chiselsTests && (!gameTestMod || gameTestMod == "carving")) {
+                    sourceSet project(":carving").sourceSets.gametest
                 }
-                if (suiteMods.containsKey(id) && path != ":chiselsandbits") {
+                if (suiteMods.containsKey(id) && path != ":carving") {
                     sourceSet mod.sourceSets.gametest
-                    if (rtsTests && path == ":vanilla") { sourceSet mod.sourceSets.rtsTest }
+                    if (path == ":create" && firefightingTests) {
+                        sourceSet mod.sourceSets.firefightingTest
+                    }
+                    if (path == ":firearms" && taczTests) {
+                        sourceSet mod.sourceSets.taczTest
+                    }
+                    if (path == ":firearms" && warfareTests) {
+                        sourceSet mod.sourceSets.warfareTest
+                    }
                     if (cookeryTests && path in [":core", ":vanilla"]) {
                         sourceSet mod.sourceSets.cookeryTest
                     }
@@ -141,9 +129,9 @@ neoForge {
             // Keep the existing dependency tests with Core, without repeating them in every mod's check.
             systemProperty "neoforge.enabledGameTestNamespaces",
                 providers.gradleProperty("gameTestNamespaces").getOrElse(
-                    createPlacementTests ? "folkways_create_candb"
+                    createPlacementTests ? "folkways_carving"
                         : !gameTestMod || gameTestMod == "core"
-                            ? "folkways,folkways_persistence,ldlib2" : "folkways,folkways_persistence")
+                            ? "folkways_core,ldlib2" : testedMods.keySet().join(","))
         }
     }
 }
@@ -163,13 +151,21 @@ dependencies {
     runtimeOnly core.sourceSets.gameTestFixtures.output
     suiteMods.values().each { path ->
         runtimeOnly project(path).sourceSets.gametest.output
-        if (rtsTests && path == ":vanilla") { runtimeOnly project(path).sourceSets.rtsTest.output }
+        if (path == ":create" && firefightingTests) {
+            runtimeOnly project(path).sourceSets.firefightingTest.output
+        }
+        if (path == ":firearms" && taczTests) {
+            runtimeOnly project(path).sourceSets.taczTest.output
+        }
+        if (path == ":firearms" && warfareTests) {
+            runtimeOnly project(path).sourceSets.warfareTest.output
+        }
         if (cookeryTests && path in [":core", ":vanilla"]) {
             runtimeOnly project(path).sourceSets.cookeryTest.output
         }
     }
     runtimeOnly ldlib2Coordinate
-    if (gameTestMod != "chiselsandbits" || createPlacementTests) { runtimeOnly core.lib("create") }
+    if (gameTestMod != "carving" || createPlacementTests) { runtimeOnly core.lib("create") }
     // Maid expression regressions bake and evaluate the converted clips with the real GeckoLib parser.
     if (!gameTestMod || gameTestMod == "vanilla") { runtimeOnly core.lib("geckolib") }
     if (taczTests) { runtimeOnly core.lib("tacz") }
@@ -202,7 +198,7 @@ tasks.named("jar") {
 }
 
 // Every mod's jar into build/libs, where the e2e instances find them.
-def collectJars = tasks.register("collectJars", Copy) {
+def collectJars = tasks.register("collectJars", Sync) {
     modProjects.values().each { path -> from(project(path).tasks.named("jar")) }
     into layout.buildDirectory.dir("libs")
 }
@@ -261,11 +257,19 @@ tasks.register("checkDataUpgrades", Exec) {
     commandLine "python3", "tests/architecture/data-upgrades.py"
 }
 
+tasks.register("checkNamespaces", Exec) {
+    group = "verification"
+    description = "Checks content namespaces and all four translation catalogs."
+    commandLine "python3", "tests/architecture/namespaces.py"
+}
+
 tasks.named("check") {
+    dependsOn "checkNamespaces"
     dependsOn "lintScaffold", "checkCorePackages", "checkDataUpgrades"
     modProjects.values().each { dependsOn "${it}:check", "${it}:compileGametestJava" }
+    dependsOn ":create:compileFirefightingTestJava", ":firearms:compileTaczTestJava",
+        ":firearms:compileWarfareTestJava"
     if (warfareTests) { dependsOn ":vanilla:compileWarfareTestJava" }
-    if (rtsTests) { dependsOn ":vanilla:compileRtsTestJava" }
     if (cookeryTests) { dependsOn ":core:compileCookeryTestJava", ":vanilla:compileCookeryTestJava" }
 }
 

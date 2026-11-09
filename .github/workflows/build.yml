@@ -48,26 +48,20 @@ jobs:
       matrix:
         include:
           - mod: core
-            profiles: base cookery rts
+            profiles: base cookery
           - mod: vanilla
-            profiles: base cookery rts warfare
+            profiles: base cookery warfare
           - mod: create
-            profiles: base
+            profiles: base firefighting
           - mod: cookery
             profiles: cookery
-          - mod: rts
-            profiles: rts
-          - mod: warfare
-            profiles: warfare
-          - mod: tacz
-            profiles: tacz
+          - mod: firearms
+            profiles: tacz warfare
           - mod: carts
             profiles: carts
-          - mod: firefighting
-            profiles: firefighting
-          - mod: chiselsandbits
-            profiles: chiselsandbits create-placement
-          - mod: epicfite
+          - mod: carving
+            profiles: carving create-placement
+          - mod: epicfight
             profiles: epicfight
     name: GameTests (${{ matrix.mod }})
     steps:
@@ -104,9 +98,6 @@ jobs:
             if [[ "$profile" == cookery ]]; then
               gradle_args+=(-PcookeryTests=true)
             fi
-            if [[ "$profile" == rts ]]; then
-              gradle_args+=(-PrtsTests=true)
-            fi
             if [[ "$profile" == warfare ]]; then
               gradle_args+=(-PwarfareTests=true)
             fi
@@ -119,7 +110,7 @@ jobs:
             if [[ "$profile" == firefighting ]]; then
               gradle_args+=(-PfirefightingTests=true)
             fi
-            if [[ "$profile" == chiselsandbits ]]; then
+            if [[ "$profile" == carving ]]; then
               gradle_args+=(-PchiselsTests=true)
             fi
             if [[ "$profile" == create-placement ]]; then
@@ -234,7 +225,10 @@ jobs:
           Built automatically from master at ${GITHUB_SHA::7} (mod version ends in \`-nightly.${GITHUB_SHA::7}\`). Untested pre-release; back up your world before trying it.
 
           Install **folkways-core** and **folkways-vanilla**, plus LDLib2. Add **folkways-create** only with Create,
-          **folkways-modulargolems** only with Modular Golems, and **folkways-cookery** only with Kaleidoscope Cookery 1.6.0.
+          **folkways-golems** only with Modular Golems, and **folkways-cookery** only with Kaleidoscope Cookery 1.6.0.
+          **folkways-firearms** activates TACZ and Superb Warfare support when those mods are installed;
+          **folkways-create** activates firefighting support when Create: FireFighting Additions is installed.
+          RTS commands and squads are included in **folkways-vanilla**.
           All Folkways jars must come from the same build.
           EOF
           gh release create nightly jars/*.jar --prerelease --target "$GITHUB_SHA" \

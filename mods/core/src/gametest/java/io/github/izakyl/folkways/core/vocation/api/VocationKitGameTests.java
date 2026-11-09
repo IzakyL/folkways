@@ -1,12 +1,12 @@
 package io.github.izakyl.folkways.core.vocation.api;
 
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.extension.api.Declaring;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import io.github.izakyl.folkways.core.resident.api.Participation;
 import io.github.izakyl.folkways.core.resident.api.Participations;
 import io.github.izakyl.folkways.core.resident.api.Stake;
-import io.github.izakyl.folkways.plugins.person.PersonBody;
+import io.github.izakyl.folkways.vanilla.person.PersonBody;
 import java.util.List;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
@@ -17,8 +17,8 @@ import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
-@EventBusSubscriber(modid = FolkwaysMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@EventBusSubscriber(modid = FolkwaysCoreMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
+@GameTestHolder(FolkwaysCoreMod.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class VocationKitGameTests {
     private static final ResourceLocation BEFORE = id("kit_before");
@@ -44,7 +44,7 @@ public final class VocationKitGameTests {
         event.register(VocationKitGameTests.class);
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void pluginToolsCombineWithTheOriginalKitInEitherDeclarationOrder(GameTestHelper helper) {
         helper.assertValueEqual(Vocations.required(BEFORE).kit(), List.of(BASE, ADDED),
             "adding before registration preserves the base kit and removes duplicates");
@@ -58,7 +58,7 @@ public final class VocationKitGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void toolsCannotBeAddedAfterTheDeclarationWindowCloses(GameTestHelper helper) {
         List<ItemSpec> original = Vocations.required(BEFORE).kit();
         boolean refused = false;

@@ -31,7 +31,7 @@ for (const stage of twins()) test(stage.title("compost recovery: discover player
       config: stage.config,
       server: { trace: tracePath("e2e", stage.name("compost-recovery-server-" + runId)), instance: seededServer(stage.name("compost-recovery-server-" + runId)) },
       client: { trace: tracePath("e2e", stage.name("compost-recovery-client-" + runId)), instance: stage.name("compost-recovery-client-" + runId) },
-      snapshot: () => ({ containers: cells ? [stage.at(cells.supply), stage.at(cells.withdrawn)] : [], entityTypes: ["folkways:resident", "minecraft:item"] }),
+      snapshot: () => ({ containers: cells ? [stage.at(cells.supply), stage.at(cells.withdrawn)] : [], entityTypes: ["folkways_vanilla:resident", "minecraft:item"] }),
     });
     const { server, client } = pair; const player = await waitForGroundedPlayer(server);
     const origin = { x: Math.round(player.pos.x) + 4, y: Math.round(player.pos.y), z: Math.round(player.pos.z) + 4 };
@@ -52,7 +52,7 @@ for (const stage of twins()) test(stage.title("compost recovery: discover player
     await world.command(server, "item replace entity " + player.name + " weapon.mainhand with " + SEED + " 64");
     evidence.playerInput = await runColonyTask(server, PLAYER_FILL, { player: player.name, compost: stage.at(cells.compost) });
     expect(evidence.playerInput.fill).toBe(7); expect(evidence.playerInput.spent).toBeGreaterThanOrEqual(7);
-    await world.command(server, "item replace entity " + player.name + " weapon.mainhand with folkways:colony_book");
+    await world.command(server, "item replace entity " + player.name + " weapon.mainhand with folkways_core:colony_book");
     evidence.fixtureChanges.push("player's leftover input seeds replaced by the colony book after native prefill; no colony seed stock was supplied");
     await tick.sprint(server, 25);
     const mature = await read(server, stage, cells); evidence.playerMature = mature;
@@ -248,8 +248,8 @@ const READ_COMPOST = defineTask<{ compost: Vec; withdrawn: Vec }, State>({
   name: "folkways.e2e.read-autonomous-compost", side: "server", timeoutMs: 20000,
   source: javaTask({ imports: [
     "io.github.izakyl.folkways.core.colony.api.Colonies", "io.github.izakyl.folkways.core.resident.api.Bodies",
-    "io.github.izakyl.folkways.core.world.api.WorldPos", "io.github.izakyl.folkways.plugins.compost.CompostPresence",
-    "io.github.izakyl.folkways.plugins.compost.CompostSettings", "io.github.izakyl.folkways.plugins.compost.CompostContent", "io.github.izakyl.folkways.core.work.api.Node", "net.minecraft.world.Container",
+    "io.github.izakyl.folkways.core.world.api.WorldPos", "io.github.izakyl.folkways.vanilla.compost.CompostPresence",
+    "io.github.izakyl.folkways.vanilla.compost.CompostSettings", "io.github.izakyl.folkways.vanilla.compost.CompostContent", "io.github.izakyl.folkways.core.work.api.Node", "net.minecraft.world.Container",
     "net.minecraft.world.entity.EquipmentSlot",
     "net.minecraft.core.BlockPos", "net.minecraft.core.registries.BuiltInRegistries", "net.minecraft.world.item.ItemStack",
     "net.minecraft.world.item.Items", "net.minecraft.world.entity.item.ItemEntity", "net.minecraft.world.level.block.ComposterBlock",

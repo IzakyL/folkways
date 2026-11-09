@@ -31,7 +31,7 @@ type CameraReading = {
 
 const SETTINGS_PAGE = "folkways.tab.settings";
 const GLOBAL_SETTING = "folkways.settings.global_tactical_controls";
-const COMBAT_PAGE = "folkways:combat";
+const COMBAT_PAGE = "folkways_core:combat";
 const COMBAT_SUMMARY = "folkways.combat.summary";
 const PERSONAL_TOGGLE = /Use tactical camera controls for all overhead tools|全局战斗视角操作逻辑/i;
 
@@ -47,7 +47,7 @@ test("the native config screen and shortcut set the camera account toggle, and t
       config: "blockwright.toml#rts",
       server: { instance: `combat-camera-input-server-${run}` },
       client: { instance: `combat-camera-input-client-${run}` },
-      snapshot: { entityTypes: ["folkways:resident"] },
+      snapshot: { entityTypes: ["folkways_vanilla:resident"] },
     });
     const { server, client } = pair;
     const player = await waitForGroundedPlayer(server);
@@ -197,7 +197,7 @@ test("the native config screen and shortcut set the camera account toggle, and t
 
     // The page-opening packet still has to prove possession of this colony book and name a registered page.
     // These two invalid requests are sent through the actual client network path; they must leave the overhead screen intact.
-    for (const request of [{ colony: colonyId, page: "folkways:missing_page" },
+    for (const request of [{ colony: colonyId, page: "folkways_vanilla:missing_page" },
       { colony: "00000000-0000-0000-0000-000000000001", page: COMBAT_PAGE }]) {
       await client.run(ATTEMPT_OPEN_PAGE, request);
       await tick.sprint(server, 2);
@@ -276,7 +276,7 @@ test("the personal tactical camera preference follows the account across colonie
   try {
     pair = await launchPair({
       config: "blockwright.toml#rts",
-      server: serverOptions, client: clientOptions, snapshot: { entityTypes: ["folkways:resident"] },
+      server: serverOptions, client: clientOptions, snapshot: { entityTypes: ["folkways_vanilla:resident"] },
     });
     let { server, client } = pair;
     const player = await waitForGroundedPlayer(server);
@@ -329,7 +329,7 @@ test("the personal tactical camera preference follows the account across colonie
       config: "blockwright.toml#rts",
       server: { ...serverOptions, reuseInstanceDir: true },
       client: { ...clientOptions, reuseInstanceDir: true },
-      snapshot: { entityTypes: ["folkways:resident"] },
+      snapshot: { entityTypes: ["folkways_vanilla:resident"] },
     });
     server = pair.server;
     client = pair.client;
@@ -488,9 +488,9 @@ const READ_CAMERA = defineTask<void, CameraReading>({
     imports: [
       "java.util.LinkedHashMap",
       "net.minecraft.client.Minecraft",
-      "io.github.izakyl.folkways.front.engine.item.HeldBook",
-      "io.github.izakyl.folkways.front.client.Overhead",
-      "io.github.izakyl.folkways.front.client.PersonalCameraControls",
+      "io.github.izakyl.folkways.core.front.engine.item.HeldBook",
+      "io.github.izakyl.folkways.core.front.client.Overhead",
+      "io.github.izakyl.folkways.core.front.client.PersonalCameraControls",
     ],
     body: `
 var state=Overhead.camera().orElse(null);var result=new LinkedHashMap<String,Object>();
@@ -516,7 +516,7 @@ const ATTEMPT_OPEN_PAGE = defineTask<{ colony: string; page: string }, { sent: t
       "java.util.Map",
       "net.minecraft.resources.ResourceLocation",
       "net.neoforged.neoforge.network.PacketDistributor",
-      "io.github.izakyl.folkways.front.engine.net.OpenBookPagePacket",
+      "io.github.izakyl.folkways.core.front.engine.net.OpenBookPagePacket",
     ],
     body: `var a=Args.of(ctx);PacketDistributor.sendToServer(new OpenBookPagePacket(UUID.fromString(a.string("colony")),ResourceLocation.parse(a.string("page"))));return Map.of("sent",true);`,
   }),
@@ -526,7 +526,7 @@ const SET_PERSONAL_PREFERENCE = defineTask<{ on: boolean }, { on: boolean }>({
   name: "folkways.combat-camera.restore-personal-preference",
   side: "client",
   source: javaTask({
-    imports: ["io.github.izakyl.folkways.front.client.PersonalCameraControls"],
+    imports: ["io.github.izakyl.folkways.core.front.client.PersonalCameraControls"],
     body: `var on=Args.of(ctx).flag("on",false);PersonalCameraControls.globalTacticalControls(on);return Map.of("on",PersonalCameraControls.globalTacticalControls());`,
   }),
 });
@@ -535,7 +535,7 @@ const PREPARE_NATIVE_CONFIG_TEST = defineTask<void, { account: string; otherUuid
   name: "folkways.combat-camera.native-config-test-account",
   side: "client",
   source: javaTask({
-    imports: ["java.util.UUID", "java.util.Map", "io.github.izakyl.folkways.FolkwaysClientConfig", "io.github.izakyl.folkways.front.client.PersonalCameraControls"],
+    imports: ["java.util.UUID", "java.util.Map", "io.github.izakyl.folkways.core.FolkwaysClientConfig", "io.github.izakyl.folkways.core.front.client.PersonalCameraControls"],
     body: `var current=PersonalCameraControls.currentUserUUID();if(current==null)throw new IllegalStateException("Minecraft account UUID is unavailable");
 UUID other=UUID.randomUUID();while(other.equals(current))other=UUID.randomUUID();boolean initial=FolkwaysClientConfig.globalTacticalControls(current);
 boolean otherBefore=FolkwaysClientConfig.globalTacticalControls(other);FolkwaysClientConfig.globalTacticalControls(other,true);
@@ -548,8 +548,8 @@ const OPEN_REGISTERED_CONFIG_FACTORY = defineTask<void, { factoryRegistered: boo
   side: "client",
   source: javaTask({
     imports: ["java.util.Map", "net.minecraft.client.Minecraft", "net.minecraft.client.KeyMapping", "net.neoforged.fml.ModList",
-      "net.neoforged.neoforge.client.gui.IConfigScreenFactory", "io.github.izakyl.folkways.front.client.PersonalCameraControls",
-      "io.github.izakyl.folkways.front.client.PersonalCameraKeyEvents"],
+      "net.neoforged.neoforge.client.gui.IConfigScreenFactory", "io.github.izakyl.folkways.core.front.client.PersonalCameraControls",
+      "io.github.izakyl.folkways.core.front.client.PersonalCameraKeyEvents"],
     body: `var mc=Minecraft.getInstance();var mod=ModList.get().getModContainerById("folkways_core").orElseThrow();
 var factory=IConfigScreenFactory.getForMod(mod.getModInfo()).orElseThrow(()->new IllegalStateException("registered Folkways config screen factory is missing"));
 mc.setScreen(factory.createScreen(mod,mc.screen));return Map.of("factoryRegistered",true,"screen",mc.screen.getClass().getName(),
@@ -562,7 +562,7 @@ const READ_CONFIG_TEST_ACCOUNTS = defineTask<{ otherUuid: string }, { currentPre
   name: "folkways.combat-camera.read-config-test-accounts",
   side: "client",
   source: javaTask({
-    imports: ["java.util.Map", "java.util.UUID", "io.github.izakyl.folkways.FolkwaysClientConfig", "io.github.izakyl.folkways.front.client.PersonalCameraControls"],
+    imports: ["java.util.Map", "java.util.UUID", "io.github.izakyl.folkways.core.FolkwaysClientConfig", "io.github.izakyl.folkways.core.front.client.PersonalCameraControls"],
     body: `var a=Args.of(ctx);return Map.of("currentPreference",PersonalCameraControls.globalTacticalControls(),
 "otherPreference",FolkwaysClientConfig.globalTacticalControls(UUID.fromString(a.string("otherUuid"))));`,
   }),
@@ -572,7 +572,7 @@ const RESTORE_CONFIG_TEST_UUID = defineTask<{ otherUuid: string; on: boolean }, 
   name: "folkways.combat-camera.restore-config-test-uuid",
   side: "client",
   source: javaTask({
-    imports: ["java.util.Map", "java.util.UUID", "io.github.izakyl.folkways.FolkwaysClientConfig"],
+    imports: ["java.util.Map", "java.util.UUID", "io.github.izakyl.folkways.core.FolkwaysClientConfig"],
     body: `var a=Args.of(ctx);FolkwaysClientConfig.globalTacticalControls(UUID.fromString(a.string("otherUuid")),a.flag("on",false));return Map.of("restored",true);`,
   }),
 });
@@ -582,7 +582,7 @@ const BIND_CAMERA_SHORTCUT = defineTask<{ keyCode: number }, { key: string }>({
   side: "client",
   source: javaTask({
     imports: ["java.util.Map", "net.minecraft.client.KeyMapping", "com.mojang.blaze3d.platform.InputConstants",
-      "io.github.izakyl.folkways.front.client.PersonalCameraKeyEvents"],
+      "io.github.izakyl.folkways.core.front.client.PersonalCameraKeyEvents"],
     body: `var key=Args.of(ctx).integer("keyCode");PersonalCameraKeyEvents.KEY.setKey(InputConstants.Type.KEYSYM.getOrCreate((int)key));
 KeyMapping.resetMapping();return Map.of("key",PersonalCameraKeyEvents.KEY.getKey().toString());`,
   }),
@@ -593,7 +593,7 @@ const RESTORE_CAMERA_SHORTCUT = defineTask<void, { unbound: boolean }>({
   side: "client",
   source: javaTask({
     imports: ["java.util.Map", "net.minecraft.client.Minecraft", "net.minecraft.client.KeyMapping", "com.mojang.blaze3d.platform.InputConstants",
-      "io.github.izakyl.folkways.front.client.PersonalCameraKeyEvents"],
+      "io.github.izakyl.folkways.core.front.client.PersonalCameraKeyEvents"],
     body: `PersonalCameraKeyEvents.KEY.setKey(InputConstants.UNKNOWN);KeyMapping.resetMapping();Minecraft.getInstance().options.save();
 return Map.of("unbound",PersonalCameraKeyEvents.KEY.isUnbound());`,
   }),
@@ -603,7 +603,7 @@ const RESIDENT_IDS = defineTask<{ colony: string }, string[]>({
   name: "folkways.combat-camera.read-residents",
   side: "server",
   source: javaTask({
-    imports: ["java.util.UUID", "net.minecraft.server.MinecraftServer", "io.github.izakyl.folkways.core.colony.api.Colonies", "io.github.izakyl.folkways.plugins.person.PersonBody"],
+    imports: ["java.util.UUID", "net.minecraft.server.MinecraftServer", "io.github.izakyl.folkways.core.colony.api.Colonies", "io.github.izakyl.folkways.vanilla.person.PersonBody"],
     body: `
 var server=(MinecraftServer)ctx.server();var colony=Colonies.of(server,UUID.fromString(Args.of(ctx).string("colony"))).orElseThrow();
 return colony.residents().stream().filter(r->r.kind().equals(PersonBody.ID)).map(r->r.id().toString()).sorted().toList();`,
@@ -614,7 +614,7 @@ const CURRENT_COLONY = defineTask<{ player: string }, string>({
   name: "folkways.combat-camera.current-colony",
   side: "server",
   source: javaTask({
-    imports: ["net.minecraft.server.MinecraftServer", "io.github.izakyl.folkways.front.engine.charter.CurrentColony"],
+    imports: ["net.minecraft.server.MinecraftServer", "io.github.izakyl.folkways.core.front.engine.charter.CurrentColony"],
     body: `var player=((MinecraftServer)ctx.server()).getPlayerList().getPlayerByName(Args.of(ctx).string("player"));if(player==null)throw new IllegalStateException("test player is offline");return CurrentColony.of(player).map(c->c.id().toString()).orElse("");`,
   }),
 });

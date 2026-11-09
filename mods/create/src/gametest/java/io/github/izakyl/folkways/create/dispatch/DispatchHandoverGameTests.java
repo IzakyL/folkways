@@ -1,12 +1,12 @@
 package io.github.izakyl.folkways.create.dispatch;
 
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.colony.api.Colony;
 import io.github.izakyl.folkways.core.colony.internal.ColonyData;
 import io.github.izakyl.folkways.core.colony.internal.ColonySnapshot;
 import io.github.izakyl.folkways.core.testing.Proxies;
 import io.github.izakyl.folkways.create.FolkwaysCreateMod;
-import io.github.izakyl.folkways.front.api.notice.Attempt;
+import io.github.izakyl.folkways.core.front.api.notice.Attempt;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -25,7 +25,7 @@ import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
 @EventBusSubscriber(modid = FolkwaysCreateMod.ID, bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@GameTestHolder("folkways_create")
 @PrefixGameTestTemplate(false)
 public final class DispatchHandoverGameTests {
 
@@ -37,7 +37,7 @@ public final class DispatchHandoverGameTests {
     // The book takes a network on only by its stock link or ticker, a chain net by any frogport or chain conveyor on
     // it, and leaves a postbox to be given as a member, and a packager, which stands where the kinds meet, to whatever
     // else would take it.
-    @GameTest(template = "empty", timeoutTicks = 40)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 40)
     public static void eachKindOfNetworkIsHandedOverByItsOwnBlocks(GameTestHelper helper) {
         PackageNetwork original = PackageNetworks.get();
         ServerLevel level = helper.getLevel();

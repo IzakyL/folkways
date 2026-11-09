@@ -1,0 +1,14 @@
+package io.github.izakyl.folkways.vanilla.fishing;
+
+import io.github.izakyl.folkways.core.resident.api.RefusalKind;
+
+public enum FishingRefusal implements RefusalKind.Named {
+
+    NO_WATER,
+    LINE_ALREADY_OUT;
+
+    @Override
+    public boolean lasting() {
+        return this == NO_WATER;
+    }
+}

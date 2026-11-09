@@ -3,7 +3,7 @@ package io.github.izakyl.folkways.cookery.racks;
 import com.github.ysbbbbbb.kaleidoscopecookery.blockentity.kitchen.KitchenwareRacksBlockEntity;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems;
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.inventory.api.Stash;
 import io.github.izakyl.folkways.core.inventory.internal.Stands;
 import io.github.izakyl.folkways.core.item.api.Containers;
@@ -20,7 +20,7 @@ import io.github.izakyl.folkways.core.work.api.Stances;
 import io.github.izakyl.folkways.core.work.internal.Commit;
 import io.github.izakyl.folkways.core.work.support.WorkStances;
 import io.github.izakyl.folkways.core.world.api.Reach;
-import io.github.izakyl.folkways.plugins.person.PersonBody;
+import io.github.izakyl.folkways.vanilla.person.PersonBody;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -43,7 +43,7 @@ import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
 @EventBusSubscriber(modid = "folkways_cookery", bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@GameTestHolder("folkways_cookery")
 @PrefixGameTestTemplate(false)
 public final class RackContainerGameTests {
 
@@ -52,7 +52,7 @@ public final class RackContainerGameTests {
         event.register(RackContainerGameTests.class);
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void realRackSlotsKeepOneToolEachAndPreserveItsComponents(GameTestHelper helper) {
         KitchenwareRacksBlockEntity rack = rack(helper);
         RackContainer view = new RackContainer(rack);
@@ -73,7 +73,7 @@ public final class RackContainerGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void rackRejectsFoodAndArmorWithoutChangingEitherRealSlot(GameTestHelper helper) {
         KitchenwareRacksBlockEntity rack = rack(helper);
         RackContainer view = new RackContainer(rack);
@@ -91,7 +91,7 @@ public final class RackContainerGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void reloadedRackKeepsItsToolButAnOldViewCannotTakeOrInsertAnything(GameTestHelper helper) {
         KitchenwareRacksBlockEntity rack = rack(helper);
         RackContainer stale = new RackContainer(rack);
@@ -114,7 +114,7 @@ public final class RackContainerGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void nativeClicksAndTheContainerOperateOnTheSamePhysicalTool(GameTestHelper helper) {
         ItemStack lid = new ItemStack(ModItems.STOCKPOT_LID.get());
         helper.assertTrue(lid.getItem() instanceof ShieldItem && lid.is(Tags.Items.TOOLS),
@@ -147,7 +147,7 @@ public final class RackContainerGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void registeredRackIsDiscoveredByTheOrdinaryContainerEntryPoint(GameTestHelper helper) {
         KitchenwareRacksBlockEntity rack = rack(helper);
         KitchenRacks.register();
@@ -160,7 +160,7 @@ public final class RackContainerGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void ordinaryCargoPlanningPrefersTheRealRackForANamedPotLid(GameTestHelper helper) {
         var fixture = new PlanningFixture(helper);
         var level = helper.getLevel();

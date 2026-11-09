@@ -42,10 +42,10 @@ ordering = "AFTER"
 side = "CLIENT"
 
 [[mixins]]
-config = "folkways-build.mixins.json"
+config = "folkways-vanilla-build.mixins.json"
 
 [[mixins]]
-config = "folkways-wares.mixins.json"
+config = "folkways-vanilla-wares.mixins.json"
 
 [[mixins]]
-config = "folkways-person.mixins.json"
+config = "folkways-vanilla-person.mixins.json"

@@ -5,7 +5,7 @@ export type Vec = { x: number; y: number; z: number };
 export type Site = { pattern: string; min?: Vec; max?: Vec; points?: Vec[]; knobs: Knobs };
 const p = (x: number, z: number, dy = 0): Vec => ({ x, y: 64 + dy, z });
 const zone = (name: string, x: number, size: number, knobs: Knobs): Site => ({
-  pattern: `folkways_chiselsandbits:${name}`, min: p(x, 10), max: p(x + size - 1, 10 + size - 1), knobs,
+  pattern: `folkways_carving:${name}`, min: p(x, 10), max: p(x + size - 1, 10 + size - 1), knobs,
 });
 export const HERO = zone("pavilion", 4, 9, { width: 9, height: 4 });
 

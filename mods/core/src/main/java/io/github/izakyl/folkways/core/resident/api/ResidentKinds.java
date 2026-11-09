@@ -1,8 +1,8 @@
 package io.github.izakyl.folkways.core.resident.api;
 
-import io.github.izakyl.folkways.base.Ledger;
+import io.github.izakyl.folkways.core.base.Ledger;
 import io.github.izakyl.folkways.core.vocation.api.Vocation;
-import io.github.izakyl.folkways.effect.perk.PerkPool;
+import io.github.izakyl.folkways.core.effect.perk.PerkPool;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;

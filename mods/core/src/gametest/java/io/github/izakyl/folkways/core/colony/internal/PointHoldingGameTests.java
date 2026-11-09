@@ -1,7 +1,7 @@
 package io.github.izakyl.folkways.core.colony.internal;
 
-import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.base.persist.Reader;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
+import io.github.izakyl.folkways.core.base.persist.Reader;
 import io.github.izakyl.folkways.core.colony.api.ClaimRelease;
 import io.github.izakyl.folkways.core.colony.api.Claimed;
 import io.github.izakyl.folkways.core.colony.api.Colonies;
@@ -21,16 +21,16 @@ import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
-@EventBusSubscriber(modid = FolkwaysMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@EventBusSubscriber(modid = FolkwaysCoreMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
+@GameTestHolder(FolkwaysCoreMod.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class PointHoldingGameTests {
-    private static final ResourceLocation OWNER = ResourceLocation.fromNamespaceAndPath("folkways", "test/native_point");
+    private static final ResourceLocation OWNER = ResourceLocation.fromNamespaceAndPath("folkways_core", "test/native_point");
     static { PointSites.register(OWNER, (level, pos) -> level.getBlockState(pos).is(Blocks.COMPOSTER) || level.getBlockState(pos).is(Blocks.CHEST)); }
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) { event.register(PointHoldingGameTests.class); }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void nativePointOwnershipPersistsWithoutABlockEntityAndAppearsInTheRealView(GameTestHelper helper) {
         var level = helper.getLevel(); var cell = helper.absolutePos(new BlockPos(1, 1, 1));
         level.setBlockAndUpdate(cell, Blocks.COMPOSTER.defaultBlockState());
@@ -47,7 +47,7 @@ public final class PointHoldingGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void pointsAndMarkedBlocksAtTheSamePositionExcludeEachOtherAcrossRealColonies(GameTestHelper helper) {
         var level = helper.getLevel(); var cell = helper.absolutePos(new BlockPos(1, 1, 1));
         level.setBlockAndUpdate(cell, Blocks.CHEST.defaultBlockState()); WorldPos at = WorldPos.of(level, cell);
@@ -66,7 +66,7 @@ public final class PointHoldingGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void aLoadedNativePointReleasesWhenItsDeclaredBlockPredicateStopsMatching(GameTestHelper helper) {
         var level = helper.getLevel(); var cell = helper.absolutePos(new BlockPos(1, 1, 1));
         level.setBlockAndUpdate(cell, Blocks.COMPOSTER.defaultBlockState()); WorldPos at = WorldPos.of(level, cell);
@@ -78,7 +78,7 @@ public final class PointHoldingGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void unloadedPointOwnershipSurvivesSaveReloadAndReconcileWithoutLoadingAChunk(GameTestHelper helper) {
         var level = helper.getLevel(); WorldPos at = WorldPos.of(level, new BlockPos(25_000_000, 80, 25_000_000));
         helper.assertTrue(!level.isLoaded(at.cell()), "the persisted native site starts in an actually unloaded chunk");
@@ -89,7 +89,7 @@ public final class PointHoldingGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void aRelocatedPointMovesItsExclusiveIndexAndKeepsThePointKindAfterSerialization(GameTestHelper helper) {
         var level = helper.getLevel(); var old = WorldPos.of(level, helper.absolutePos(new BlockPos(1, 1, 1)));
         var moved = WorldPos.of(level, helper.absolutePos(new BlockPos(2, 1, 1)));
@@ -101,7 +101,7 @@ public final class PointHoldingGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void publicPointAdmissionRejectsUnregisteredAndInvalidNativeSites(GameTestHelper helper) {
         var level = helper.getLevel(); var cell = helper.absolutePos(new BlockPos(1, 1, 1));
         level.setBlockAndUpdate(cell, Blocks.STONE.defaultBlockState()); WorldPos at = WorldPos.of(level, cell);
@@ -109,7 +109,7 @@ public final class PointHoldingGameTests {
         try {
             helper.assertTrue(colony.hold(OWNER, new Claimed.Point(at)).isEmpty(), "new point admission validates the actual loaded native block");
             level.setBlockAndUpdate(cell, Blocks.COMPOSTER.defaultBlockState());
-            helper.assertTrue(colony.hold(ResourceLocation.fromNamespaceAndPath("folkways", "test/unknown_point"), new Claimed.Point(at)).isEmpty(), "an unregistered point owner cannot claim arbitrary world blocks");
+            helper.assertTrue(colony.hold(ResourceLocation.fromNamespaceAndPath("folkways_core", "test/unknown_point"), new Claimed.Point(at)).isEmpty(), "an unregistered point owner cannot claim arbitrary world blocks");
         } finally { colony.raze(); }
         helper.succeed();
     }

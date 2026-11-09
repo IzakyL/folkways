@@ -1,7 +1,7 @@
 package io.github.izakyl.folkways.core.colony.internal;
 
-import io.github.izakyl.folkways.base.persist.Reader;
-import io.github.izakyl.folkways.base.persist.Writer;
+import io.github.izakyl.folkways.core.base.persist.Reader;
+import io.github.izakyl.folkways.core.base.persist.Writer;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
 import java.util.LinkedHashMap;
 import java.util.Map;

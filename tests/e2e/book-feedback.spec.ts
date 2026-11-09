@@ -22,7 +22,7 @@ const READ_TRANSLATION = defineTask<void, Record<string, string>>({
   name: "folkways.ui-feedback.read-translations", side: "client",
   source: javaTask({ imports: ["net.minecraft.network.chat.Component"], body: `
 var result=new LinkedHashMap<String,String>();
-for(var key:List.of("item.minecraft.diamond","block.kaleidoscope_cookery.tea_tree","folkways.doing.folkways.taking_supplies.about","folkways.doing.folkways.leaving_millstone"))
+for(var key:List.of("item.minecraft.diamond","block.kaleidoscope_cookery.tea_tree","folkways.doing.folkways_vanilla.taking_supplies.about","folkways.doing.folkways_cookery.leaving_millstone"))
  result.put(key,Component.translatable(key,Component.translatable("item.minecraft.diamond")).getString());
 return result;
 ` }),
@@ -58,7 +58,7 @@ for (const stage of twins()) test(stage.title("book feedback: bounded stock sear
     await expect.poll(async () => shown(await panelElements(client), SUPPLY), { timeout: 10_000 }).toBe(false);
     evidence.beforeBox = await panelElements(client);
     await screen.dismiss(client);
-    await world.command(server, `setblock ${commandPos(stage.at(source))} folkways:creative_supply_box`);
+    await world.command(server, `setblock ${commandPos(stage.at(source))} folkways_vanilla:creative_supply_box`);
     await openColonyPanelViaBook(server, client, name, founded.standBlock, stage);
     expect(shown(await panelElements(client), SUPPLY), "a placed but unclaimed source stays hidden").toBe(false);
     await screen.dismiss(client);
@@ -106,8 +106,8 @@ for (const stage of twins()) test(stage.title("book feedback: bounded stock sear
     await expect.poll(async () => (await client.run(READ_TRANSLATION, undefined))["item.minecraft.diamond"], { timeout: 30_000 }).toBe("钻石");
     const words = await client.run(READ_TRANSLATION, undefined); evidence.translations = words;
     expect(words["block.kaleidoscope_cookery.tea_tree"]).toBe("茶树");
-    expect(words["folkways.doing.folkways.taking_supplies.about"]).toBe("正在领取补给中的钻石");
-    expect(words["folkways.doing.folkways.leaving_millstone"]).toBe("正在离开石磨");
+    expect(words["folkways.doing.folkways_vanilla.taking_supplies.about"]).toBe("正在领取补给中的钻石");
+    expect(words["folkways.doing.folkways_cookery.leaving_millstone"]).toBe("正在离开石磨");
     await openColonyPanelViaBook(server, client, name, founded.standBlock, stage);
     await clickElement(client, { id: "folkways.tab.metrics" });
     await search(client, "钻石");

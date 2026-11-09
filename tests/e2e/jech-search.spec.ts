@@ -28,8 +28,8 @@ return Component.translatable("item.minecraft.iron_ingot").getString();
 const MATCHING = defineTask<void, Record<string, boolean>>({
   name: "folkways.jech.matching", side: "client",
   source: javaTask({ imports: [
-    "io.github.izakyl.folkways.front.api.ui.TextSearch",
-    "io.github.izakyl.folkways.front.ui.screen.RosterQuery",
+    "io.github.izakyl.folkways.core.front.api.ui.TextSearch",
+    "io.github.izakyl.folkways.core.front.ui.screen.RosterQuery",
   ], body: `
 var fields=new RosterQuery.Fields(List.of("name","姓名"),List.of("doing","工作"));
 var entry=new RosterQuery.Entry("张三","正在采矿",List.of(new RosterQuery.Trade(List.of("mining","采矿"),1)));
@@ -47,8 +47,8 @@ const FOLDER = defineTask<void, boolean>({
     "com.lowdragmc.lowdraglib2.gui.ui.ModularUI",
     "com.lowdragmc.lowdraglib2.gui.ui.elements.Button",
     "com.lowdragmc.lowdraglib2.gui.ui.elements.Dialog",
-    "io.github.izakyl.folkways.front.api.ui.Picker",
-    "io.github.izakyl.folkways.front.api.ui.Tokens",
+    "io.github.izakyl.folkways.core.front.api.ui.Picker",
+    "io.github.izakyl.folkways.core.front.api.ui.Tokens",
     "net.minecraft.client.Minecraft",
     "net.minecraft.network.chat.Component",
   ], body: `
@@ -64,7 +64,7 @@ picker.size(230,150).open(ModularUI.of(((Minecraft)ctx.client()).screen).ui.root
 const SETTINGS = defineTask<void, Record<string, boolean | number>>({
   name: "folkways.jech.settings", side: "client",
   source: javaTask({ imports: [
-    "io.github.izakyl.folkways.front.api.ui.TextSearch",
+    "io.github.izakyl.folkways.core.front.api.ui.TextSearch",
     "me.towdium.jecharacters.config.JechConfig",
     "me.towdium.jecharacters.utils.Match",
   ], body: `
@@ -128,7 +128,7 @@ for (const installed of [false, true]) test(`display search with JEC ${installed
     expect((await optInViaBook(server, client, player, barrel, "chest")).member).toBe(true);
     await openColonyPanelViaBook(server, client, player, founded.standBlock);
     await clickTab(client, "folkways.page.build");
-    await clickElement(client, { id: "folkways.settings.open.tool.folkways.building.folkways.build" }, { scrollIntoView: true });
+    await clickElement(client, { id: "folkways.settings.open.tool.folkways_vanilla.building.folkways_vanilla.build" }, { scrollIntoView: true });
     await waitForElement(client, { id: "folkways.selector.search" });
     for (const query of ["tieding", "td", "tie锭", "@minecraft TIEDING"]) {
       await search(client, "folkways.selector.search", query);

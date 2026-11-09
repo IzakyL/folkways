@@ -25,7 +25,7 @@ for (const stage of twins()) test(stage.title("creative supplies: configure a re
       server: { trace: tracePath("e2e", stage.name("creative-supplies-server")), instance: seededServer(stage.name(
         "creative-supplies-server-" + runId)) },
       client: { trace: tracePath("e2e", stage.name("creative-supplies-client")), instance: stage.name("creative-supplies-client-" + runId) },
-      snapshot: () => ({ containers: target ? [stage.at(target)] : [], entityTypes: ["folkways:resident", "minecraft:item"] }),
+      snapshot: () => ({ containers: target ? [stage.at(target)] : [], entityTypes: ["folkways_vanilla:resident", "minecraft:item"] }),
     });
     const { server, client } = pair;
     const grounded = await waitForGroundedPlayer(server);
@@ -43,7 +43,7 @@ for (const stage of twins()) test(stage.title("creative supplies: configure a re
     const source = { x: origin.x - 6, y: origin.y, z: origin.z + 5 };
     const table = { x: origin.x - 3, y: origin.y, z: origin.z + 5 };
     target = { x: origin.x + 6, y: origin.y, z: origin.z + 5 };
-    await world.command(server, "setblock " + commandPos(stage.at(source)) + " folkways:creative_supply_box");
+    await world.command(server, "setblock " + commandPos(stage.at(source)) + " folkways_vanilla:creative_supply_box");
     await world.command(server, "setblock " + commandPos(stage.at(table)) + " minecraft:crafting_table");
     await world.command(server, "setblock " + commandPos(stage.at(target)) + " minecraft:chest{Items:[]}");
     await world.command(server, "gamemode creative " + name);
@@ -67,11 +67,11 @@ for (const stage of twins()) test(stage.title("creative supplies: configure a re
     evidence.configured = configured;
 
     // The source's own item link opens its independent lesson on a server without Cookery installed.
-    await world.command(server, "ponder folkways:creative_supply_box " + name);
+    await world.command(server, "ponder folkways_vanilla:creative_supply_box " + name);
     await frames(client, 3);
     expect(screenName(await safeScreen(client))).toMatch(/PonderUI/);
     await screen.dismiss(client);
-    await world.command(server, "give " + name + " folkways:colony_book");
+    await world.command(server, "give " + name + " folkways_core:colony_book");
     for (const cell of [source, table, target]) {
       await optInViaBook(server, client, name, cell, "worksite", stage);
     }

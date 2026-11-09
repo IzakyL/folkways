@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.core.inventory.internal;
 
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -9,8 +9,8 @@ import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
-@EventBusSubscriber(modid = FolkwaysMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@EventBusSubscriber(modid = FolkwaysCoreMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
+@GameTestHolder(FolkwaysCoreMod.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class ObservationBudgetGameTests {
 
@@ -19,7 +19,7 @@ public final class ObservationBudgetGameTests {
         event.register(ObservationBudgetGameTests.class);
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void noFirstStepWhenEmpty(GameTestHelper helper) {
         ObservationBudget budget = new ObservationBudget(5, 0, () -> 100L);
         helper.assertTrue(budget.spent(), "zero budget must stop the first step");

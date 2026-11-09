@@ -7,10 +7,10 @@ import com.github.ysbbbbbb.kaleidoscopecookery.blockentity.kitchen.PotBlockEntit
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems;
 import com.github.ysbbbbbb.kaleidoscopecookery.item.KitchenShovelItem;
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.item.api.Containers;
 import io.github.izakyl.folkways.core.item.api.Goods;
-import io.github.izakyl.folkways.plugins.person.PersonBody;
+import io.github.izakyl.folkways.vanilla.person.PersonBody;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.gametest.framework.GameTest;
@@ -26,13 +26,13 @@ import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
 @EventBusSubscriber(modid = "folkways_cookery", bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@GameTestHolder("folkways_cookery")
 @PrefixGameTestTemplate(false)
 public final class OilGameTests {
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) { event.register(OilGameTests.class); }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void placedOilUsesItsOneNativeSlotAndAllTwoHundredFiftySixUnits(GameTestHelper helper) {
         PlacedOilStore.register(); var level = helper.getLevel(); BlockPos at = helper.absolutePos(new BlockPos(1, 1, 1));
         level.setBlockAndUpdate(at, ModBlocks.OIL_POT.get().defaultBlockState());
@@ -53,7 +53,7 @@ public final class OilGameTests {
         store.clearContent(); helper.assertTrue(!level.getBlockState(at).getValue(OilPotBlock.HAS_OIL), "draining the true handler clears its native oil model"); helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void nativeOilReloadKeepsTheExactRemainingQuantityAndRejectsOtherItems(GameTestHelper helper) {
         PlacedOilStore.register(); var level = helper.getLevel(); BlockPos at = helper.absolutePos(new BlockPos(1, 1, 1));
         level.setBlockAndUpdate(at, ModBlocks.OIL_POT.get().defaultBlockState());
@@ -68,7 +68,7 @@ public final class OilGameTests {
         helper.assertValueEqual(reloaded.getOilCount(), 183, "a rejected deposit does not overwrite the oil"); helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void openingABasinDoesNotSpendOilAndFillingConsumesOnlyActualFreeCapacity(GameTestHelper helper) {
         var level = helper.getLevel(); BlockPos at = helper.absolutePos(new BlockPos(1, 1, 1));
         level.setBlockAndUpdate(at, ModBlocks.ENAMEL_BASIN.get().defaultBlockState()); ItemStack oil = new ItemStack(ModItems.OIL.get(), 35);
@@ -80,7 +80,7 @@ public final class OilGameTests {
         helper.assertTrue(!EnamelOil.interact(level, at, oil), "a full basin cannot consume more oil"); helper.assertValueEqual(oil.getCount(), 3, "overflow remains real stock"); helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void aRealNamedShovelTakesAndReturnsOneOilUnitWithoutCreatingOilItems(GameTestHelper helper) {
         var level = helper.getLevel(); BlockPos at = helper.absolutePos(new BlockPos(1, 1, 1));
         level.setBlockAndUpdate(at, ModBlocks.ENAMEL_BASIN.get().defaultBlockState().setValue(EnamelBasinBlock.HAS_LID, false).setValue(EnamelBasinBlock.OIL_COUNT, 2));
@@ -93,7 +93,7 @@ public final class OilGameTests {
         helper.assertValueEqual(level.getBlockState(at).getValue(EnamelBasinBlock.OIL_COUNT), 2, "taking then returning conserves the exact basin quantity"); helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void emptyAndFullBasinBoundariesNeverFlipARejectedShovelComponent(GameTestHelper helper) {
         var level = helper.getLevel(); BlockPos at = helper.absolutePos(new BlockPos(1, 1, 1)); ItemStack shovel = new ItemStack(ModItems.KITCHEN_SHOVEL.get());
         level.setBlockAndUpdate(at, ModBlocks.ENAMEL_BASIN.get().defaultBlockState().setValue(EnamelBasinBlock.HAS_LID, false));
@@ -103,7 +103,7 @@ public final class OilGameTests {
         helper.assertTrue(!EnamelOil.interact(level, at, new ItemStack(Items.IRON_SHOVEL)), "native-specific kitchen shovel rules are preserved"); helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void basinOilOnTheActualShovelCanEnterANativeCookingPot(GameTestHelper helper) {
         var level = helper.getLevel(); BlockPos basin = helper.absolutePos(new BlockPos(1, 1, 1)); BlockPos cooking = basin.east(2);
         level.setBlockAndUpdate(basin, ModBlocks.ENAMEL_BASIN.get().defaultBlockState().setValue(EnamelBasinBlock.HAS_LID, false).setValue(EnamelBasinBlock.OIL_COUNT, 1));

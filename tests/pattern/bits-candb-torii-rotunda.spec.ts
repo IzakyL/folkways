@@ -27,7 +27,7 @@ test("bits gallery: torii and rotunda", async ({}, testInfo) => {
   let pair: E2EPair | undefined;
   try {
     pair = await launchPair({
-      config: "blockwright.toml#chiselsandbits",
+      config: "blockwright.toml#carving",
       server: { trace: tracePath("pattern", `${scope}-server`),
         instance: seededOffThreadServer(`${scope}-server-${id}`), startFrozen: false },
       client: { trace: tracePath("pattern", `${scope}-client`), instance: `${scope}-client-${id}` },

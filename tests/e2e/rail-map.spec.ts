@@ -75,11 +75,11 @@ test("the train map says who drives a colony's train and how many of its seats a
 
     const freezeResidents = async (frozen: boolean) => await tryCommand(
       server,
-      `execute as @e[type=folkways:resident] run data merge entity @s {NoAI:${frozen ? 1 : 0}b}`,
+      `execute as @e[type=folkways_vanilla:resident] run data merge entity @s {NoAI:${frozen ? 1 : 0}b}`,
     );
     // NoAI only stops walking: a resident already standing by the cab still takes the seat by labor, so park them off the line first.
     const railOrigin: Vec = { x: origin.x - 8, y: origin.y, z: origin.z + 4 };
-    await tryCommand(server, `tp @e[type=folkways:resident] ${origin.x + 8} ${origin.y} ${origin.z}`);
+    await tryCommand(server, `tp @e[type=folkways_vanilla:resident] ${origin.x + 8} ${origin.y} ${origin.z}`);
     expect((await freezeResidents(true))?.success, "residents should freeze, or the 'no driver' moment cannot be caught").toBe(true);
     const rail = await buildRailLine(server, client, player.name, playerUuid, railOrigin, RAIL_LINE, "inventory.0");
     expect(rail.assembled, `the train should assemble: ${JSON.stringify(rail.steps).slice(0, 400)}`).toBe(true);

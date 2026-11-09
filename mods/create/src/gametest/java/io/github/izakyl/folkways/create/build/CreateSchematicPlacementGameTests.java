@@ -4,16 +4,16 @@ import com.simibubi.create.AllDataComponents;
 import com.simibubi.create.content.schematics.SchematicItem;
 import com.simibubi.create.content.schematics.SchematicPrinter;
 import com.simibubi.create.foundation.utility.CreatePaths;
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.create.FolkwaysCreateMod;
-import io.github.izakyl.folkways.plugins.build.Blueprint;
-import io.github.izakyl.folkways.plugins.build.BlueprintBlock;
-import io.github.izakyl.folkways.plugins.build.BlueprintBuildOrder;
-import io.github.izakyl.folkways.plugins.build.StructureNbt;
-import io.github.izakyl.folkways.plugins.build.draft.Draft;
-import io.github.izakyl.folkways.plugins.build.draft.DraftTemplate;
-import io.github.izakyl.folkways.plugins.build.draft.Extent;
+import io.github.izakyl.folkways.vanilla.build.Blueprint;
+import io.github.izakyl.folkways.vanilla.build.BlueprintBlock;
+import io.github.izakyl.folkways.vanilla.build.BlueprintBuildOrder;
+import io.github.izakyl.folkways.vanilla.build.StructureNbt;
+import io.github.izakyl.folkways.vanilla.build.draft.Draft;
+import io.github.izakyl.folkways.vanilla.build.draft.DraftTemplate;
+import io.github.izakyl.folkways.vanilla.build.draft.Extent;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -46,7 +46,7 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
 /** Compares the confirmed build order's world positions with Create's deployed schematic printer. */
 @EventBusSubscriber(modid = FolkwaysCreateMod.ID, bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@GameTestHolder("folkways_create")
 @PrefixGameTestTemplate(false)
 public final class CreateSchematicPlacementGameTests {
 
@@ -55,7 +55,7 @@ public final class CreateSchematicPlacementGameTests {
         event.register(CreateSchematicPlacementGameTests.class);
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void deployedSchematicSiteMatchesCreateForEveryRotationAndMirror(GameTestHelper helper)
             throws IOException {
         // Odd and even sizes, and a single block wide, keep their position under every placement.

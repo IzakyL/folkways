@@ -33,12 +33,12 @@ import io.github.izakyl.folkways.core.world.api.Reach;
 import io.github.izakyl.folkways.core.world.api.Stand;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.core.world.api.WorldSpaces;
-import io.github.izakyl.folkways.front.api.Facing;
-import io.github.izakyl.folkways.front.api.Fronts;
-import io.github.izakyl.folkways.front.api.ZoneView;
-import io.github.izakyl.folkways.front.api.notice.Line;
-import io.github.izakyl.folkways.plugins.compost.SeedBudget;
-import io.github.izakyl.folkways.plugins.farming.FarmingContent;
+import io.github.izakyl.folkways.core.front.api.Facing;
+import io.github.izakyl.folkways.core.front.api.Fronts;
+import io.github.izakyl.folkways.core.front.api.ZoneView;
+import io.github.izakyl.folkways.core.front.api.notice.Line;
+import io.github.izakyl.folkways.vanilla.compost.SeedBudget;
+import io.github.izakyl.folkways.vanilla.farming.FarmingContent;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -319,9 +319,9 @@ public final class SeedPresence implements Facing {
             ModItems.LETTUCE_SEED.get(), ModItems.TEA_SEED.get());
     }
 
-    private static ResourceLocation id(String path) { return ResourceLocation.fromNamespaceAndPath("folkways", path); }
+    private static ResourceLocation id(String path) { return ResourceLocation.fromNamespaceAndPath("folkways_cookery", path); }
 
     private static UUID named(String text) {
-        return UUID.nameUUIDFromBytes(("folkways:seeds/" + text).getBytes(StandardCharsets.UTF_8));
+        return UUID.nameUUIDFromBytes(("folkways_cookery:seeds/" + text).getBytes(StandardCharsets.UTF_8));
     }
 }

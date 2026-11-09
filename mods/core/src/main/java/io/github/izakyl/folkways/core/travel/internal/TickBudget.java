@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.core.travel.internal;
 
-import io.github.izakyl.folkways.FolkwaysConfig;
+import io.github.izakyl.folkways.core.FolkwaysConfig;
 import net.minecraft.gametest.framework.GameTestServer;
 import net.minecraft.server.MinecraftServer;
 

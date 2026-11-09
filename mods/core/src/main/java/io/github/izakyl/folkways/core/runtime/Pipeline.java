@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.core.runtime;
 
-import io.github.izakyl.folkways.FolkwaysConfig;
+import io.github.izakyl.folkways.core.FolkwaysConfig;
 import io.github.izakyl.folkways.core.plan.internal.Known;
 import io.github.izakyl.folkways.core.plan.internal.Message;
 import io.github.izakyl.folkways.core.plan.internal.Planner;

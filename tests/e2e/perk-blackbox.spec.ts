@@ -76,7 +76,7 @@ test("perk system end-to-end: carrying capacity and occupation-specific husbandr
       config: stage.config,
       server: { trace: serverTrace, instance: seededServer(serverInstance) },
       client: { trace: clientTrace, instance: clientInstance },
-      snapshot: () => ({ containers: [], entityTypes: ["folkways:resident", "minecraft:cow", "minecraft:item"] }),
+      snapshot: () => ({ containers: [], entityTypes: ["folkways_vanilla:resident", "minecraft:cow", "minecraft:item"] }),
     });
     ({ server, client } = pair);
 
@@ -101,7 +101,7 @@ test("perk system end-to-end: carrying capacity and occupation-specific husbandr
     const foodAt = stage.at(founding.foodChest);
     expect(founding.residents, `residents=${founding.residents} (expected ${RESIDENT_COUNT})`).toBeGreaterThanOrEqual(RESIDENT_COUNT);
     await grantPerkToAllResidents(server,
-      `{global:{level:99,owned:[]},vocations:{"folkways:herding":{level:99,owned:[]}}}`);
+      `{global:{level:99,owned:[]},vocations:{"folkways_vanilla:herding":{level:99,owned:[]}}}`);
 
     const pen = penLayout(origin, 8, 3);
     await buildPen(server, pen, stage);
@@ -124,7 +124,7 @@ test("perk system end-to-end: carrying capacity and occupation-specific husbandr
     await clearCarcassGoods(server);
     await normalizeHerd(server, pen, origin.y);
     await grantPerkToAllResidents(server,
-      `{vocations:{"folkways:herding":{xp:192,level:${BUTCHER_RANK},owned:[{id:"herding_butcher",rank:${BUTCHER_RANK}}]}}}`);
+      `{vocations:{"folkways_vanilla:herding":{xp:192,level:${BUTCHER_RANK},owned:[{id:"herding_butcher",rank:${BUTCHER_RANK}}]}}}`);
     await tick.sprint(server, 20);
     await normalizeHerd(server, pen, origin.y);
     await clearCarcassGoods(server);
@@ -200,7 +200,7 @@ test("perk system end-to-end: carrying capacity and occupation-specific husbandr
       + `so the peak measured below can only be the old ${BASE_PLANNABLE} slots, regardless of whether the pack grew`,
     ).toEqual({ source: 0, target: 0, packs: 0, food_chest: 0 });
 
-    await grantPerkToAllResidents(server, `{vocations:{"folkways:hauling":{xp:480,level:2,owned:[{id:"hauling_heavy",rank:2}]}}}`);
+    await grantPerkToAllResidents(server, `{vocations:{"folkways_core:hauling":{xp:480,level:2,owned:[{id:"hauling_heavy",rank:2}]}}}`);
     await tick.sprint(server, 20);
 
     const perkedPacks = await readResidentPerks(server);
@@ -287,8 +287,8 @@ async function countInChest(server: any, chest: Vec, itemId: string) {
 }
 
 async function emptyPacks(server: any) {
-  await tryCommand(server, `execute as @e[type=folkways:resident] run data merge entity @s `
-    + `{"neoforge:attachments":{"folkways:body_state":{Pack:{Items:[]}}}}`);
+  await tryCommand(server, `execute as @e[type=folkways_vanilla:resident] run data merge entity @s `
+    + `{"neoforge:attachments":{"folkways_core:body_state":{Pack:{Items:[]}}}}`);
   await tick.sprint(server, 5);
 }
 
@@ -417,12 +417,12 @@ async function observeCull(server: any, pen: any) {
 
 async function readResidentPerks(server: any) {
   const listed = await world
-    .entities(server, { dimension: "minecraft:overworld", types: ["folkways:resident"], limit: 20 })
+    .entities(server, { dimension: "minecraft:overworld", types: ["folkways_vanilla:resident"], limit: 20 })
     .catch(() => ({ entities: [] as world.EntityJson[] }));
   const out: any[] = [];
   for (const resident of listed.entities) {
     const perks = await world
-      .entity(server, { uuid: resident.uuid }, { nbtPath: "neoforge:attachments.folkways:body_state.Perks" })
+      .entity(server, { uuid: resident.uuid }, { nbtPath: "neoforge:attachments.folkways_core:body_state.Perks" })
       .then((r) => r?.nbt).catch((e: any) => String(e).slice(0, 120));
     const slots = await reflect.invoke(server, {
       target: { kind: "entity", uuid: resident.uuid },

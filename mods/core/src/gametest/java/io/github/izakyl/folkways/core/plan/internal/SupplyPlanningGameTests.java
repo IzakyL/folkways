@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.core.plan.internal;
 
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.extension.api.Declaring;
 import io.github.izakyl.folkways.core.inventory.api.Stash;
 import io.github.izakyl.folkways.core.item.api.Goods;
@@ -41,8 +41,8 @@ import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
-@EventBusSubscriber(modid = FolkwaysMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@EventBusSubscriber(modid = FolkwaysCoreMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
+@GameTestHolder(FolkwaysCoreMod.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class SupplyPlanningGameTests {
     private static final ResourceLocation OWNER = ResourceLocation.fromNamespaceAndPath("folkways_test", "supply");
@@ -151,7 +151,7 @@ public final class SupplyPlanningGameTests {
         }
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void aFreeSecondWorkshopBeatsQueueingBehindTheFirst(GameTestHelper helper) {
         var f = new PlanningFixture(helper);
         var first = new QueuedBakery(f, 1);
@@ -176,7 +176,7 @@ public final class SupplyPlanningGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void enlargingACookingBatchQuotesAfterReleasingItsOldBooking(GameTestHelper helper) {
         var f = new PlanningFixture(helper);
         var oven = new QueuedBakery(f, 8);
@@ -200,7 +200,7 @@ public final class SupplyPlanningGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void rejectedBatchJoinsCannotReverseQueuedWorkshopDependencies(GameTestHelper helper) {
         var f = new PlanningFixture(helper);
         var first = new QueuedBakery(f, 1);
@@ -235,7 +235,7 @@ public final class SupplyPlanningGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void independentWorkshopHoldsWaitInParallel(GameTestHelper helper) {
         var f = new PlanningFixture(helper);
         var parallelA = new Counted(true) { public long estimatedWaitTicks() { return 100; } };
@@ -264,7 +264,7 @@ public final class SupplyPlanningGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void declaredNeedsAreOpenEdgesIntoTheirConsumer(GameTestHelper helper) {
         var f = new PlanningFixture(helper);
         Node eats = consumer(f, new Need(BREAD, 4), new Need(PLANKS, 2));
@@ -278,7 +278,7 @@ public final class SupplyPlanningGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void aFedEdgeDoesNotOutliveItsConsumer(GameTestHelper helper) {
         var f = new PlanningFixture(helper);
         var held = List.of(new Stock.Holding(new Stash(f.source), new ItemStack(Items.BREAD, 4)));
@@ -315,7 +315,7 @@ public final class SupplyPlanningGameTests {
         return ovens;
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void aLikeDemandIsAddedOntoTheMakingAlreadyLaid(GameTestHelper helper) {
         var f = new PlanningFixture(helper);
         Weaver weaver = new Weaver(new Claims(), new Cooldowns());
@@ -344,7 +344,7 @@ public final class SupplyPlanningGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void aMakingInHandIsNotLaidAfresh(GameTestHelper helper) {
         var f = new PlanningFixture(helper);
         Weaver weaver = new Weaver(new Claims(), new Cooldowns());
@@ -366,7 +366,7 @@ public final class SupplyPlanningGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void refusedWorkshopHoldAdmitsNothing(GameTestHelper helper) {
         var f = new PlanningFixture(helper);
         var hold = new Counted(false);
@@ -384,7 +384,7 @@ public final class SupplyPlanningGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void anAskShortOfGoodsStallsWhereItsWorkIs(GameTestHelper helper) {
         var f = new PlanningFixture(helper);
         Node eats = consumer(f, new Need(BREAD, 4));
@@ -413,7 +413,7 @@ public final class SupplyPlanningGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void workshopHoldIsTakenOnAdmissionAndReleasedWithItsWork(GameTestHelper helper) {
         var f = new PlanningFixture(helper);
         var hold = new Counted(true);
@@ -437,7 +437,7 @@ public final class SupplyPlanningGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void askedHoldsAreTakenWhenTheAskIsAdmitted(GameTestHelper helper) {
         var f = new PlanningFixture(helper);
         var known = known(f, List.of(), List.of());
@@ -479,12 +479,12 @@ public final class SupplyPlanningGameTests {
         };
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void aWayBackThroughTheAskedGoodsIsNotCheaperThanMakingThem(GameTestHelper helper) {
         bakesRatherThanUnpacks(helper, BREAD);
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void aWayBackThroughATagHoldingTheAskedGoodsIsNotCheaperEither(GameTestHelper helper) {
         bakesRatherThanUnpacks(helper, ItemSpec.of(ItemTags.create(ResourceLocation.fromNamespaceAndPath("c", "foods/bread"))));
     }

@@ -23,7 +23,7 @@ import { BUDGET } from "../shared/harness/budgets";
 import { introspect } from "../shared/harness/bw-helpers";
 import { newRunId } from "../shared/harness/run-id";
 
-const RESIDENT_TYPE = "folkways:resident";
+const RESIDENT_TYPE = "folkways_vanilla:resident";
 const CONFIG_PATH = "blockwright.toml";
 
 type Vec = { x: number; y: number; z: number };
@@ -90,15 +90,15 @@ test("a real Create train, assembled on real track, between two named stations",
     await tryCommand(server, "time set day");
 
     const crew = (await world.entities(server, { dimension: "minecraft:overworld", limit: 1000 }))
-      .entities.filter((e: any) => entityTypeMatches(e.type, "folkways:resident")) ?? [];
+      .entities.filter((e: any) => entityTypeMatches(e.type, "folkways_vanilla:resident")) ?? [];
     expect(crew.length, `expected ${RESIDENT_COUNT} residents to split into driver and builder, saw ${crew.length}`)
       .toBeGreaterThanOrEqual(2);
     const driverRole = await setVocationPriorityViaPanel(
-      server, client, player.name, founding.standBlock, crew[0].uuid, "folkways:building", 0);
+      server, client, player.name, founding.standBlock, crew[0].uuid, "folkways_vanilla:building", 0);
     const builderRole = await setVocationPriorityViaPanel(
-      server, client, player.name, founding.standBlock, crew[1].uuid, "folkways:conducting", 0);
-    expect(driverRole.ok, `the driver's folkways:building should be off, got ${driverRole.after}`).toBe(true);
-    expect(builderRole.ok, `the builder's folkways:conducting should be off, got ${builderRole.after}`).toBe(true);
+      server, client, player.name, founding.standBlock, crew[1].uuid, "folkways_create:conducting", 0);
+    expect(driverRole.ok, `the driver's folkways_vanilla:building should be off, got ${driverRole.after}`).toBe(true);
+    expect(builderRole.ok, `the builder's folkways_create:conducting should be off, got ${builderRole.after}`).toBe(true);
 
     await tryCommand(server, `item replace entity ${player.name} inventory.0 from entity ${player.name} weapon.mainhand`);
 
@@ -236,7 +236,7 @@ test("a real Create train, assembled on real track, between two named stations",
     const conductorUuid = (await seatedUuids())[0];
     expect(conductorUuid, "with the conductor in place Passengers[0] should carry the forward conductor's UUID").toBeTruthy();
     const passengers = await tryCommand(server, `data get entity @e[type=create:carriage_contraption,limit=1] Passengers`);
-    expect(passengers?.output?.[0], "the one seated on the train should be a resident").toContain("folkways:resident");
+    expect(passengers?.output?.[0], "the one seated on the train should be a resident").toContain("folkways_vanilla:resident");
 
     const driverSeatIndex = await seatedAt(server, carriageUuid, conductorUuid);
     expect(driverSeatIndex, "the conductor must still sit in the confirmed driver seat").toBeDefined();
@@ -248,13 +248,13 @@ test("a real Create train, assembled on real track, between two named stations",
         doing: await readDoing(server, conductorUuid),
         seat: await seatedAt(server, carriageUuid, conductorUuid),
       }),
-      done: (sample) => sample.doing === "folkways:driving" && sample.seat === driverSeatIndex,
+      done: (sample) => sample.doing === "folkways_create:driving" && sample.seat === driverSeatIndex,
     });
     expect(driving.matched, "the same conductor should pick up the driving task within 100 ticks and stay in the driver seat").toBe(true);
     expect(
       driving.sample.doing,
       "the resident in the driver seat must be running the ongoing driving task; another resident on the ground must not hold it for them",
-    ).toBe("folkways:driving");
+    ).toBe("folkways_create:driving");
 
     const material = Object.entries(schematicSpec(BLUEPRINT_ASSET).materials)[0];
     const supplied = await tryCommand(
@@ -355,7 +355,7 @@ test("a real Create train, assembled on real track, between two named stations",
 
     const boardingPosition = (await carriagePos())!;
     const destination = await tryCommand(server,
-      `data get entity ${passengerUuid} NeoForgeData."folkways:ride_destination"`);
+      `data get entity ${passengerUuid} NeoForgeData."folkways_create:ride_destination"`);
     expect(Math.hypot(boardingPosition.x - posBeforeDeparture.x, boardingPosition.z - posBeforeDeparture.z),
       "the builder passenger must board at Alpha's outbound or return stop").toBeLessThan(ALPHA_STOP_RADIUS);
     expect(destination.output?.[0], "the builder passenger's destination must be Beta").toContain(`"${STATION_B}"`);

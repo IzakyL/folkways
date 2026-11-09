@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.core.colony.internal;
 
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.colony.api.ClaimRelease;
 import io.github.izakyl.folkways.core.colony.api.Claimed;
 import io.github.izakyl.folkways.core.colony.api.Colonies;
@@ -11,8 +11,8 @@ import io.github.izakyl.folkways.core.travel.internal.Faring;
 import io.github.izakyl.folkways.core.travel.internal.Ways;
 import io.github.izakyl.folkways.core.world.api.Reach;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
-import io.github.izakyl.folkways.plugins.person.PersonBody;
-import io.github.izakyl.folkways.plugins.person.ResidentEntity;
+import io.github.izakyl.folkways.vanilla.person.PersonBody;
+import io.github.izakyl.folkways.vanilla.person.ResidentEntity;
 import java.util.Comparator;
 import java.util.Set;
 import net.minecraft.core.BlockPos;
@@ -30,8 +30,8 @@ import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
-@EventBusSubscriber(modid = FolkwaysMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@EventBusSubscriber(modid = FolkwaysCoreMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
+@GameTestHolder(FolkwaysCoreMod.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class PointTravelGameTests {
     private static final ResourceLocation OWNER = ResourceLocation.fromNamespaceAndPath("folkways_test", "point_ways");
@@ -40,7 +40,7 @@ public final class PointTravelGameTests {
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) { event.register(PointTravelGameTests.class); }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void aNativePointCanBeReachedOnDemandAndReleased(GameTestHelper helper)
             throws ReflectiveOperationException {
         try (var rig = new Rig(helper)) {
@@ -65,7 +65,7 @@ public final class PointTravelGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void aPersistedPointInAnotherDimensionSurvivesAdvancingTheWaysHere(GameTestHelper helper) {
         try (var rig = new Rig(helper)) {
             WorldPos elsewhere = WorldPos.of(Level.NETHER, rig.at.cell());

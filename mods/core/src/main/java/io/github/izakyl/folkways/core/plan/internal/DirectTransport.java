@@ -24,8 +24,8 @@ import net.minecraft.resources.ResourceLocation;
 // An unregistered quote provider. Execution still belongs to Carry.
 public final class DirectTransport implements TransportMode {
 
-    public static final ResourceLocation ID = ResourceLocation.fromNamespaceAndPath("folkways", "direct");
-    private static final ResourceLocation ITEMS = ResourceLocation.fromNamespaceAndPath("folkways", "items");
+    public static final ResourceLocation ID = ResourceLocation.fromNamespaceAndPath("folkways_core", "direct");
+    private static final ResourceLocation ITEMS = ResourceLocation.fromNamespaceAndPath("folkways_core", "items");
 
     // Called while capturing an already eligible carrier, outside quoting and estimating.
     public static TransportSnapshot.Carrier carrier(Resident who, WorldPos at, ItemSpec goods, long perTrip,
@@ -107,7 +107,7 @@ public final class DirectTransport implements TransportMode {
                         if (rest > 0) {
                             loads.add(new TransportQuote.Load(rest, 1, batch.readyAt(), handed));
                         }
-                        ResourceLocation resource = ResourceLocation.fromNamespaceAndPath("folkways",
+                        ResourceLocation resource = ResourceLocation.fromNamespaceAndPath("folkways_core",
                             "carrier/" + carrier.who().id() + "/pack");
                         best = new TransportQuote(ID, link, batch, batch.count(), cost, handed, loads,
                             List.of(new TransportQuote.Occupancy(resource, ITEMS, Math.min(room, batch.count()))),

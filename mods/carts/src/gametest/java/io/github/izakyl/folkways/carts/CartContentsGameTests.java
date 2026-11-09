@@ -1,7 +1,7 @@
 package io.github.izakyl.folkways.carts;
 
 import com.jusipat.astikorcartsredux.entity.AbstractCargoCart;
-import io.github.izakyl.folkways.front.api.notice.Line;
+import io.github.izakyl.folkways.core.front.api.notice.Line;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.gametest.framework.GameTest;
@@ -16,7 +16,7 @@ import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
 @EventBusSubscriber(modid = FolkwaysCartsMod.ID, bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder("folkways")
+@GameTestHolder("folkways_carts")
 @PrefixGameTestTemplate(false)
 public final class CartContentsGameTests {
     @SubscribeEvent
@@ -24,7 +24,7 @@ public final class CartContentsGameTests {
         event.register(CartContentsGameTests.class);
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void cartCardCountsWholeStockAndUpdatesWhenUnloaded(GameTestHelper helper) {
         var cart = (AbstractCargoCart) BuiltInRegistries.ENTITY_TYPE
             .get(io.github.izakyl.folkways.carts.Line.Kind.SUPPLY.entity()).create(helper.getLevel());

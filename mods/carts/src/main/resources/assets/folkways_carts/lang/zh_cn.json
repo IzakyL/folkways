@@ -1,0 +1,18 @@
+{
+  "folkways.choice.folkways_carts.line_closed": "环线",
+  "folkways.choice.folkways_carts.line_open": "往返",
+  "folkways.delegation.folkways_carts.cart_line": "马车线路",
+  "folkways.lessons.carts": "货运车辆",
+  "folkways.refusal.cart.no_cart": "线路没有车",
+  "folkways.refusal.cart.no_horse": "线路没有马",
+  "folkways.refusal.cart.no_room": "车厢已满",
+  "folkways.refusal.cart.not_aboard": "货物不在车上",
+  "folkways.refusal.cart.not_at_station": "车不在这一站",
+  "folkways.refusal.cart.not_hitched": "车没有套好",
+  "folkways.refusal.cart.nowhere_to_place": "没有地方放车",
+  "folkways.settings.cart_line.cart": "车型",
+  "folkways.settings.cart_line.round": "行驶方式",
+  "folkways_carts.ponder.carts.header": "马车线路：车站与往返",
+  "folkways_carts.ponder.carts.text_1": "用聚落簿画一条马车线路，每个点都是一个车站。选择手推车或运输车，以及往返还是环线。聚落会制作车辆并放在第一站。",
+  "folkways_carts.ponder.carts.text_2": "搬运工拉着车逐站行驶，每站停留一段时间供装卸货物。运输车线路会从马牧场领取一匹已驯服的成年马，由居民牵引，这匹马不再计入牧场数量，也不会被宰杀。线路需要宽入口与转角空间。"
+}

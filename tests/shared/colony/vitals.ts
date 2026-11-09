@@ -20,8 +20,8 @@ const VARY_VITALS = defineTask<Record<string, any>, Record<string, any>>({
     imports: [
       "io.github.izakyl.folkways.core.colony.api.Colony",
       "io.github.izakyl.folkways.core.resident.api.Resident",
-      "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
-      "io.github.izakyl.folkways.plugins.person.living.LivingContent",
+      "io.github.izakyl.folkways.core.front.engine.colony.ColonyGround",
+      "io.github.izakyl.folkways.vanilla.person.living.LivingContent",
       "java.lang.reflect.AccessibleObject",
       "java.lang.reflect.Constructor",
       "java.util.ArrayList",
@@ -42,7 +42,7 @@ Colony colony = ColonyGround.of(server, UUID.fromString(colonyId))
     .orElseThrow(() -> Fail.notFound("no colony " + colonyId));
 Object presence = colony.service(LivingContent.ID, Object.class).orElse(null);
 if (presence == null) {
-    throw Fail.unavailable("the colony has no folkways:living presence");
+    throw Fail.unavailable("the colony has no folkways_vanilla:living presence");
 }
 List<?> health = args.list("health");
 List<?> food = args.list("food");
@@ -52,8 +52,8 @@ List<?> tired = args.list("tired");
 Map<UUID, Object> bellies = (Map<UUID, Object>) open(presence.getClass().getDeclaredField("bellies")).get(presence);
 @SuppressWarnings("unchecked")
 Map<UUID, Object> wear = (Map<UUID, Object>) open(presence.getClass().getDeclaredField("wear")).get(presence);
-Class<?> hungerType = Class.forName("io.github.izakyl.folkways.plugins.person.living.Hunger");
-Class<?> restType = Class.forName("io.github.izakyl.folkways.plugins.person.living.Rest");
+Class<?> hungerType = Class.forName("io.github.izakyl.folkways.vanilla.person.living.Hunger");
+Class<?> restType = Class.forName("io.github.izakyl.folkways.vanilla.person.living.Rest");
 Constructor<?> newHunger = open(hungerType.getDeclaredConstructor());
 Constructor<?> newRest = open(restType.getDeclaredConstructor());
 
@@ -124,8 +124,8 @@ const WEAR = defineTask<Record<string, any>, Record<string, any>>({
     imports: [
       "io.github.izakyl.folkways.core.colony.api.Colony",
       "io.github.izakyl.folkways.core.resident.api.Resident",
-      "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
-      "io.github.izakyl.folkways.plugins.person.living.LivingContent",
+      "io.github.izakyl.folkways.core.front.engine.colony.ColonyGround",
+      "io.github.izakyl.folkways.vanilla.person.living.LivingContent",
       "java.lang.reflect.AccessibleObject",
       "java.lang.reflect.Constructor",
       "java.util.Map",
@@ -137,13 +137,13 @@ String colonyId = args.string("colony_id");
 Colony colony = ColonyGround.of(ctx.server(), UUID.fromString(colonyId))
     .orElseThrow(() -> Fail.notFound("no colony " + colonyId));
 Object presence = colony.service(LivingContent.ID, Object.class)
-    .orElseThrow(() -> Fail.unavailable("the colony has no folkways:living presence"));
+    .orElseThrow(() -> Fail.unavailable("the colony has no folkways_vanilla:living presence"));
 @SuppressWarnings("unchecked")
 Map<UUID, Object> bellies = (Map<UUID, Object>) open(presence.getClass().getDeclaredField("bellies")).get(presence);
 @SuppressWarnings("unchecked")
 Map<UUID, Object> wear = (Map<UUID, Object>) open(presence.getClass().getDeclaredField("wear")).get(presence);
-Class<?> hungerType = Class.forName("io.github.izakyl.folkways.plugins.person.living.Hunger");
-Class<?> restType = Class.forName("io.github.izakyl.folkways.plugins.person.living.Rest");
+Class<?> hungerType = Class.forName("io.github.izakyl.folkways.vanilla.person.living.Hunger");
+Class<?> restType = Class.forName("io.github.izakyl.folkways.vanilla.person.living.Rest");
 Constructor<?> newHunger = open(hungerType.getDeclaredConstructor());
 Constructor<?> newRest = open(restType.getDeclaredConstructor());
 int set = 0;

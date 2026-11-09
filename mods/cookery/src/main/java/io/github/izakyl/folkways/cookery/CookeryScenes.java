@@ -1,9 +1,9 @@
 package io.github.izakyl.folkways.cookery;
 
 import io.github.izakyl.folkways.cookery.stove.HeatScene;
-import io.github.izakyl.folkways.front.api.ponder.PonderScenery;
-import io.github.izakyl.folkways.front.api.ponder.Scenes;
-import io.github.izakyl.folkways.plugins.person.PersonBody;
+import io.github.izakyl.folkways.core.front.api.ponder.PonderScenery;
+import io.github.izakyl.folkways.core.front.api.ponder.Scenes;
+import io.github.izakyl.folkways.vanilla.person.PersonBody;
 import net.createmod.catnip.math.Pointing;
 import net.createmod.ponder.api.PonderPalette;
 import net.createmod.ponder.api.scene.SceneBuilder;
@@ -25,30 +25,30 @@ public final class CookeryScenes {
     public static void declare(FMLClientSetupEvent event) {
         event.enqueueWork(() -> {
             Scenes.folder(CookeryContent.ID, "folkways.page.cookery", item("stockpot"),
-                Scenes.scene("cookery_orders", CookeryScenes::orders, item("chopping_board"), item("stockpot")),
-                Scenes.scene("cookery_tools", io.github.izakyl.folkways.cookery.tools.SharedToolsScene::program,
+                Scenes.scene("folkways_cookery", "cookery_orders", CookeryScenes::orders, item("chopping_board"), item("stockpot")),
+                Scenes.scene("folkways_cookery", "cookery_tools", io.github.izakyl.folkways.cookery.tools.SharedToolsScene::program,
                     item("kitchenware_racks"), item("iron_kitchen_knife"), item("kitchen_shovel"), item("sickle")),
-                Scenes.scene("cookery_heat", io.github.izakyl.folkways.cookery.stove.HeatScene::program, item("stove")),
-                Scenes.scene("cookery_millstone", io.github.izakyl.folkways.cookery.millstone.MillstoneScene::program,
+                Scenes.scene("folkways_cookery", "cookery_heat", io.github.izakyl.folkways.cookery.stove.HeatScene::program, item("stove")),
+                Scenes.scene("folkways_cookery", "cookery_millstone", io.github.izakyl.folkways.cookery.millstone.MillstoneScene::program,
                     item("millstone")),
-                Scenes.scene("cookery_spit", io.github.izakyl.folkways.cookery.spit.SpitScene::program,
+                Scenes.scene("folkways_cookery", "cookery_spit", io.github.izakyl.folkways.cookery.spit.SpitScene::program,
                     item("shawarma_spit")),
-                Scenes.scene("cookery_steamer", io.github.izakyl.folkways.cookery.steamer.SteamerScene::program,
+                Scenes.scene("folkways_cookery", "cookery_steamer", io.github.izakyl.folkways.cookery.steamer.SteamerScene::program,
                     item("steamer")),
-                Scenes.scene("cookery_pots", io.github.izakyl.folkways.cookery.pot.CookingPotsScene::program,
+                Scenes.scene("folkways_cookery", "cookery_pots", io.github.izakyl.folkways.cookery.pot.CookingPotsScene::program,
                     item("pot"), item("stockpot"), item("stockpot_lid")),
-                Scenes.scene("cookery_rice", io.github.izakyl.folkways.cookery.farming.RiceScene::program,
+                Scenes.scene("folkways_cookery", "cookery_rice", io.github.izakyl.folkways.cookery.farming.RiceScene::program,
                     item("rice"), item("wild_rice"), item("rice_panicle")),
-                Scenes.scene("cookery_equipment", io.github.izakyl.folkways.cookery.gear.EquipmentScene::program,
+                Scenes.scene("folkways_cookery", "cookery_equipment", io.github.izakyl.folkways.cookery.gear.EquipmentScene::program,
                     item("straw_hat"), item("sickle"), item("farmer_chest_plate")),
-                Scenes.scene("cookery_seeds", io.github.izakyl.folkways.cookery.seeds.SeedScene::program,
+                Scenes.scene("folkways_cookery", "cookery_seeds", io.github.izakyl.folkways.cookery.seeds.SeedScene::program,
                     item("straw_hat"), ResourceLocation.withDefaultNamespace("composter")),
-                Scenes.scene("cookery_tray", io.github.izakyl.folkways.cookery.tray.TrayScene::program, item("bamboo_tray")),
-                Scenes.scene("cookery_teapot", io.github.izakyl.folkways.cookery.teapot.TeaScene::program, item("teapot"), item("empty_cup")),
-                Scenes.scene("cookery_chain", io.github.izakyl.folkways.cookery.pot.CookingChainScene::program,
+                Scenes.scene("folkways_cookery", "cookery_tray", io.github.izakyl.folkways.cookery.tray.TrayScene::program, item("bamboo_tray")),
+                Scenes.scene("folkways_cookery", "cookery_teapot", io.github.izakyl.folkways.cookery.teapot.TeaScene::program, item("teapot"), item("empty_cup")),
+                Scenes.scene("folkways_cookery", "cookery_chain", io.github.izakyl.folkways.cookery.pot.CookingChainScene::program,
                     item("flour"), item("raw_dough"), item("raw_noodles")));
             if (net.neoforged.fml.ModList.get().isLoaded("kaleidoscope_tavern")) {
-                Scenes.add(CookeryContent.ID, Scenes.scene("tavern",
+                Scenes.add(CookeryContent.ID, Scenes.scene("folkways_cookery", "tavern",
                     io.github.izakyl.folkways.cookery.tavern.TavernScene::program,
                     ResourceLocation.fromNamespaceAndPath("kaleidoscope_tavern", "barrel")));
             }
@@ -80,7 +80,7 @@ public final class CookeryScenes {
             .pointAt(util.vector().topOf(board)).placeNearTarget().attachKeyFrame();
         scene.idle(105);
         scene.overlay().showControls(util.vector().topOf(store), Pointing.DOWN, 80).rightClick()
-            .withItem(PonderScenery.book(io.github.izakyl.folkways.front.api.Shape.Gesture.POINT));
+            .withItem(PonderScenery.book(io.github.izakyl.folkways.core.front.api.Shape.Gesture.POINT));
         scene.overlay().showText(95)
             .text("Give residents the crafting trade, then set a delivery or maintain-stock order for the finished dish. The colony arranges the ingredients and intermediate steps.")
             .pointAt(util.vector().topOf(store)).placeNearTarget().attachKeyFrame();

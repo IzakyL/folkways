@@ -17,7 +17,7 @@ import io.github.izakyl.folkways.core.work.api.Amount;
 import io.github.izakyl.folkways.core.work.api.Stances;
 import io.github.izakyl.folkways.core.work.api.WorkSite;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
-import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
+import io.github.izakyl.folkways.vanilla.FolkwaysVanillaConfig;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;

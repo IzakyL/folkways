@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.core.plan.internal;
 
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.inventory.api.Stash;
 import io.github.izakyl.folkways.core.plan.internal.PlanningFixture.Owed;
 import io.github.izakyl.folkways.core.resident.api.Resident;
@@ -21,8 +21,8 @@ import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
-@EventBusSubscriber(modid = FolkwaysMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@EventBusSubscriber(modid = FolkwaysCoreMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
+@GameTestHolder(FolkwaysCoreMod.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class PlanLifecycleGameTests {
     @SubscribeEvent
@@ -30,7 +30,7 @@ public final class PlanLifecycleGameTests {
         event.register(PlanLifecycleGameTests.class);
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void failedFetchIsReplacedWhileTheDeliveryAndItsOtherFetchStand(GameTestHelper helper) {
         BreadStores scene = new BreadStores(helper);
         Owed task = owed(scene);
@@ -66,7 +66,7 @@ public final class PlanLifecycleGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void unrepairableSupplyLetsTheWholePlanGoWithoutOrphans(GameTestHelper helper) {
         BreadStores scene = new BreadStores(helper);
         Owed task = owed(scene);
@@ -89,7 +89,7 @@ public final class PlanLifecycleGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void failedConsumerTakesItsUnstartedSuppliesWith(GameTestHelper helper) {
         BreadStores scene = new BreadStores(helper);
         Owed task = owed(scene);
@@ -113,7 +113,7 @@ public final class PlanLifecycleGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void repeatedFailureBacksOffAndOpensAgainOnTime(GameTestHelper helper) {
         BreadStores scene = new BreadStores(helper);
         Owed task = owed(scene);
@@ -140,7 +140,7 @@ public final class PlanLifecycleGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void workersAreFreedByReleaseAndAbsenceButKeepWhatTheyCarry(GameTestHelper helper) {
         BreadStores scene = new BreadStores(helper);
         Owed task = owed(scene);
@@ -191,7 +191,7 @@ public final class PlanLifecycleGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void heldFetchThatCannotBeRefilledLeavesAndIsNeverGrownBack(GameTestHelper helper) {
         BreadStores scene = new BreadStores(helper);
         Owed task = owed(scene);

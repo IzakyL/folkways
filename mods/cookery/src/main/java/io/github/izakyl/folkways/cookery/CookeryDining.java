@@ -7,7 +7,7 @@ import com.github.ysbbbbbb.kaleidoscopecookery.init.registry.FoodBiteRegistry;
 import com.github.ysbbbbbb.kaleidoscopecookery.item.quality.Quality;
 import com.github.ysbbbbbb.kaleidoscopecookery.item.quality.QualityUtils;
 import io.github.izakyl.folkways.core.work.api.Worker;
-import io.github.izakyl.folkways.plugins.person.living.DiningFoods;
+import io.github.izakyl.folkways.vanilla.person.living.DiningFoods;
 import java.util.List;
 import java.util.Optional;
 import net.minecraft.core.BlockPos;
@@ -27,7 +27,7 @@ public final class CookeryDining {
     private CookeryDining() { }
 
     public static void register() {
-        DiningFoods.register(ResourceLocation.fromNamespaceAndPath("folkways", "cookery_dining"), new Meal());
+        DiningFoods.register(ResourceLocation.fromNamespaceAndPath("folkways_cookery", "cookery_dining"), new Meal());
     }
 
     private static boolean supported(Block block) {

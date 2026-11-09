@@ -15,8 +15,9 @@ export type Pose = { x: number; y: number; z: number; yaw: number; pitch: number
 export type Cell = [number, number];
 
 // The game is in Chinese (blockwright.toml#promo-land): its buttons are found by what they say there.
-export const SAYS: Record<string, string> = JSON.parse(
-  readFileSync(path.join(REPO_ROOT, "mods/core/src/main/resources/assets/folkways/lang/zh_cn.json"), "utf8"));
+export const SAYS: Record<string, string> = Object.assign({},
+  ...["core", "vanilla", "create", "cookery", "firearms", "carts", "golems"].map(mod => JSON.parse(
+    readFileSync(path.join(REPO_ROOT, `mods/${mod}/src/main/resources/assets/folkways_${mod}/lang/zh_cn.json`), "utf8"))));
 
 // The view's own numbers (Overhead.java): how fast the walking keys fly it, how far a wheel notch moves it along its
 // line of sight, and how far a dragged pixel turns it.
@@ -269,7 +270,7 @@ export class View {
     if (raiseNow) {
       const shown = await this.shown();
       if (!shown.some(one => one.id.endsWith(`.${pattern}`))) {
-        await this.pick(await this.element(id => id === "folkways.draft.folder.shared.folkways_chiselsandbits"));
+        await this.pick(await this.element(id => id === "folkways.draft.folder.shared.folkways_carving"));
       }
     }
     const picked = await this.element(id => id.startsWith("folkways.draft.pattern.") && id.endsWith(`.${pattern}`));
@@ -506,7 +507,7 @@ const PATH_POINTS = defineTask<Record<string, any>, Record<string, any>>({
   source: javaTask({
     imports: ["net.minecraft.core.BlockPos"],
     body: `
-var field=Class.forName("io.github.izakyl.folkways.front.client.PathSelection").getDeclaredField("POINTS");
+var field=Class.forName("io.github.izakyl.folkways.core.front.client.PathSelection").getDeclaredField("POINTS");
 field.setAccessible(true);
 var points=new ArrayList<Object>();
 for(var raw:(List<?>)field.get(null)){var at=(BlockPos)raw;points.add(List.of(at.getX(),at.getY(),at.getZ()));}

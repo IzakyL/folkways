@@ -26,7 +26,7 @@ test("resident extinguisher and hose show native spray only while suppressing", 
       config: `blockwright.toml#${shaders ? "firefighting_visuals" : "firefighting"}`,
       server: { instance: `spray-server-${run}`, startFrozen: false },
       client: { instance: clientInstance },
-      snapshot: { entityTypes: ["folkways:resident"] },
+      snapshot: { entityTypes: ["folkways_vanilla:resident"] },
     });
     const player = await waitForGroundedPlayer(pair.server);
     if (shaders) {
@@ -166,15 +166,15 @@ const IMPORTS = [
   "io.github.izakyl.folkways.core.colony.api.Colonies", "io.github.izakyl.folkways.core.colony.api.Claimed",
   "io.github.izakyl.folkways.core.world.api.WorldPos", "io.github.izakyl.folkways.core.work.api.Worker",
   "io.github.izakyl.folkways.core.work.api.Placement", "io.github.izakyl.folkways.core.work.api.Outcome",
-  "io.github.izakyl.folkways.effect.Effects", "io.github.izakyl.folkways.plugins.person.PersonBody",
-  "io.github.izakyl.folkways.plugins.person.PersonContent",
-  "io.github.izakyl.folkways.plugins.person.ResidentEntity",
-  "io.github.izakyl.folkways.plugins.damagecontrol.SuppressionMethods",
-  "io.github.izakyl.folkways.plugins.damagecontrol.SuppressionSession",
-  "io.github.izakyl.folkways.plugins.damagecontrol.DamageControlContent",
+  "io.github.izakyl.folkways.core.effect.Effects", "io.github.izakyl.folkways.vanilla.person.PersonBody",
+  "io.github.izakyl.folkways.vanilla.person.PersonContent",
+  "io.github.izakyl.folkways.vanilla.person.ResidentEntity",
+  "io.github.izakyl.folkways.vanilla.damagecontrol.SuppressionMethods",
+  "io.github.izakyl.folkways.vanilla.damagecontrol.SuppressionSession",
+  "io.github.izakyl.folkways.vanilla.damagecontrol.DamageControlContent",
   "io.github.izakyl.folkways.core.vocation.api.Vocations",
-  "io.github.izakyl.folkways.front.engine.colony.ZoneDrafts",
-  "io.github.izakyl.folkways.front.engine.colony.ColonySettings",
+  "io.github.izakyl.folkways.core.front.engine.colony.ZoneDrafts",
+  "io.github.izakyl.folkways.core.front.engine.colony.ColonySettings",
 ];
 
 const SETUP = defineTask<{ player: string; tool: string; automatic?: boolean }, Scene>({
@@ -349,7 +349,7 @@ for (var queue : ((Map<?, ?>) field.get(engine)).values()) {
         }
     }
 }
-var visuals = Class.forName("io.github.izakyl.folkways.firefighting.ResidentSprayVisuals");
+var visuals = Class.forName("io.github.izakyl.folkways.create.firefighting.ResidentSprayVisuals");
 var active = visuals.getDeclaredField("ACTIVE");
 active.setAccessible(true);
 counts.put("hoses", ((Map<?, ?>) active.get(null)).size());

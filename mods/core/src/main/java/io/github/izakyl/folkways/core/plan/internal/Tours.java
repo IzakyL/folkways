@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.core.plan.internal;
 
-import io.github.izakyl.folkways.FolkwaysConfig;
+import io.github.izakyl.folkways.core.FolkwaysConfig;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import io.github.izakyl.folkways.core.resident.api.Gait;
 import io.github.izakyl.folkways.core.travel.internal.Faring;

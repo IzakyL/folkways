@@ -35,7 +35,7 @@ test("RTS real pointer and keyboard inputs select, bind, queue, stop, suspend an
       config: "blockwright.toml#rts",
       server: { instance: `combat-input-server-${run}` },
       client: { instance: `combat-input-client-${run}` },
-      snapshot: { entityTypes: ["folkways:resident"] },
+      snapshot: { entityTypes: ["folkways_vanilla:resident"] },
     });
     const { server, client } = pair;
     const player = await waitForGroundedPlayer(server);
@@ -262,7 +262,7 @@ test("RTS real pointer and keyboard inputs select, bind, queue, stop, suspend an
 
     const keys = await client.run(KEY_SETTINGS, { stop: 72 });
     expect(keys.codes).toEqual([71, 72, 74]);
-    expect(keys.categories).toEqual(Array(3).fill("key.categories.folkways.rts"));
+    expect(keys.categories).toEqual(Array(3).fill("key.categories.folkways_core.rts"));
     expect(keys.hintBindings).toContain("key.folkways.rts.attack_move");
     expect((await client.run(READ_CLIENT)).buttons.some(hit =>
       ["ATTACK_MOVE", "STOP", "RELEASE"].includes(hit.kind))).toBe(false);
@@ -501,7 +501,7 @@ test("RTS real pointer and keyboard inputs select, bind, queue, stop, suspend an
     }
     expectRunning(await server.run(READ_SERVER, context), looping);
 
-    await mustCommand(server, `item replace entity ${player.name} weapon.mainhand with folkways:colony_book`);
+    await mustCommand(server, `item replace entity ${player.name} weapon.mainhand with folkways_core:colony_book`);
     await tapV(client);
     await screen.waitFor(client, "OverheadScreen", { timeoutMs: 8_000 });
     const reopened = await waitFor("reopening V restores the selection and route of the unseen squad", client, server, context,
@@ -663,7 +663,7 @@ const GROUP_EXISTS = defineTask<{ colony: string; group: string }, boolean>({
   name: "folkways.combat-rts-input.observe-superseded-squad", side: "server",
   source: javaTask({
     imports: ["java.util.UUID", "net.minecraft.server.MinecraftServer", "io.github.izakyl.folkways.core.colony.api.Colonies",
-      "io.github.izakyl.folkways.rts.combat.group.UnitGroups"],
+      "io.github.izakyl.folkways.core.rts.combat.group.UnitGroups"],
     body: `var a=Args.of(ctx);var colony=Colonies.of((MinecraftServer)ctx.server(),UUID.fromString(a.string("colony"))).orElseThrow();
 return UnitGroups.of(colony).group(UUID.fromString(a.string("group"))).isPresent();`,
   }),
@@ -674,8 +674,8 @@ const READ_SERVER = defineTask<Context, ServerState>({
   source: javaTask({
     imports: ["java.util.UUID", "java.util.List", "java.util.Map", "java.util.LinkedHashMap", "net.minecraft.server.MinecraftServer",
       "io.github.izakyl.folkways.core.colony.api.Colonies", "io.github.izakyl.folkways.core.resident.api.Bodies",
-      "io.github.izakyl.folkways.rts.combat.group.UnitGroups", "io.github.izakyl.folkways.rts.combat.command.ResidentCommands",
-      "io.github.izakyl.folkways.rts.combat.control.CombatSelectionOwnership"],
+      "io.github.izakyl.folkways.core.rts.combat.group.UnitGroups", "io.github.izakyl.folkways.core.rts.combat.command.ResidentCommands",
+      "io.github.izakyl.folkways.core.rts.combat.control.CombatSelectionOwnership"],
     body: `
 var a=Args.of(ctx);var server=(MinecraftServer)ctx.server();var player=server.getPlayerList().getPlayerByName(a.string("player"));
 var colony=Colonies.of(server,UUID.fromString(a.string("colony"))).orElseThrow();
@@ -706,7 +706,7 @@ const KEY_SETTINGS = defineTask<{ stop: number }, {
   source: javaTask({
     imports: ["java.util.List", "java.util.Map", "java.util.Arrays", "net.minecraft.client.Minecraft",
       "com.mojang.blaze3d.platform.InputConstants", "net.minecraft.client.KeyMapping",
-      "io.github.izakyl.folkways.rts.client.CombatKeys", "io.github.izakyl.folkways.front.api.ui.OverheadTools"],
+      "io.github.izakyl.folkways.core.rts.client.CombatKeys", "io.github.izakyl.folkways.core.front.api.ui.OverheadTools"],
     body: `
 CombatKeys.STOP.setKey(InputConstants.Type.KEYSYM.getOrCreate((int) Args.of(ctx).integer("stop")));
 KeyMapping.resetMapping();
@@ -726,9 +726,9 @@ const REJECTED_PACKET = defineTask<Vec & { intent: string }, boolean>({
   name: "folkways.combat-rts-input.probe-failure-only-rejections", side: "client",
   source: javaTask({
     imports: ["java.util.List", "java.util.UUID", "net.minecraft.client.Minecraft", "net.minecraft.core.BlockPos",
-      "io.github.izakyl.folkways.core.world.api.WorldPos", "io.github.izakyl.folkways.rts.combat.net.CombatPackets",
-      "io.github.izakyl.folkways.rts.combat.net.CombatControlPacket",
-      "io.github.izakyl.folkways.rts.combat.net.CombatStopPacket", "net.neoforged.neoforge.network.PacketDistributor"],
+      "io.github.izakyl.folkways.core.world.api.WorldPos", "io.github.izakyl.folkways.core.rts.combat.net.CombatPackets",
+      "io.github.izakyl.folkways.core.rts.combat.net.CombatControlPacket",
+      "io.github.izakyl.folkways.core.rts.combat.net.CombatStopPacket", "net.neoforged.neoforge.network.PacketDistributor"],
     body: `
 var a = Args.of(ctx);
 var mc = Minecraft.getInstance();

@@ -1,7 +1,7 @@
 package io.github.izakyl.folkways.cookery;
 
 import io.github.izakyl.folkways.core.extension.api.Declaring;
-import io.github.izakyl.folkways.front.api.Registering;
+import io.github.izakyl.folkways.core.front.api.Registering;
 import net.neoforged.bus.api.IEventBus;
 
 public final class CookeryPlugin {
@@ -15,7 +15,7 @@ public final class CookeryPlugin {
             io.github.izakyl.folkways.cookery.millstone.MillstoneDrive::joined);
         modBus.addListener(Declaring.class, CookeryContent::declare);
         modBus.addListener(io.github.izakyl.folkways.core.extension.api.Relating.class, event ->
-            event.defaultParticipation(io.github.izakyl.folkways.plugins.person.PersonBody.ID,
+            event.defaultParticipation(io.github.izakyl.folkways.vanilla.person.PersonBody.ID,
                 io.github.izakyl.folkways.core.resident.api.Stake.urge(CookeryContent.ID),
                 io.github.izakyl.folkways.core.resident.api.Participation.ALWAYS));
         modBus.addListener(Registering.class, CookeryContent::enroll);

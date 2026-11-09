@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.core.runtime;
 
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.colony.api.Claimed;
 import io.github.izakyl.folkways.core.colony.api.Colonies;
 import io.github.izakyl.folkways.core.colony.api.WorkDefaults;
@@ -16,8 +16,8 @@ import io.github.izakyl.folkways.core.travel.internal.Ways;
 import io.github.izakyl.folkways.core.vocation.api.Keenness;
 import io.github.izakyl.folkways.core.vocation.api.Vocation;
 import io.github.izakyl.folkways.core.vocation.api.Vocations;
-import io.github.izakyl.folkways.plugins.person.PersonBody;
-import io.github.izakyl.folkways.plugins.person.PersonContent;
+import io.github.izakyl.folkways.vanilla.person.PersonBody;
+import io.github.izakyl.folkways.vanilla.person.PersonContent;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -30,8 +30,8 @@ import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
-@EventBusSubscriber(modid = FolkwaysMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@EventBusSubscriber(modid = FolkwaysCoreMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
+@GameTestHolder(FolkwaysCoreMod.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class SurveyLicenceGameTests {
     @SubscribeEvent
@@ -41,7 +41,7 @@ public final class SurveyLicenceGameTests {
 
     private static final Ways NOWHERE = PlanningFixture.afoot(0);
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void aTradeTurnedOffIsNoLongerPlannedFor(GameTestHelper helper) {
         var level = helper.getLevel();
         var body = PersonBody.RESIDENT.get().create(level);
@@ -66,7 +66,7 @@ public final class SurveyLicenceGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void transportPlanningOnlyReadsItsLevel(GameTestHelper helper) {
         ColonyData colony = new ColonyData();
         Survey survey = new Survey();
@@ -95,7 +95,7 @@ public final class SurveyLicenceGameTests {
         return hands.size() == 1 && hands.get(0).licenceFor(trade).isPresent();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void copiedDefaultsReachThePlannersCrew(GameTestHelper helper) {
         var level = helper.getLevel();
         var colony = Colonies.mint(level.getServer());

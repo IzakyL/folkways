@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.core.runtime;
 
-import io.github.izakyl.folkways.FolkwaysConfig;
+import io.github.izakyl.folkways.core.FolkwaysConfig;
 import io.github.izakyl.folkways.core.colony.internal.ColonyData;
 import io.github.izakyl.folkways.core.colony.internal.ColonyMemberWrites;
 import io.github.izakyl.folkways.core.colony.internal.ColonyRegistry;

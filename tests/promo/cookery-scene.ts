@@ -12,7 +12,7 @@ import { cinematicWorld, hideHud, hudShown, launchPromoPair, promoClip, setFov, 
 export const K = "kaleidoscope_cookery:";
 export const T = "kaleidoscope_tavern:";
 export const COOKERY_CONFIG = "blockwright.toml#promo-cookery";
-export const SUPPLY_BOX = "folkways:creative_supply_box";
+export const SUPPLY_BOX = "folkways_vanilla:creative_supply_box";
 
 export type Scene = {
   pair: PromoPair; server: MinecraftServer; client: MinecraftClient; name: string; o: Vec;
@@ -59,11 +59,11 @@ export async function castColony(scene: Scene, members: Vec[], count: number, tr
     members = [...members, rations];
   }
   await world.command(server, `tp ${name} ${o.x + 0.5} ${o.y} ${o.z + 0.5}`);
-  await world.command(server, `item replace entity ${name} weapon.mainhand with folkways:colony_book`);
+  await world.command(server, `item replace entity ${name} weapon.mainhand with folkways_core:colony_book`);
   await tick.sprint(server, 10);
   const founded = await foundPromoColonyFast(server, name, members);
   const admitted = await admitPromoSettlersFast(server, name, founded.colony_id, count);
-  const residents = (await world.entities(server, { types: ["folkways:resident"], limit: 64 })).entities.map(one => one.uuid);
+  const residents = (await world.entities(server, { types: ["folkways_vanilla:resident"], limit: 64 })).entities.map(one => one.uuid);
   if (residents.length !== count) throw new Error(`Expected ${count} residents, found ${residents.length}`);
   const looks = await applyCookeryLooks(server, client, residents);
   const licences = await licenseCrewFast(server, residents.map((uuid, i) => ({ uuid, trades: trades(i) })));
@@ -79,7 +79,7 @@ export async function place(server: MinecraftServer, uuid: string, p: Vec) {
 /** Puts the spectating player at a fixed camera and clears the HUD. */
 export async function fixCamera(scene: Scene, feet: Vec, aim: Vec, fov: number) {
   const { server, client, name } = scene;
-  await world.command(server, `item replace entity ${name} weapon.mainhand with folkways:colony_book`);
+  await world.command(server, `item replace entity ${name} weapon.mainhand with folkways_core:colony_book`);
   await world.command(server, `gamemode spectator ${name}`);
   await setFov(client, fov);
   const look = cameraLookingAt({ x: feet.x + 0.5, y: feet.y + 1.62, z: feet.z + 0.5 },
@@ -185,9 +185,9 @@ const STAGE_DINING = defineTask<Record<string, any>, any>({
   name: "folkways.promo.scene-dining", side: "server", timeoutMs: 20_000,
   source: javaTask({ imports: [
     "io.github.izakyl.folkways.core.colony.api.Colonies", "io.github.izakyl.folkways.core.item.api.ItemFilter",
-    "io.github.izakyl.folkways.front.engine.colony.ColonyFront", "io.github.izakyl.folkways.front.engine.colony.ColonySettings",
-    "io.github.izakyl.folkways.plugins.person.living.LivingContent", "net.minecraft.core.BlockPos", "net.minecraft.resources.ResourceLocation",
-    "io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig", "net.neoforged.neoforge.common.ModConfigSpec",
+    "io.github.izakyl.folkways.core.front.engine.colony.ColonyFront", "io.github.izakyl.folkways.core.front.engine.colony.ColonySettings",
+    "io.github.izakyl.folkways.vanilla.person.living.LivingContent", "net.minecraft.core.BlockPos", "net.minecraft.resources.ResourceLocation",
+    "io.github.izakyl.folkways.vanilla.FolkwaysVanillaConfig", "net.neoforged.neoforge.common.ModConfigSpec",
   ], body: `
 var args = Args.of(ctx);
 var colony = Colonies.of(ctx.server(), UUID.fromString(args.string("colony"))).orElseThrow();
@@ -221,8 +221,8 @@ const SET_VITALS = defineTask<Record<string, any>, Record<string, any>>({
   source: javaTask({
     imports: [
       "io.github.izakyl.folkways.core.colony.api.Colony",
-      "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
-      "io.github.izakyl.folkways.plugins.person.living.LivingContent",
+      "io.github.izakyl.folkways.core.front.engine.colony.ColonyGround",
+      "io.github.izakyl.folkways.vanilla.person.living.LivingContent",
       "java.lang.reflect.AccessibleObject",
       "java.lang.reflect.Constructor",
     ],
@@ -234,8 +234,8 @@ Object presence=colony.service(LivingContent.ID,Object.class).orElseThrow();
 Map<UUID,Object> bellies=(Map<UUID,Object>)open(presence.getClass().getDeclaredField("bellies")).get(presence);
 @SuppressWarnings("unchecked")
 Map<UUID,Object> wear=(Map<UUID,Object>)open(presence.getClass().getDeclaredField("wear")).get(presence);
-Class<?> hungerType=Class.forName("io.github.izakyl.folkways.plugins.person.living.Hunger");
-Class<?> restType=Class.forName("io.github.izakyl.folkways.plugins.person.living.Rest");
+Class<?> hungerType=Class.forName("io.github.izakyl.folkways.vanilla.person.living.Hunger");
+Class<?> restType=Class.forName("io.github.izakyl.folkways.vanilla.person.living.Rest");
 Constructor<?> newHunger=open(hungerType.getDeclaredConstructor());
 Constructor<?> newRest=open(restType.getDeclaredConstructor());
 var set=new ArrayList<Object>();
@@ -271,7 +271,7 @@ const PREFER_CRAFTING = defineTask<Record<string, any>, any>({
   name: "folkways.promo.scene-prefer-crafting", side: "server", timeoutMs: 20_000,
   source: javaTask({ imports: [
     "io.github.izakyl.folkways.core.resident.api.Bodies", "io.github.izakyl.folkways.core.vocation.api.Keenness",
-    "io.github.izakyl.folkways.core.vocation.api.Vocations", "io.github.izakyl.folkways.plugins.wares.WaresContent",
+    "io.github.izakyl.folkways.core.vocation.api.Vocations", "io.github.izakyl.folkways.vanilla.wares.WaresContent",
     "net.minecraft.core.registries.BuiltInRegistries", "net.minecraft.resources.ResourceLocation", "net.minecraft.world.item.ItemStack",
   ], body: `
 var args = Args.of(ctx);
@@ -293,10 +293,10 @@ return Sync.stamp(Map.of("priority", "crafting-before-hauling"));
 const READ_SCENE = defineTask<Record<string, any>, any>({
   name: "folkways.promo.scene-read", side: "server", timeoutMs: 20_000,
   source: javaTask({ imports: [
-    "io.github.izakyl.folkways.core.resident.api.Bodies", "io.github.izakyl.folkways.plugins.person.living.DiningTables",
+    "io.github.izakyl.folkways.core.resident.api.Bodies", "io.github.izakyl.folkways.vanilla.person.living.DiningTables",
     "io.github.izakyl.folkways.core.item.api.Containers",
     "io.github.izakyl.folkways.core.colony.api.Colonies",
-    "io.github.izakyl.folkways.plugins.person.living.LivingContent",
+    "io.github.izakyl.folkways.vanilla.person.living.LivingContent",
     "net.minecraft.core.BlockPos", "net.minecraft.core.registries.BuiltInRegistries",
   ], body: `
 var args = Args.of(ctx);
@@ -320,10 +320,10 @@ for (var id : args.strings("uuids")) {
     one.put("lastDined", dined.getLong(mood));
     one.put("action", body.doing().map(doing -> doing.what().getPath()).orElse("idle"));
     one.put("toward", body.doing().map(doing -> doing.toward().orElse(doing.what()).getPath()).orElse("idle"));
-    boolean dining = entity instanceof io.github.izakyl.folkways.plugins.person.ResidentEntity person && (person.leisureMotion().equals("dining") || person.leisureMotion().equals("drinking"));
+    boolean dining = entity instanceof io.github.izakyl.folkways.vanilla.person.ResidentEntity person && (person.leisureMotion().equals("dining") || person.leisureMotion().equals("drinking"));
     one.put("seated", dining && entity.getVehicle() != null);
-    one.put("drinking", entity.getPersistentData().getBoolean("folkways:dining_drinking"));
-    one.put("tableDrinks", entity.getPersistentData().getInt("folkways:table_drinks"));
+    one.put("drinking", entity.getPersistentData().getBoolean("folkways_vanilla:dining_drinking"));
+    one.put("tableDrinks", entity.getPersistentData().getInt("folkways_vanilla:table_drinks"));
     one.put("position", List.of(Math.round(entity.getX() * 10) / 10.0, Math.round(entity.getY() * 10) / 10.0, Math.round(entity.getZ() * 10) / 10.0));
     one.put("pack", body.pack().contents().stream().filter(stack -> !stack.isEmpty())
         .map(stack -> BuiltInRegistries.ITEM.getKey(stack.getItem()).getPath() + "x" + stack.getCount()).toList());

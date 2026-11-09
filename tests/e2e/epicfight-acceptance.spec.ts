@@ -13,14 +13,14 @@ import { PROJECT } from "../shared/combat/rts-fixtures";
 
 // Java tasks arrange actual world entities and production orders, or read existing state.
 // They never write a renderer observation, animation state, or a combat network payload.
-test("Epic Fight without RTS renders real resident skins and lands native sword and spear collisions", async ({}, info) => {
+test("Epic Fight with Vanilla RTS renders real resident skins and lands native sword and spear collisions", async ({}, info) => {
   test.setTimeout(420_000);
   let pair: E2EPair | undefined, active: Scene | undefined;
   const evidence: Evidence = [];
   try {
     const run = newRunId();
     pair = await launchPair({ config: "blockwright.toml#epicfight", server: { instance: `epicfight-native-server-${run}` },
-      client: { instance: `epicfight-native-client-${run}` }, snapshot: { entityTypes: ["folkways:resident", "minecraft:zombie", "minecraft:item"] } });
+      client: { instance: `epicfight-native-client-${run}` }, snapshot: { entityTypes: ["folkways_vanilla:resident", "minecraft:zombie", "minecraft:item"] } });
     const player = await waitForGroundedPlayer(pair.server);
     const origin = { x: Math.round(player.pos.x) + 4, y: Math.round(player.pos.y), z: Math.round(player.pos.z) + 4 };
     await flat(pair, origin);
@@ -31,7 +31,7 @@ test("Epic Fight without RTS renders real resident skins and lands native sword 
       const initial = await pair.server.run(READ, active);
       evidence.push({ step: `${weapon} initial real stack`, value: initial });
       expect(initial.patch).toBe(true);
-      expect(initial.rts, "the actual server has no RTS dependency").toBe(false);
+      expect(initial.rts, "Vanilla includes RTS on the actual server").toBe(true);
       expect(initial.weaponCount).toBe(1);
       expect(initial.weaponDamage).toBe(9);
       expect(initial.components).toBe(true);
@@ -44,9 +44,9 @@ test("Epic Fight without RTS renders real resident skins and lands native sword 
       }, 450);
       expect(hit.residentHealth).toBe(20); expect(hit.staffed, "a real production patrol assignment owns this autonomous engagement").toBe(true);
       const rendered = await render(pair, active, evidence);
-      expect(rendered.rts, "this profile must exercise the optional integration with no RTS module").toBe(false);
+      expect(rendered.rts, "Vanilla includes RTS on the actual client").toBe(true);
       expect(rendered.texture).toBe("minecraft:textures/entity/player/wide/steve.png");
-      expect(rendered.sourceRenderer).toBe("io.github.izakyl.folkways.plugins.person.ResidentSkinRenderer");
+      expect(rendered.sourceRenderer).toBe("io.github.izakyl.folkways.vanilla.person.ResidentSkinRenderer");
       expect(rendered.mesh, "Steve's wide skin uses EF's real native biped mesh").toBe("epicfight:entity/biped");
       await capture(pair.client, info, `${weapon.replace(":", "-")}-native-hit-rendered.png`);
       // Withdraw the actual patrol staffing and relocate its threat; the ordinary runner closes its hand loan.
@@ -84,7 +84,7 @@ test("Epic Fight V command pointer MOVE cancels a real pending native attack and
   try {
     const run = newRunId();
     pair = await launchPair({ config: "blockwright.toml#epicfight-acceptance", server: { instance: `epicfight-move-server-${run}` },
-      client: { instance: `epicfight-move-client-${run}` }, snapshot: { entityTypes: ["folkways:resident", "minecraft:zombie", "minecraft:item"] } });
+      client: { instance: `epicfight-move-client-${run}` }, snapshot: { entityTypes: ["folkways_vanilla:resident", "minecraft:zombie", "minecraft:item"] } });
     await pair.client.run(GUI_SCALE);
     const player = await waitForGroundedPlayer(pair.server);
     const origin = { x: Math.round(player.pos.x) + 4, y: Math.round(player.pos.y), z: Math.round(player.pos.z) + 4 };

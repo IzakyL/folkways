@@ -3,7 +3,7 @@ package io.github.izakyl.folkways.cookery.tools;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.tag.TagMod;
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.cookery.CookeryContent;
 import io.github.izakyl.folkways.cookery.KitchenBookings;
 import io.github.izakyl.folkways.cookery.board.ChoppingBoardWorkshops;
@@ -54,16 +54,16 @@ import io.github.izakyl.folkways.core.work.internal.Commit;
 import io.github.izakyl.folkways.core.work.support.Leaves;
 import io.github.izakyl.folkways.core.work.support.Tools;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
-import io.github.izakyl.folkways.effect.Stats;
-import io.github.izakyl.folkways.effect.perk.Perks;
-import io.github.izakyl.folkways.front.api.Facings;
-import io.github.izakyl.folkways.front.engine.colony.ColonyFront;
-import io.github.izakyl.folkways.front.engine.colony.ColonySettings;
-import io.github.izakyl.folkways.plugins.orders.OrderReturns;
-import io.github.izakyl.folkways.plugins.orders.Orders;
-import io.github.izakyl.folkways.plugins.orders.OrdersContent;
-import io.github.izakyl.folkways.plugins.person.PersonBody;
-import io.github.izakyl.folkways.plugins.wares.WaresContent;
+import io.github.izakyl.folkways.core.effect.Stats;
+import io.github.izakyl.folkways.core.effect.perk.Perks;
+import io.github.izakyl.folkways.core.front.api.Facings;
+import io.github.izakyl.folkways.core.front.engine.colony.ColonyFront;
+import io.github.izakyl.folkways.core.front.engine.colony.ColonySettings;
+import io.github.izakyl.folkways.vanilla.orders.OrderReturns;
+import io.github.izakyl.folkways.vanilla.orders.Orders;
+import io.github.izakyl.folkways.vanilla.orders.OrdersContent;
+import io.github.izakyl.folkways.vanilla.person.PersonBody;
+import io.github.izakyl.folkways.vanilla.wares.WaresContent;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -91,7 +91,7 @@ import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
 @EventBusSubscriber(modid = "folkways_cookery", bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@GameTestHolder("folkways_cookery")
 @PrefixGameTestTemplate(false)
 public final class TaskToolsGameTests {
     private static final ToolNeed KNIFE = new ToolNeed.Tagged(TagMod.KITCHEN_KNIFE);
@@ -102,14 +102,14 @@ public final class TaskToolsGameTests {
         event.register(TaskToolsGameTests.class);
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void aMissingClothingSnapshotFailsWithoutChangingItsSavedLoan(GameTestHelper helper) {
         try (Rig rig = new Rig(helper)) {
             var head = net.minecraft.world.entity.EquipmentSlot.HEAD;
             rig.body.mob().setItemSlot(head, new ItemStack(ModItems.STRAW_HAT.get()));
             var worn = new net.minecraft.nbt.CompoundTag();
             worn.putUUID(head.getName(), UUID.randomUUID());
-            rig.body.mob().getPersistentData().put("folkways:cookery_clothing", worn);
+            rig.body.mob().getPersistentData().put("folkways_cookery:cookery_clothing", worn);
             var saved = new net.minecraft.nbt.CompoundTag();
             rig.body.mob().saveWithoutId(saved);
             rig.body.mob().discard();
@@ -132,7 +132,7 @@ public final class TaskToolsGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void savedToolRecordsCannotOmitLoanIdentity(GameTestHelper helper) {
         try (Rig rig = new Rig(helper)) {
             var record = new net.minecraft.nbt.CompoundTag();
@@ -164,7 +164,7 @@ public final class TaskToolsGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void hardUrgesPreserveTheLoanAcrossNativeBoardWorkAndReturn(
         GameTestHelper helper) {
         try (Rig rig = new Rig(helper)) {
@@ -200,7 +200,7 @@ public final class TaskToolsGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void revokeAndSoftControllerEndReturnEachBorrowedToolExactlyOnce(
         GameTestHelper helper) {
         for (boolean controller : List.of(false, true)) {
@@ -239,11 +239,11 @@ public final class TaskToolsGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void sharedSickleDefaultsAndBorrowingBelongToFarming(GameTestHelper helper) {
         try (Rig rig = new Rig(helper)) {
-            var farming = io.github.izakyl.folkways.plugins.farming.FarmingContent.trade();
-            var crafting = io.github.izakyl.folkways.plugins.wares.WaresContent.trade();
+            var farming = io.github.izakyl.folkways.vanilla.farming.FarmingContent.trade();
+            var crafting = io.github.izakyl.folkways.vanilla.wares.WaresContent.trade();
             var sickle = ModItems.SICKLE.get();
             helper.assertTrue(io.github.izakyl.folkways.core.colony.api.KitRules.allows(rig.colony.works(), farming, sickle),
                 "the harvesting vocation includes the shared sickle by default");
@@ -275,14 +275,14 @@ public final class TaskToolsGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void sharedBorrowUsesTheWorkVocationAndHeldLoansStillWorkAfterDisabling(GameTestHelper helper) {
         try (Rig rig = new Rig(helper)) {
             rig.rack.setItem(0, rig.namedKnife());
             var executions = new AtomicInteger();
             Node work = rig.simple(executions, false);
-            var crafting = io.github.izakyl.folkways.plugins.wares.WaresContent.CRAFTING;
-            var farming = io.github.izakyl.folkways.plugins.farming.FarmingContent.VOCATION;
+            var crafting = io.github.izakyl.folkways.vanilla.wares.WaresContent.CRAFTING;
+            var farming = io.github.izakyl.folkways.vanilla.farming.FarmingContent.VOCATION;
             var front = ColonyFront.of(rig.colony.works());
             var knife = new ColonySettings.Value.Items(List.of(ItemFilter.item(
                 BuiltInRegistries.ITEM.getKey(ModItems.IRON_KITCHEN_KNIFE.get()))));
@@ -318,14 +318,14 @@ public final class TaskToolsGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void disablingWhileTravellingPreventsThePhysicalBorrow(GameTestHelper helper) {
         try (Rig rig = new Rig(helper)) {
             rig.rack.setItem(0, rig.namedKnife());
             Node work = rig.simple(new AtomicInteger(), false);
             helper.assertTrue(rig.ready(work), "the permitted knife can be reserved");
             HoldingFixture borrow = rig.holding(work).prepare();
-            ColonyFront.of(rig.colony.works()).setSetting(io.github.izakyl.folkways.plugins.wares.WaresContent.CRAFTING,
+            ColonyFront.of(rig.colony.works()).setSetting(io.github.izakyl.folkways.vanilla.wares.WaresContent.CRAFTING,
                 "tool", new ColonySettings.Value.Items(List.of()));
 
             helper.assertTrue(
@@ -338,7 +338,7 @@ public final class TaskToolsGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void changingAllowedKnivesWhileTravellingRetriesWithTheNewSubset(GameTestHelper helper) {
         try (Rig rig = new Rig(helper)) {
             var iron = ModItems.IRON_KITCHEN_KNIFE.get();
@@ -372,7 +372,7 @@ public final class TaskToolsGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void unchangedRevisionsNeverReadContainersOrPacksAcrossToolPasses(GameTestHelper helper) {
         try (Rig rig = new Rig(helper)) {
             rig.rack.setItem(0, rig.namedKnife());
@@ -434,7 +434,7 @@ public final class TaskToolsGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void anIdenticalPackReplacementNeverInheritsThePhysicalLoan(GameTestHelper helper) {
         try (Rig rig = new Rig(helper)) {
             rig.rack.setItem(0, rig.namedKnife());
@@ -453,7 +453,7 @@ public final class TaskToolsGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void borrowingKeepsAnIdenticalPersonalToolSeparate(GameTestHelper helper) {
         try (Rig rig = new Rig(helper)) {
             ItemStack personal = rig.namedKnife();
@@ -472,7 +472,7 @@ public final class TaskToolsGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void aStackableToolObservationCountsOneLoanUnit(GameTestHelper helper) {
         try (Rig rig = new Rig(helper)) {
             rig.chest.setItem(0, new ItemStack(Items.FIRE_CHARGE, 8));
@@ -485,7 +485,7 @@ public final class TaskToolsGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void anUnloadedBorrowerRebindsItsSavedPackSlotOnRecovery(GameTestHelper helper) {
         try (Rig rig = new Rig(helper)) {
             rig.rack.setItem(0, rig.namedKnife());
@@ -513,7 +513,7 @@ public final class TaskToolsGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void clothingReadsNeverReconcileMarkersOrClaimAnIdenticalReplacement(GameTestHelper helper) {
         try (Rig rig = new Rig(helper)) {
             ItemStack hat = new ItemStack(ModItems.STRAW_HAT.get());
@@ -548,7 +548,7 @@ public final class TaskToolsGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void pendingCoverageCannotManufactureTools(GameTestHelper helper) {
         try (Rig rig = new Rig(helper)) {
             rig.rack.setItem(0, rig.namedKnife());
@@ -561,7 +561,7 @@ public final class TaskToolsGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void ruleRemappingRejectsTheReservedPhysicalSlot(GameTestHelper helper) {
         try (Rig rig = new Rig(helper)) {
             rig.chest.setItem(1, rig.namedKnife());
@@ -587,7 +587,7 @@ public final class TaskToolsGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void sharedToolStockRespectsIndependentTakeAndStoreAccess(GameTestHelper helper) {
         try (Rig rig = new Rig(helper)) {
             rig.rack.setItem(0, rig.namedKnife());
@@ -609,7 +609,7 @@ public final class TaskToolsGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void borrowingRechecksTakeAccessAfterTheTripWasPlanned(GameTestHelper helper) {
         try (Rig rig = new Rig(helper)) {
             rig.rack.setItem(0, rig.namedKnife());
@@ -627,7 +627,7 @@ public final class TaskToolsGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void aPendingToolReturnWaitsForStoreAccessWithoutRepeatingWork(GameTestHelper helper) {
         try (Rig rig = new Rig(helper)) {
             rig.rack.setItem(0, rig.namedKnife());
@@ -655,7 +655,7 @@ public final class TaskToolsGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void completedNativeIgnitionCanResumeReturnsWhenTheStoveGetsWetOrTheLastChargeWasSpent(GameTestHelper helper) {
         for (var item : List.of(Items.FLINT_AND_STEEL, Items.FIRE_CHARGE)) {
             try (Rig rig = new Rig(helper)) {
@@ -701,7 +701,7 @@ public final class TaskToolsGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void borrowedWorkerKeepsTheRealCraftingPerksGrantedSpeed(GameTestHelper helper) {
         try (Rig rig = new Rig(helper)) {
             var perks = Perks.fixed(Map.of(WaresContent.QUICK_HANDS, 2));
@@ -727,7 +727,7 @@ public final class TaskToolsGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void wrappedNativeBoardKeepsOnlyItsUnpromisedBoneAndOneLoanCell(GameTestHelper helper) {
         try (Rig rig = new Rig(helper)) {
             rig.rack.setItem(0, rig.namedKnife());
@@ -749,7 +749,7 @@ public final class TaskToolsGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void wrappedAdditiveRemainderKeepsItsOriginalSameItemBudget(GameTestHelper helper) {
         try (Rig rig = new Rig(helper)) {
             var paper = Goods.specOf(Items.PAPER.getDefaultInstance());
@@ -770,7 +770,7 @@ public final class TaskToolsGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void twoRealBoardOperationsBorrowOneNamedKnifeAndReturnItToTheRack(GameTestHelper helper) {
         try (Rig rig = new Rig(helper)) {
             ItemStack knife = rig.namedKnife();
@@ -802,7 +802,7 @@ public final class TaskToolsGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void aWholeTwoOperationFoodPlanDoesNotBudgetTheOnlyKnifeTwice(GameTestHelper helper) {
         try (Rig rig = new Rig(helper)) {
             var fixture = new PlanningFixture(helper, 36);
@@ -838,7 +838,7 @@ public final class TaskToolsGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void missingToolsKeepTheOnlyCraftingWorkerFreeAndMergeOneBootstrapOrder(GameTestHelper helper) {
         try (Rig rig = new Rig(helper)) {
             List<Node> submitted = new ArrayList<>();
@@ -868,7 +868,7 @@ public final class TaskToolsGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void cancellationAndReloadRecoverOnlyTheActualBorrowedTool(GameTestHelper helper) {
         try (Rig rig = new Rig(helper)) {
             rig.rack.setItem(0, rig.namedKnife());
@@ -898,7 +898,7 @@ public final class TaskToolsGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void aBusyToolWaitsAndAFullRackReturnsToOrdinaryStorage(GameTestHelper helper) {
         try (Rig rig = new Rig(helper)) {
             rig.rack.setItem(0, rig.namedKnife());
@@ -919,7 +919,7 @@ public final class TaskToolsGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void aPlayerChangingTheReservedToolDoesNotMoveOrDuplicateEitherStack(GameTestHelper helper) {
         try (Rig rig = new Rig(helper)) {
             rig.rack.setItem(0, rig.namedKnife());
@@ -937,7 +937,7 @@ public final class TaskToolsGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void aDroppedBorrowedToolRemainsPhysicalStockAndDoesNotTriggerManufacture(GameTestHelper helper) {
         try (Rig rig = new Rig(helper)) {
             rig.rack.setItem(0, rig.namedKnife());
@@ -960,7 +960,7 @@ public final class TaskToolsGameTests {
         }
         helper.succeed();
     }
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void cancellingAWrappedOnceReleasesTheOriginalExecutionOnlyOnce(GameTestHelper helper) {
         try (Rig rig = new Rig(helper)) {
             rig.rack.setItem(0, rig.namedKnife());
@@ -984,7 +984,7 @@ public final class TaskToolsGameTests {
         }
         helper.succeed();
     }
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void adoptingTheConsumerBeforeItsProducerCannotTakeTheProducersBorrowingTurn(GameTestHelper helper) {
         try (Rig rig = new Rig(helper)) {
             rig.rack.setItem(0, rig.namedKnife());
@@ -1009,7 +1009,7 @@ public final class TaskToolsGameTests {
         }
         helper.succeed();
     }
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void nativeBreakageReleasesTheLoanAndAllowsOneReplacement(GameTestHelper helper) {
         try (Rig rig = new Rig(helper)) {
             ItemStack lastUse = rig.namedKnife();
@@ -1031,7 +1031,7 @@ public final class TaskToolsGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void twoActuallyBorrowedRackKnivesDoNotRefillTheirStandingTarget(GameTestHelper helper) throws Exception {
         try (var loans = new LoanRig(helper)) {
             Rig rig = loans.rig;
@@ -1059,7 +1059,7 @@ public final class TaskToolsGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void aStandingThreeToolWarehouseOnlyOrdersItsOneRealGap(GameTestHelper helper) throws Exception {
         try (var loans = new LoanRig(helper)) {
             Rig rig = loans.rig;
@@ -1083,7 +1083,7 @@ public final class TaskToolsGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void cancelAndReloadRetainReturnsButAStolenPhysicalKnifeDoesNot(GameTestHelper helper) throws Exception {
         try (var loans = new LoanRig(helper)) {
             Rig rig = loans.rig;
@@ -1292,7 +1292,7 @@ public final class TaskToolsGameTests {
         }
 
         Node simple(AtomicInteger executions, boolean breaks) {
-            return simple(executions, breaks, io.github.izakyl.folkways.plugins.wares.WaresContent.trade(), KNIFE);
+            return simple(executions, breaks, io.github.izakyl.folkways.vanilla.wares.WaresContent.trade(), KNIFE);
         }
 
         Node simple(AtomicInteger executions, boolean breaks,

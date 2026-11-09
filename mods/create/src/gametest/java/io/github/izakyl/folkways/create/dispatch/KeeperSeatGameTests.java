@@ -1,11 +1,11 @@
 package io.github.izakyl.folkways.create.dispatch;
 
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.resident.api.Body;
 import io.github.izakyl.folkways.core.work.api.WorkGesture;
 import io.github.izakyl.folkways.core.world.api.Footing;
 import io.github.izakyl.folkways.create.FolkwaysCreateMod;
-import io.github.izakyl.folkways.plugins.person.PersonBody;
+import io.github.izakyl.folkways.vanilla.person.PersonBody;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.gametest.framework.GameTest;
@@ -20,7 +20,7 @@ import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
 @EventBusSubscriber(modid = FolkwaysCreateMod.ID, bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@GameTestHolder("folkways_create")
 @PrefixGameTestTemplate(false)
 public final class KeeperSeatGameTests {
 
@@ -31,7 +31,7 @@ public final class KeeperSeatGameTests {
 
     // A seat sunk a level into the floor, as beside a stock ticker one block up: whoever gets up from it is set on
     // top of it, a jump short of the floor round it, where no way starts. The keeper steps off onto the floor.
-    @GameTest(template = "empty", timeoutTicks = 40)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 40)
     public static void aKeeperGettingUpFromASunkSeatStepsOntoTheFloor(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         BlockPos seat = helper.absolutePos(new BlockPos(2, 1, 2));

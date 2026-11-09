@@ -1,0 +1,330 @@
+package io.github.izakyl.folkways.vanilla.pasture;
+
+import io.github.izakyl.folkways.core.base.persist.Reader;
+import io.github.izakyl.folkways.core.base.persist.Writer;
+import io.github.izakyl.folkways.core.colony.api.ColonyView;
+import io.github.izakyl.folkways.core.plan.api.Workshop;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.work.api.WorkSite;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
+import io.github.izakyl.folkways.core.world.api.WorldSpaces;
+import io.github.izakyl.folkways.core.front.api.FrontView;
+import io.github.izakyl.folkways.core.front.api.PastDay;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.EnumMap;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.TreeSet;
+import java.util.UUID;
+import net.minecraft.core.BlockPos;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.Shearable;
+import net.minecraft.world.entity.animal.Animal;
+import net.minecraft.world.entity.animal.Cow;
+import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.item.Item;
+
+final class Herd {
+
+    enum Job {
+
+        SHEAR(30),
+        FEED(40),
+        NURTURE(30),
+        CULL(40),
+        GLEAN(10);
+
+        private final int laborTicks;
+
+        Job(int laborTicks) {
+            this.laborTicks = laborTicks;
+        }
+
+        int laborTicks() {
+            return laborTicks;
+        }
+    }
+
+    private static final long MILK_COOLDOWN_TICKS = 24_000L;
+
+    private static final String TAG_MILKED = "milked";
+    private static final String TAG_COW = "cow";
+    private static final String TAG_WHEN = "at";
+
+    record Tally(Pen pen, Map<Job, List<Quarry>> work) {
+    }
+
+    record Sight(ResourceLocation keeps, int target, int living, int adults, BlockPos where) {
+    }
+
+    private record Seen(WorldPos at, Pen pen, Enclosure enclosure, Stances footings) {
+    }
+
+    private record Dropped(WorldPos at, Pen pen, Enclosure enclosure, Optional<Stances> footings) {
+    }
+
+    private final Runnable changed;
+
+    private final PastDay made;
+
+    private final Map<UUID, Long> milked = new LinkedHashMap<>();
+    private final Map<UUID, Seen> seen = new LinkedHashMap<>();
+    private final Set<UUID> gleanOrder = new TreeSet<>();
+    private final Map<UUID, Dropped> dropsSeen = new LinkedHashMap<>();
+
+    private final Set<UUID> claimed = new LinkedHashSet<>();
+    private final Map<UUID, Enclosure> surveyed = new LinkedHashMap<>();
+    private volatile Map<UUID, Enclosure> enclosures = Map.of();
+    private final List<Sight> sights = new ArrayList<>();
+
+    Herd(Runnable changed, PastDay made) {
+        this.changed = changed;
+        this.made = made;
+    }
+
+    PastDay made() {
+        return made;
+    }
+
+    List<Sight> sights() {
+        return List.copyOf(sights);
+    }
+
+    Optional<Enclosure> enclosure(UUID zone) {
+        return Optional.ofNullable(enclosures.get(zone));
+    }
+
+    void begin() {
+        claimed.clear();
+        sights.clear();
+        surveyed.clear();
+    }
+
+    List<Tally> reconcile(ColonyView view, FrontView front, List<Workshop> udders) {
+        ServerLevel level = view.level();
+        long now = level.getGameTime();
+        List<Tally> tallies = new ArrayList<>();
+        for (Pen pen : Pen.markedOut(view, front)) {
+            Enclosure enclosure = surveyed(level, pen);
+            surveyed.put(pen.zone(), enclosure);
+            List<Animal> standing = standingIn(level, pen);
+            int adults = 0;
+            for (Animal beast : standing) {
+                if (!beast.isBaby()) {
+                    adults++;
+                }
+            }
+            sights.add(new Sight(pen.keeps().type(), pen.target(), standing.size(), adults,
+                pen.anchor().cell()));
+            List<Animal> workable = new ArrayList<>(standing.size());
+            for (Animal beast : standing) {
+                if (project(level, pen, enclosure, beast)) {
+                    workable.add(beast);
+                }
+            }
+            Map<Job, List<Quarry>> work = new EnumMap<>(Job.class);
+            if (pen.shear()) {
+                work.put(Job.SHEAR, shear(level, workable));
+            }
+            pen.keeps().lays().ifPresent(produce ->
+                work.put(Job.GLEAN, glean(level, pen, enclosure, produce)));
+            milk(level, workable, now, udders);
+            work.put(Job.NURTURE, workable.stream().filter(Animal::isBaby)
+                .filter(beast -> !beast.getPersistentData().getBoolean(BreedingPerks.NURTURED))
+                .map(beast -> quarry(level, beast)).toList());
+            int surplus = adults - pen.target();
+            if (surplus > 0) {
+                work.put(Job.CULL, cull(level, workable, surplus));
+            }
+            int feedings = pen.feedings(standing);
+            if (feedings > 0) {
+                work.put(Job.FEED, feed(level, workable, feedings));
+            }
+            tallies.add(new Tally(pen, Map.copyOf(work)));
+        }
+        return List.copyOf(tallies);
+    }
+
+    void settle(long now) {
+        enclosures = Map.copyOf(surveyed);
+        seen.keySet().retainAll(claimed);
+        gleanOrder.retainAll(claimed);
+        dropsSeen.keySet().retainAll(claimed);
+        boolean expired = false;
+        for (Iterator<Map.Entry<UUID, Long>> records = milked.entrySet().iterator();
+             records.hasNext(); ) {
+            if (now - records.next().getValue() >= MILK_COOLDOWN_TICKS) {
+                records.remove();
+                expired = true;
+            }
+        }
+        if (expired) {
+            changed.run();
+        }
+    }
+
+    void milked(UUID cow, long when) {
+        milked.put(cow, when);
+        changed.run();
+    }
+
+    CompoundTag save() {
+        return Writer.of().children(TAG_MILKED, milked.entrySet(), Herd::saveRecord).tag();
+    }
+
+    private static CompoundTag saveRecord(Map.Entry<UUID, Long> record) {
+        return Writer.of()
+            .uuid(TAG_COW, record.getKey())
+            .longValue(TAG_WHEN, record.getValue())
+            .tag();
+    }
+
+    void load(Reader reader) {
+        for (Reader record : reader.requiredChildren(TAG_MILKED)) {
+            Optional<UUID> cow = record.uuid(TAG_COW);
+            Optional<Long> when = record.longValue(TAG_WHEN);
+            if (cow.isPresent() && when.isPresent()) {
+                milked.put(cow.get(), when.get());
+            }
+        }
+    }
+
+    // The same ground, kept as the same survey, so a workplace found on it still holds.
+    private Enclosure surveyed(ServerLevel level, Pen pen) {
+        Enclosure now = Enclosure.survey(level, pen);
+        Enclosure before = enclosures.get(pen.zone());
+        return now.equals(before) ? before : now;
+    }
+
+    private List<Animal> standingIn(ServerLevel level, Pen pen) {
+        List<Animal> found = pen.stock(level);
+        found.sort(Comparator.comparing(Animal::getUUID));
+        found.removeIf(beast -> !claimed.add(beast.getUUID()));
+        return found;
+    }
+
+    private boolean project(ServerLevel level, Pen pen, Enclosure enclosure, Entity beast) {
+        UUID who = beast.getUUID();
+        WorldPos at = WorldSpaces.at(beast);
+        Seen held = seen.get(who);
+        if (held != null && held.at().equals(at) && held.pen().equals(pen) && held.enclosure() == enclosure) {
+            return true;
+        }
+        Optional<Stances> cells = pen.workplaces(level, beast, enclosure);
+        cells.ifPresentOrElse(where -> seen.put(who, new Seen(at, pen, enclosure, where)), () -> seen.remove(who));
+        return cells.isPresent();
+    }
+
+    private Quarry quarry(ServerLevel level, Entity subject) {
+        Seen where = seen.get(subject.getUUID());
+        return new Quarry(subject.getUUID(),
+            new WorkSite.AtEntity(subject.getUUID(), where.at()),
+            where.footings());
+    }
+
+    private List<Quarry> shear(ServerLevel level, List<Animal> workable) {
+        List<Quarry> found = new ArrayList<>();
+        for (Animal beast : workable) {
+            if (beast instanceof Shearable woolly && woolly.readyForShearing()) {
+                found.add(quarry(level, beast));
+            }
+        }
+        return List.copyOf(found);
+    }
+
+    private List<Quarry> glean(ServerLevel level, Pen pen, Enclosure enclosure, Item produce) {
+        List<ItemEntity> lying = level.getEntitiesOfClass(ItemEntity.class, pen.reach(level),
+            drop -> drop.isAlive() && !drop.isRemoved() && drop.getItem().is(produce)
+                && pen.holds(drop));
+        Map<UUID, ItemEntity> drops = new LinkedHashMap<>();
+        lying.forEach(drop -> drops.put(drop.getUUID(), drop));
+        gleanOrder.addAll(drops.keySet());
+        List<Quarry> found = new ArrayList<>();
+        for (UUID id : gleanOrder) {
+            ItemEntity drop = drops.get(id);
+            if (drop == null || !claimed.add(id)) {
+                continue;
+            }
+            WorldPos at = WorldSpaces.at(drop);
+            Dropped held = dropsSeen.get(id);
+            if (held == null || !held.at().equals(at) || !held.pen().equals(pen) || held.enclosure() != enclosure) {
+                held = new Dropped(at, pen, enclosure, pen.workplaces(level, drop, enclosure));
+                dropsSeen.put(id, held);
+            }
+            held.footings().ifPresent(where -> found.add(new Quarry(id, new WorkSite.AtEntity(id, at), where)));
+        }
+        return List.copyOf(found);
+    }
+
+    private void milk(ServerLevel level, List<Animal> workable, long now, List<Workshop> udders) {
+        for (Animal beast : workable) {
+            if (!(beast instanceof Cow) || beast.isBaby() || !rested(beast.getUUID(), now)) {
+                continue;
+            }
+            Quarry cow = quarry(level, beast);
+            udders.add(new MilkHost(cow, this));
+        }
+    }
+
+    private boolean rested(UUID cow, long now) {
+        Long last = milked.get(cow);
+        return last == null || now - last >= MILK_COOLDOWN_TICKS;
+    }
+
+    private List<Quarry> cull(ServerLevel level, List<Animal> workable, int surplus) {
+        List<Quarry> found = new ArrayList<>();
+        for (Animal beast : workable) {
+            if (found.size() >= surplus) {
+                break;
+            }
+            if (!beast.isBaby()) {
+                found.add(quarry(level, beast));
+            }
+        }
+        return List.copyOf(found);
+    }
+
+    private List<Quarry> feed(ServerLevel level, List<Animal> workable, int deficit) {
+        List<Animal> willing = new ArrayList<>();
+        for (Animal beast : workable) {
+            if (FeedNode.willing(beast)) {
+                willing.add(beast);
+            }
+        }
+        List<Quarry> found = new ArrayList<>();
+        while (willing.size() >= 2 && found.size() < deficit) {
+            Animal first = willing.removeFirst();
+            Animal mate = null;
+            Set<WorldPos> shared = Set.of();
+            double nearest = FeedNode.PARTNER_RANGE_SQR;
+            for (Animal candidate : willing) {
+                double distance = first.distanceToSqr(candidate);
+                if (candidate.getType() != first.getType() || distance > nearest) {
+                    continue;
+                }
+                Set<WorldPos> cells = new LinkedHashSet<>(seen.get(first.getUUID()).footings().cells());
+                cells.retainAll(seen.get(candidate.getUUID()).footings().cells());
+                if (!cells.isEmpty()) {
+                    mate = candidate;
+                    shared = cells;
+                    nearest = distance;
+                }
+            }
+            if (mate != null) {
+                willing.remove(mate);
+                Quarry beast = quarry(level, first);
+                found.add(new Quarry(beast.subject(), beast.at(), new Stances.Cells(shared), Optional.of(mate.getUUID())));
+            }
+        }
+        return List.copyOf(found);
+    }
+}

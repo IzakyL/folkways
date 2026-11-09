@@ -1,8 +1,8 @@
 package io.github.izakyl.folkways.core.resident.api;
 
 import io.github.izakyl.folkways.core.vocation.api.Vocation;
-import io.github.izakyl.folkways.effect.Effects;
-import io.github.izakyl.folkways.effect.Stats;
+import io.github.izakyl.folkways.core.effect.Effects;
+import io.github.izakyl.folkways.core.effect.Stats;
 import java.util.Objects;
 import java.util.Optional;
 import net.minecraft.core.Holder;
@@ -27,9 +27,9 @@ public final class Bodies {
     private static StateSource states;
 
     private static final ResourceLocation SPEED_MODIFIER =
-        ResourceLocation.fromNamespaceAndPath("folkways", "effect_speed");
+        ResourceLocation.fromNamespaceAndPath("folkways_core", "effect_speed");
     private static final ResourceLocation REACH_MODIFIER =
-        ResourceLocation.fromNamespaceAndPath("folkways", "effect_reach");
+        ResourceLocation.fromNamespaceAndPath("folkways_core", "effect_reach");
 
     private Bodies() {
     }

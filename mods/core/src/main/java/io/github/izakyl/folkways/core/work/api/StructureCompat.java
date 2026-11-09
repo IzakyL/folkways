@@ -20,7 +20,7 @@ import net.minecraft.world.level.block.state.BlockState;
 
 /** Per-block configuration hooks; integrations do not replace the placement adapter. */
 public final class StructureCompat {
-    public static final String DESCRIPTOR = "folkways:structure";
+    public static final String DESCRIPTOR = "folkways_core:structure";
 
     public static final class Failure extends IllegalArgumentException {
         private final String key;

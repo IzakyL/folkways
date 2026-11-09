@@ -59,7 +59,7 @@ for (const stage of twins()) test(stage.title("pasture milk end-to-end: a standi
       config: stage.config,
       server: { trace: serverTrace, instance: seededServer(stage.name(`pasture-milk-server-${runId}`)) },
       client: { trace: clientTrace, instance: clientInstance },
-      snapshot: () => ({ containers: [demandChest, supplyChest].map((chest) => chest && stage.at(chest)), entityTypes: ["folkways:resident", "minecraft:cow"] }),
+      snapshot: () => ({ containers: [demandChest, supplyChest].map((chest) => chest && stage.at(chest)), entityTypes: ["folkways_vanilla:resident", "minecraft:cow"] }),
     });
     ({ server, client } = pair);
 

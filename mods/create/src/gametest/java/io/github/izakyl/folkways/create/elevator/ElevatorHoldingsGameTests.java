@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.create.elevator;
 
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.colony.api.Claim;
 import io.github.izakyl.folkways.core.colony.api.Claimed;
 import io.github.izakyl.folkways.core.colony.api.Closing;
@@ -21,7 +21,7 @@ import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
 @EventBusSubscriber(modid = FolkwaysCreateMod.ID, bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@GameTestHolder("folkways_create")
 @PrefixGameTestTemplate(false)
 public final class ElevatorHoldingsGameTests {
     @SubscribeEvent
@@ -29,7 +29,7 @@ public final class ElevatorHoldingsGameTests {
         event.register(ElevatorHoldingsGameTests.class);
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void aReconstructedServiceRestoresOwnershipFromOrdinaryHoldings(GameTestHelper helper) {
         Fixture fixture = new Fixture(helper);
         fixture.hold();
@@ -52,7 +52,7 @@ public final class ElevatorHoldingsGameTests {
         }
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void conflictingColonyHoldingsCannotCreateTwoControllers(GameTestHelper helper) {
         Fixture owner = new Fixture(helper);
         Fixture contender = new Fixture(helper);
@@ -80,7 +80,7 @@ public final class ElevatorHoldingsGameTests {
         }
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void removingOneOfTwoHoldingsDoesNotRetireTheSharedPhysicalLift(GameTestHelper helper) {
         Fixture fixture = new Fixture(helper);
         fixture.hold();

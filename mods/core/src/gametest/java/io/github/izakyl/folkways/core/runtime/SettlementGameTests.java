@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.core.runtime;
 
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import io.github.izakyl.folkways.core.work.api.Disposition;
 import io.github.izakyl.folkways.core.work.api.HoldingContext;
@@ -38,8 +38,8 @@ import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
-@EventBusSubscriber(modid = FolkwaysMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@EventBusSubscriber(modid = FolkwaysCoreMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
+@GameTestHolder(FolkwaysCoreMod.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class SettlementGameTests {
     @SubscribeEvent
@@ -47,7 +47,7 @@ public final class SettlementGameTests {
         event.register(SettlementGameTests.class);
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void standardHoldingsSettleGoodsExactlyOnce(GameTestHelper helper) {
         for (boolean continuous : List.of(false, true)) {
             try (HoldingGameTests.Harness h = new HoldingGameTests.Harness(helper)) {
@@ -65,7 +65,7 @@ public final class SettlementGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void failedSettlementReturnsGoods(GameTestHelper helper) {
         for (boolean continuous : List.of(false, true)) {
             try (HoldingGameTests.Harness h = new HoldingGameTests.Harness(helper)) {
@@ -84,7 +84,7 @@ public final class SettlementGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void throwingSettlementReturnsGoods(GameTestHelper helper) {
         try (HoldingGameTests.Harness h = new HoldingGameTests.Harness(helper)) {
             Probe node = start(h, false, false);
@@ -97,7 +97,7 @@ public final class SettlementGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void endingPrivateWorkConservesGoods(GameTestHelper helper) {
         for (boolean hard : List.of(false, true)) {
             for (boolean afterCommit : List.of(false, true)) {
@@ -118,7 +118,7 @@ public final class SettlementGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void suspendingPrivateWorkConservesGoods(GameTestHelper helper) {
         for (boolean hard : List.of(false, true)) {
             for (boolean afterCommit : List.of(false, true)) {
@@ -144,7 +144,7 @@ public final class SettlementGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void enginePickupUsesTheNodeHolding(GameTestHelper helper) {
         try (HoldingGameTests.Harness h = new HoldingGameTests.Harness(helper)) {
             ItemEntity drop = new ItemEntity(h.level, h.at.getX() + 0.5D, h.at.getY(), h.at.getZ() + 0.5D,

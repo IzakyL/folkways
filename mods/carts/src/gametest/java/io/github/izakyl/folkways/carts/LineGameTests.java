@@ -1,7 +1,7 @@
 package io.github.izakyl.folkways.carts;
 
 import com.jusipat.astikorcartsredux.entity.AbstractCargoCart;
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.colony.api.Claimed;
 import io.github.izakyl.folkways.core.colony.api.Closing;
 import io.github.izakyl.folkways.core.colony.api.Colonies;
@@ -32,14 +32,14 @@ import io.github.izakyl.folkways.core.work.api.WorkSite;
 import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.core.world.api.Stand;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
-import io.github.izakyl.folkways.front.engine.colony.ColonyFront;
-import io.github.izakyl.folkways.front.engine.colony.ColonySettings;
-import io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfile;
-import io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfiles;
-import io.github.izakyl.folkways.plugins.combat.weapon.ResidentMounts;
-import io.github.izakyl.folkways.plugins.pasture.PastureContent;
-import io.github.izakyl.folkways.plugins.person.PersonContent;
-import io.github.izakyl.folkways.plugins.person.ResidentEntity;
+import io.github.izakyl.folkways.core.front.engine.colony.ColonyFront;
+import io.github.izakyl.folkways.core.front.engine.colony.ColonySettings;
+import io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutProfile;
+import io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutProfiles;
+import io.github.izakyl.folkways.vanilla.combat.weapon.ResidentMounts;
+import io.github.izakyl.folkways.vanilla.pasture.PastureContent;
+import io.github.izakyl.folkways.vanilla.person.PersonContent;
+import io.github.izakyl.folkways.vanilla.person.ResidentEntity;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -67,7 +67,7 @@ import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
 @EventBusSubscriber(modid = FolkwaysCartsMod.ID, bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@GameTestHolder("folkways_carts")
 @PrefixGameTestTemplate(false)
 public final class LineGameTests {
 
@@ -78,7 +78,7 @@ public final class LineGameTests {
         event.register(LineGameTests.class);
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void openLinesRunOutAndBackAndLoopsRoundWithStopsReckoned(GameTestHelper helper) {
         try (Rig rig = new Rig(helper, 24)) {
             Line open = rig.line(false);
@@ -94,7 +94,7 @@ public final class LineGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void aLineSetsDownAHeldCartOfItsKindAtItsFirstStation(GameTestHelper helper) {
         try (Rig rig = new Rig(helper, 24)) {
             Line line = rig.line(false);
@@ -116,7 +116,7 @@ public final class LineGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void goodsGoAboardAndComeOffOnlyWhereTheCartStands(GameTestHelper helper) {
         try (Rig rig = new Rig(helper, 24)) {
             Line line = rig.line(false);
@@ -149,7 +149,7 @@ public final class LineGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void aRollingCartIsNotParkedEvenWithZeroHorizontalVelocity(GameTestHelper helper) {
         try (Rig rig = new Rig(helper, 24)) {
             var level = helper.getLevel();
@@ -178,7 +178,7 @@ public final class LineGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void goodsNoBatchAccountsForAreSetDownAtTheNextStation(GameTestHelper helper) {
         try (Rig rig = new Rig(helper, 24)) {
             Line line = rig.line(false);
@@ -200,7 +200,7 @@ public final class LineGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void theLineIsQuotedForWaitingRidingAndHandlingAndBookedOnLaying(GameTestHelper helper) {
         try (Rig rig = new Rig(helper, 24)) {
             Line line = rig.line(false);
@@ -215,10 +215,10 @@ public final class LineGameTests {
             var quote = mode.quote(links.getFirst(), batch, snapshot);
             helper.assertTrue(quote instanceof QuoteResult.Available available
                     && available.quote().covered() == 128
-                    && available.quote().cost() == 2L * io.github.izakyl.folkways.FolkwaysConfig.haulReachTicks()
+                    && available.quote().cost() == 2L * io.github.izakyl.folkways.core.FolkwaysConfig.haulReachTicks()
                         + io.github.izakyl.folkways.core.transport.api.TransportQuote.delay(
                             line.cycle() / 2 + line.ride(0, 1))
-                    && available.quote().handedAt() == 2L * io.github.izakyl.folkways.FolkwaysConfig.haulReachTicks()
+                    && available.quote().handedAt() == 2L * io.github.izakyl.folkways.core.FolkwaysConfig.haulReachTicks()
                         + line.cycle() / 2 + line.ride(0, 1),
                 "a batch beyond the free cells is covered in part; only handling is work, waiting and riding delay");
             cart.discard();
@@ -226,7 +226,7 @@ public final class LineGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void aLongHaulGoesByTheLineThatRunsAnyway(GameTestHelper helper) {
         try (Rig rig = new Rig(helper, 120)) {
             Line line = rig.line(false);
@@ -268,7 +268,7 @@ public final class LineGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void aHorseTakenForALineIsNoLongerPastureStock(GameTestHelper helper) {
         var horse = net.minecraft.world.entity.EntityType.HORSE.create(helper.getLevel());
         helper.assertTrue(horse != null, "a horse");
@@ -278,7 +278,7 @@ public final class LineGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void aSupplyLineClaimsItsOwnNavigationAndReleasesItOnErasure(GameTestHelper helper) {
         try (Rig rig = new Rig(helper, 24)) {
             var level = helper.getLevel();
@@ -322,7 +322,7 @@ public final class LineGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void supplyLineCannotTakeAProfilesHorseAndCanTakeItAfterRelease(GameTestHelper helper) {
         try (Rig rig = new Rig(helper, 24)) {
             var body = (ResidentEntity) rig.fixture.worker.body();
@@ -370,7 +370,7 @@ public final class LineGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void bookingsCanChangeOnThePlannerWhileTheServerReadsThem(GameTestHelper helper) throws Exception {
         try (Rig rig = new Rig(helper, 24)) {
             Line line = rig.line(false);
@@ -421,7 +421,7 @@ public final class LineGameTests {
         }
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void erasingANetherLineReleasesTheHorseInItsOwnDimension(GameTestHelper helper) {
         try (Rig rig = new Rig(helper, 24)) {
             var nether = helper.getLevel().getServer().getLevel(Level.NETHER);
@@ -441,7 +441,7 @@ public final class LineGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void colonyClosureReleasesSupplyHorsesExceptAtShutdown(GameTestHelper helper) throws Exception {
         for (Closing why : List.of(Closing.SHUTDOWN, Closing.RAZED, Closing.GONE)) {
             try (Rig rig = new Rig(helper, 24)) {
@@ -543,7 +543,7 @@ public final class LineGameTests {
         }
 
         private io.github.izakyl.folkways.core.transport.api.TransportEndpoint endpoint() {
-            ResourceLocation id = ResourceLocation.fromNamespaceAndPath("folkways", "test_end");
+            ResourceLocation id = ResourceLocation.fromNamespaceAndPath("folkways_carts", "test_end");
             return new io.github.izakyl.folkways.core.transport.api.TransportEndpoint(id, fixture.source,
                 Set.of(new Stand(fixture.source)), new io.github.izakyl.folkways.core.transport.api.TransportEndpoint
                     .Handover(io.github.izakyl.folkways.core.transport.api.TransportEndpoint.Form.INVENTORY, id));
@@ -562,8 +562,8 @@ public final class LineGameTests {
                 public void spill(ItemStack stack) {
                     throw new AssertionError("unexpected spill: " + stack);
                 }
-                public io.github.izakyl.folkways.effect.Effects effects() {
-                    return io.github.izakyl.folkways.effect.Effects.NONE;
+                public io.github.izakyl.folkways.core.effect.Effects effects() {
+                    return io.github.izakyl.folkways.core.effect.Effects.NONE;
                 }
                 public List<Node> route() { return List.of(); }
                 public io.github.izakyl.folkways.core.work.api.Placement placement() {

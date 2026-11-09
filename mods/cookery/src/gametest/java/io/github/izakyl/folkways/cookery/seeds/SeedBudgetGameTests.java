@@ -1,10 +1,10 @@
 package io.github.izakyl.folkways.cookery.seeds;
 
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems;
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.item.api.Goods;
-import io.github.izakyl.folkways.plugins.compost.SeedBudget;
-import io.github.izakyl.folkways.plugins.farming.CropSeeds;
+import io.github.izakyl.folkways.vanilla.compost.SeedBudget;
+import io.github.izakyl.folkways.vanilla.farming.CropSeeds;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -22,13 +22,13 @@ import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
 @EventBusSubscriber(modid = "folkways_cookery", bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@GameTestHolder("folkways_cookery")
 @PrefixGameTestTemplate(false)
 public final class SeedBudgetGameTests {
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) { event.register(SeedBudgetGameTests.class); }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void farmingCatalogueIncludesFoodRiceAndEveryActualSowingAlternative(GameTestHelper helper) {
         Set<Item> seeds = CropSeeds.catalogue(helper.getLevel(), helper.absolutePos(BlockPos.ZERO));
         helper.assertTrue(seeds.containsAll(Set.of(ModItems.WILD_RICE_SEED.get(), ModItems.RICE_SEED.get(),
@@ -38,7 +38,7 @@ public final class SeedBudgetGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void rareFirstSeedsAndRiceFoodRemainProtectedAndMaintainTargetsKeepTheirMeaning(GameTestHelper helper) {
         Item rice = ModItems.RICE_SEED.get();
         var place = SeedBudget.Location.pack(UUID.randomUUID());
@@ -55,7 +55,7 @@ public final class SeedBudgetGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void riceSowingClaimsStayProtectedInsideTheSharedRicePurpose(GameTestHelper helper) {
         Item rice = ModItems.RICE_SEED.get();
         Item wild = ModItems.WILD_RICE_SEED.get();
@@ -71,7 +71,7 @@ public final class SeedBudgetGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void alternativeTargetsProtectTheirTotalOnceAndReuseThePurposeReserve(GameTestHelper helper) {
         Item wild = ModItems.WILD_RICE_SEED.get();
         Item rice = ModItems.RICE_SEED.get();

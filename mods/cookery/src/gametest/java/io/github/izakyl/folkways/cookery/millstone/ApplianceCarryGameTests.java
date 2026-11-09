@@ -7,7 +7,7 @@ import com.github.ysbbbbbb.kaleidoscopecookery.blockentity.kitchen.SteamerBlockE
 import com.github.ysbbbbbb.kaleidoscopecookery.blockentity.kitchen.TeapotBlockEntity;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems;
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.cookery.CookeryContent;
 import io.github.izakyl.folkways.cookery.KitchenBookings;
 import io.github.izakyl.folkways.cookery.KitchenStation;
@@ -49,10 +49,10 @@ import io.github.izakyl.folkways.core.work.internal.Commit;
 import io.github.izakyl.folkways.core.work.internal.TransferNode;
 import io.github.izakyl.folkways.core.world.api.Stand;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
-import io.github.izakyl.folkways.effect.Effects;
-import io.github.izakyl.folkways.plugins.person.PersonBody;
-import io.github.izakyl.folkways.plugins.person.ResidentEntity;
-import io.github.izakyl.folkways.plugins.wares.WaresContent;
+import io.github.izakyl.folkways.core.effect.Effects;
+import io.github.izakyl.folkways.vanilla.person.PersonBody;
+import io.github.izakyl.folkways.vanilla.person.ResidentEntity;
+import io.github.izakyl.folkways.vanilla.wares.WaresContent;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -81,40 +81,40 @@ import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
 @EventBusSubscriber(modid = "folkways_cookery", bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@GameTestHolder("folkways_cookery")
 @PrefixGameTestTemplate(false)
 public final class ApplianceCarryGameTests {
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) { event.register(ApplianceCarryGameTests.class); }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void theMillFetchesNearbyWheatBeforeItsNativeLoad(GameTestHelper helper) {
         run(helper, new MillstoneStation(), ModBlocks.MILLSTONE.get(), List.of(new ItemStack(Items.WHEAT, 3)),
             new ItemStack(ModItems.FLOUR.get(), 3), 1);
     }
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void theSpitFetchesNearbyMeatBeforeItsNativeLoad(GameTestHelper helper) {
         run(helper, new SpitStation(), ModBlocks.SHAWARMA_SPIT.get(), List.of(new ItemStack(Items.BEEF, 2)),
             new ItemStack(Items.COOKED_BEEF, 2), 1);
     }
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void theSteamerFetchesNearbyDoughBeforeItsNativeLoad(GameTestHelper helper) {
         run(helper, new SteamerStation(), ModBlocks.STEAMER.get(), List.of(new ItemStack(ModItems.RAW_DOUGH.get(), 2)),
             new ItemStack(ModItems.MANTOU.get(), 2), 1);
     }
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void theTrayFetchesNearbyLeavesBeforeItsNativeLoad(GameTestHelper helper) {
         run(helper, new TrayStation(), ModBlocks.BAMBOO_TRAY.get(), List.of(new ItemStack(ModItems.FRESH_TEA_LEAVES.get(), 2)),
             new ItemStack(ModItems.DRIED_TEA_LEAVES.get(), 2), 1);
     }
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void theTeapotFetchesItsFluidIngredientAndTwelveCupsBeforeNativeLoading(GameTestHelper helper) {
         run(helper, new TeapotStation(), ModBlocks.TEAPOT.get(), List.of(new ItemStack(Items.WATER_BUCKET),
             new ItemStack(ModItems.TIEGUANYIN_TEA_BAG.get()), new ItemStack(ModItems.EMPTY_CUP.get(), 12)),
             new ItemStack(BuiltInRegistries.ITEM.get(ResourceLocation.fromNamespaceAndPath("kaleidoscope_cookery", "tieguanyin")), 12), 2);
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void aMillKeepsUnpromisedAndChanceOutputsWithoutDuplicatingItsPromisedMain(GameTestHelper helper) {
         var fixture = new PlanningFixture(helper, 3);
         WorldPos at = fixture.source;

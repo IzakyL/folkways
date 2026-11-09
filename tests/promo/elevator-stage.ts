@@ -178,7 +178,7 @@ for(var resident:colony.residents()){
  // bystander on the stationary landing; dining chairs are separate native mounts.
  boolean aboard=place.filter(v.places()::contains).isPresent()&&!body.isPassenger()
   &&(request.equals("RIDING")||request.equals("ALIGHTING"));
- boolean dining=body instanceof io.github.izakyl.folkways.plugins.person.ResidentEntity person&&person.leisureMotion().equals("dining");
+ boolean dining=body instanceof io.github.izakyl.folkways.vanilla.person.ResidentEntity person&&person.leisureMotion().equals("dining");
  var one=new LinkedHashMap<String,Object>();one.put("uuid",body.getUUID().toString());
  one.put("x",body.getX());one.put("y",body.getY());one.put("z",body.getZ());
  one.put("inLift",aboard);one.put("seatedAtTable",dining&&body.isPassenger());one.put("place",aboard?place.orElseThrow():-1);

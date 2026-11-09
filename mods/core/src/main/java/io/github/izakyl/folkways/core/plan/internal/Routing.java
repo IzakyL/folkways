@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.core.plan.internal;
 
-import io.github.izakyl.folkways.FolkwaysConfig;
+import io.github.izakyl.folkways.core.FolkwaysConfig;
 import io.github.izakyl.folkways.core.item.api.Goods;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import io.github.izakyl.folkways.core.plan.api.Intent;
@@ -408,7 +408,7 @@ final class Routing implements Refinement {
 
     static TransportEndpoint endpoint(String id, WorldPos at, Set<Stand> stands,
                                                TransportEndpoint.Form form) {
-        ResourceLocation name = ResourceLocation.fromNamespaceAndPath("folkways", "transfer/" + id);
+        ResourceLocation name = ResourceLocation.fromNamespaceAndPath("folkways_core", "transfer/" + id);
         return new TransportEndpoint(name, at, stands, new TransportEndpoint.Handover(form, name));
     }
 

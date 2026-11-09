@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.core.runtime;
 
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.colony.internal.ColonyData;
 import io.github.izakyl.folkways.core.inventory.api.Stash;
 import io.github.izakyl.folkways.core.inventory.internal.Stands;
@@ -52,8 +52,8 @@ import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
-@EventBusSubscriber(modid = FolkwaysMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@EventBusSubscriber(modid = FolkwaysCoreMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
+@GameTestHolder(FolkwaysCoreMod.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class InputReservationGameTests {
     private static final ItemSpec SEEDS = Goods.specOf(Items.WHEAT_SEEDS.getDefaultInstance());
@@ -64,7 +64,7 @@ public final class InputReservationGameTests {
 
     public record Exported(List<ReservedInput> inputs, List<ItemStack> pack, UUID consumer, UUID resident) { }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void independentFetchesToOneConsumerExportAll129PhysicalSeeds(GameTestHelper helper) {
         fetched129(helper);
         helper.succeed();
@@ -111,7 +111,7 @@ public final class InputReservationGameTests {
         }
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void anUnassignedConsumerDoesNotReserveItsFutureFetchTwice(GameTestHelper helper) {
         try (var scene = new Scene(helper)) {
             scene.first();
@@ -126,7 +126,7 @@ public final class InputReservationGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void actualFetcherIsRememberedWhenItsRouteChangesBeforeHandoff(GameTestHelper helper) throws Exception {
         try (var scene = new Scene(helper)) {
             var planned = scene.first();

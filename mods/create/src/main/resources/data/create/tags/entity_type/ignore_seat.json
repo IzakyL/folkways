@@ -2,7 +2,7 @@
   "replace": false,
   "values": [
     {
-      "id": "folkways:resident",
+      "id": "folkways_vanilla:resident",
       "required": false
     }
   ]

@@ -17,8 +17,8 @@ import { aimAndWorldLeftClick } from "../shared/ui/world-ui";
 
 const PLACARDS = defineTask<void, string[][]>({
   name: "folkways.visual.bed-placards", side: "client",
-  source: javaTask({ imports: ["io.github.izakyl.folkways.front.client.ColonyHighlightState",
-    "io.github.izakyl.folkways.front.api.Placard", "io.github.izakyl.folkways.front.api.notice.Line"], body: `
+  source: javaTask({ imports: ["io.github.izakyl.folkways.core.front.client.ColonyHighlightState",
+    "io.github.izakyl.folkways.core.front.api.Placard", "io.github.izakyl.folkways.core.front.api.notice.Line"], body: `
 var field = ColonyHighlightState.class.getDeclaredField("PLACARDS"); field.setAccessible(true);
 var cards = (List<Placard>)field.get(null);
 return cards.stream().filter(card -> card.lines().getFirst() instanceof Line.Said said
@@ -33,8 +33,8 @@ return cards.stream().filter(card -> card.lines().getFirst() instanceof Line.Sai
 
 const RESIDENT_CARD = defineTask<void, boolean>({
   name: "folkways.visual.resident-card", side: "client",
-  source: javaTask({ imports: ["net.minecraft.client.Minecraft", "io.github.izakyl.folkways.front.client.ColonyLookState",
-    "io.github.izakyl.folkways.front.api.notice.Line"], body: `
+  source: javaTask({ imports: ["net.minecraft.client.Minecraft", "io.github.izakyl.folkways.core.front.client.ColonyLookState",
+    "io.github.izakyl.folkways.core.front.api.notice.Line"], body: `
 var minecraft = Minecraft.getInstance();
 for (var card : ColonyLookState.residents()) {
  var entity = minecraft.level.getEntity(card.entityId());
@@ -49,7 +49,7 @@ return false;
 const POSE_RESIDENT = defineTask<Vec, { uuid: string; position: number[] }>({
   name: "folkways.visual.pose-resident", side: "server",
   source: javaTask({ imports: ["net.minecraft.network.protocol.game.ClientboundTeleportEntityPacket",
-    "io.github.izakyl.folkways.plugins.person.ResidentEntity"], body: `
+    "io.github.izakyl.folkways.vanilla.person.ResidentEntity"], body: `
 var player = ctx.server().getPlayerList().getPlayers().getFirst();
 for (var found : player.serverLevel().getAllEntities()) if (found instanceof ResidentEntity resident) {
  resident.teleportTo(Args.of(ctx).number("x"), Args.of(ctx).number("y"), Args.of(ctx).number("z"));
@@ -77,8 +77,8 @@ return false;
 });
 const DINING_CARD = defineTask<void, boolean>({
   name: "folkways.visual.dining-card", side: "client",
-  source: javaTask({ imports: ["io.github.izakyl.folkways.front.client.ColonyHighlightState",
-    "io.github.izakyl.folkways.front.api.notice.Line", "net.minecraft.network.chat.Component"], body: `
+  source: javaTask({ imports: ["io.github.izakyl.folkways.core.front.client.ColonyHighlightState",
+    "io.github.izakyl.folkways.core.front.api.notice.Line", "net.minecraft.network.chat.Component"], body: `
 var field = ColonyHighlightState.class.getDeclaredField("NOTES"); field.setAccessible(true);
 var notes = (Map<UUID, List<Line>>)field.get(null);
 var expected = Component.translatable("folkways.dining.summary", 1, 2).getString();
@@ -107,8 +107,8 @@ for (const locale of ["en_us", "zh_cn"]) test(`living UI: beds, mood, dining, el
     await screen.dismiss(client);
     const command = (value: string) => world.command(server, value);
     // The bedroom walls can cover the random arrival position while the room survey advances.
-    await command(`tp @e[type=folkways:resident,limit=1] ${x - 10} ${y} ${z + 3}`);
-    await command(`data merge entity @e[type=folkways:resident,limit=1] {NoAI:1b}`);
+    await command(`tp @e[type=folkways_vanilla:resident,limit=1] ${x - 10} ${y} ${z + 3}`);
+    await command(`data merge entity @e[type=folkways_vanilla:resident,limit=1] {NoAI:1b}`);
     await command(`time set noon`);
     await command(`weather clear`);
     await server.run(defineTask<void, boolean>({
@@ -142,7 +142,7 @@ player.getAbilities().flying = true; player.onUpdateAbilities(); return true;
     await runColonyTask(server, MARK_MEMBERS, { player: who, colony_id: String(founding.evidence.colonyId),
       cells: [spare, pulley].flatMap(at => [at.x, at.y, at.z]) });
     expect(await isColonyMember(server, pulley), "the elevator delegation must accept the real Create pulley").toBe(true);
-    run.note("elevator", { at: pulley, delegation: "folkways:elevator", member: true });
+    run.note("elevator", { at: pulley, delegation: "folkways_create:elevator", member: true });
     const catalog = ponderCatalog(locale);
     await expect.poll(async () => {
       await tick.sprint(server, 40);
@@ -172,12 +172,12 @@ player.getAbilities().flying = true; player.onUpdateAbilities(); return true;
       await input.move(client, { x: 0, y: 0 });
       await run.shot(client, name, { subject, worldState: { origin, locale }, hard: true });
     };
-    await command(`tp @e[type=folkways:resident,limit=1] ${x - 10} ${y} ${z + 3}`);
+    await command(`tp @e[type=folkways_vanilla:resident,limit=1] ${x - 10} ${y} ${z + 3}`);
     await view({ x: x + 1, y: y + 1.62, z: z + 5.5 }, { x: x + 1, y: y + 1.4, z: z + 0.5 });
     await shot("01-claimed-private-bed", "Held book: claimed bed, resident name, private bedroom grade and improvement advice");
     await view({ x: spare.x + 0.5, y: y + 1.62, z: z + 5 }, { x: spare.x + 0.8, y: y + 0.8, z: z + 0.5 });
     await shot("02-unclaimed-exposed-bed", "Held book: unclaimed bed outside, exposed grade and shelter advice");
-    await command(`tp @e[type=folkways:resident,limit=1] ${x - 10} ${y} ${z + 3}`);
+    await command(`tp @e[type=folkways_vanilla:resident,limit=1] ${x - 10} ${y} ${z + 3}`);
     await view({ x: x - 10, y: y + 1.62, z: z + 8 }, { x: x - 10, y: y + 1.5, z: z + 3 });
     // Pose after the observer settles, while simulation is frozen, so an old labour route cannot
     // walk the subject off camera. Send its teleport immediately rather than advancing that route.
@@ -216,13 +216,13 @@ player.getAbilities().flying = true; player.onUpdateAbilities(); return true;
         expect(await client.run(defineTask<void, boolean>({
           name: "folkways.visual.dining-selection-from-inside", side: "client",
           source: javaTask({ imports: ["net.minecraft.client.Minecraft", "net.minecraft.world.entity.player.Player",
-            "net.minecraft.world.phys.AABB", "io.github.izakyl.folkways.front.client.ZoneSelection",
-            "io.github.izakyl.folkways.front.engine.net.ZoneSnapshot"], body: `
+            "net.minecraft.world.phys.AABB", "io.github.izakyl.folkways.core.front.client.ZoneSelection",
+            "io.github.izakyl.folkways.core.front.engine.net.ZoneSnapshot"], body: `
 var player = Minecraft.getInstance().player;
 var aimed = ZoneSelection.class.getDeclaredMethod("aimedZone", Player.class);
 aimed.setAccessible(true);
 var selected = (Optional<ZoneSnapshot>) aimed.invoke(null, player);
-return selected.filter(zone -> zone.delegation().toString().equals("folkways:dining")
+return selected.filter(zone -> zone.delegation().toString().equals("folkways_vanilla:dining")
     && AABB.encapsulatingFullBlocks(zone.min(), zone.max()).contains(player.getEyePosition())).isPresent();
 ` }),
         })), "right-click must select dining while the player's eyes are inside its box").toBe(true);

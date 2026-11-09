@@ -6,7 +6,7 @@ import com.github.ysbbbbbb.kaleidoscopecookery.crafting.recipe.MillstoneRecipe;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModRecipes;
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.cookery.CookeryContent;
 import io.github.izakyl.folkways.cookery.KitchenBookings;
 import io.github.izakyl.folkways.cookery.testing.NativeCookingMatrix;
@@ -24,9 +24,9 @@ import io.github.izakyl.folkways.core.work.api.Stances;
 import io.github.izakyl.folkways.core.work.api.WorkSite;
 import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
-import io.github.izakyl.folkways.effect.Effects;
-import io.github.izakyl.folkways.plugins.person.PersonBody;
-import io.github.izakyl.folkways.plugins.person.ResidentEntity;
+import io.github.izakyl.folkways.core.effect.Effects;
+import io.github.izakyl.folkways.vanilla.person.PersonBody;
+import io.github.izakyl.folkways.vanilla.person.ResidentEntity;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -50,7 +50,7 @@ import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 
 @EventBusSubscriber(modid = "folkways_cookery", bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@GameTestHolder("folkways_cookery")
 public final class MillstoneRecipeMatrixGameTests {
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) { event.register(MillstoneRecipeMatrixGameTests.class); }
@@ -58,8 +58,8 @@ public final class MillstoneRecipeMatrixGameTests {
     public static Collection<TestFunction> nativeRecipes() {
         List<ResourceLocation> ids = NativeCookingMatrix.ids(id -> id.toString().startsWith("kaleidoscope_cookery:millstone/"));
         if (ids.size() != 85) { throw new IllegalStateException("expected all 85 native millstone recipes, got " + ids.size()); }
-        return ids.stream().map(id -> new TestFunction("cookery_mill_matrix", "folkways:mill_matrix_" + id.getPath().replace('/', '_'),
-            "folkways:empty", 2500, 0L, true, helper -> run(helper, id))).toList();
+        return ids.stream().map(id -> new TestFunction("cookery_mill_matrix", "folkways_cookery:mill_matrix_" + id.getPath().replace('/', '_'),
+            "folkways_core:empty", 2500, 0L, true, helper -> run(helper, id))).toList();
     }
     private static void run(GameTestHelper helper, ResourceLocation id) {
         Rig rig = new Rig(helper, id);

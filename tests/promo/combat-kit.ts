@@ -48,13 +48,13 @@ const IMPORTS = [
   "io.github.izakyl.folkways.core.colony.api.Claimed",
   "io.github.izakyl.folkways.core.world.api.WorldPos",
   "io.github.izakyl.folkways.core.item.api.ItemSpec",
-  "io.github.izakyl.folkways.plugins.person.PersonBody",
-  "io.github.izakyl.folkways.plugins.person.PersonContent",
-  "io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfiles",
-  "io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfile",
-  "io.github.izakyl.folkways.plugins.combat.weapon.LoadoutRegistry",
-  "io.github.izakyl.folkways.plugins.patrol.SentryPosts",
-  "io.github.izakyl.folkways.plugins.patrol.PatrolStaffing",
+  "io.github.izakyl.folkways.vanilla.person.PersonBody",
+  "io.github.izakyl.folkways.vanilla.person.PersonContent",
+  "io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutProfiles",
+  "io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutProfile",
+  "io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutRegistry",
+  "io.github.izakyl.folkways.vanilla.patrol.SentryPosts",
+  "io.github.izakyl.folkways.vanilla.patrol.PatrolStaffing",
   "net.minecraft.core.BlockPos",
   "net.minecraft.core.registries.BuiltInRegistries",
   "net.minecraft.resources.ResourceLocation",
@@ -70,7 +70,7 @@ const IMPORTS = [
   "com.atsuishio.superbwarfare.data.gun.GunProp",
   "com.atsuishio.superbwarfare.entity.vehicle.base.VehicleEntity",
   "com.atsuishio.superbwarfare.entity.vehicle.MortarEntity",
-  "io.github.izakyl.folkways.warfare.WarfareStations",
+  "io.github.izakyl.folkways.firearms.warfare.WarfareStations",
 ];
 
 const CAST = defineTask<Record<string, any>, any>({
@@ -247,7 +247,7 @@ var crew = new ArrayList<Object>();
 var enemies = new ArrayList<Object>();
 var stations = new ArrayList<Object>();
 for (var entity : level.getAllEntities()) {
-    if (entity instanceof io.github.izakyl.folkways.plugins.person.ResidentEntity body
+    if (entity instanceof io.github.izakyl.folkways.vanilla.person.ResidentEntity body
         && entity.getTags().contains("draft_crew")) {
         var row = new LinkedHashMap<String, Object>();
         var data = entity.getPersistentData();
@@ -372,7 +372,7 @@ for (var entry : adapters.entrySet()) {
     var level = ctx.server().overworld();
     var bodyField = adapter.getClass().getDeclaredField("body");
     bodyField.setAccessible(true);
-    var body = (io.github.izakyl.folkways.plugins.person.ResidentEntity) bodyField.get(adapter);
+    var body = (io.github.izakyl.folkways.vanilla.person.ResidentEntity) bodyField.get(adapter);
     for (int step = 0; step < 200; step++) {
         var next = point.add(velocity);
         var hit = level.clip(new net.minecraft.world.level.ClipContext(point, next,

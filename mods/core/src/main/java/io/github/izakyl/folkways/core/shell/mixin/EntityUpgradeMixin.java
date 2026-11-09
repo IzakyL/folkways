@@ -1,7 +1,7 @@
 package io.github.izakyl.folkways.core.shell.mixin;
 
-import io.github.izakyl.folkways.base.persist.upgrade.RawUpgrades;
-import io.github.izakyl.folkways.base.persist.upgrade.Surface;
+import io.github.izakyl.folkways.core.base.persist.upgrade.RawUpgrades;
+import io.github.izakyl.folkways.core.base.persist.upgrade.Surface;
 import io.github.izakyl.folkways.core.shell.neoforge.FolkwaysAttachments;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;

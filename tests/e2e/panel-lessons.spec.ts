@@ -36,12 +36,12 @@ const LESSONS = [
 // The Lessons page: a folder per plugin, a row per scene in it.
 const SHELF = {
   tab: "folkways.tab.lessons",
-  folder: "folkways.lessons.folder.folkways.farming",
-  scene: "folkways.lessons.scene.folkways.farming",
+  folder: "folkways.lessons.folder.folkways_vanilla.farming",
+  scene: "folkways.lessons.scene.folkways_vanilla.farming",
 } as const;
 
 // A page a domain draws itself replaces the core's table; one it does not keeps it.
-const CRAFT_PAGE = "folkways.wares";
+const CRAFT_PAGE = "folkways_vanilla.wares";
 const CRAFT_TAB = "folkways.page.wares";
 const PASTURE_TAB = "folkways.page.pasture";
 const CRAFT_ROW = `folkways.board.row.${CRAFT_PAGE}.0`;
@@ -129,7 +129,7 @@ test("every colony panel tab draws its own page and opens its own ponder lesson"
         .toEqual([]);
       expect(afterHold,
         `${token}: holding the ponder key did not open a lesson (got ${afterHold}). `
-          + `folkways:${lesson} has no scene bound: the page names no lesson and its plugin declared no folder under the page id, or the folder is empty.`)
+          + `folkways_vanilla:${lesson} has no scene bound: the page names no lesson and its plugin declared no folder under the page id, or the folder is empty.`)
         .toMatch(/LessonScreen/);
       expect(settled,
         `${token}: releasing the ponder key closed the lesson; once a scene opens it should stay open`).toMatch(/LessonScreen/);
@@ -142,7 +142,7 @@ test("every colony panel tab draws its own page and opens its own ponder lesson"
     await frames(client, 2);
     // Without the optional extension there is no kitchen: no lesson folder, no page.
     const shelf = await panelElements(client);
-    expect(shelf.some((element) => element.id === "folkways.lessons.folder.folkways.cookery")).toBe(false);
+    expect(shelf.some((element) => element.id === "folkways.lessons.folder.folkways_cookery.cookery")).toBe(false);
     expect(shelf.some((element) => element.id === "folkways.page.cookery"),
       "the kitchen page belongs to the optional Folkways extension").toBe(false);
     await clickElement(client, { id: SHELF.folder }, { scrollIntoView: true });

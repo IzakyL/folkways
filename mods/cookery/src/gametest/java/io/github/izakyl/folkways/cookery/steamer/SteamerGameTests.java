@@ -4,7 +4,7 @@ import com.github.ysbbbbbb.kaleidoscopecookery.block.kitchen.SteamerBlock;
 import com.github.ysbbbbbb.kaleidoscopecookery.blockentity.kitchen.SteamerBlockEntity;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems;
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.cookery.CookeryContent;
 import io.github.izakyl.folkways.cookery.KitchenBookings;
 import io.github.izakyl.folkways.cookery.testing.RecoveryAsking;
@@ -25,9 +25,9 @@ import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.core.work.support.WorkStances;
 import io.github.izakyl.folkways.core.world.api.Reach;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
-import io.github.izakyl.folkways.effect.Effects;
-import io.github.izakyl.folkways.plugins.person.PersonBody;
-import io.github.izakyl.folkways.plugins.person.ResidentEntity;
+import io.github.izakyl.folkways.core.effect.Effects;
+import io.github.izakyl.folkways.vanilla.person.PersonBody;
+import io.github.izakyl.folkways.vanilla.person.ResidentEntity;
 import java.util.List;
 import java.util.UUID;
 import java.util.function.Consumer;
@@ -53,13 +53,13 @@ import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
 @EventBusSubscriber(modid = "folkways_cookery", bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@GameTestHolder("folkways_cookery")
 @PrefixGameTestTemplate(false)
 public final class SteamerGameTests {
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) { event.register(SteamerGameTests.class); }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void malformedOriginalLidDoesNotInventAnOpenSnapshot(GameTestHelper helper) {
         try (Rig rig = new Rig(helper, true, false, 1)) {
             rig.load(1);
@@ -75,7 +75,7 @@ public final class SteamerGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 1500)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 1500)
     public static void hardUrgesPreserveAcceptedSlotsAndTheOriginalLid(GameTestHelper helper) {
         Rig rig = new Rig(helper, true, false, 2);
         SteamerWork work = rig.plan();
@@ -100,7 +100,7 @@ public final class SteamerGameTests {
             });
     }
 
-    @GameTest(template = "empty", timeoutTicks = 1500)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 1500)
     public static void aHalfSteamerAcceptsFourRealInputsAndDoesNotDismantleWhenServed(GameTestHelper helper) {
         Rig rig = new Rig(helper, true, false, 6);
         SteamerWork work = rig.load(4);
@@ -116,7 +116,7 @@ public final class SteamerGameTests {
         });
     }
 
-    @GameTest(template = "empty", timeoutTicks = 1500)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 1500)
     public static void aFullSteamerAcceptsEightRealInputsAndRestoresThePreviousHand(GameTestHelper helper) {
         Rig rig = new Rig(helper, false, false, 10);
         SteamerWork work = rig.load(8);
@@ -138,7 +138,7 @@ public final class SteamerGameTests {
         });
     }
 
-    @GameTest(template = "empty", timeoutTicks = 1500)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 1500)
     public static void anUpperLayerCooksWithoutTakingPlayerFoodInTheLowerBlock(GameTestHelper helper) {
         Rig rig = new Rig(helper, false, true, 2);
         ItemStack playerFood = new ItemStack(ModItems.STUFFED_DOUGH_FOOD.get());
@@ -154,7 +154,7 @@ public final class SteamerGameTests {
         });
     }
 
-    @GameTest(template = "empty", timeoutTicks = 1600)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 1600)
     public static void removingRealHeatRunsNativeCooldownAndRestoringItResumesCooking(GameTestHelper helper) {
         Rig rig = new Rig(helper, true, false, 2);
         SteamerWork work = rig.load(2);
@@ -176,7 +176,7 @@ public final class SteamerGameTests {
         });
     }
 
-    @GameTest(template = "empty", timeoutTicks = 1500)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 1500)
     public static void aReloadedBatchIsAdoptedWithoutAnotherIngredientBudget(GameTestHelper helper) {
         Rig rig = new Rig(helper, true, false, 3);
         rig.load(3);
@@ -198,7 +198,7 @@ public final class SteamerGameTests {
         });
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void withdrawalRejectsAPlannedInteractionBeforeItConsumesDough(GameTestHelper helper) {
         try (Rig rig = new Rig(helper, true, false, 2)) {
             SteamerWork work = rig.plan();
@@ -212,7 +212,7 @@ public final class SteamerGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void addingPlayerFoodInvalidatesTheClaimWithoutClearingAnyFood(GameTestHelper helper) {
         try (Rig rig = new Rig(helper, true, false, 2)) {
             SteamerWork work = rig.load(2);
@@ -225,7 +225,7 @@ public final class SteamerGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 1500)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 1500)
     public static void takingFoodOutsideTheTaskCannotCauseAQueuedTakeToDismantleTheEmptyMachine(GameTestHelper helper) {
         Rig rig = new Rig(helper, true, false, 2);
         SteamerWork work = rig.load(2);
@@ -239,7 +239,7 @@ public final class SteamerGameTests {
         });
     }
 
-    @GameTest(template = "empty", timeoutTicks = 1500)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 1500)
     public static void aNativeTakeHookThrowingAfterClearKeepsBothHandAndDroppedPortions(GameTestHelper helper) {
         Rig rig = new Rig(helper, true, false, 3);
         SteamerWork work = rig.load(3);
@@ -271,7 +271,7 @@ public final class SteamerGameTests {
         });
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void releasingTheStationRestoresOnlyItsOwnLidAndKeepsAcceptedFood(GameTestHelper helper) {
         try (Rig rig = new Rig(helper, true, false, 2)) {
             rig.load(2);
@@ -289,7 +289,7 @@ public final class SteamerGameTests {
     @net.minecraft.gametest.framework.GameTestGenerator
     public static java.util.Collection<net.minecraft.gametest.framework.TestFunction> nativeSteamerRecipes() {
         return List.of("mantou", "baozi", "qingtuan", "bamboo_tube_rice").stream().map(name -> new net.minecraft.gametest.framework.TestFunction(
-            "cookery_steamer_matrix", "folkways:steamer_matrix_" + name, "folkways:empty", 2000, 0L, true, helper -> {
+            "cookery_steamer_matrix", "folkways_cookery:steamer_matrix_" + name, "folkways_core:empty", 2000, 0L, true, helper -> {
                 var id = net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("kaleidoscope_cookery", "steamer/" + name);
                 var recipe = helper.getLevel().getRecipeManager().getAllRecipesFor(com.github.ysbbbbbb.kaleidoscopecookery.init.ModRecipes.STEAMER_RECIPE)
                     .stream().filter(holder -> holder.id().equals(id)).findFirst().orElseThrow();
@@ -313,7 +313,7 @@ public final class SteamerGameTests {
                 try { check.accept(rig); } finally { rig.close(); }
             }).thenSucceed();
     }
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void aFourLayerSteamerCannotPlanWhenOnlyItsBottomFoodSlotIsReachable(GameTestHelper helper) {
         try (Rig rig = new Rig(helper, false, false, 2)) {
             BlockPos edge = fourLayerBoundary(rig);
@@ -334,7 +334,7 @@ public final class SteamerGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 1500)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 1500)
     public static void threeLayerSteamerPublishesAndRecoversOnlyStancesThatReachFoodAndTopLid(GameTestHelper helper) {
         Rig rig = new Rig(helper, false, false, 2); BlockPos edge = fourLayerBoundary(rig);
         rig.level.setBlockAndUpdate(rig.cell.above(3), Blocks.AIR.defaultBlockState());
@@ -381,7 +381,7 @@ public final class SteamerGameTests {
         return rig.cell.offset(4, 0, 2);
     }
 
-    @GameTest(template = "empty", timeoutTicks = 1600)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 1600)
     public static void aBookedRecoveryStaysWantedAcrossAskingSweepsAndTheNativeSettlementWindow(GameTestHelper helper) {
         Rig rig = new Rig(helper, true, false, 2); rig.load(2); rig.level.setBlockAndUpdate(rig.cell.below(), Blocks.STONE.defaultBlockState());
         rig.hold.release(Ending.DROPPED); rig.hold = null;

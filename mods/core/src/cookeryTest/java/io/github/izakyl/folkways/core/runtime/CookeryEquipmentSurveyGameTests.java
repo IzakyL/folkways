@@ -2,7 +2,7 @@ package io.github.izakyl.folkways.core.runtime;
 
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.tag.TagMod;
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.cookery.CookeryContent;
 import io.github.izakyl.folkways.core.colony.api.Claimed;
 import io.github.izakyl.folkways.core.colony.api.Colonies;
@@ -18,11 +18,11 @@ import io.github.izakyl.folkways.core.resident.api.Body;
 import io.github.izakyl.folkways.core.travel.internal.ColonyWays;
 import io.github.izakyl.folkways.core.vocation.api.Vocations;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
-import io.github.izakyl.folkways.front.engine.colony.ColonyFront;
-import io.github.izakyl.folkways.front.engine.colony.ColonySettings;
-import io.github.izakyl.folkways.plugins.farming.FarmingContent;
-import io.github.izakyl.folkways.plugins.person.PersonBody;
-import io.github.izakyl.folkways.plugins.person.ResidentEntity;
+import io.github.izakyl.folkways.core.front.engine.colony.ColonyFront;
+import io.github.izakyl.folkways.core.front.engine.colony.ColonySettings;
+import io.github.izakyl.folkways.vanilla.farming.FarmingContent;
+import io.github.izakyl.folkways.vanilla.person.PersonBody;
+import io.github.izakyl.folkways.vanilla.person.ResidentEntity;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -47,16 +47,16 @@ import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
-@EventBusSubscriber(modid = FolkwaysMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@EventBusSubscriber(modid = FolkwaysCoreMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
+@GameTestHolder(FolkwaysCoreMod.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class CookeryEquipmentSurveyGameTests {
-    private static final ResourceLocation STORE = ResourceLocation.fromNamespaceAndPath("folkways", "test/clothing_store");
+    private static final ResourceLocation STORE = ResourceLocation.fromNamespaceAndPath("folkways_core", "test/clothing_store");
 
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) { event.register(CookeryEquipmentSurveyGameTests.class); }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void changingTheClothingAllowlistDoesNotQueueUnusedPersonalEquipment(GameTestHelper helper) {
         try (var rig = new Rig(helper)) {
             rig.allow(ModItems.STRAW_HAT.get()); rig.survey.read(rig.body.id()); rig.read();
@@ -72,7 +72,7 @@ public final class CookeryEquipmentSurveyGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 220)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 220)
     public static void realIdleColonyLaborNeverFetchesAStandingHatAcrossPermissionChanges(GameTestHelper helper) {
         var rig = new Rig(helper);
         rig.flag(false); rig.allow(ModItems.STRAW_HAT.get());

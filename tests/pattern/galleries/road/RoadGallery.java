@@ -1,8 +1,8 @@
 import blockwright.minecraft.core.Args;
 import blockwright.minecraft.core.Sync;
 import dev.blockwright.api.Context;
-import io.github.izakyl.folkways.plugins.build.draft.*;
-import io.github.izakyl.folkways.front.api.Settings;
+import io.github.izakyl.folkways.vanilla.build.draft.*;
+import io.github.izakyl.folkways.core.front.api.Settings;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -49,8 +49,8 @@ public final class Task {
 
     private static Object build(Context ctx) {
         var args = Args.of(ctx);
-        var libraries = Map.of(ResourceLocation.parse("folkways:grading"), args.string("grading"));
-        var pattern = Pattern.parse(ResourceLocation.parse("folkways:road"), args.string("road"),
+        var libraries = Map.of(ResourceLocation.parse("folkways_vanilla:grading"), args.string("grading"));
+        var pattern = Pattern.parse(ResourceLocation.parse("folkways_vanilla:road"), args.string("road"),
             id -> Optional.ofNullable(libraries.getOrDefault(id, Patterns.sources().get(id)))).orElseThrow();
         ServerLevel level = ctx.server().overworld();
         int r = 72;

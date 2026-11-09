@@ -48,15 +48,15 @@ export async function openSettlement(scope: string, run: VisualRun) {
   await world.command(server, `forceload add ${o.x - 64} ${o.z - 104} ${o.x + 64} ${o.z + 160}`);
   const sources = Object.fromEntries(
     ["city_wall", "road", "arcade", "terraced_field", "dock", "arch_bridge", "materials", "grading"].map((id) => [
-      `folkways:${id}`,
-      readFileSync(`mods/vanilla/src/main/resources/data/folkways/folkways/pattern/${id}.star`, "utf8"),
+      `folkways_vanilla:${id}`,
+      readFileSync(`mods/vanilla/src/main/resources/data/folkways_vanilla/folkways/pattern/${id}.star`, "utf8"),
     ]),
   );
   const points = (cells: number[][]) => cells.map(([x, z]) => [o.x + x, o.y, o.z + z]);
   const drawings = [
     {
       name: "curtain",
-      pattern: "folkways:city_wall",
+      pattern: "folkways_vanilla:city_wall",
       kind: "path",
       knobs: { spacing: 32 },
       points: points([
@@ -69,7 +69,7 @@ export async function openSettlement(scope: string, run: VisualRun) {
     },
     {
       name: "gate-road",
-      pattern: "folkways:road",
+      pattern: "folkways_vanilla:road",
       kind: "path",
       knobs: { width: 7 },
       points: points([
@@ -79,7 +79,7 @@ export async function openSettlement(scope: string, run: VisualRun) {
     },
     {
       name: "market-street",
-      pattern: "folkways:road",
+      pattern: "folkways_vanilla:road",
       kind: "path",
       knobs: { width: 5 },
       points: points([
@@ -89,7 +89,7 @@ export async function openSettlement(scope: string, run: VisualRun) {
     },
     {
       name: "upper-street",
-      pattern: "folkways:road",
+      pattern: "folkways_vanilla:road",
       kind: "path",
       knobs: { width: 5 },
       points: points([
@@ -99,7 +99,7 @@ export async function openSettlement(scope: string, run: VisualRun) {
     },
     {
       name: "market-arcade",
-      pattern: "folkways:arcade",
+      pattern: "folkways_vanilla:arcade",
       kind: "path",
       knobs: { width: 5, railing: false },
       points: points([
@@ -109,7 +109,7 @@ export async function openSettlement(scope: string, run: VisualRun) {
     },
     {
       name: "workshop-arcade",
-      pattern: "folkways:arcade",
+      pattern: "folkways_vanilla:arcade",
       kind: "path",
       knobs: { width: 5, railing: false },
       points: points([
@@ -119,7 +119,7 @@ export async function openSettlement(scope: string, run: VisualRun) {
     },
     {
       name: "river-dock",
-      pattern: "folkways:dock",
+      pattern: "folkways_vanilla:dock",
       kind: "path",
       points: points([
         [70, -78],
@@ -128,7 +128,7 @@ export async function openSettlement(scope: string, run: VisualRun) {
     },
     {
       name: "river-path",
-      pattern: "folkways:road",
+      pattern: "folkways_vanilla:road",
       kind: "path",
       knobs: { width: 3, lights: false },
       points: points([
@@ -138,7 +138,7 @@ export async function openSettlement(scope: string, run: VisualRun) {
     },
     {
       name: "food-terraces",
-      pattern: "folkways:terraced_field",
+      pattern: "folkways_vanilla:terraced_field",
       kind: "zone",
       points: points([
         [27, -84],
@@ -151,7 +151,7 @@ export async function openSettlement(scope: string, run: VisualRun) {
     throw new Error(`Settlement patterns refused: ${JSON.stringify(patterns)}`);
   }
   const stage = await server.run(FURNISH_SETTLEMENT, o);
-  await world.command(server, `item replace entity ${name} weapon.mainhand with folkways:colony_book`);
+  await world.command(server, `item replace entity ${name} weapon.mainhand with folkways_core:colony_book`);
   const founded = await foundPromoColonyFast(server, name, stage.members);
   await screen.dismiss(client);
   await tick.freeze(server, false);

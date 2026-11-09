@@ -61,7 +61,7 @@ test("two colony trains run looping lines that cross on the level", async ({}, t
     expect(graph.signals, `Create should register the crossing signals on its track graph: ${JSON.stringify(graph)}`).toBeGreaterThan(0);
 
     // Each resident walks over to a train's platform.
-    const crew = (await world.entities(server, { types: ["folkways:resident"] })).entities ?? [];
+    const crew = (await world.entities(server, { types: ["folkways_vanilla:resident"] })).entities ?? [];
     expect(crew.length, "the founding should leave two residents").toBe(2);
     for (const [i, l] of lines.entries()) {
       const at = { x: l.stationA.x + 3, y: p.y, z: l.stationA.z + 4 };

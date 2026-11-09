@@ -2,7 +2,7 @@ package io.github.izakyl.folkways.core.runtime;
 
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.tag.TagMod;
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.colony.api.Colonies;
 import io.github.izakyl.folkways.core.colony.api.Equipment;
 import io.github.izakyl.folkways.core.item.api.Goods;
@@ -13,7 +13,7 @@ import io.github.izakyl.folkways.core.resident.api.TaskTools;
 import io.github.izakyl.folkways.core.work.api.ToolNeed;
 import io.github.izakyl.folkways.core.work.internal.Kit;
 import io.github.izakyl.folkways.core.work.support.Tools;
-import io.github.izakyl.folkways.plugins.person.PersonBody;
+import io.github.izakyl.folkways.vanilla.person.PersonBody;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -32,14 +32,14 @@ import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
-@EventBusSubscriber(modid = FolkwaysMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@EventBusSubscriber(modid = FolkwaysCoreMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
+@GameTestHolder(FolkwaysCoreMod.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class CookeryKitGameTests {
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) { event.register(CookeryKitGameTests.class); }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void theCareerKitNeverRequestsAKitchenKnifeForEveryResident(GameTestHelper helper) {
         var colony = Colonies.mint(helper.getLevel().getServer());
         var kits = new Kits();
@@ -57,7 +57,7 @@ public final class CookeryKitGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void aKitchenShovelCannotBeTakenAsAnOrdinaryBuildingShovel(GameTestHelper helper) {
         ItemStack shovel = new ItemStack(ModItems.KITCHEN_SHOVEL.get());
         helper.assertTrue(Tools.sharedItem(shovel), "the actual native spatula is task-owned");
@@ -72,7 +72,7 @@ public final class CookeryKitGameTests {
 
     // A worn, named kitchen knife and a named straw hat: each idle one is cargo, and an active task's loan of it is
     // protected only until that task releases it.
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void idleKitchenToolsAndClothingAreCargoAndOnlyAnActiveTaskProtectsTheirLoan(GameTestHelper helper) {
         var colony = Colonies.mint(helper.getLevel().getServer());
         var kits = new Kits();

@@ -28,7 +28,7 @@ print('cuts',[(x.get('spot') or 'overview') for x in c.get('cuts',[])])
 log=open(R+'large-colony.server.log',errors='replace').read().split('\n')
 u=[x for x in log if 'unassignedKinds=' in x]
 for x in (u[len(u)//3],u[-1]):
-    print(re.search(r'Oct2026 ([0-9:]+)',x).group(1), re.findall(r'[A-Z_]+/folkways:build/StripNode=\d+',x), re.findall(r'BEYOND_HORIZON/folkways:haul/TransferNode=\d+',x))
+    print(re.search(r'Oct2026 ([0-9:]+)',x).group(1), re.findall(r'[A-Z_]+/folkways_vanilla:build/StripNode=\d+',x), re.findall(r'BEYOND_HORIZON/folkways_vanilla:haul/TransferNode=\d+',x))
 import statistics
 rows=[int(x['full_ns'])/1e6 for x in csv.DictReader(open(R+'large-colony.ticks.csv')) if int(x['game_time'])>r['run']['start']]
 print('mspt mean %.1f p95 %.1f'%(statistics.mean(rows),sorted(rows)[int(len(rows)*.95)]))

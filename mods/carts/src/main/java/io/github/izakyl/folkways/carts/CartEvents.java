@@ -41,7 +41,7 @@ public final class CartEvents {
     @SubscribeEvent
     public static void removed(EntityLeaveLevelEvent event) {
         var entity = event.getEntity();
-        boolean horse = entity.getTags().contains(io.github.izakyl.folkways.plugins.pasture.PastureContent.CLAIMED);
+        boolean horse = entity.getTags().contains(io.github.izakyl.folkways.vanilla.pasture.PastureContent.CLAIMED);
         if ((CartLinks.admissible(entity) || horse) && event.getLevel() instanceof ServerLevel level) {
             if (!horse && CartLinks.residentDrawn(entity)) {
                 CartLinks.sync((AbstractCargoCart) entity, ((SavedPuller) entity).folkways$puller());

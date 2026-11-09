@@ -48,7 +48,7 @@ test("residents build sealed interiors, a tower, a cantilever and an excavation 
     const setup = await runColonyTask(server, HEIGHT, {});
     const y = Number(setup.y);
     await world.command(server, `tp ${player} -4 ${y} 0`);
-    await world.command(server, `item replace entity ${player} weapon.mainhand with folkways:colony_book`);
+    await world.command(server, `item replace entity ${player} weapon.mainhand with folkways_core:colony_book`);
     const { colony_id } = await foundPromoColonyFast(server, player, setup.members);
     await admitPromoSettlersFast(server, player, colony_id, 3);
     const selectedCases = process.env.FOLKWAYS_CONSTRUCTION_CASES?.split(",");
@@ -126,7 +126,7 @@ return Sync.stamp(Map.of("y",y,"members",members));`,
 
 const CREW = defineTask<Record<string, any>, Record<string, any>>({
   name: "folkways.construction.crew", side: "server", source: javaTask({
-    imports: ["io.github.izakyl.folkways.front.engine.colony.ColonyGround",
+    imports: ["io.github.izakyl.folkways.core.front.engine.colony.ColonyGround",
       "io.github.izakyl.folkways.core.resident.api.Bodies", "io.github.izakyl.folkways.core.vocation.api.Vocations",
       "net.minecraft.world.item.*"],
     body: `
@@ -145,11 +145,11 @@ return Sync.stamp(Map.of("residents",index));`,
   }),
 });
 
-const imports = ["io.github.izakyl.folkways.front.engine.colony.ColonyGround",
-  "io.github.izakyl.folkways.plugins.build.*", "net.minecraft.core.BlockPos",
+const imports = ["io.github.izakyl.folkways.core.front.engine.colony.ColonyGround",
+  "io.github.izakyl.folkways.vanilla.build.*", "net.minecraft.core.BlockPos",
   "net.minecraft.core.registries.BuiltInRegistries", "net.minecraft.resources.ResourceLocation",
   "net.minecraft.world.item.ItemStack", "net.minecraft.world.level.block.Blocks", "net.minecraft.world.Container",
-  "io.github.izakyl.folkways.core.resident.api.Bodies", "io.github.izakyl.folkways.front.api.notice.Doings",
+  "io.github.izakyl.folkways.core.resident.api.Bodies", "io.github.izakyl.folkways.core.front.api.notice.Doings",
   "io.github.izakyl.folkways.core.work.api.Node"];
 const members = `
 static BlockPos pos(Map<?,?> raw){return new BlockPos(((Number)raw.get("x")).intValue(),((Number)raw.get("y")).intValue(),((Number)raw.get("z")).intValue());}
@@ -169,7 +169,7 @@ for(var raw:args.list("cells")){var cell=(Map<?,?>)raw;var offset=pos(cell);var 
   if(!state.isAir())materials.merge(id.toString(),1,Integer::sum);
   level.setBlock(anchor.offset(offset),Boolean.TRUE.equals(args.value("buried"))?Blocks.STONE.defaultBlockState():Blocks.AIR.defaultBlockState(),2);
 }
-var presence=colony.service(ResourceLocation.parse("folkways:build"),Object.class).orElseThrow();
+var presence=colony.service(ResourceLocation.parse("folkways_vanilla:build"),Object.class).orElseThrow();
 var field=presence.getClass().getDeclaredField("book");field.setAccessible(true);var book=field.get(presence);
 var blueprint=new Blueprint(UUID.randomUUID(),args.string("name"),blocks,BlueprintVolume.around(blocks.stream().map(BlueprintBlock::offset).toList()).orElseThrow(),level.getGameTime());
 call(book,"add",level,blueprint);call(book,"place",level,blueprint.id(),blueprint.name(),anchor,Optional.empty(),"construction-take",level.getGameTime());
@@ -191,7 +191,7 @@ for(var resident:colony.residents()){var entity=level.getEntity(resident.id());i
  crew.add(Map.of("id",resident.id().toString(),"x",entity.getX(),"y",entity.getY(),"z",entity.getZ(),
  "doing",body.doing().map(one->Doings.name(one).getString()).orElse("idle"),
  "pack",body.pack().contents().stream().filter(stack->!stack.isEmpty()).map(Object::toString).toList()));}}
-var presence=colony.service(ResourceLocation.parse("folkways:build"),Object.class).orElseThrow();
+var presence=colony.service(ResourceLocation.parse("folkways_vanilla:build"),Object.class).orElseThrow();
 var sites=new ArrayList<Object>();
 for(var entry:((Map<?,?>)field(presence,"sites")).entrySet()){
  var site=entry.getValue();var live=(Map<?,?>)field(site,"live");var counts=new LinkedHashMap<String,Integer>();var pieces=new ArrayList<Object>();

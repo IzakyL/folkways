@@ -23,7 +23,7 @@ for (const stage of twins()) test(stage.title("stove recovery: borrow real ignit
       config: "blockwright.toml#" + (stage.kind === "ground" ? "cookery" : "cookery-sable"),
       server: { trace: tracePath("e2e", stage.name("stove-recovery-server-" + runId)), instance: seededServer(stage.name("stove-recovery-server-" + runId)) },
       client: { trace: tracePath("e2e", stage.name("stove-recovery-client-" + runId)), instance: stage.name("stove-recovery-client-" + runId) },
-      snapshot: () => ({ containers: cells ? [stage.at(cells.supply), stage.at(cells.stove)] : [], entityTypes: ["folkways:resident", "minecraft:item"] }),
+      snapshot: () => ({ containers: cells ? [stage.at(cells.supply), stage.at(cells.stove)] : [], entityTypes: ["folkways_vanilla:resident", "minecraft:item"] }),
     });
     const { server, client } = pair; const player = await waitForGroundedPlayer(server);
     const origin = { x: Math.round(player.pos.x) + 4, y: Math.round(player.pos.y), z: Math.round(player.pos.z) + 4 };

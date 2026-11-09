@@ -2,7 +2,7 @@ package io.github.izakyl.folkways.core.work.api;
 
 import io.github.izakyl.folkways.core.resident.api.Resident;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
-import io.github.izakyl.folkways.effect.Effects;
+import io.github.izakyl.folkways.core.effect.Effects;
 import java.util.List;
 import net.minecraft.world.Container;
 import net.minecraft.world.entity.Mob;

@@ -12,8 +12,8 @@ import com.github.ysbbbbbb.kaleidoscopecookery.init.ModSoupBases;
 import com.github.ysbbbbbb.kaleidoscopecookery.item.quality.Quality;
 import com.github.ysbbbbbb.kaleidoscopecookery.item.quality.QualityUtils;
 import com.github.ysbbbbbb.kaleidoscopecookery.util.ItemUtils;
-import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.base.persist.upgrade.RawUpgrades;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
+import io.github.izakyl.folkways.core.base.persist.upgrade.RawUpgrades;
 import io.github.izakyl.folkways.cookery.CookeryContent;
 import io.github.izakyl.folkways.cookery.CookeryRefusal;
 import io.github.izakyl.folkways.cookery.KitchenBookings;
@@ -52,10 +52,10 @@ import io.github.izakyl.folkways.core.work.support.Leaves;
 import io.github.izakyl.folkways.core.world.api.Realm;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.core.world.api.WorldSpaces;
-import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
-import io.github.izakyl.folkways.plugins.person.PersonBody;
-import io.github.izakyl.folkways.plugins.person.ResidentEntity;
-import io.github.izakyl.folkways.plugins.wares.WaresContent;
+import io.github.izakyl.folkways.vanilla.FolkwaysVanillaConfig;
+import io.github.izakyl.folkways.vanilla.person.PersonBody;
+import io.github.izakyl.folkways.vanilla.person.ResidentEntity;
+import io.github.izakyl.folkways.vanilla.wares.WaresContent;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -95,7 +95,7 @@ import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
 @EventBusSubscriber(modid = "folkways_cookery", bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@GameTestHolder("folkways_cookery")
 @PrefixGameTestTemplate(false)
 public final class StockpotGameTests {
 
@@ -104,7 +104,7 @@ public final class StockpotGameTests {
         event.register(StockpotGameTests.class);
     }
 
-    @GameTest(template = "empty", timeoutTicks = 1100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 1100)
     public static void hardUrgesPreserveTheLoadedSoupAndItsSingleServing(GameTestHelper helper) {
         Rig rig = new Rig(helper, "rice_1", false);
         rig.stockRice(1, 1);
@@ -148,7 +148,7 @@ public final class StockpotGameTests {
             });
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void stockpotBudgetKeepsItsRealBucketAndLidWithoutDuplicatingTheMeal(GameTestHelper helper) {
         try (Rig rig = new Rig(helper, "rice_3", false)) {
             StockpotWork work = new StockpotWork(rig.colony, rig.at, rig.stances, rig.plan, 1, false, rig.bookings, () -> {});
@@ -168,7 +168,7 @@ public final class StockpotGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 450)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 450)
     public static void threeRiceInputsBecomeThreeSeparatelyServedBowls(GameTestHelper helper) {
         Rig rig = new Rig(helper, "rice_3", false);
         rig.stockRice(3, 3);
@@ -192,7 +192,7 @@ public final class StockpotGameTests {
         });
     }
 
-    @GameTest(template = "empty", timeoutTicks = 800)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 800)
     public static void oneLidAndOneSetOfBowlsCanCookTwoConsecutiveBatches(GameTestHelper helper) {
         Rig rig = new Rig(helper, "rice_3", false);
         rig.stockRice(3, 3);
@@ -222,7 +222,7 @@ public final class StockpotGameTests {
         }).thenSucceed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void missingCarriersOrIngredientsLeaveEverythingUnchanged(GameTestHelper helper) {
         try (Rig rig = new Rig(helper, "rice_3", false)) {
             rig.stockRice(3, 2);
@@ -248,7 +248,7 @@ public final class StockpotGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void noHeatPreventsLoadingAndRefundsAllSupplies(GameTestHelper helper) {
         try (Rig rig = new Rig(helper, "rice_3", false)) {
             rig.stockRice(3, 3);
@@ -264,7 +264,7 @@ public final class StockpotGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void playerContentsAreNeitherReplacedNorAdopted(GameTestHelper helper) {
         try (Rig rig = new Rig(helper, "rice_3", false)) {
             rig.stockRice(3, 3);
@@ -281,7 +281,7 @@ public final class StockpotGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 450)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 450)
     public static void anExistingNamedLidIsBorrowedAndReplaced(GameTestHelper helper) {
         Rig rig = new Rig(helper, "rice_3", true);
         ItemStack lid = ModItems.STOCKPOT_LID.get().getDefaultInstance();
@@ -299,7 +299,7 @@ public final class StockpotGameTests {
         });
     }
 
-    @GameTest(template = "empty", timeoutTicks = 450)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 450)
     public static void savedCookingBatchRecoversWithoutDrawingTheIngredientsAgain(GameTestHelper helper) {
         Rig rig = new Rig(helper, "rice_3", false);
         rig.stockRice(3, 3);
@@ -331,7 +331,7 @@ public final class StockpotGameTests {
         });
     }
 
-    @GameTest(template = "empty", timeoutTicks = 450)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 450)
     public static void finishedBatchRecoversForAnotherResident(GameTestHelper helper) {
         Rig rig = new Rig(helper, "rice_3", false);
         rig.stockRice(3, 3);
@@ -354,7 +354,7 @@ public final class StockpotGameTests {
         });
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void aFailedSecondIngredientRollsBackSoupLidClaimAndGoods(GameTestHelper helper) {
         try (Rig rig = new Rig(helper, "rice_3", false)) {
             rig.stockRice(3, 3);
@@ -378,7 +378,7 @@ public final class StockpotGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 450)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 450)
     public static void aFailedSecondServingRestoresAllPortionsAndCarriers(GameTestHelper helper) {
         Rig rig = new Rig(helper, "rice_3", false);
         rig.stockRice(3, 3);
@@ -404,7 +404,7 @@ public final class StockpotGameTests {
         });
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void changedPlayerInputsReleaseOnlyOurClaim(GameTestHelper helper) {
         try (Rig rig = new Rig(helper, "rice_3", false)) {
             rig.stockRice(3, 3);
@@ -431,7 +431,7 @@ public final class StockpotGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void aSecondColonyCannotRecoverTheFirstColonysPot(GameTestHelper helper) {
         try (Rig rig = new Rig(helper, "rice_3", false)) {
             rig.stockRice(3, 3);
@@ -444,7 +444,7 @@ public final class StockpotGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void overlappingIngredientPredicatesAreMatchedWithoutSpendingGoods(GameTestHelper helper) {
         List<ItemStack> supplied = List.of(new ItemStack(Items.CARROT), new ItemStack(Items.POTATO));
         var picked = StockpotSupplies.draw(supplied, List.of(
@@ -455,7 +455,7 @@ public final class StockpotGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void aResidentMovedAwayCannotLoadThePotRemotely(GameTestHelper helper) {
         try (Rig rig = new Rig(helper, "rice_3", false)) {
             rig.stockRice(3, 3);
@@ -469,7 +469,7 @@ public final class StockpotGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void refusedRecipesAreNeitherPlannedNorCommitted(GameTestHelper helper) {
         try (Rig rig = new Rig(helper, "rice_3", false)) {
             rig.stockRice(3, 3);
@@ -486,7 +486,7 @@ public final class StockpotGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void planningAThreeServingBatchNeedsOnlyThreeBowls(GameTestHelper helper) {
         try (Rig rig = new Rig(helper, "rice_3", false)) {
             rig.claim.release(Ending.DROPPED);
@@ -507,7 +507,7 @@ public final class StockpotGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void releasingAKitchenPreservesEveryInvestedItemAndOtherOwners(GameTestHelper helper) {
         try (Rig rig = new Rig(helper, "rice_3", false)) {
             rig.stockRice(3, 3);
@@ -525,7 +525,7 @@ public final class StockpotGameTests {
         }
         helper.succeed();
     }
-    @GameTest(template = "empty", timeoutTicks = 450)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 450)
     public static void threeSingleServingBatchesUseOneLidAndExactlyThreeBowls(GameTestHelper helper) {
         Rig rig = new Rig(helper, "rice_1", false);
         rig.stockRice(3, 3);
@@ -558,7 +558,7 @@ public final class StockpotGameTests {
         }).thenSucceed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void aRotatedMovingFrameUsesStorageFeetForTheRealStockpotInteraction(GameTestHelper helper) {
         try (Rig rig = new Rig(helper, "rice_3", false)) {
             rig.stockRice(3, 3);
@@ -609,7 +609,7 @@ public final class StockpotGameTests {
         }
         helper.succeed();
     }
-    @GameTest(template = "empty", timeoutTicks = 250)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 250)
     public static void recoveryReservesRoomForBothTheMealAndReturnedLid(GameTestHelper helper) {
         Rig rig = new Rig(helper, "rice_1", false);
         rig.stockRice(1, 1);
@@ -638,7 +638,7 @@ public final class StockpotGameTests {
         });
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void recoveryCapacityCountsEveryNonStackableServing(GameTestHelper helper) {
         try (Rig rig = new Rig(helper, "rice_1", false)) {
             StockpotRecipe recipe = new StockpotRecipe(List.of(Ingredient.of(ModItems.RICE_SEED.get())),
@@ -657,7 +657,7 @@ public final class StockpotGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 250)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 250)
     public static void cancellingMultiBatchWorkKeepsUnspentGoodsAndRecoversOnlyTheInvestedBatch(GameTestHelper helper) {
         Rig rig = new Rig(helper, "rice_1", false);
         rig.stockRice(3, 3);
@@ -696,7 +696,7 @@ public final class StockpotGameTests {
         });
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void aStaleNewBatchReleasesItsTurnForAnOlderInvestedBatch(GameTestHelper helper) {
         try (Rig rig = new Rig(helper, "rice_1", false)) {
             rig.stockRice(1, 1);
@@ -717,7 +717,7 @@ public final class StockpotGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void unmarkingAndRemarkingCannotReviveOldStockpotWork(GameTestHelper helper) {
         try (Rig rig = new Rig(helper, "rice_1", false)) {
             rig.stockRice(1, 1);
@@ -742,7 +742,7 @@ public final class StockpotGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void anEmptyAbandonedMarkerCanBeReclaimedWithoutAdoptingForeignFood(GameTestHelper helper) {
         try (Rig rig = new Rig(helper, "rice_1", false)) {
             CompoundTag marker = new CompoundTag();
@@ -819,7 +819,7 @@ public final class StockpotGameTests {
             setting.set(before);
         }
     }
-    @GameTest(template = "empty", timeoutTicks = 450)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 450)
     public static void flexibleBatchReloadRecoversItsRealQualityWithoutReplayingInputs(GameTestHelper helper) {
         Rig rig = new Rig(helper, ResourceLocation.fromNamespaceAndPath("kaleidoscope_cookery", "flex_stockpot/udon_noodle"), false);
         rig.stockUdon();
@@ -849,7 +849,7 @@ public final class StockpotGameTests {
             }).thenSucceed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 450)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 450)
     public static void changingAFlexibleResultComponentRelinquishesOwnershipWithoutTakingThePlayersFood(GameTestHelper helper) {
         Rig rig = new Rig(helper, ResourceLocation.fromNamespaceAndPath("kaleidoscope_cookery", "flex_stockpot/udon_noodle"), false);
         rig.stockUdon();
@@ -868,7 +868,7 @@ public final class StockpotGameTests {
         });
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void thePlannerChoosesFlexibleUdonWhenOnlyThreeIngredientsExist(GameTestHelper helper) {
         try (Rig rig = new Rig(helper, ResourceLocation.fromNamespaceAndPath("kaleidoscope_cookery", "flex_stockpot/udon_noodle"), false)) {
             rig.claim.release(Ending.DROPPED);

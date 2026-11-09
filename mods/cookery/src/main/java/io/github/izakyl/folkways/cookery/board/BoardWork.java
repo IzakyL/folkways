@@ -36,8 +36,8 @@ import io.github.izakyl.folkways.core.work.support.WorkStances;
 import io.github.izakyl.folkways.core.world.api.Reach;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.core.world.api.WorldSpaces;
-import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
-import io.github.izakyl.folkways.plugins.wares.WaresContent;
+import io.github.izakyl.folkways.vanilla.FolkwaysVanillaConfig;
+import io.github.izakyl.folkways.vanilla.wares.WaresContent;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
@@ -84,7 +84,7 @@ final class BoardWork implements KitchenWork {
         this.recovering = previous != null;
         this.loaded = recovering;
         UUID id = recovering
-            ? UUID.nameUUIDFromBytes(("folkways:board/recover/" + previous.id()).getBytes(StandardCharsets.UTF_8))
+            ? UUID.nameUUIDFromBytes(("folkways_cookery:board/recover/" + previous.id()).getBytes(StandardCharsets.UTF_8))
             : UUID.randomUUID();
         this.batch = recovering ? previous : new BoardOwnership.Batch(colony, id, job.recipe());
         this.spec = declare(id, stances, new Workload.Custom())

@@ -1,7 +1,7 @@
 package io.github.izakyl.folkways.core.colony.internal;
 
-import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.base.persist.Reader;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
+import io.github.izakyl.folkways.core.base.persist.Reader;
 import io.github.izakyl.folkways.core.colony.api.WorkDefaults;
 import io.github.izakyl.folkways.core.extension.api.Declaring;
 import io.github.izakyl.folkways.core.resident.api.Body;
@@ -30,8 +30,8 @@ import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
-@EventBusSubscriber(modid = FolkwaysMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@EventBusSubscriber(modid = FolkwaysCoreMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
+@GameTestHolder(FolkwaysCoreMod.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class WorkDefaultsGameTests {
     @SubscribeEvent
@@ -40,7 +40,7 @@ public final class WorkDefaultsGameTests {
     }
 
     private static final ResourceLocation FIRST = Vocations.HAULING;
-    private static final ResourceLocation SECOND = ResourceLocation.fromNamespaceAndPath("folkways", "building");
+    private static final ResourceLocation SECOND = ResourceLocation.fromNamespaceAndPath("folkways_vanilla", "building");
 
     @SubscribeEvent(priority = EventPriority.LOWEST)
     public static void declare(Declaring event) {
@@ -53,7 +53,7 @@ public final class WorkDefaultsGameTests {
         }
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void invalidSavedKeennessFailsForDeclaredTrades(GameTestHelper helper) {
         var provider = helper.getLevel().registryAccess();
         var licences = new ResidentLicences(kind("saved_defaults").id());
@@ -74,7 +74,7 @@ public final class WorkDefaultsGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void sparsePrioritiesRoundTripWithUnknownTrades(GameTestHelper helper) {
         var trade = Vocations.ids().getFirst();
         var missing = id("missing_plugin/trade");
@@ -86,7 +86,7 @@ public final class WorkDefaultsGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void colonySaveKeepsDefaultsAndMissingPluginsThroughEdits(GameTestHelper helper) {
         var trades = java.util.List.of(FIRST, SECOND);
         var kind = kind("saved_defaults");
@@ -114,7 +114,7 @@ public final class WorkDefaultsGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void missingTemplateUsesUsualWorkSettings(GameTestHelper helper) {
         var trade = Vocations.of(FIRST).orElseThrow();
         var kind = kind("missing_defaults");
@@ -126,7 +126,7 @@ public final class WorkDefaultsGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void editsAndApplicationRespectParticipationAndRejectBadInput(GameTestHelper helper) {
         var trades = java.util.List.of(Vocations.of(FIRST).orElseThrow(), Vocations.of(SECOND).orElseThrow());
         var always = trades.get(0);
@@ -150,7 +150,7 @@ public final class WorkDefaultsGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void optInSurvivesKindCopiesAndOtherKindsKeepPersonalSettings(GameTestHelper helper) {
         var trade = Vocations.of(FIRST).orElseThrow();
         var kind = kind("copied_defaults");
@@ -183,6 +183,6 @@ public final class WorkDefaultsGameTests {
     }
 
     private static ResourceLocation id(String name) {
-        return ResourceLocation.fromNamespaceAndPath("folkways", "test/" + name);
+        return ResourceLocation.fromNamespaceAndPath("folkways_core", "test/" + name);
     }
 }

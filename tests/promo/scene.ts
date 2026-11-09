@@ -786,8 +786,8 @@ async function layScene(
   await world.command(server, `tp ${playerName} ${layout.standBlock.x + 0.5} ${layout.standBlock.y} ${layout.standBlock.z + 0.5} 180 20`);
   await tick.sprint(server, 10);
 
-  await tryCommand(server, `give ${playerName} folkways:colony_book`);
-  await world.command(server, `item replace entity ${playerName} weapon.mainhand with folkways:colony_book`);
+  await tryCommand(server, `give ${playerName} folkways_core:colony_book`);
+  await world.command(server, `item replace entity ${playerName} weapon.mainhand with folkways_core:colony_book`);
   await tick.sprint(server, 5);
   const founded = await foundPromoColonyFast(server, playerName, [
     ...layout.quarters.bedFeet,
@@ -926,10 +926,10 @@ export async function residentPositions(server: any): Promise<Standing[]> {
   const result = await world.entities(server, {
     dimension: "minecraft:overworld",
     limit: 1000,
-    types: ["folkways:resident"],
+    types: ["folkways_vanilla:resident"],
   });
   const standing: Standing[] = result.entities
-    .filter((entity: any) => /folkways:resident$/.test(String(entity.type ?? "")) && entity.uuid && entity.position)
+    .filter((entity: any) => /folkways_vanilla:resident$/.test(String(entity.type ?? "")) && entity.uuid && entity.position)
     .map((entity: any) => ({ uuid: String(entity.uuid), at: entity.position as Vec }));
   return standing;
 }
@@ -1195,7 +1195,7 @@ async function outfitCrew(server: any, layout: SiteLayout) {
         const [item, count] = kit.items[i];
         await world.command(
           server,
-          `data modify entity ${uuid} "neoforge:attachments"."folkways:body_state".Pack.Items append value ` +
+          `data modify entity ${uuid} "neoforge:attachments"."folkways_core:body_state".Pack.Items append value ` +
             `{Slot:${KIT_SLOT + i}b,Stack:{id:"${item}",count:${count}}}`,
         );
       }

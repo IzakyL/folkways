@@ -32,7 +32,7 @@ import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.server.ServerLifecycleHooks;
 
 public final class SablePassage implements Passage {
-    public static final ResourceLocation ID = ResourceLocation.fromNamespaceAndPath("folkways", "sable_step");
+    public static final ResourceLocation ID = ResourceLocation.fromNamespaceAndPath("folkways_core", "sable_step");
     private static final Fare STEP = Fare.flat(10);
     private record Contacts(int tick, List<Hop> hops) {
     }

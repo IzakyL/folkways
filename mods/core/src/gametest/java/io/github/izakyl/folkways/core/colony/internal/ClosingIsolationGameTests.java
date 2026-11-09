@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.core.colony.internal;
 
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.colony.api.Closing;
 import io.github.izakyl.folkways.core.colony.api.Colony;
 import io.github.izakyl.folkways.core.colony.api.ColonyContext;
@@ -35,8 +35,8 @@ import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
-@EventBusSubscriber(modid = FolkwaysMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@EventBusSubscriber(modid = FolkwaysCoreMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
+@GameTestHolder(FolkwaysCoreMod.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class ClosingIsolationGameTests {
 
@@ -68,7 +68,7 @@ public final class ClosingIsolationGameTests {
         }
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void nestedFailuresStillEndEverySiblingAndParentOnce(GameTestHelper helper) {
         List<String> ended = new ArrayList<>();
         Branch run = new Branch("run", ended);
@@ -97,7 +97,7 @@ public final class ClosingIsolationGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void fatalErrorsEscapeAfterDetachingAndEndingTheParent(GameTestHelper helper) {
         for (Error fatal : List.of(new VirtualMachineError("injected VM failure") { }, new ThreadDeath())) {
             List<String> ended = new ArrayList<>();
@@ -117,7 +117,7 @@ public final class ClosingIsolationGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void failedScopeCallbacksStillReleaseTheirOwnerAndKeepOtherOwners(GameTestHelper helper) {
         Fixture fixture = new Fixture();
         ColonyWorks colony = fixture.data.works();
@@ -187,7 +187,7 @@ public final class ClosingIsolationGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void failedListenersStillClearTheColonyAfterItsScopes(GameTestHelper helper) {
         Fixture fixture = new Fixture();
         ColonyWorks colony = fixture.data.works();
@@ -240,7 +240,7 @@ public final class ClosingIsolationGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void fatalScopeCallbackStillReleasesItsOwner(GameTestHelper helper) {
         Fixture fixture = new Fixture();
         ColonyWorks colony = fixture.data.works();
@@ -273,7 +273,7 @@ public final class ClosingIsolationGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void failedWithdrawalsStillClearWorkOutsideContributionScopes(GameTestHelper helper) {
         ColonyWorks colony = new ColonyData().works();
         var level = helper.getLevel();
@@ -353,7 +353,7 @@ public final class ClosingIsolationGameTests {
     }
 
     private static ResourceLocation id(String path) {
-        return ResourceLocation.fromNamespaceAndPath("folkways", path);
+        return ResourceLocation.fromNamespaceAndPath("folkways_core", path);
     }
 
     private static final class State {

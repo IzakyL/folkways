@@ -86,7 +86,7 @@ test("every resident has a trade and the trades follow the work", () => {
   const of = (name: string) => staff.find((s) => s.trade.name === name)!.size;
   // No one only carries: every trade but the drivers' carries goods when its own work is done.
   assert.ok(!staff.some((s) => s.trade.name === "hauler"));
-  for (const s of staff) assert.equal(s.trade.priorities["folkways:hauling"], s.trade.name === "driver" ? undefined : 3, s.trade.name);
+  for (const s of staff) assert.equal(s.trade.priorities["folkways_core:hauling"], s.trade.name === "driver" ? undefined : 3, s.trade.name);
   assert.ok(of("driver") < 10);
   // The trades stand in the proportion of their work: herders to fishers as half the pens to the fishing spots.
   assert.ok(of("fisher") > 0);

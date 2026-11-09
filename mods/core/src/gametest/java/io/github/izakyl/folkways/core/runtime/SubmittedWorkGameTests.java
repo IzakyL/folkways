@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.core.runtime;
 
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.colony.api.WorkListener;
 import io.github.izakyl.folkways.core.colony.internal.ColonyData;
 import io.github.izakyl.folkways.core.plan.api.Before;
@@ -26,8 +26,8 @@ import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
-@EventBusSubscriber(modid = FolkwaysMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@EventBusSubscriber(modid = FolkwaysCoreMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
+@GameTestHolder(FolkwaysCoreMod.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class SubmittedWorkGameTests {
     @SubscribeEvent
@@ -57,12 +57,12 @@ public final class SubmittedWorkGameTests {
         }
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void submissionsAreToldAsTheyHappen(GameTestHelper helper) {
         var level = helper.getLevel();
         var dimension = level.dimension();
         var colony = new ColonyData();
-        var owner = ResourceLocation.fromNamespaceAndPath("folkways", "submitted_test");
+        var owner = ResourceLocation.fromNamespaceAndPath("folkways_core", "submitted_test");
         List<String> heard = new ArrayList<>();
         Node single = Nodes.done(spec(helper, owner));
         colony.works().submit(owner, dimension, Grown.of(single), (any, how) -> heard.add("single " + how));
@@ -85,7 +85,7 @@ public final class SubmittedWorkGameTests {
         helper.assertTrue(pair.equals(List.of(first.id() + " " + Ending.DONE)), "each node of it ends on its own");
         colony.works().ended(dimension, second.id(), Ending.DONE);
 
-        colony.works().withdraw(ResourceLocation.fromNamespaceAndPath("folkways", "stranger"), single.id());
+        colony.works().withdraw(ResourceLocation.fromNamespaceAndPath("folkways_core", "stranger"), single.id());
         helper.assertTrue(told.drain().isEmpty(), "only the owner may withdraw submitted work");
         colony.works().withdraw(owner, single.id());
         helper.assertTrue(told.drain().equals(List.of("withdraw " + single.id())) && heard.isEmpty(),
@@ -125,11 +125,11 @@ public final class SubmittedWorkGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void anotherOwnersNodeCannotBeResubmitted(GameTestHelper helper) {
         var colony = new ColonyData();
-        var mine = ResourceLocation.fromNamespaceAndPath("folkways", "submitted_mine");
-        var theirs = ResourceLocation.fromNamespaceAndPath("folkways", "submitted_theirs");
+        var mine = ResourceLocation.fromNamespaceAndPath("folkways_core", "submitted_mine");
+        var theirs = ResourceLocation.fromNamespaceAndPath("folkways_core", "submitted_theirs");
         Grown goal = Grown.of(Nodes.done(spec(helper, mine)));
         colony.works().submit(mine, helper.getLevel().dimension(), goal, (any, how) -> { });
         helper.assertTrue(refused(() -> colony.works().submit(theirs, helper.getLevel().dimension(), goal,

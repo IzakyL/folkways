@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.core.plan.internal;
 
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.inventory.api.Stash;
 import io.github.izakyl.folkways.core.item.api.Containers;
 import io.github.izakyl.folkways.core.item.api.Goods;
@@ -18,8 +18,8 @@ import io.github.izakyl.folkways.core.work.api.WorkSite;
 import io.github.izakyl.folkways.core.work.internal.Commit;
 import io.github.izakyl.folkways.core.work.internal.HaulWork;
 import io.github.izakyl.folkways.core.work.internal.TransferNode;
-import io.github.izakyl.folkways.effect.Stats;
-import io.github.izakyl.folkways.effect.perk.PerkPool;
+import io.github.izakyl.folkways.core.effect.Stats;
+import io.github.izakyl.folkways.core.effect.perk.PerkPool;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -38,8 +38,8 @@ import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
-@EventBusSubscriber(modid = FolkwaysMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@EventBusSubscriber(modid = FolkwaysCoreMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
+@GameTestHolder(FolkwaysCoreMod.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class DeliveryPlanningGameTests {
     @SubscribeEvent
@@ -47,7 +47,7 @@ public final class DeliveryPlanningGameTests {
         event.register(DeliveryPlanningGameTests.class);
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void unstackableDeliverySplitsToFitThePack(GameTestHelper helper) {
         int capacity = 6;
         PlanningFixture fixture = new PlanningFixture(helper, capacity);
@@ -87,7 +87,7 @@ public final class DeliveryPlanningGameTests {
         throw new AssertionError("delivery did not finish");
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void aBatchIsSizedByTheRoomKnownWhenItIsGrown(GameTestHelper helper) {
         PlanningFixture fixture = new PlanningFixture(helper, 18);
         ItemSpec saddles = ItemSpec.of(ResourceLocation.withDefaultNamespace("saddle"));
@@ -153,7 +153,7 @@ public final class DeliveryPlanningGameTests {
         return holdings;
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void deliveryExpandsAsAnOrdinaryTaskAndDoesNotUseItsOwnStock(GameTestHelper helper) {
         PlanningFixture fixture = new PlanningFixture(helper);
         var barrels = fixture.barrels();
@@ -190,7 +190,7 @@ public final class DeliveryPlanningGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void missingSourceDoesNotRecycleDestinationOrLeaveClaims(GameTestHelper helper) {
         PlanningFixture fixture = new PlanningFixture(helper);
         ItemSpec bread = ItemSpec.of(ResourceLocation.withDefaultNamespace("bread"));
@@ -209,7 +209,7 @@ public final class DeliveryPlanningGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void personalSuppliesBindTheFetchToTheRecipient(GameTestHelper helper) {
         PlanningFixture fixture = new PlanningFixture(helper);
         ItemSpec bread = ItemSpec.of(ResourceLocation.withDefaultNamespace("bread"));
@@ -239,7 +239,7 @@ public final class DeliveryPlanningGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void aToolPutAwayIsFetchedBackIntoItsOwnersPack(GameTestHelper helper) {
         PlanningFixture fixture = new PlanningFixture(helper);
         ItemSpec hoes = ItemSpec.of(ItemTags.HOES);
@@ -260,7 +260,7 @@ public final class DeliveryPlanningGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void personalBatchFitsItsRecipientEvenWhenAnotherWorkerHasALargerPack(GameTestHelper helper) {
         PlanningFixture fixture = new PlanningFixture(helper);
         ItemSpec saddles = ItemSpec.of(ResourceLocation.withDefaultNamespace("saddle"));
@@ -287,7 +287,7 @@ public final class DeliveryPlanningGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void alternativeItemsShareOneCarrierAndCommitTogether(GameTestHelper helper) {
         PlanningFixture fixture = new PlanningFixture(helper);
         var barrels = fixture.barrels();
@@ -319,7 +319,7 @@ public final class DeliveryPlanningGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void heavyHaulingDeliversMoreThanOneStackButStillFitsItsActualPack(GameTestHelper helper) {
         for (int rank : new int[]{0, 3}) {
             var effects = PerkPool.effects(rank == 0 ? Map.of() : Map.of(HaulWork.HEAVY, rank));

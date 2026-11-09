@@ -5,18 +5,18 @@ import io.github.izakyl.folkways.core.vocation.api.VocationSpec;
 import io.github.izakyl.folkways.core.vocation.api.Vocations;
 import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.core.work.api.Workload;
-import io.github.izakyl.folkways.effect.Modifier;
-import io.github.izakyl.folkways.effect.Scope;
-import io.github.izakyl.folkways.effect.Stat;
-import io.github.izakyl.folkways.effect.Stats;
-import io.github.izakyl.folkways.effect.perk.Perk;
+import io.github.izakyl.folkways.core.effect.Modifier;
+import io.github.izakyl.folkways.core.effect.Scope;
+import io.github.izakyl.folkways.core.effect.Stat;
+import io.github.izakyl.folkways.core.effect.Stats;
+import io.github.izakyl.folkways.core.effect.perk.Perk;
 import java.util.List;
 import net.minecraft.resources.ResourceLocation;
 
 public final class HaulWork {
 
     public static final ResourceLocation DOMAIN =
-        ResourceLocation.fromNamespaceAndPath("folkways", "haul");
+        ResourceLocation.fromNamespaceAndPath("folkways_core", "haul");
 
     public static final String QUICK_HANDS = "hauling_quick_hands";
 
@@ -38,7 +38,7 @@ public final class HaulWork {
                 List.of(0.85, 0.70, 0.55).get(rank - 1), Scope.trade(Vocations.HAULING))))));
 
     private static ResourceLocation id(String path) {
-        return ResourceLocation.fromNamespaceAndPath("folkways", path);
+        return ResourceLocation.fromNamespaceAndPath("folkways_core", path);
     }
 
     private static final Workload.Haste HASTE = Workload.Haste.of(Vocations.HAULING);

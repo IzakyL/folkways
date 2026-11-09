@@ -1,14 +1,14 @@
 import blockwright.minecraft.core.Args;
 import blockwright.minecraft.core.Sync;
 import dev.blockwright.api.Context;
-import io.github.izakyl.folkways.plugins.build.draft.Commission;
-import io.github.izakyl.folkways.plugins.build.draft.Draft;
-import io.github.izakyl.folkways.plugins.build.draft.Drawn;
-import io.github.izakyl.folkways.plugins.build.draft.Hint;
-import io.github.izakyl.folkways.plugins.build.draft.Pattern;
-import io.github.izakyl.folkways.plugins.build.draft.World;
-import io.github.izakyl.folkways.front.api.Schema;
-import io.github.izakyl.folkways.front.api.Settings;
+import io.github.izakyl.folkways.vanilla.build.draft.Commission;
+import io.github.izakyl.folkways.vanilla.build.draft.Draft;
+import io.github.izakyl.folkways.vanilla.build.draft.Drawn;
+import io.github.izakyl.folkways.vanilla.build.draft.Hint;
+import io.github.izakyl.folkways.vanilla.build.draft.Pattern;
+import io.github.izakyl.folkways.vanilla.build.draft.World;
+import io.github.izakyl.folkways.core.front.api.Schema;
+import io.github.izakyl.folkways.core.front.api.Settings;
 import io.github.izakyl.folkways.core.item.api.ItemFilter;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import net.minecraft.core.BlockPos;
@@ -181,7 +181,7 @@ public final class Task {
 
     private static Object build(Context ctx) {
         var args = Args.of(ctx);
-        var pattern = Pattern.parse(ResourceLocation.parse("folkways:mine"), args.string("source")).orElseThrow();
+        var pattern = Pattern.parse(ResourceLocation.parse("folkways_vanilla:mine"), args.string("source")).orElseThrow();
         ServerLevel level = ctx.server().overworld();
         BlockState air = Blocks.AIR.defaultBlockState();
         for (int x = X0; x <= X1; x++) {

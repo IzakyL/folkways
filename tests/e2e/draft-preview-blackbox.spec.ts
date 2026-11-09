@@ -13,10 +13,10 @@ import { clickUnverified, safeScreen, screenOpen, waitForElement } from "../shar
 import { newRunId } from "../shared/harness/run-id";
 import { around, twins, type Stage } from "../shared/harness/stage";
 
-const BOOK_ITEM = "folkways:colony_book";
-const OFFER = "folkways.zoneconfig.offer.folkways.draft";
+const BOOK_ITEM = "folkways_core:colony_book";
+const OFFER = "folkways.zoneconfig.offer.folkways_vanilla.draft";
 const CHOOSE = "folkways.draft.choose";
-const PATTERN = "folkways.draft.pattern.folkways.terraced_field";
+const PATTERN = "folkways.draft.pattern.folkways_vanilla.terraced_field";
 const PREVIEW = "folkways.draft.preview";
 const BUILD = "folkways.draft.confirm";
 
@@ -27,7 +27,7 @@ const PREVIEWED = defineTask<undefined, Record<string, any>>({
   timeoutMs: 20_000,
   source: javaTask({
     body: `
-var preview = Class.forName("io.github.izakyl.folkways.front.client.ShapePreview");
+var preview = Class.forName("io.github.izakyl.folkways.core.front.client.ShapePreview");
 var ghosts = preview.getDeclaredField("ghosts"); ghosts.setAccessible(true);
 var offer = preview.getDeclaredField("offer"); offer.setAccessible(true);
 return Map.of("ghosts", ((List<?>) ghosts.get(null)).size(), "offer", String.valueOf(offer.get(null)));
@@ -42,9 +42,9 @@ const SITES = defineTask<{ player: string }, Record<string, any>>({
   timeoutMs: 20_000,
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.front.api.Books",
-      "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
-      "io.github.izakyl.folkways.plugins.build.BuildContent",
+      "io.github.izakyl.folkways.core.front.api.Books",
+      "io.github.izakyl.folkways.core.front.engine.colony.ColonyGround",
+      "io.github.izakyl.folkways.vanilla.build.BuildContent",
     ],
     body: `
 var player = ctx.server().getPlayerList().getPlayerByName(Args.of(ctx).string("player"));
@@ -68,10 +68,10 @@ const MEMORY = defineTask<void, Record<string, boolean>>({
   timeoutMs: 20_000,
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.FolkwaysClientConfig",
-      "io.github.izakyl.folkways.front.ui.screen.RememberedSettings",
-      "io.github.izakyl.folkways.front.api.Schema",
-      "io.github.izakyl.folkways.plugins.build.draft.client.KnobValues",
+      "io.github.izakyl.folkways.core.FolkwaysClientConfig",
+      "io.github.izakyl.folkways.core.front.ui.screen.RememberedSettings",
+      "io.github.izakyl.folkways.core.front.api.Schema",
+      "io.github.izakyl.folkways.vanilla.build.draft.client.KnobValues",
       "net.minecraft.resources.ResourceLocation",
       "net.minecraft.nbt.CompoundTag",
       "net.neoforged.fml.loading.FMLPaths",
@@ -85,15 +85,15 @@ try {
     FolkwaysClientConfig.rememberDrawingSettings(true);
     var a = new CompoundTag(); a.putInt("width", 99);
     var b = new CompoundTag(); b.putInt("width", -9);
-    RememberedSettings.save("pattern/folkways:memory_a", a);
-    RememberedSettings.save("pattern/folkways:memory_b", b);
+    RememberedSettings.save("pattern/folkways_vanilla:memory_a", a);
+    RememberedSettings.save("pattern/folkways_vanilla:memory_b", b);
     var disk = new java.util.Properties();
     try (var input = Files.newInputStream(path)) { disk.load(input); }
-    boolean persisted = disk.getProperty("pattern/folkways:memory_a").equals(a.toString())
-        && disk.getProperty("pattern/folkways:memory_b").equals(b.toString());
-    boolean isolated = RememberedSettings.load("pattern/folkways:memory_a").orElseThrow().getInt("width") == 99
-        && RememberedSettings.load("pattern/folkways:memory_b").orElseThrow().getInt("width") == -9
-        && RememberedSettings.load("folkways:memory_a").isEmpty();
+    boolean persisted = disk.getProperty("pattern/folkways_vanilla:memory_a").equals(a.toString())
+        && disk.getProperty("pattern/folkways_vanilla:memory_b").equals(b.toString());
+    boolean isolated = RememberedSettings.load("pattern/folkways_vanilla:memory_a").orElseThrow().getInt("width") == 99
+        && RememberedSettings.load("pattern/folkways_vanilla:memory_b").orElseThrow().getInt("width") == -9
+        && RememberedSettings.load("folkways_vanilla:memory_a").isEmpty();
     var stone = ResourceLocation.parse("minecraft:stone");
     var dirt = ResourceLocation.parse("minecraft:dirt");
     var schema = new Schema(List.of(
@@ -114,11 +114,11 @@ try {
         && fallback.choice("choice").equals(stone) && fallback.items("material").isPresent();
     byte[] written = Files.readAllBytes(path);
     FolkwaysClientConfig.rememberDrawingSettings(false);
-    boolean disabledRead = RememberedSettings.load("pattern/folkways:memory_a").isEmpty();
-    RememberedSettings.save("pattern/folkways:memory_a", b);
+    boolean disabledRead = RememberedSettings.load("pattern/folkways_vanilla:memory_a").isEmpty();
+    RememberedSettings.save("pattern/folkways_vanilla:memory_a", b);
     boolean disabledWrite = java.util.Arrays.equals(written, Files.readAllBytes(path));
     FolkwaysClientConfig.rememberDrawingSettings(true);
-    boolean preserved = RememberedSettings.load("pattern/folkways:memory_a").orElseThrow().equals(a);
+    boolean preserved = RememberedSettings.load("pattern/folkways_vanilla:memory_a").orElseThrow().equals(a);
     return Map.of("persisted", persisted, "isolated", isolated, "restored", restoredValues,
         "conformed", conformed, "disabledRead", disabledRead, "disabledWrite", disabledWrite,
         "preserved", preserved);

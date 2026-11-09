@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.core.plan.internal;
 
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.inventory.api.Stash;
 import io.github.izakyl.folkways.core.inventory.api.StoreRule;
 import io.github.izakyl.folkways.core.inventory.internal.Stands;
@@ -60,11 +60,11 @@ import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
-@EventBusSubscriber(modid = FolkwaysMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@EventBusSubscriber(modid = FolkwaysCoreMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
+@GameTestHolder(FolkwaysCoreMod.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class TransferPlanningGameTests {
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void withdrawingARequestFreesItsRunningDependencyForCargoRecovery(GameTestHelper helper) {
         var f = new PlanningFixture(helper);
         var level = helper.getLevel();
@@ -117,7 +117,7 @@ public final class TransferPlanningGameTests {
         event.register(TransferPlanningGameTests.class);
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void recoveryQueriesEachStoreOnceAndPreservesUncertainRoutes(GameTestHelper helper) {
         var f = new PlanningFixture(helper);
         var hand = f.crew.hands().getFirst();
@@ -171,7 +171,7 @@ public final class TransferPlanningGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void missingPartOfAManifestDoesNotMoveAnything(GameTestHelper helper) {
         var f = new PlanningFixture(helper);
         var level = helper.getLevel();
@@ -195,7 +195,7 @@ public final class TransferPlanningGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void planningFixesComponentsAndExecutionCannotSubstituteItems(GameTestHelper helper) {
         var f = new PlanningFixture(helper);
         var level = helper.getLevel();
@@ -227,7 +227,7 @@ public final class TransferPlanningGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void failedDepositIsReplannedFromTheSameResidentsPack(GameTestHelper helper) {
         var f = new PlanningFixture(helper);
         var level = helper.getLevel();
@@ -277,7 +277,7 @@ public final class TransferPlanningGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void idleCargoIsNotPutAwayAmongAnotherGoodsReserve(GameTestHelper helper) {
         var f = new PlanningFixture(helper);
         var hand = f.crew.hands().getFirst();
@@ -329,7 +329,7 @@ public final class TransferPlanningGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void idleCargoIsPutAwayInTheNearestStoreWhileNoWayThereIsWorkedOut(GameTestHelper helper) {
         var f = new PlanningFixture(helper);
         var hand = f.crew.hands().getFirst();
@@ -383,7 +383,7 @@ public final class TransferPlanningGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void personalSuppliesAreAcquiredThenKept(GameTestHelper helper) {
         var f = new PlanningFixture(helper);
         ItemStack bread = new ItemStack(Items.BREAD, 2);
@@ -412,7 +412,7 @@ public final class TransferPlanningGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void personalDeliveryDoesNotCountExistingSuppliesAsNewGoods(GameTestHelper helper) {
         var f = new PlanningFixture(helper);
         var hand = f.crew.hands().getFirst();
@@ -433,7 +433,7 @@ public final class TransferPlanningGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void producedGoodsKeepComponentsAndTransferAtomically(GameTestHelper helper) {
         var f = new PlanningFixture(helper);
         var level = helper.getLevel();
@@ -469,7 +469,7 @@ public final class TransferPlanningGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void futureAlternativesBindOnlyAfterAtomicPickup(GameTestHelper helper) {
         var f = new PlanningFixture(helper);
         var level = helper.getLevel();
@@ -507,7 +507,7 @@ public final class TransferPlanningGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void futureTagAndExactStockCanShareAManifest(GameTestHelper helper) {
         var f = new PlanningFixture(helper);
         var tag = ItemSpec.of(ItemTags.PLANKS);
@@ -529,7 +529,7 @@ public final class TransferPlanningGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void productionWithAlternativesPlansAcrossEmptyStores(GameTestHelper helper) {
         var f = new PlanningFixture(helper);
         var alternatives = ItemSpec.anyOf(List.of(ItemSpec.of(Items.COAL), ItemSpec.of(Items.OAK_PLANKS)));

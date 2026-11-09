@@ -30,7 +30,7 @@ test("resident names and cards, and a chest window that fits every GUI scale", a
     const origin = { x: Math.round(grounded.pos.x) + 4, y: Math.round(grounded.pos.y), z: Math.round(grounded.pos.z) + 4 };
     const founded = await foundColonyFast(server, client, player, { origin, residentCount: 2 });
     await screen.dismiss(client);
-    await world.command(server, `tp @e[type=folkways:resident,limit=1] ${origin.x + 4} ${origin.y} ${origin.z + 4}`);
+    await world.command(server, `tp @e[type=folkways_vanilla:resident,limit=1] ${origin.x + 4} ${origin.y} ${origin.z + 4}`);
     await world.command(server, `tp ${player} ${origin.x + 4} ${origin.y} ${origin.z + 9} 180 0`);
     await tick.sprint(server, 8);
     await frames(client, 30);
@@ -51,7 +51,7 @@ test("resident names and cards, and a chest window that fits every GUI scale", a
     await tick.sprint(server, 5);
     await createMarkedZone(server, client, player, founded.standBlock, "farm");
     await world.command(server, `setblock ${zoneMax.x} ${zoneMax.y} ${zoneMax.z} minecraft:air`);
-    await world.command(server, `tp @e[type=folkways:resident,limit=1] ${origin.x + 4} ${origin.y} ${origin.z + 4}`);
+    await world.command(server, `tp @e[type=folkways_vanilla:resident,limit=1] ${origin.x + 4} ${origin.y} ${origin.z + 4}`);
     await world.command(server, `tp ${player} ${origin.x + 4} ${origin.y} ${origin.z + 9} 180 0`);
     await tick.sprint(server, 8);
     await frames(client, 30);
@@ -93,7 +93,7 @@ test("resident names and cards, and a chest window that fits every GUI scale", a
     await setMaintainDemandViaUI(server, client, player, chest, "minecraft:cobblestone", 1);
     const draft = await openOrderDraft(server, client, chest);
     const order = await scrollElementIntoView(client, {
-      id: `folkways.board.do.folkways.orders.${draft.row + 1}.0`,
+      id: `folkways.board.do.folkways_vanilla.orders.${draft.row + 1}.0`,
     });
     const shown = visibleBox(await panelElements(client), order);
     expect(shown?.height).toBe(order.height);

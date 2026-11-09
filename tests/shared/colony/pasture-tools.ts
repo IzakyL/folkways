@@ -157,18 +157,18 @@ export async function looseItemExists(server: MinecraftServer, itemId: string) {
 }
 
 const PERKS_IN = (inner: string) =>
-  `{"neoforge:attachments":{"folkways:body_state":{Perks:${inner}}}}`;
+  `{"neoforge:attachments":{"folkways_core:body_state":{Perks:${inner}}}}`;
 
 export async function grantPerkToAllResidents(server: MinecraftServer, perksNbt: string) {
   return mustCommand(
     server,
-    `execute as @e[type=folkways:resident] run data merge entity @s ${PERKS_IN(perksNbt)}`,
+    `execute as @e[type=folkways_vanilla:resident] run data merge entity @s ${PERKS_IN(perksNbt)}`,
   );
 }
 
 export async function anyResidentEarnedPerkXp(server: MinecraftServer) {
   return probe(
     server,
-    `as @e[type=folkways:resident] unless entity @s[nbt=${PERKS_IN("{global:{xp:0}}")}]`,
+    `as @e[type=folkways_vanilla:resident] unless entity @s[nbt=${PERKS_IN("{global:{xp:0}}")}]`,
   );
 }

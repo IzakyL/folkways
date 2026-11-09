@@ -5,7 +5,7 @@ import io.github.izakyl.folkways.core.colony.api.ColonyView;
 import io.github.izakyl.folkways.core.resident.api.Body;
 import io.github.izakyl.folkways.core.resident.api.Resident;
 import io.github.izakyl.folkways.core.world.api.WorldSpaces;
-import io.github.izakyl.folkways.effect.Effects;
+import io.github.izakyl.folkways.core.effect.Effects;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;

@@ -1,0 +1,45 @@
+plugins {
+    id "net.neoforged.moddev"
+    id "java-library"
+    id "maven-publish"
+}
+
+ext.modId = "folkways_firearms"
+ext.modName = "folkways-firearms"
+apply from: rootProject.file("gradle/mod.gradle")
+evaluationDependsOn(":core")
+evaluationDependsOn(":vanilla")
+
+dependencies {
+    api project(":vanilla")
+    compileOnly lib("tacz")
+    compileOnly lib("superbwarfare")
+    compileOnly lib("kotlinforforge")
+    compileOnly lib("geckolib")
+    gametestImplementation project(":core").sourceSets.gameTestFixtures.output
+}
+
+// Native integration tests enter the server only with their target mod.
+sourceSets { taczTest }
+neoForge { addModdingDependenciesTo sourceSets.taczTest }
+configurations {
+    taczTestCompileOnly.extendsFrom gametestCompileOnly
+    taczTestImplementation.extendsFrom gametestImplementation
+    taczTestRuntimeOnly.extendsFrom gametestRuntimeOnly
+}
+dependencies {
+    taczTestImplementation sourceSets.main.output
+}
+
+// Native integration tests enter the server only with their target mod.
+sourceSets { warfareTest }
+neoForge { addModdingDependenciesTo sourceSets.warfareTest }
+configurations {
+    warfareTestCompileOnly.extendsFrom gametestCompileOnly
+    warfareTestImplementation.extendsFrom gametestImplementation
+    warfareTestRuntimeOnly.extendsFrom gametestRuntimeOnly
+}
+dependencies {
+    warfareTestImplementation sourceSets.main.output
+    warfareTestImplementation project(":vanilla").sourceSets.warfareTest.output
+}

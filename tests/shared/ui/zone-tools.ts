@@ -121,11 +121,11 @@ export async function markBox(
 }
 
 export const ZONE_KIND_ID = {
-  farm: "folkways:farm",
-  dining: "folkways:dining",
-  pasture: "folkways:pasture",
-  fish: "folkways:fish",
-  ground: "folkways:ground",
+  farm: "folkways_vanilla:farm",
+  dining: "folkways_vanilla:dining",
+  pasture: "folkways_vanilla:pasture",
+  fish: "folkways_vanilla:fish",
+  ground: "folkways_vanilla:ground",
 } as const;
 
 export type ZoneKind = keyof typeof ZONE_KIND_ID;
@@ -263,7 +263,7 @@ const CLIENT_ZONES = defineTask<undefined, Record<string, any>>({
   side: "client",
   timeoutMs: 20_000,
   source: javaTask({
-    imports: ["io.github.izakyl.folkways.front.client.ColonyHighlightState"],
+    imports: ["io.github.izakyl.folkways.core.front.client.ColonyHighlightState"],
     body: `
 var player=net.minecraft.client.Minecraft.getInstance().player;
 var zones=new ArrayList<Object>();
@@ -308,7 +308,7 @@ export async function releaseHeldZone(client: MinecraftClient) {
 
 const COLONY_REGISTRY = "io.github.izakyl.folkways.core.colony.internal.ColonyRegistry";
 
-const COLONY_FRONT = "io.github.izakyl.folkways.front.engine.colony.ColonyFront";
+const COLONY_FRONT = "io.github.izakyl.folkways.core.front.engine.colony.ColonyFront";
 const COLONY_INTERFACE = "io.github.izakyl.folkways.core.colony.api.Colony";
 
 export async function colonyRegistry(server: MinecraftServer): Promise<string> {

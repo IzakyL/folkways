@@ -1,7 +1,7 @@
 package io.github.izakyl.folkways.carts;
 
 import com.jusipat.astikorcartsredux.entity.AbstractCargoCart;
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.colony.api.Claimed;
 import io.github.izakyl.folkways.core.colony.api.Colonies;
 import io.github.izakyl.folkways.core.colony.api.Colony;
@@ -10,7 +10,7 @@ import io.github.izakyl.folkways.core.item.api.Goods;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import io.github.izakyl.folkways.core.plan.internal.Crew;
 import io.github.izakyl.folkways.core.plan.internal.PlanningFixture;
-import io.github.izakyl.folkways.plugins.person.ResidentEntity;
+import io.github.izakyl.folkways.vanilla.person.ResidentEntity;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -30,7 +30,7 @@ import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
 @EventBusSubscriber(modid = FolkwaysCartsMod.ID, bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@GameTestHolder("folkways_carts")
 @PrefixGameTestTemplate(false)
 public final class CartGameTests {
     private static final ItemSpec SADDLES = ItemSpec.of(Items.SADDLE);
@@ -40,7 +40,7 @@ public final class CartGameTests {
         event.register(CartGameTests.class);
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void hitchingDoesNotChangeThePackOrItsPlanningCapacity(GameTestHelper helper) {
         try (Rig rig = new Rig(helper, "hand_cart")) {
             int size = rig.pack().getContainerSize();
@@ -54,7 +54,7 @@ public final class CartGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void savedPullerRelinksAfterReload(GameTestHelper helper) {
         try (Rig rig = new Rig(helper, "hand_cart")) {
             rig.hitch();
@@ -75,7 +75,7 @@ public final class CartGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void leavingTheColonyDetachesTheCartWithoutTakingItsCargo(GameTestHelper helper) {
         try (Rig rig = new Rig(helper, "hand_cart")) {
             rig.hitch();
@@ -88,7 +88,7 @@ public final class CartGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void anUnloadedPullerKeepsItsSavedLinkAndRelinksOnReturn(GameTestHelper helper) {
         try (Rig rig = new Rig(helper, "hand_cart")) {
             rig.hitch();
@@ -101,7 +101,7 @@ public final class CartGameTests {
             helper.assertTrue(id.equals(((SavedPuller) rig.cart).folkways$puller()),
                 "unloading a resident must retain native pullingUUID instead of detaching permanently");
             var replacement = (ResidentEntity) BuiltInRegistries.ENTITY_TYPE.get(
-                ResourceLocation.fromNamespaceAndPath("folkways", "resident")).create(helper.getLevel());
+                ResourceLocation.fromNamespaceAndPath("folkways_vanilla", "resident")).create(helper.getLevel());
             replacement.load(saved);
             helper.getLevel().addFreshEntity(replacement);
             replacement.joinColony(rig.colony.id());
@@ -117,7 +117,7 @@ public final class CartGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void admissionSurvivesUnloadingAndColonySaveLoadButDestructionReleasesIt(GameTestHelper helper)
             throws ReflectiveOperationException {
         try (Rig rig = new Rig(helper, "hand_cart")) {
@@ -127,10 +127,10 @@ public final class CartGameTests {
                 "unloading a cart retains admission");
             var original = io.github.izakyl.folkways.core.colony.internal.ColonyData
                 .find(helper.getLevel().getServer(), rig.colony.id()).orElseThrow();
-            var load = original.getClass().getDeclaredMethod("load", io.github.izakyl.folkways.base.persist.Reader.class);
+            var load = original.getClass().getDeclaredMethod("load", io.github.izakyl.folkways.core.base.persist.Reader.class);
             load.setAccessible(true);
             var restored = (io.github.izakyl.folkways.core.colony.internal.ColonyData) ((Optional<?>) load.invoke(null,
-                io.github.izakyl.folkways.base.persist.Reader.of(original.save(new CompoundTag())))).orElseThrow();
+                io.github.izakyl.folkways.core.base.persist.Reader.of(original.save(new CompoundTag())))).orElseThrow();
             helper.assertTrue(restored.works().claimOf(rig.cart.getUUID()).filter(held::equals).isPresent(),
                 "entity admission survives actual colony serialization without loading the cart");
             var replacement = rig.newCart("hand_cart");
@@ -144,7 +144,7 @@ public final class CartGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void aDeadPullerLeavesItsLoadedCartBehind(GameTestHelper helper) {
         try (Rig rig = new Rig(helper, "hand_cart")) {
             rig.hitch();

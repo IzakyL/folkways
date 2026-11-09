@@ -18,7 +18,7 @@ for(int x=(int)args.integer("minX");x<=(int)args.integer("maxX");x++){
         var storage=entity.payload().storage();
         if(entity.getStatistics().isEmptyBlock()){empty++;}
         ${side === "server" ? `
-        var adapter=io.github.izakyl.folkways.plugins.build.SchematicPlacement.adapter();
+        var adapter=io.github.izakyl.folkways.vanilla.build.SchematicPlacement.adapter();
         if(adapter.prepare(level,entity.getBlockState(),entity)==null){stripped++;}` : ""}
         cells.add(List.of(at.toShortString(),storage.getSize(),java.util.Arrays.hashCode(storage.getRawData()),
           storage.palette().paletteEntries().toString()));

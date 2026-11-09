@@ -1,7 +1,7 @@
 package io.github.izakyl.folkways.create.dispatch;
 
-import io.github.izakyl.folkways.base.persist.Reader;
-import io.github.izakyl.folkways.base.persist.Writer;
+import io.github.izakyl.folkways.core.base.persist.Reader;
+import io.github.izakyl.folkways.core.base.persist.Writer;
 import io.github.izakyl.folkways.core.colony.api.Claim;
 import io.github.izakyl.folkways.core.colony.api.Claimed;
 import io.github.izakyl.folkways.core.colony.api.Closing;
@@ -28,12 +28,12 @@ import io.github.izakyl.folkways.core.world.api.Stand;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.create.rail.domain.RailContent;
 import io.github.izakyl.folkways.create.rail.domain.RailPresence;
-import io.github.izakyl.folkways.front.api.Facing;
-import io.github.izakyl.folkways.front.api.notice.Attempt;
-import io.github.izakyl.folkways.front.api.notice.Line;
-import io.github.izakyl.folkways.front.api.notice.Notice;
-import io.github.izakyl.folkways.front.api.notice.Sentence;
-import io.github.izakyl.folkways.front.api.panel.Board;
+import io.github.izakyl.folkways.core.front.api.Facing;
+import io.github.izakyl.folkways.core.front.api.notice.Attempt;
+import io.github.izakyl.folkways.core.front.api.notice.Line;
+import io.github.izakyl.folkways.core.front.api.notice.Notice;
+import io.github.izakyl.folkways.core.front.api.notice.Sentence;
+import io.github.izakyl.folkways.core.front.api.panel.Board;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -65,8 +65,8 @@ public final class DispatchPresence implements Facing {
     private static final String TAG_CHAINS = "chains";
 
     private static final ResourceLocation DISPATCHING =
-        ResourceLocation.fromNamespaceAndPath("folkways", "vocation/dispatching");
-    private static final ResourceLocation PORT = ResourceLocation.fromNamespaceAndPath("folkways", "delegation/port");
+        ResourceLocation.fromNamespaceAndPath("folkways_create", "vocation/dispatching");
+    private static final ResourceLocation PORT = ResourceLocation.fromNamespaceAndPath("folkways_create", "delegation/port");
     private static final ResourceLocation PARCEL =
         ResourceLocation.fromNamespaceAndPath("create", "cardboard_package_12x12");
     private static final ResourceLocation CHAIN = ResourceLocation.fromNamespaceAndPath("create", "chain_conveyor");
@@ -629,7 +629,7 @@ public final class DispatchPresence implements Facing {
         if (desks.isEmpty()) {
             return Optional.empty();
         }
-        return Optional.of(new Counter(UUID.nameUUIDFromBytes(("folkways:dispatch/counter/"
+        return Optional.of(new Counter(UUID.nameUUIDFromBytes(("folkways_create:dispatch/counter/"
                 + level.dimension().location()).getBytes(StandardCharsets.UTF_8)),
             new WorkSite.AtBlock(desks.getFirst().packager()), desks, collecting, eta, posting, reachTicks));
     }
@@ -697,7 +697,7 @@ public final class DispatchPresence implements Facing {
     }
 
     private static UUID depotKey(UUID network, ServerLevel level) {
-        return UUID.nameUUIDFromBytes(("folkways:dispatch/depot/" + network + "/" + level.dimension().location())
+        return UUID.nameUUIDFromBytes(("folkways_create:dispatch/depot/" + network + "/" + level.dimension().location())
             .getBytes(StandardCharsets.UTF_8));
     }
 
@@ -889,7 +889,7 @@ public final class DispatchPresence implements Facing {
         Optional<ResourceLocation> item = Doings.item(request.goods());
         if (item.isPresent()) {
             return Optional.of(Line.told(Sentence.of(
-                Sentence.glyph(DISPATCHING, new Notice("folkways.vocation.folkways.dispatching", List.of())),
+                Sentence.glyph(DISPATCHING, new Notice("folkways.vocation.folkways_create.dispatching", List.of())),
                 Sentence.ware(item.get(), request.count()), Sentence.YIELDS).then(bound(request.port()))));
         }
         return Doings.about(request.goods()).map(goods -> Line.of(DispatchNotice.SENDING,

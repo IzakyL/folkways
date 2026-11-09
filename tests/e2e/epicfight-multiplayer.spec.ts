@@ -26,7 +26,7 @@ test("two real Epic Fight clients see one native guard, through guest disconnect
     const run = newRunId();
     pair = await launchPair({ config: "blockwright.toml#epicfight",
       server: { instance: `epicfight-multi-server-${run}` }, client: { instance: `epicfight-multi-primary-${run}` },
-      snapshot: { entityTypes: ["folkways:resident", "minecraft:zombie", "minecraft:item"] } });
+      snapshot: { entityTypes: ["folkways_vanilla:resident", "minecraft:zombie", "minecraft:item"] } });
     const primary = await waitForGroundedPlayer(pair.server);
     const origin = { x: Math.round(primary.pos.x) + 4, y: Math.round(primary.pos.y), z: Math.round(primary.pos.z) + 4 };
     await flat(pair, origin);
@@ -49,7 +49,7 @@ test("two real Epic Fight clients see one native guard, through guest disconnect
     const initial = await pair.server.run(NATIVE, scene);
     evidence.push({ step: "server pinned native spear and unique physical stack", value: initial });
     expect(initial.patch).toBe(true);
-    expect(initial.rts).toBe(false);
+    expect(initial.rts).toBe(true);
     expect(initial.weaponCount).toBe(1);
     expect(initial.components).toBe(true);
     expect(initial.weaponDamage).toBe(9);
@@ -157,7 +157,7 @@ test("two real Epic Fight clients see one native guard, through guest disconnect
 
 function physical(state: Native) {
   expect(state.patch).toBe(true);
-  expect(state.rts).toBe(false);
+  expect(state.rts).toBe(true);
   expect(state.weaponCount, "pack, borrowed native hand and nearby drops together hold one spear").toBe(1);
   expect(state.components, "the real spear retains its components except legitimate durability").toBe(true);
   expect(state.weaponDamage).toBeGreaterThan(9);
@@ -167,11 +167,11 @@ function drawn(draw: Draw) {
   expect(draw.present && draw.patch && draw.epicfight && draw.bridge).toBe(true);
   expect(draw.overlay || !!draw.screen, "screenshots must expose the world rather than a loading/menu overlay").toBe(false);
   expect(draw.nativeVersion).toBe("21.17.3.1");
-  expect(draw.look).toBe("folkways:steve_wide");
+  expect(draw.look).toBe("folkways_vanilla:steve_wide");
   expect(draw.draws).toBeGreaterThan(0);
   expect(draw.mesh).toBe(MESH);
   expect(draw.texture).toBe(SKIN);
-  expect(draw.sourceRenderer).toBe("io.github.izakyl.folkways.plugins.person.ResidentSkinRenderer");
+  expect(draw.sourceRenderer).toBe("io.github.izakyl.folkways.vanilla.person.ResidentSkinRenderer");
   expect(draw.entryScale).toBeGreaterThan(0);
 }
 async function online(pair: E2EPair, count: number, evidence: Evidence, step: string) {
@@ -221,7 +221,7 @@ var a=Args.of(ctx);var level=((MinecraftServer)ctx.server()).overworld();var tar
 target.getAttribute(Attributes.MAX_HEALTH).setBaseValue(2000);target.setHealth(2000);return true;` }) });
 const DRAW = defineTask<Scene, Draw>({ name: "folkways.epicfight.multiplayer.actual-client-draw", side: "client", source: javaTask({ imports: [
   "java.util.LinkedHashMap", "net.minecraft.client.Minecraft", "net.neoforged.fml.ModList",
-  "io.github.izakyl.folkways.plugins.person.ResidentEntity", "io.github.izakyl.folkways.plugins.person.look.ResidentLooks",
+  "io.github.izakyl.folkways.vanilla.person.ResidentEntity", "io.github.izakyl.folkways.vanilla.person.look.ResidentLooks",
   "io.github.izakyl.folkways.epicfight.ResidentEpicFightPatch", "io.github.izakyl.folkways.epicfight.client.ResidentRenderEvidence",
   "yesman.epicfight.api.animation.types.AttackAnimation"], body: `
 var a=Args.of(ctx);var mc=Minecraft.getInstance();var out=new LinkedHashMap<String,Object>();

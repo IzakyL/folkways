@@ -21,7 +21,7 @@ import { newRunId } from "../shared/harness/run-id";
 const CONFIG_PATH = "blockwright.toml";
 
 const SKIN = path.join(MODEL_ASSETS, "steve", "textures", "tartaric_acid.png");
-const BLUEPRINT = path.join(REPO_ROOT, "mods/vanilla/src/gametest/resources/data/folkways/folkways/blueprint/test_hut.nbt");
+const BLUEPRINT = path.join(REPO_ROOT, "mods/vanilla/src/gametest/resources/data/folkways_vanilla/folkways/blueprint/test_hut.nbt");
 const PATTERN = `accepts = ["zone"]
 
 def draw(site):
@@ -34,9 +34,9 @@ const MODEL_NAME = "default_boy";
 const MODEL_WEIGHT = 400;
 const RESIDENTS = 3;
 
-const GEOMETRY_PACK_PATH = "assets/folkways/geo/resident_models/default_boy.geo.json";
-const ANIMATION_PACK_PATH = "assets/folkways/animations/resident_models/default_boy.animation.json";
-const TEXTURE_PACK_PATH = "assets/folkways/textures/entity/resident_models/default_boy/blue.png";
+const GEOMETRY_PACK_PATH = "assets/folkways_vanilla/geo/resident_models/default_boy.geo.json";
+const ANIMATION_PACK_PATH = "assets/folkways_vanilla/animations/resident_models/default_boy.animation.json";
+const TEXTURE_PACK_PATH = "assets/folkways_vanilla/textures/entity/resident_models/default_boy/blue.png";
 
 test("server data loads from the folkways folder and data packs: files, resident models and pattern translations", async ({}, testInfo) => {
   test.setTimeout(BUDGET.quick);
@@ -49,7 +49,7 @@ test("server data loads from the folkways folder and data packs: files, resident
       config: CONFIG_PATH,
       server: { trace: tracePath("e2e", "library-folder-server"), instance: seededServer(`library-folder-server-${runId}`) },
       client: { trace: tracePath("e2e", "library-folder-client"), instance: `library-folder-client-${runId}` },
-      snapshot: () => ({ entityTypes: ["folkways:resident"] }),
+      snapshot: () => ({ entityTypes: ["folkways_vanilla:resident"] }),
     });
     const { server, client } = pair;
 
@@ -84,8 +84,8 @@ test("server data loads from the folkways folder and data packs: files, resident
     evidence.models = { entryIds: models.entryIds, resolved: models.resolved };
     expect(models.resolved, "the static read must resolve").toBe(true);
     expect(models.entryIds, "one entry per texture, and nothing refused").toEqual([
-      "folkways:model/default_boy/blue",
-      "folkways:model/default_boy/red",
+      "folkways_vanilla:model/default_boy/blue",
+      "folkways_vanilla:model/default_boy/red",
     ]);
     evidence.model_arrival = await waitForModelsOnClient(client, GEOMETRY_PACK_PATH);
     expect({
@@ -159,12 +159,12 @@ const READ_LIBRARY = defineTask<void, {
   timeoutMs: 20_000,
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.library.LooseFolder",
-      "io.github.izakyl.folkways.library.Shelves",
-      "io.github.izakyl.folkways.plugins.build.draft.Patterns",
-      "io.github.izakyl.folkways.plugins.build.draft.Templates",
-      "io.github.izakyl.folkways.plugins.person.look.ResidentLook",
-      "io.github.izakyl.folkways.plugins.person.look.ResidentLooks",
+      "io.github.izakyl.folkways.core.library.LooseFolder",
+      "io.github.izakyl.folkways.core.library.Shelves",
+      "io.github.izakyl.folkways.vanilla.build.draft.Patterns",
+      "io.github.izakyl.folkways.vanilla.build.draft.Templates",
+      "io.github.izakyl.folkways.vanilla.person.look.ResidentLook",
+      "io.github.izakyl.folkways.vanilla.person.look.ResidentLooks",
       "java.nio.file.Files",
       "net.minecraft.resources.ResourceLocation",
     ],
@@ -215,9 +215,9 @@ const TRANSLATE = defineTask<{ first: string; second: string }, {
   source: javaTask({
     imports: [
       "com.mojang.serialization.JsonOps",
-      "io.github.izakyl.folkways.front.api.notice.Notice",
-      "io.github.izakyl.folkways.plugins.build.draft.Pattern",
-      "io.github.izakyl.folkways.plugins.build.draft.PatternText",
+      "io.github.izakyl.folkways.core.front.api.notice.Notice",
+      "io.github.izakyl.folkways.vanilla.build.draft.Pattern",
+      "io.github.izakyl.folkways.vanilla.build.draft.PatternText",
       "net.minecraft.client.Minecraft",
       "net.minecraft.client.resources.language.ClientLanguage",
       "net.minecraft.locale.Language",

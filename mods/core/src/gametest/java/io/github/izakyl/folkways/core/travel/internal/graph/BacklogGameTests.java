@@ -1,9 +1,9 @@
 package io.github.izakyl.folkways.core.travel.internal.graph;
 
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.travel.internal.Urgency;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
-import io.github.izakyl.folkways.plugins.person.walk.Walking;
+import io.github.izakyl.folkways.vanilla.person.walk.Walking;
 import it.unimi.dsi.fastutil.longs.LongArrayList;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -25,19 +25,19 @@ import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
-@EventBusSubscriber(modid = FolkwaysMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@EventBusSubscriber(modid = FolkwaysCoreMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
+@GameTestHolder(FolkwaysCoreMod.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class BacklogGameTests {
 
-    private static final ResourceLocation KIND = ResourceLocation.fromNamespaceAndPath("folkways", "resident");
+    private static final ResourceLocation KIND = ResourceLocation.fromNamespaceAndPath("folkways_vanilla", "resident");
 
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) {
         event.register(BacklogGameTests.class);
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void representativesSurviveDeletionAndAttachmentEviction(GameTestHelper helper) {
         Waypoints net = new Waypoints();
         int a = net.admit(new BlockPos(0, 1, 0).asLong(), 0);
@@ -63,7 +63,7 @@ public final class BacklogGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void representativesRespectDirectionAndResumeExpiredEdges(GameTestHelper helper) {
         Waypoints net = new Waypoints();
         int a = net.pin(new BlockPos(0, 1, 0).asLong(), 0);
@@ -88,7 +88,7 @@ public final class BacklogGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void pendingServesUrgencyFirstAndKeysByTheWay(GameTestHelper helper) {
         Pending queue = new Pending();
         Ask planned = ask(helper, 1, 10, Urgency.PLANNING);
@@ -116,7 +116,7 @@ public final class BacklogGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void snapshotsAnswerOnTheirOwnTermsUntilFreezingAgain(GameTestHelper helper) {
         Waypoints net = new Waypoints();
         Ask ask = ask(helper, 1, 2);
@@ -140,7 +140,7 @@ public final class BacklogGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     @SuppressWarnings("unchecked")
     public static void knownWaysAreAnsweredWithoutSearching(GameTestHelper helper) throws Exception {
         Mob body = helper.spawnWithNoFreeWill(EntityType.ZOMBIE, new BlockPos(1, 2, 1));
@@ -173,7 +173,7 @@ public final class BacklogGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void nearbyCellsSnapOntoTheGraphUnlessWalkingThereFailed(GameTestHelper helper) {
         Waypoints net = new Waypoints();
         BlockPos at = new BlockPos(10, 1, 10);
@@ -191,7 +191,7 @@ public final class BacklogGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void walkingAnEdgeTeachesItsCostAndFailingStrikesOnlyThatEdge(GameTestHelper helper) {
         Waypoints net = new Waypoints();
         long a = new BlockPos(0, 1, 0).asLong(), b = new BlockPos(12, 1, 0).asLong(), c = new BlockPos(24, 1, 0).asLong();
@@ -207,7 +207,7 @@ public final class BacklogGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", batch = "backlog_exploration")
+    @GameTest(template = "empty", templateNamespace = "folkways_core", batch = "backlog_exploration")
     @SuppressWarnings("unchecked")
     public static void explorationGetsATurnWhileAQuestAndBacklogRemain(GameTestHelper helper) throws Exception {
         for (int x = 0; x < 24; x++) {
@@ -246,7 +246,7 @@ public final class BacklogGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void strongComponentsMatchIndependentReachability(GameTestHelper helper) {
         Random random = new Random(47017);
         for (int trial = 0; trial < 20; trial++) {

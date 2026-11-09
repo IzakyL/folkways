@@ -13,7 +13,7 @@ import { GROUND } from "../shared/harness/stage";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 
-const PAGE = "folkways.orders";
+const PAGE = "folkways_vanilla.orders";
 const REFUSAL = `folkways.board.refusal.${PAGE}`;
 
 // Existing orders never prevent switching a container's incoming goods filter.

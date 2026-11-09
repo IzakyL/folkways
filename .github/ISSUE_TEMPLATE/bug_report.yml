@@ -13,7 +13,7 @@ body:
     id: versions
     attributes:
       label: Versions
-      description: Name each Folkways jar you have installed (Core, Vanilla, × Create, × Modular Golems).
+      description: Name each Folkways jar you have installed (Core, Vanilla, × Create, Firearms, × Modular Golems, × Cookery, × Chisels & Bits, × AstikorCarts Redux, × Epic Fight).
       placeholder: Minecraft 1.21.1, NeoForge 21.1.233, Folkways Core + Vanilla + × Create 0.1.0, LDLib2 2.2.37
     validations:
       required: true
@@ -21,7 +21,7 @@ body:
     id: mods
     attributes:
       label: Other mods installed
-      description: At least Create, Sable, Modular Golems, GeckoLib, JEI and EMI if you have them.
+      description: Include Create, FireFighting Additions, TACZ, Superb Warfare, Kotlin for Forge, Epic Fight, Sable, Modular Golems, GeckoLib, JEI and EMI if installed.
   - type: textarea
     id: log
     attributes:

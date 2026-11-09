@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.create.dispatch.mixin;
 
-import io.github.izakyl.folkways.base.FolkwaysMixinPlugin;
+import io.github.izakyl.folkways.core.base.FolkwaysMixinPlugin;
 import java.util.List;
 import java.util.Set;
 

@@ -7,7 +7,7 @@ import io.github.izakyl.folkways.core.vocation.api.Vocation;
 import io.github.izakyl.folkways.core.work.api.ActionSpec;
 import io.github.izakyl.folkways.core.work.api.ToolUse;
 import io.github.izakyl.folkways.core.work.api.Worker;
-import io.github.izakyl.folkways.effect.Stats;
+import io.github.izakyl.folkways.core.effect.Stats;
 import java.util.function.Consumer;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.level.ServerLevel;

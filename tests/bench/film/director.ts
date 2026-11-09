@@ -33,7 +33,7 @@ const INSTALL = defineTask<{ path: string; colony_id: string }, Record<string, a
       "net.neoforged.neoforge.server.ServerLifecycleHooks",
       "io.github.izakyl.folkways.core.work.api.WorkProgress",
       "io.github.izakyl.folkways.core.resident.api.Bodies",
-      "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
+      "io.github.izakyl.folkways.core.front.engine.colony.ColonyGround",
     ],
     body: `
 var props = System.getProperties();

@@ -2,7 +2,7 @@ package io.github.izakyl.folkways.cookery.stove;
 
 import com.github.ysbbbbbb.kaleidoscopecookery.block.kitchen.StoveBlock;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks;
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.cookery.CookeryPresence;
 import io.github.izakyl.folkways.cookery.testing.StationColony;
 import io.github.izakyl.folkways.core.colony.api.Closing;
@@ -17,8 +17,8 @@ import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.core.work.internal.Commit;
 import io.github.izakyl.folkways.core.work.support.Tools;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
-import io.github.izakyl.folkways.plugins.person.PersonBody;
-import io.github.izakyl.folkways.plugins.person.ResidentEntity;
+import io.github.izakyl.folkways.vanilla.person.PersonBody;
+import io.github.izakyl.folkways.vanilla.person.ResidentEntity;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -40,13 +40,13 @@ import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
 @EventBusSubscriber(modid = "folkways_cookery", bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@GameTestHolder("folkways_cookery")
 @PrefixGameTestTemplate(false)
 public final class StoveSchedulingGameTests {
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) { event.register(StoveSchedulingGameTests.class); }
 
-    @GameTest(template = "empty", timeoutTicks = 220)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 220)
     public static void theRealPresenceKeepsIgnitionWantedAcrossSweepsBeforeAndAfterTheNativeStoveLights(GameTestHelper helper) {
         Rig rig = new Rig(helper);
         Grown original = rig.submitted.getFirst();
@@ -68,7 +68,7 @@ public final class StoveSchedulingGameTests {
         }).thenSucceed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 140)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 140)
     public static void aWetPlannedStoveWaitsAcrossTheRealSweepAndResumesWithoutWastingItsIgnition(GameTestHelper helper) {
         Rig rig = new Rig(helper);
         Grown original = rig.submitted.getFirst(); Node light = original.nodes().getFirst();

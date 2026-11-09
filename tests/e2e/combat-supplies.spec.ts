@@ -26,7 +26,7 @@ test("guards walk to real registered storage for their kit: a melee guard collec
       config: "blockwright.toml#rts",
       server: { instance: `combat-supplies-server-${run}` },
       client: { instance: `combat-supplies-client-${run}` },
-      snapshot: () => ({ containers: scene ? [{ x: scene.stockX, y: scene.stockY, z: scene.stockZ }] : [], entityTypes: ["folkways:resident", "minecraft:zombie", "minecraft:arrow"] }),
+      snapshot: () => ({ containers: scene ? [{ x: scene.stockX, y: scene.stockY, z: scene.stockZ }] : [], entityTypes: ["folkways_vanilla:resident", "minecraft:zombie", "minecraft:arrow"] }),
     });
     const { server } = pair;
     const player = await waitForGroundedPlayer(server);
@@ -37,7 +37,7 @@ test("guards walk to real registered storage for their kit: a melee guard collec
     await world.command(server, "time set midnight");
     await world.command(server, "difficulty normal");
     await layFloor(server, { x: x - 10, z: z - 8 }, { x: x + 25, z: z + 8 }, y);
-    await world.command(server, `item replace entity ${player.name} weapon.mainhand with folkways:colony_book`);
+    await world.command(server, `item replace entity ${player.name} weapon.mainhand with folkways_core:colony_book`);
     const colony = String((await runColonyTask(server, BIND_COLONY, { player: player.name })).colony_id);
     await world.command(server, `setblock ${stock.x} ${y} ${z} minecraft:chest`);
     await world.command(server, `item replace block ${stock.x} ${y} ${z} container.0 with minecraft:iron_sword`);
@@ -143,11 +143,11 @@ const IMPORTS = [
   "net.minecraft.server.MinecraftServer", "net.minecraft.core.BlockPos", "net.minecraft.world.Container",
   "net.minecraft.world.entity.EntityType", "net.minecraft.world.entity.ai.attributes.Attributes", "net.minecraft.world.item.Items",
   "net.minecraft.world.phys.Vec3", "io.github.izakyl.folkways.core.colony.api.Colonies", "io.github.izakyl.folkways.core.colony.api.Claimed",
-  "io.github.izakyl.folkways.core.world.api.WorldSpaces", "io.github.izakyl.folkways.plugins.person.PersonContent",
-  "io.github.izakyl.folkways.plugins.person.PersonBody", "io.github.izakyl.folkways.plugins.person.ResidentEntity",
-  "io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfiles", "io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfile",
+  "io.github.izakyl.folkways.core.world.api.WorldSpaces", "io.github.izakyl.folkways.vanilla.person.PersonContent",
+  "io.github.izakyl.folkways.vanilla.person.PersonBody", "io.github.izakyl.folkways.vanilla.person.ResidentEntity",
+  "io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutProfiles", "io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutProfile",
   "io.github.izakyl.folkways.core.item.api.ItemSpec", "net.neoforged.neoforge.common.Tags",
-  "io.github.izakyl.folkways.rts.combat.command.ResidentCommands", "io.github.izakyl.folkways.plugins.combat.weapon.PatrolSupplies",
+  "io.github.izakyl.folkways.core.rts.combat.command.ResidentCommands", "io.github.izakyl.folkways.vanilla.combat.weapon.PatrolSupplies",
 ];
 
 const SETUP = defineTask<Omit<Scene, "resident"> & { bow: boolean }, Scene>({
@@ -203,7 +203,7 @@ return Map.ofEntries(Map.entry("x", body.getX()), Map.entry("z", body.getZ()), M
  Map.entry("status", order.map(value -> value.status().name()).orElse("NONE")), Map.entry("supply", state.state().name()), Map.entry("reason", state.reason()),
  Map.entry("sourceDistance", body.position().distanceTo(Vec3.atCenterOf(stockAt))), Map.entry("targetHealth", target == null ? 100 : target.getHealth()),
  Map.entry("hitByResident", target != null && target.getLastHurtByMob() == body),
- Map.entry("bowAllowed", io.github.izakyl.folkways.core.colony.api.KitRules.allows(colony, io.github.izakyl.folkways.core.vocation.api.Vocations.required(io.github.izakyl.folkways.plugins.patrol.PatrolContent.VOCATION), Items.BOW)),
+ Map.entry("bowAllowed", io.github.izakyl.folkways.core.colony.api.KitRules.allows(colony, io.github.izakyl.folkways.core.vocation.api.Vocations.required(io.github.izakyl.folkways.vanilla.patrol.PatrolContent.VOCATION), Items.BOW)),
  Map.entry("stockSwords", stockSwords), Map.entry("carriedSwords", swords), Map.entry("swordDamage", swordDamage),
  Map.entry("reservedAtSource", colony.reservedInputs(level).stream().filter(claim -> claim.store()
   .filter(WorldSpaces.at(level, stockAt)::equals).isPresent()).mapToLong(claim -> claim.count()).sum()));

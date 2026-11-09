@@ -13,7 +13,7 @@ public final class Task {
         }
         PLACED.clear();
         String name = Args.of(ctx).string("name");
-        var id = ResourceLocation.parse("folkways_chiselsandbits:" + name);
+        var id = ResourceLocation.parse("folkways_carving:" + name);
         var pattern = Pattern.parse(id, Args.of(ctx).string("source")).orElseThrow(
             () -> new IllegalArgumentException("cannot parse " + name));
         if (Patterns.find(id).isEmpty()) {

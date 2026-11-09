@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.cookery.tools;
 
-import io.github.izakyl.folkways.base.persist.Required;
+import io.github.izakyl.folkways.core.base.persist.Required;
 import io.github.izakyl.folkways.core.colony.api.Colonies;
 import io.github.izakyl.folkways.core.item.api.Containers;
 import io.github.izakyl.folkways.core.resident.api.Bodies;
@@ -17,8 +17,8 @@ import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
 
 /** Slot ownership names a physical loan, never a player's pre-existing item. */
 final class LoanClothing {
-    private static final String KEY = "folkways:cookery_clothing";
-    private static final String ITEMS = "folkways:cookery_clothing_items";
+    private static final String KEY = "folkways_cookery:cookery_clothing";
+    private static final String ITEMS = "folkways_cookery:cookery_clothing_items";
 
     private LoanClothing() {
     }

@@ -1,0 +1,236 @@
+package io.github.izakyl.folkways.vanilla.groundwork;
+
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.work.api.WorkSite;
+import io.github.izakyl.folkways.core.world.api.Footing;
+import io.github.izakyl.folkways.core.world.api.Reach;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
+import io.github.izakyl.folkways.core.world.api.WorldSpaces;
+import io.github.izakyl.folkways.vanilla.farming.FarmingContent;
+import io.github.izakyl.folkways.vanilla.farming.Felling;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.TreeSet;
+import java.util.UUID;
+import java.util.function.Function;
+import java.util.function.Predicate;
+import net.minecraft.core.BlockPos;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.tags.BlockTags;
+import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.level.block.DoublePlantBlock;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
+
+// Weeds, trees and loose stacks in a zone, read off the world one sweep at a time.
+final class Survey {
+
+    // How far a body stands from the cell it works: as far as its hands reach.
+    private static final int REACH = (int) Math.floor(Reach.PLAYER_BLOCK_REACH);
+
+    private static final Comparator<BlockPos> UPWARD =
+        Comparator.comparingInt((BlockPos cell) -> cell.getY())
+            .thenComparingInt(BlockPos::getX)
+            .thenComparingInt(BlockPos::getZ);
+
+    record Drop(WorldPos at, Optional<Stances> stances) { }
+
+    static final class Drops {
+        final Map<UUID, Drop> known = new HashMap<>();
+        final Set<UUID> order = new TreeSet<>();
+    }
+
+    private boolean discovering;
+
+    Survey discovering() {
+        discovering = true;
+        return this;
+    }
+
+    private final ServerLevel level;
+    private final Set<BlockPos> cells;
+    private final Map<BlockPos, Boolean> footed = new HashMap<>();
+
+    Survey(ServerLevel level, Set<BlockPos> cells) {
+        this.level = level;
+        this.cells = cells;
+    }
+
+    // Fallen wood needs no canopy. Only its marked logs go; their small decorations come away first.
+    List<Job> fallen(Predicate<BlockPos> member, Predicate<BlockState> kept, Set<BlockPos> claimed) {
+        Predicate<BlockPos> spared = cell -> member.test(cell) || kept.test(level.getBlockState(cell));
+        FallenLogs fallen = new FallenLogs(level, member);
+        List<Job> jobs = new ArrayList<>();
+        for (BlockPos cell : sorted(UPWARD)) {
+            if (claimed.contains(cell) || !level.isLoaded(cell) || !FallenLogs.horizontal(level.getBlockState(cell))
+                || spared.test(cell) || !fallen.at(cell)) {
+                continue;
+            }
+            List<BlockPos> decorations = fallen.decorations(cell);
+            if (decorations.stream().anyMatch(spared)) {
+                continue;
+            }
+            stances(cell).ifPresent(where -> jobs.add(new Job("fallen:" + Job.keyOf(cell), site(cell),
+                cell, List.of(cell), decorations, where)));
+        }
+        return jobs;
+    }
+
+    List<Job> weed(Predicate<BlockState> pulled) {
+        List<Job> jobs = new ArrayList<>();
+        for (BlockPos cell : sorted(UPWARD)) {
+            if (level.isLoaded(cell) && weedAt(level.getBlockState(cell), pulled)) {
+                stances(cell).ifPresent(where -> jobs.add(Job.at(cell, site(cell), where)));
+            }
+        }
+        return jobs;
+    }
+
+    List<Job> forage(Predicate<BlockPos> spared, Set<BlockPos> claimed) {
+        List<Job> jobs = new ArrayList<>();
+        Set<BlockPos> found = new HashSet<>();
+        for (BlockPos cell : sorted(UPWARD)) {
+            if (found.contains(cell) || !level.isLoaded(cell) || !Foraging.root(level.getBlockState(cell))) continue;
+            List<BlockPos> plant = Foraging.cells(level, cell, cells);
+            if (plant.isEmpty() || plant.stream().anyMatch(at -> claimed.contains(at) || spared.test(at)
+                    || level.getBlockState(at).getDestroySpeed(level, at) < 0.0F)) continue;
+            BlockPos root = Foraging.vine(level.getBlockState(cell)) ? plant.getLast() : cell;
+            stances(root).ifPresent(where -> {
+                found.addAll(plant);
+                jobs.add(new Job(Job.keyOf(root), site(root), root, plant, List.of(), where));
+            });
+        }
+        return jobs;
+    }
+
+    // A tree is felled from the foot of its trunk in the box, whole, the way a wood lot fells one. A log with no
+    // leaves of its own is no tree, but a beam or a wall, and stays.
+    List<Job> fell() {
+        List<Job> jobs = new ArrayList<>();
+        Set<BlockPos> claimed = new LinkedHashSet<>();
+        for (BlockPos cell : sorted(UPWARD)) {
+            if (claimed.contains(cell) || !level.isLoaded(cell) || !level.getBlockState(cell).is(BlockTags.LOGS)
+                || level.getBlockState(cell.below()).is(BlockTags.LOGS)) {
+                continue;
+            }
+            List<BlockPos> tree = Felling.tree(level, cell);
+            if (tree.isEmpty() || tree.stream().anyMatch(claimed::contains)) {
+                continue;
+            }
+            List<BlockPos> canopy = Felling.canopy(level, tree);
+            if (canopy.stream().noneMatch(leaf -> Felling.leaf(level.getBlockState(leaf)))) {
+                continue;
+            }
+            Optional<Stances> where = stances(cell);
+            if (where.isEmpty()) {
+                continue;
+            }
+            claimed.addAll(tree);
+            jobs.add(new Job(Job.keyOf(cell), site(cell), cell, tree, canopy, where.get()));
+        }
+        return jobs;
+    }
+
+    // A stack lies in the box when the cell it lies in is one of the box's, wherever the box stands: aboard a ship,
+    // a stack lies in the world over the deck, never among the cells the ship is kept in.
+    List<Job> haul(Function<BlockPos, WorldPos> address) {
+        return haul(address, new Drops());
+    }
+
+    List<Job> haul(Function<BlockPos, WorldPos> address, Drops cache) {
+        Set<WorldPos> held = new HashSet<>();
+        AABB box = null;
+        for (BlockPos cell : cells) {
+            WorldPos at = address.apply(cell);
+            held.add(at);
+            Optional<Vec3> shown = WorldSpaces.world(level, at);
+            if (shown.isPresent()) {
+                AABB one = new AABB(shown.get(), shown.get());
+                box = box == null ? one : box.minmax(one);
+            }
+        }
+        if (box == null) {
+            cache.known.clear();
+            cache.order.clear();
+            return List.of();
+        }
+        List<ItemEntity> lying = level.getEntitiesOfClass(ItemEntity.class, box.inflate(1.5D),
+            drop -> drop.isAlive() && !drop.getItem().isEmpty() && held.contains(WorldSpaces.at(drop)));
+        Map<UUID, ItemEntity> found = new HashMap<>();
+        lying.forEach(drop -> found.put(drop.getUUID(), drop));
+        cache.known.keySet().retainAll(found.keySet());
+        cache.order.retainAll(found.keySet());
+        cache.order.addAll(found.keySet());
+        List<Job> jobs = new ArrayList<>();
+        for (UUID id : cache.order) {
+            ItemEntity drop = found.get(id);
+            WorldPos at = WorldSpaces.at(drop);
+            BlockPos cell = at.block(level);
+            Drop cached = cache.known.get(drop.getUUID());
+            Optional<Stances> where;
+            if (discovering) {
+                where = Optional.of(Stances.WHEREVER);
+            } else if (cached != null && cached.at().equals(at)) {
+                where = cached.stances();
+            } else {
+                where = Stances.of(level, Reach.workableCells(level, cell));
+                cache.known.put(drop.getUUID(), new Drop(at, where));
+            }
+            where.ifPresent(footings -> jobs.add(new Job(
+                "item:" + drop.getUUID(), new WorkSite.AtEntity(drop.getUUID(), at), cell, List.of(cell), List.of(),
+                footings)));
+        }
+        return jobs;
+    }
+
+    // What a zone pulls when it weeds: its grass, its flowers, or both.
+    static Predicate<BlockState> weeds(boolean grass, boolean flowers) {
+        return state -> FarmingContent.weed(state, grass, flowers);
+    }
+
+    // A weed two tall is pulled by its lower half, which takes the upper with it.
+    private static boolean weedAt(BlockState state, Predicate<BlockState> pulled) {
+        return pulled.test(state) && !(state.hasProperty(DoublePlantBlock.HALF)
+            && state.getValue(DoublePlantBlock.HALF) == DoubleBlockHalf.UPPER);
+    }
+
+    private List<BlockPos> sorted(Comparator<BlockPos> order) {
+        List<BlockPos> list = new ArrayList<>(cells);
+        list.sort(order);
+        return list;
+    }
+
+    private WorkSite site(BlockPos cell) {
+        return new WorkSite.AtBlock(WorldPos.of(level, cell));
+    }
+
+    // Everywhere a body stands in reach of the cell, from a level below it to one above.
+    private Optional<Stances> stances(BlockPos target) {
+        if (discovering) {
+            return Optional.of(Stances.WHEREVER);
+        }
+        Set<BlockPos> found = new LinkedHashSet<>();
+        for (int dx = -REACH; dx <= REACH; dx++) {
+            for (int dy = -2; dy <= 1; dy++) {
+                for (int dz = -REACH; dz <= REACH; dz++) {
+                    BlockPos feet = target.offset(dx, dy, dz);
+                    if (Reach.withinReach(feet, target) && footed.computeIfAbsent(feet,
+                            at -> level.isLoaded(at) && Footing.withFeetAt(level, at))) {
+                        found.add(feet);
+                    }
+                }
+            }
+        }
+        return Stances.of(level, found);
+    }
+
+}

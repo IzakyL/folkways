@@ -1,0 +1,15 @@
+{
+  "folkways.doing.folkways_golems.mending": "修理傀儡",
+  "folkways.lessons.golem": "傀儡",
+  "folkways.refusal.golem.already_settled_elsewhere": "這個傀儡已屬於另一個殖民地",
+  "folkways.refusal.golem.not_yours_to_hand_over": "這個傀儡不歸你，無法移交",
+  "folkways.refusal.golem.nothing_to_mend_with": "背包裏沒有可用的修補材料",
+  "folkways.urge.folkways_golems.mend": "修補",
+  "folkways_golems.ponder.golems.header": "傀儡：讓你的傀儡為殖民地工作",
+  "folkways_golems.ponder.golems.text_1": "把書切到點選，左鍵點擊一個屬於你的金屬傀儡，它就作為居民加入殖民地；再點一次則離開。",
+  "folkways_golems.ponder.golems.text_2": "只有傀儡的主人才能移交它，已經屬於另一個殖民地的傀儡不會被帶走。",
+  "folkways_golems.ponder.golems.text_3": "在殖民地裏，它不再按自己的目標行動，也不會主動挑起戰鬥，傀儡的指令物品對它不起作用。離開殖民地後，它會恢復原來的行為。",
+  "folkways_golems.ponder.golems.text_4": "它能從事哪些工種取決於身體：大型金屬傀儡能搬運和建造，犬形金屬傀儡只能搬運，人形金屬傀儡還能製作、駕駛和調度。",
+  "folkways_golems.ponder.golems.text_5": "它從不吃飯也不睡覺。它的本領是造出來就有的，不會越幹越熟練。",
+  "folkways_golems.ponder.golems.text_6": "生命值低於六成時，如果背包裏帶着可用於修理傀儡的材料（例如鐵錠），它會用掉一個來修補自己。"
+}

@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.core.inventory.api;
 
-import io.github.izakyl.folkways.base.Ledger;
+import io.github.izakyl.folkways.core.base.Ledger;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
 import java.util.LinkedHashMap;
 import java.util.List;

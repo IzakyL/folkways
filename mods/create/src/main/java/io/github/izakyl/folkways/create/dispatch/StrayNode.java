@@ -76,6 +76,6 @@ final class StrayNode implements Node {
     }
 
     private static UUID idOf(WorldPos at) {
-        return UUID.nameUUIDFromBytes(("folkways:dispatch/stray/" + at).getBytes(StandardCharsets.UTF_8));
+        return UUID.nameUUIDFromBytes(("folkways_create:dispatch/stray/" + at).getBytes(StandardCharsets.UTF_8));
     }
 }

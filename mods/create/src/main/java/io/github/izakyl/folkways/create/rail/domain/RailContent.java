@@ -4,16 +4,17 @@ import io.github.izakyl.folkways.core.colony.api.Colonies;
 import io.github.izakyl.folkways.core.colony.api.Colony;
 import io.github.izakyl.folkways.core.extension.api.Declaring;
 import io.github.izakyl.folkways.core.vocation.api.Vocation;
+import io.github.izakyl.folkways.core.vocation.api.VocationGroup;
 import io.github.izakyl.folkways.core.vocation.api.VocationSpec;
 import io.github.izakyl.folkways.core.vocation.api.Vocations;
 import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.core.work.api.Workload;
 import io.github.izakyl.folkways.create.FolkwaysCreateConfig;
-import io.github.izakyl.folkways.effect.perk.Perk;
-import io.github.izakyl.folkways.front.api.Enrollment;
-import io.github.izakyl.folkways.front.api.Registering;
-import io.github.izakyl.folkways.front.api.Schema;
-import io.github.izakyl.folkways.front.api.panel.PageKind;
+import io.github.izakyl.folkways.core.effect.perk.Perk;
+import io.github.izakyl.folkways.core.front.api.Enrollment;
+import io.github.izakyl.folkways.core.front.api.Registering;
+import io.github.izakyl.folkways.core.front.api.Schema;
+import io.github.izakyl.folkways.core.front.api.panel.PageKind;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -24,19 +25,19 @@ import net.neoforged.neoforge.event.server.ServerStoppedEvent;
 
 public final class RailContent {
 
-    public static final ResourceLocation TAKING_SEAT = ResourceLocation.fromNamespaceAndPath("folkways", "taking_seat");
+    public static final ResourceLocation TAKING_SEAT = ResourceLocation.fromNamespaceAndPath("folkways_create", "taking_seat");
 
-    public static final ResourceLocation DRIVING = ResourceLocation.fromNamespaceAndPath("folkways", "driving");
+    public static final ResourceLocation DRIVING = ResourceLocation.fromNamespaceAndPath("folkways_create", "driving");
 
-    public static final ResourceLocation BOARDING = ResourceLocation.fromNamespaceAndPath("folkways", "boarding");
+    public static final ResourceLocation BOARDING = ResourceLocation.fromNamespaceAndPath("folkways_create", "boarding");
 
-    public static final ResourceLocation RIDING = ResourceLocation.fromNamespaceAndPath("folkways", "riding");
+    public static final ResourceLocation RIDING = ResourceLocation.fromNamespaceAndPath("folkways_create", "riding");
 
     public static final ResourceLocation ID =
-        ResourceLocation.fromNamespaceAndPath("folkways", "rail");
+        ResourceLocation.fromNamespaceAndPath("folkways_create", "rail");
 
     public static final ResourceLocation VOCATION =
-        ResourceLocation.fromNamespaceAndPath("folkways", "conducting");
+        ResourceLocation.fromNamespaceAndPath("folkways_create", "conducting");
 
     public static final String QUICK_HANDS = "conducting_quick_hands";
 
@@ -58,7 +59,7 @@ public final class RailContent {
         TransitNetworks.install(network);
         NeoForge.EVENT_BUS.addListener(network::tick);
         NeoForge.EVENT_BUS.addListener(ServerStoppedEvent.class, event -> network.forgetServer());
-        declaring.vocation(SPEC.ordered(700));
+        declaring.vocation(SPEC.ordered(200).grouped(VocationGroup.TRANSPORT));
         declaring.colony(ID, scope -> {
             RailPresence state = new RailPresence(scope.colony());
             scope.share(state);
@@ -69,7 +70,7 @@ public final class RailContent {
 
     public static void enroll(Registering registering) {
         registering.facing(ID, colony -> colony.service(ID, RailPresence.class)
-            .map(value -> (io.github.izakyl.folkways.front.api.Facing) value));
+            .map(value -> (io.github.izakyl.folkways.core.front.api.Facing) value));
         registering.enrollment(ID, new Enrollment(List.of(), Schema.none(), List.of(PAGE)));
     }
 

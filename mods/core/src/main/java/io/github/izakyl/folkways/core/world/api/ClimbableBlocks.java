@@ -13,7 +13,7 @@ public final class ClimbableBlocks {
     // Blocks a resident climbs that vanilla does not call climbable: a modded stepladder climbs in steps inside its
     // own column, so the ways and the walk take it as a ladder, while players keep the block's own physics.
     public static final TagKey<Block> RESIDENT_CLIMBABLE = TagKey.create(Registries.BLOCK,
-        ResourceLocation.fromNamespaceAndPath("folkways", "climbable"));
+        ResourceLocation.fromNamespaceAndPath("folkways_core", "climbable"));
 
     private ClimbableBlocks() {
     }

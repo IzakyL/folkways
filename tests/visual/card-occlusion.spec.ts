@@ -16,17 +16,17 @@ import { BUDGET } from "../shared/harness/budgets";
 const CARD = defineTask<undefined, Record<string, any>>({
   name: "folkways.visual.card-occlusion.samples", side: "client", timeoutMs: 20_000,
   source: javaTask({
-    imports: ["io.github.izakyl.folkways.front.client.ColonyLookState", "net.minecraft.client.Minecraft", "net.minecraft.world.phys.Vec3"],
+    imports: ["io.github.izakyl.folkways.core.front.client.ColonyLookState", "net.minecraft.client.Minecraft", "net.minecraft.world.phys.Vec3"],
     body: `
 var mc = Minecraft.getInstance();
 var look = ColonyLookState.residents().getFirst();
 var resident = mc.level.getEntity(look.entityId());
 var anchor = resident.position().add(0, resident.getBbHeight() + 0.5, 0);
-var cards = Class.forName("io.github.izakyl.folkways.front.client.WorldCards");
-var rowsMethod = Class.forName("io.github.izakyl.folkways.front.client.ColonyLookCard").getDeclaredMethod("rows", List.class);
+var cards = Class.forName("io.github.izakyl.folkways.core.front.client.WorldCards");
+var rowsMethod = Class.forName("io.github.izakyl.folkways.core.front.client.ColonyLookCard").getDeclaredMethod("rows", List.class);
 rowsMethod.setAccessible(true);
 var rows = (List<?>) rowsMethod.invoke(null, look.lines());
-var layout = Class.forName("io.github.izakyl.folkways.front.client.LookCardLayout");
+var layout = Class.forName("io.github.izakyl.folkways.core.front.client.LookCardLayout");
 var of = layout.getDeclaredMethod("of", net.minecraft.client.gui.Font.class, List.class); of.setAccessible(true);
 var laid = of.invoke(null, mc.font, rows);
 var queued = Class.forName(cards.getName() + "$Queued");
@@ -49,16 +49,16 @@ return Map.of("hidden", hidden.invoke(null, mc.level, view.getPosition(), spots)
 const PREVIEW = defineTask<{ x: number; y: number; z: number }, Record<string, any>>({
   name: "folkways.visual.card-occlusion.preview", side: "client", timeoutMs: 20_000,
   source: javaTask({
-    imports: ["io.github.izakyl.folkways.front.client.ZoneSelection", "io.github.izakyl.folkways.front.api.Ghost", "net.minecraft.core.BlockPos", "net.minecraft.world.level.block.Blocks", "net.minecraft.resources.ResourceLocation"],
+    imports: ["io.github.izakyl.folkways.core.front.client.ZoneSelection", "io.github.izakyl.folkways.core.front.api.Ghost", "net.minecraft.core.BlockPos", "net.minecraft.world.level.block.Blocks", "net.minecraft.resources.ResourceLocation"],
     body: `
 var args = Args.of(ctx); int x = (int) args.integer("x"), y = (int) args.integer("y"), z = (int) args.integer("z");
 var shape = ZoneSelection.marked().orElseThrow();
 var ghosts = List.of(new Ghost(new BlockPos(x+1,y+1,z+2), Blocks.OAK_PLANKS.defaultBlockState()),
   new Ghost(new BlockPos(x+2,y+1,z+2), Blocks.BRICKS.defaultBlockState()),
   new Ghost(new BlockPos(x+3,y+1,z+2), Blocks.DIAMOND_BLOCK.defaultBlockState()));
-var preview = Class.forName("io.github.izakyl.folkways.front.client.ShapePreview");
+var preview = Class.forName("io.github.izakyl.folkways.core.front.client.ShapePreview");
 var show = preview.getDeclaredMethod("show", ResourceLocation.class, Object.class, java.util.function.Supplier.class, List.class); show.setAccessible(true);
-show.invoke(null, ResourceLocation.fromNamespaceAndPath("folkways", "visual_occlusion"), shape,
+show.invoke(null, ResourceLocation.fromNamespaceAndPath("folkways_vanilla", "visual_occlusion"), shape,
   (java.util.function.Supplier<Optional<?>>) () -> ZoneSelection.marked(), ghosts);
 return Map.of("box", shape.toString(), "ghosts", ghosts.toString());
 `,
@@ -68,9 +68,9 @@ return Map.of("box", shape.toString(), "ghosts", ghosts.toString());
 const FACE = defineTask<undefined, Record<string, any>>({
   name: "folkways.visual.card-occlusion.face", side: "client", timeoutMs: 20_000,
   source: javaTask({ body: `
-var zone = Class.forName("io.github.izakyl.folkways.front.client.ZoneSelection");
+var zone = Class.forName("io.github.izakyl.folkways.core.front.client.ZoneSelection");
 var face = zone.getDeclaredField("aimedFace"); face.setAccessible(true);
-var preview = Class.forName("io.github.izakyl.folkways.front.client.ShapePreview");
+var preview = Class.forName("io.github.izakyl.folkways.core.front.client.ShapePreview");
 var ghosts = preview.getDeclaredField("ghosts"); ghosts.setAccessible(true);
 return Map.of("face", String.valueOf(face.get(null)), "ghosts", ((List<?>)ghosts.get(null)).size());
 ` }),
@@ -103,8 +103,8 @@ test("resident cards across walls and ghosts through a gripped box face", async 
     const p = { x: origin.x, y: origin.y, z: origin.z + 22 };
     await fill({ x: p.x - 12, y: p.y, z: p.z - 12 }, { x: p.x + 12, y: p.y + 9, z: p.z + 6 }, "minecraft:air");
     await fill({ x: p.x - 12, y: p.y - 1, z: p.z - 12 }, { x: p.x + 12, y: p.y - 1, z: p.z + 6 }, "minecraft:smooth_stone");
-    await cmd(`execute as @e[type=folkways:resident] run data merge entity @s {NoAI:1b,NoGravity:1b,Invulnerable:1b}`);
-    await cmd(`tp @e[type=folkways:resident] ${p.x + 0.5} ${p.y} ${p.z + 0.5} 180 0`);
+    await cmd(`execute as @e[type=folkways_vanilla:resident] run data merge entity @s {NoAI:1b,NoGravity:1b,Invulnerable:1b}`);
+    await cmd(`tp @e[type=folkways_vanilla:resident] ${p.x + 0.5} ${p.y} ${p.z + 0.5} 180 0`);
     const eye = { x: p.x + 0.5, y: p.y + 2.8, z: p.z - 7.5 };
     const facing = cameraLookingAt(eye, { x: p.x + 0.5, y: p.y + 2.8, z: p.z + 0.5 });
     const camera = { dimension: "minecraft:overworld", position: eye, ...facing, fov: 55 };

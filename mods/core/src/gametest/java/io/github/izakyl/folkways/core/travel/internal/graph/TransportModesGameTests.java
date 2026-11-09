@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.core.travel.internal.graph;
 
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.colony.api.Colony;
 import io.github.izakyl.folkways.core.colony.internal.ColonyData;
 import io.github.izakyl.folkways.core.extension.api.Declaring;
@@ -52,8 +52,8 @@ import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
-@EventBusSubscriber(modid = FolkwaysMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@EventBusSubscriber(modid = FolkwaysCoreMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
+@GameTestHolder(FolkwaysCoreMod.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class TransportModesGameTests {
 
@@ -86,7 +86,7 @@ public final class TransportModesGameTests {
         Participations.register(KIND, Stake.passage(SERVICE), Participation.ALWAYS);
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void cheapTrunkMustPayForTheWholeRoute(GameTestHelper helper) {
         Fixture f = new Fixture(helper);
         f.edge("pq", "p", "q", 1).carry("a", "p", 40).carry("q", "b", 40);
@@ -102,7 +102,7 @@ public final class TransportModesGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void aFartherHubCanSucceedWhenTheNearestIsCutOff(GameTestHelper helper) {
         Fixture f = new Fixture(helper);
         f.edge("pq", "p", "q", -2).carry("a", "p", 1).carry("q", "b", 1);
@@ -111,7 +111,7 @@ public final class TransportModesGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void longDirectHaulStillCompetesWithTrunks(GameTestHelper helper) {
         Fixture f = new Fixture(helper);
         f.edge("pq", "p", "q", 1);
@@ -127,7 +127,7 @@ public final class TransportModesGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void trunksNeverChain(GameTestHelper helper) {
         Fixture f = new Fixture(helper);
         f.edge("ap", "a", "p", 3).edge("pb", "p", "b", 4);
@@ -138,7 +138,7 @@ public final class TransportModesGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void aTrunkFromTheSourceNeedsNoApproachButCustodyIsNotPlace(GameTestHelper helper) {
         Fixture f = new Fixture(helper);
         f.edge("ab", "a", "b", 5).carry("a", "b", 10);
@@ -155,7 +155,7 @@ public final class TransportModesGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void laterKeepsUnknownAlternativesPending(GameTestHelper helper) {
         Fixture f = new Fixture(helper);
         f.edge("pq", "p", "q", -1).carry("a", "p", 1).carry("q", "b", 1);
@@ -202,7 +202,7 @@ public final class TransportModesGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void partialTrunksAreReportedAndExcludedLinksSkipped(GameTestHelper helper) {
         Fixture f = new Fixture(helper);
         f.edge("pq", "p", "q", 1).carry("a", "p", 1).carry("q", "b", 1).carry("a", "b", 40);
@@ -219,7 +219,7 @@ public final class TransportModesGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void quotingNeverRequestsOrTreadsRoutes(GameTestHelper helper) {
         Fixture f = new Fixture(helper);
         Ways dangerous = new Ways() {
@@ -264,7 +264,7 @@ public final class TransportModesGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void pureTravelUsesTheRequestedDepartureAndCountsPassageOnce(GameTestHelper helper) {
         Fixture f = new Fixture(helper);
         WorldPos a = f.at("a").at();
@@ -287,7 +287,7 @@ public final class TransportModesGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void directQuotesIncludeRepeatedTripsAndHandling(GameTestHelper helper) {
         Fixture f = new Fixture(helper);
         Resident who = new Resident(UUID.randomUUID(), KIND);
@@ -300,7 +300,7 @@ public final class TransportModesGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void directQuotesSeparateRouteKindsOfTheSameResidentKind(GameTestHelper helper) {
         Fixture f = new Fixture(helper);
         ResourceLocation cart = id("cart_test");
@@ -321,7 +321,7 @@ public final class TransportModesGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void publicationsReplaceOnlyTheirOwnerAndDimensionAndAdvanceVersions(GameTestHelper helper) {
         Fixture f = new Fixture(helper);
         ColonyData colony = new ColonyData();
@@ -347,7 +347,7 @@ public final class TransportModesGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void closedEndsMatchPairwiseTravelEstimates(GameTestHelper helper) {
         WorldPos from = WorldPos.of(helper.getLevel(), new BlockPos(0, 1, 0));
         WorldPos to = from.at(new BlockPos(1000, 1, 0));
@@ -422,7 +422,7 @@ public final class TransportModesGameTests {
     }
 
     private static ResourceLocation id(String path) {
-        return ResourceLocation.fromNamespaceAndPath("folkways", path);
+        return ResourceLocation.fromNamespaceAndPath("folkways_core", path);
     }
 
     private static final class Fixture implements TransportMode {

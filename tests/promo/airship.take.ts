@@ -24,7 +24,7 @@ const CAMERA = { x: 55, y: 10, z: 21 };
 const AIM = { x: 51, y: 1, z: 0 };
 const SAMPLES = 15;
 // What a resident is up to, as the WORK task reports it: leisure does not count as a job.
-const LEISURE = new Set(["idle", "folkways:walking", "folkways:waiting", "folkways:chatting", "folkways:eating", "folkways:sleeping"]);
+const LEISURE = new Set(["idle", "folkways_core:walking", "folkways_core:waiting", "folkways_vanilla:chatting", "folkways_vanilla:eating", "folkways_vanilla:sleeping"]);
 const RESIDENTS = 12;
 const WARMUP_TICKS = 200;
 
@@ -44,7 +44,7 @@ test("a sky ship carries a working colony past a fixed camera", async ({}, testI
     run.note("scene", scene);
     await world.command(server, `tp ${player} ${ORIGIN.x} ${ORIGIN.y + 1} ${ORIGIN.z + 1}`);
     const members = scene.members as Array<{x:number;y:number;z:number}>;
-    await world.command(server, `item replace entity ${player} weapon.mainhand with folkways:colony_book`);
+    await world.command(server, `item replace entity ${player} weapon.mainhand with folkways_core:colony_book`);
     const founded = await foundPromoColonyFast(server, player, members);
     const colony_id = founded.colony_id;
     await admitPromoSettlersFast(server, player, colony_id, RESIDENTS);
@@ -55,7 +55,7 @@ test("a sky ship carries a working colony past a fixed camera", async ({}, testI
       { at: at(21, 3, 3), item: "minecraft:stick", count: 128 },
     ]);
     // The book stays in hand through the shot, so each resident near the camera carries their card.
-    await world.command(server, `execute if items entity ${player} weapon.mainhand folkways:colony_book`);
+    await world.command(server, `execute if items entity ${player} weapon.mainhand folkways_core:colony_book`);
     await world.command(server, `gamemode spectator ${player}`);
     await world.command(server, `sable assemble area ${ORIGIN.x - 25} ${ORIGIN.y - 10} ${ORIGIN.z - 10} ${ORIGIN.x + 36} ${ORIGIN.y + 9} ${ORIGIN.z + 10}`);
     run.note("flight", await runColonyTask(server, FLIGHT, { colony_id, speed: SPEED }));
@@ -109,7 +109,7 @@ test("a sky ship carries a working colony past a fixed camera", async ({}, testI
 });
 
 
-// "Doing[what=folkways:walking, toward=Optional[folkways:crafting], ...]" is walking toward crafting: the job is crafting.
+// "Doing[what=folkways_core:walking, toward=Optional[folkways_vanilla:crafting], ...]" is walking toward crafting: the job is crafting.
 function job(doing: string) {
   const toward = /toward=Optional\[([^\]]+)\]/.exec(doing)?.[1];
   return toward ?? /what=([^,\]]+)/.exec(doing)?.[1] ?? doing;
@@ -363,7 +363,7 @@ const CREW = defineTask<Record<string, any>, Record<string, any>>({
   timeoutMs: 20_000,
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.front.engine.colony.*",
+      "io.github.izakyl.folkways.core.front.engine.colony.*",
       "io.github.izakyl.folkways.core.resident.api.Bodies",
       "io.github.izakyl.folkways.core.vocation.api.Vocations",
       "io.github.izakyl.folkways.core.work.api.*",
@@ -379,14 +379,14 @@ const CREW = defineTask<Record<string, any>, Record<string, any>>({
 var server=ctx.server();var level=server.overworld();var args=Args.of(ctx);
 var colony=ColonyGround.of(server,UUID.fromString(args.string("colony_id"))).orElseThrow();
 var o=(Map<?,?>)args.value("origin");int x=((Number)o.get("x")).intValue(),y=((Number)o.get("y")).intValue(),z=((Number)o.get("z")).intValue();
-ZoneDrafts.zone(level,colony,ResourceLocation.parse("folkways:farm"),new BlockPos(x-10,y,z+2),new BlockPos(x-5,y,z+5),
+ZoneDrafts.zone(level,colony,ResourceLocation.parse("folkways_vanilla:farm"),new BlockPos(x-10,y,z+2),new BlockPos(x-5,y,z+5),
   ColonySettings.empty().with("crop",new ColonySettings.Value.Choice(ResourceLocation.parse("minecraft:wheat")))).orElseThrow();
-ZoneDrafts.zone(level,colony,ResourceLocation.parse("folkways:pasture"),new BlockPos(x+4,y,z+2),new BlockPos(x+9,y,z+7),
+ZoneDrafts.zone(level,colony,ResourceLocation.parse("folkways_vanilla:pasture"),new BlockPos(x+4,y,z+2),new BlockPos(x+9,y,z+7),
   ColonySettings.empty().with("animal",new ColonySettings.Value.Choice(ResourceLocation.parse("minecraft:sheep")))
   .with("target",new ColonySettings.Value.Count(8))).orElseThrow();
 // one spot per fisher, each on its own side of the pond, so all three cast at once and their cards stay apart
 for(int[] spot:new int[][]{{-3,5},{-1,3},{2,5}})
-  ZoneDrafts.zone(level,colony,ResourceLocation.parse("folkways:fish"),new BlockPos(x+spot[0],y,z+spot[1]),new BlockPos(x+spot[0],y,z+spot[1]),ColonySettings.empty()).orElseThrow();
+  ZoneDrafts.zone(level,colony,ResourceLocation.parse("folkways_vanilla:fish"),new BlockPos(x+spot[0],y,z+spot[1]),new BlockPos(x+spot[0],y,z+spot[1]),ColonySettings.empty()).orElseThrow();
 // each trade starts at its own post, spread along the deck from stern to bow
 String[] roles={"farming","farming","herding","herding","fishing","fishing","fishing","crafting","crafting","crafting","hauling","hauling"};
 double[][] posts={{-9,0},{-6,0},{5,4},{8,4},{-3,5},{-1,3},{2,5},{-6,-3},{-4,-3},{0,-3},{-11,-2},{15,0}};
@@ -474,7 +474,7 @@ const WORK = defineTask<Record<string, any>, Record<string, any>>({
   source: javaTask({
     imports: [
       "dev.ryanhcode.sable.api.sublevel.SubLevelContainer",
-      "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
+      "io.github.izakyl.folkways.core.front.engine.colony.ColonyGround",
       "io.github.izakyl.folkways.core.resident.api.Bodies",
       "io.github.izakyl.folkways.core.world.api.*",
       "io.github.izakyl.folkways.core.item.api.*",
@@ -499,7 +499,7 @@ for(var resident:colony.residents()){
     "doing",body.doing().map(Object::toString).orElse("idle"),
     "pack",body.pack().contents().stream().map(Object::toString).toList()));
 }
-for(var view:colony.views(server))for(var pos:view.blocks(ResourceLocation.parse("folkways:store")))if(level.getBlockEntity(pos) instanceof Container chest)
+for(var view:colony.views(server))for(var pos:view.blocks(ResourceLocation.parse("folkways_vanilla:store")))if(level.getBlockEntity(pos) instanceof Container chest)
   for(int i=0;i<chest.getContainerSize();i++){var stack=chest.getItem(i);if(stack.is(Items.OAK_PLANKS))planks+=stack.getCount();if(stack.is(Items.STICK))sticks+=stack.getCount();if(stack.is(Items.COOKED_BEEF))cooked+=stack.getCount();if(stack.is(Items.WHEAT))wheat+=stack.getCount();}
 var said=new LinkedHashMap<String,Object>();
 said.put("ok",true);said.put("aboard",aboard);said.put("workers",workers);said.put("planks",planks);said.put("sticks",sticks);

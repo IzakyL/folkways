@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.core.runtime;
 
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.plan.api.Before;
 import io.github.izakyl.folkways.core.plan.internal.Claims;
 import io.github.izakyl.folkways.core.plan.internal.Cooldowns;
@@ -57,8 +57,8 @@ import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
-@EventBusSubscriber(modid = FolkwaysMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@EventBusSubscriber(modid = FolkwaysCoreMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
+@GameTestHolder(FolkwaysCoreMod.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class SchedulingRecoveryGameTests {
     private static final ResourceLocation OWNER = ResourceLocation.fromNamespaceAndPath("folkways_test", "schedule_recovery");
@@ -66,7 +66,7 @@ public final class SchedulingRecoveryGameTests {
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) { event.register(SchedulingRecoveryGameTests.class); }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void failedBackgroundSchedulesReportOnlyWhenAppliedOnTheServer(GameTestHelper helper) {
         var data = new io.github.izakyl.folkways.core.colony.internal.ColonyData();
         ColonyLabor labor = new ColonyLabor(data, helper.getLevel().dimension());
@@ -97,7 +97,7 @@ public final class SchedulingRecoveryGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void aPartialLayoutRetriesWithoutMessagesAndKeepsItsPublishedDiff(GameTestHelper helper) {
         Fixture scene = new Fixture(helper, 3);
         scene.begin();
@@ -119,7 +119,7 @@ public final class SchedulingRecoveryGameTests {
         });
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void changesReceivedDuringBackoffJoinTheCurrentGraphOnce(GameTestHelper helper) {
         Fixture scene = new Fixture(helper, 2);
         scene.begin();
@@ -143,7 +143,7 @@ public final class SchedulingRecoveryGameTests {
         });
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void closingDuringARecoveryRejectsItsLatePublication(GameTestHelper helper) {
         Fixture scene = new Fixture(helper, 1);
         scene.begin();
@@ -157,12 +157,12 @@ public final class SchedulingRecoveryGameTests {
         });
     }
 
-    @GameTest(template = "empty", timeoutTicks = 200)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 200)
     public static void asynchronousSuccessAndRecoveryPublishInOrderAcrossAFailure(GameTestHelper helper) {
         new AsyncRecovery(helper, false).start();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 200)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 200)
     public static void asynchronousRecoveryFinishingAfterCloseCannotPublish(GameTestHelper helper) {
         new AsyncRecovery(helper, true).start();
     }

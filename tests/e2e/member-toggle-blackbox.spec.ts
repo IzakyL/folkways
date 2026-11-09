@@ -10,7 +10,7 @@ import { waitForAnyScreen, waitForElement, safeAction, safeScreen, screenOpen, i
 import { newRunId } from "../shared/harness/run-id";
 import { around, twins } from "../shared/harness/stage";
 
-const BOOK_ITEM = "folkways:colony_book";
+const BOOK_ITEM = "folkways_core:colony_book";
 const TOGGLE_WIDGET = "folkways.member.toggle";
 const PANEL_WIDGET = "folkways.site.panel";
 const TOGGLE_TICKS = 200;
@@ -105,5 +105,5 @@ for (const stage of twins()) test(stage.title("either half of a double chest ope
 });
 
 function memberCondition(chest: Vec, member: boolean): string {
-  return `${member ? "if" : "unless"} data block ${commandPos(chest)} "neoforge:attachments"."folkways:colony_member"`;
+  return `${member ? "if" : "unless"} data block ${commandPos(chest)} "neoforge:attachments"."folkways_core:colony_member"`;
 }

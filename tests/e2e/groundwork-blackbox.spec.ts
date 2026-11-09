@@ -211,10 +211,10 @@ const DRAW_ZONE = defineTask<{ colony_id: string; works: string; fill_block: str
   timeoutMs: 20_000,
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.front.engine.colony.ColonyFront",
-      "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
-      "io.github.izakyl.folkways.front.engine.colony.ColonySchemas",
-      "io.github.izakyl.folkways.front.engine.colony.ColonySettings",
+      "io.github.izakyl.folkways.core.front.engine.colony.ColonyFront",
+      "io.github.izakyl.folkways.core.front.engine.colony.ColonyGround",
+      "io.github.izakyl.folkways.core.front.engine.colony.ColonySchemas",
+      "io.github.izakyl.folkways.core.front.engine.colony.ColonySettings",
       "net.minecraft.core.BlockPos",
       "net.minecraft.resources.ResourceLocation",
       "java.util.Arrays",
@@ -224,7 +224,7 @@ const DRAW_ZONE = defineTask<{ colony_id: string; works: string; fill_block: str
 Args args = Args.of(ctx);
 var colony = ColonyGround.of(ctx.server(), UUID.fromString(args.string("colony_id")))
     .orElseThrow(() -> Fail.notFound("no colony"));
-ResourceLocation ground = ResourceLocation.fromNamespaceAndPath("folkways", "ground");
+ResourceLocation ground = ResourceLocation.fromNamespaceAndPath("folkways_vanilla", "ground");
 List<?> box = (List<?>) ctx.arg("box");
 int[] c = new int[6];
 for (int i = 0; i < 6; i++) {
@@ -256,9 +256,9 @@ const GROUND_ORDERS = defineTask<{ colony_id: string }, Record<string, any>>({
   timeoutMs: 20_000,
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.front.engine.colony.ColonyFront",
-      "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
-      "io.github.izakyl.folkways.plugins.build.BuildContent",
+      "io.github.izakyl.folkways.core.front.engine.colony.ColonyFront",
+      "io.github.izakyl.folkways.core.front.engine.colony.ColonyGround",
+      "io.github.izakyl.folkways.vanilla.build.BuildContent",
       "net.minecraft.nbt.Tag",
     ],
     body: `

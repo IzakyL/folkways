@@ -39,7 +39,7 @@ test("a one-shot order delivers colony stock into the container it was filed on"
       server: { trace: serverTrace, instance: seededServer(stage.name(`logistics-server-${runId}`)) },
       client: { trace: clientTrace, instance: stage.name(`logistics-client-${runId}`) },
       snapshot: () => ({ containers: [sourceChest, targetChest].map((chest) => chest && stage.at(chest)),
-        entityTypes: ["folkways:resident", ITEM_TYPE] }),
+        entityTypes: ["folkways_vanilla:resident", ITEM_TYPE] }),
     });
     ({ server, client } = pair);
 

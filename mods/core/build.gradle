@@ -64,7 +64,7 @@ dependencies {
 def apiJar = tasks.register("apiJar", Jar) {
     archiveClassifier = "api"
     from sourceSets.main.output
-    include "io/github/izakyl/folkways/front/api/**"
+    include "io/github/izakyl/folkways/core/front/api/**"
     include "io/github/izakyl/folkways/core/*/api/**", "io/github/izakyl/folkways/core/work/support/**"
     includeEmptyDirs = false
 }

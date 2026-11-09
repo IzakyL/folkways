@@ -1,7 +1,7 @@
 package io.github.izakyl.folkways.carts;
 
 import com.jusipat.astikorcartsredux.entity.AbstractCargoCart;
-import io.github.izakyl.folkways.front.api.notice.Line;
+import io.github.izakyl.folkways.core.front.api.notice.Line;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;

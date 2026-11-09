@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.core.colony.api;
 
-import io.github.izakyl.folkways.base.task.Cleanup;
+import io.github.izakyl.folkways.core.base.task.Cleanup;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
 import java.util.List;
 import java.util.Map;

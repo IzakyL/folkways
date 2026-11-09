@@ -55,7 +55,7 @@ final class KeeperPosts {
     }
 
     private static UUID idOf(Post post) {
-        return UUID.nameUUIDFromBytes(("folkways:dispatch/" + post.seat() + "/keep")
+        return UUID.nameUUIDFromBytes(("folkways_create:dispatch/" + post.seat() + "/keep")
             .getBytes(StandardCharsets.UTF_8));
     }
 }

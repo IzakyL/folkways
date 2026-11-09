@@ -1,0 +1,11 @@
+{
+  "replace": false,
+  "values": [
+    "#folkways_firearms:warfare/glock_17",
+    "#folkways_firearms:warfare/mp_5",
+    "#folkways_firearms:warfare/ak_47",
+    "#folkways_firearms:warfare/m_4",
+    "#folkways_firearms:warfare/m_870",
+    "#folkways_firearms:warfare/svd"
+  ]
+}

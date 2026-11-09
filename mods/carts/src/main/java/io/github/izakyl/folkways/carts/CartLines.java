@@ -1,7 +1,7 @@
 package io.github.izakyl.folkways.carts;
 
 import com.jusipat.astikorcartsredux.entity.AbstractCargoCart;
-import io.github.izakyl.folkways.base.persist.Required;
+import io.github.izakyl.folkways.core.base.persist.Required;
 import io.github.izakyl.folkways.core.colony.api.Asking;
 import io.github.izakyl.folkways.core.colony.api.Claim;
 import io.github.izakyl.folkways.core.colony.api.ClaimRelease;
@@ -15,9 +15,9 @@ import io.github.izakyl.folkways.core.transport.api.TransportSnapshot;
 import io.github.izakyl.folkways.core.transport.api.TransportTravel;
 import io.github.izakyl.folkways.core.work.api.Ending;
 import io.github.izakyl.folkways.core.work.api.Node;
-import io.github.izakyl.folkways.front.api.Fronts;
-import io.github.izakyl.folkways.front.api.PathView;
-import io.github.izakyl.folkways.plugins.pasture.PastureHorses;
+import io.github.izakyl.folkways.core.front.api.Fronts;
+import io.github.izakyl.folkways.core.front.api.PathView;
+import io.github.izakyl.folkways.vanilla.pasture.PastureHorses;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -266,7 +266,7 @@ final class CartLines {
     }
 
     private static UUID id(Line line, String what) {
-        return UUID.nameUUIDFromBytes(("folkways:carts/" + line.id() + "/" + what).getBytes());
+        return UUID.nameUUIDFromBytes(("folkways_carts:carts/" + line.id() + "/" + what).getBytes());
     }
 
     private void ended(UUID node, Ending how) {

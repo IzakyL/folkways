@@ -19,7 +19,7 @@ import { newRunId } from "../shared/harness/run-id";
 import { MODE_PROBE } from "../shared/ui/mode-layers";
 import { twins } from "../shared/harness/stage";
 
-const BOOK_ITEM = "folkways:colony_book";
+const BOOK_ITEM = "folkways_core:colony_book";
 const KEY_V = 86;
 const KEY_SPACE = 32;
 const KEY_LEFT_SHIFT = 340;
@@ -187,8 +187,8 @@ for (const stage of twins()) test(stage.title("view from above: the book's box g
     await tick.sprint(server, 5);
     evidence.tabbed = await readActionBar(client);
     const tabMode = await client.run(MODE_PROBE);
-    expect(tabMode.mode, "Tab leaves the last Build gesture for the registered Damage Control mode")
-      .toBe("folkways:damage_control");
+    expect(tabMode.mode, "Tab leaves the last Build gesture for the next registered mode, Core's RTS")
+      .toBe("folkways_core:rts");
     expect((await screen.widgets(client)).map((widget: any) => widget.label)).not.toContain("Draw a line");
 
     await input.key(client, { keyCode: KEY_V, action: "press" });

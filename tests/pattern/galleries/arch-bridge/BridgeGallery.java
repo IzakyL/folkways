@@ -1,8 +1,8 @@
 import blockwright.minecraft.core.Args;
 import blockwright.minecraft.core.Sync;
 import dev.blockwright.api.Context;
-import io.github.izakyl.folkways.plugins.build.draft.*;
-import io.github.izakyl.folkways.front.api.Settings;
+import io.github.izakyl.folkways.vanilla.build.draft.*;
+import io.github.izakyl.folkways.core.front.api.Settings;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.Blocks;
@@ -230,7 +230,7 @@ public final class Task {
 
     private static Object build(Context ctx) {
         var args = Args.of(ctx);
-        var pattern = Pattern.parse(ResourceLocation.parse("folkways:arch_bridge"), args.string("source")).orElseThrow();
+        var pattern = Pattern.parse(ResourceLocation.parse("folkways_vanilla:arch_bridge"), args.string("source")).orElseThrow();
         var stone = new Materials(5, "stone_bricks", "smooth_stone", "stone_brick_wall", "chiseled_stone_bricks", "polished_andesite");
         int verified = 0;
         for (int[] delta : new int[][] {{24,0}, {-24,0}, {0,24}, {0,-24}, {19,13}, {-19,13}, {19,-13}, {-19,-13}}) {
@@ -336,6 +336,6 @@ public final class Task {
             reports.add(Map.of("width",v[4],"blocks",result.draft().cells().size(),"palette",palette[i]));
         }
         return Map.of("ok",true,"verified",verified,"examples",reports,
-            "bundled", Patterns.find(ResourceLocation.parse("folkways:arch_bridge")).isPresent());
+            "bundled", Patterns.find(ResourceLocation.parse("folkways_vanilla:arch_bridge")).isPresent());
     }
 }

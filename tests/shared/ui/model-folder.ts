@@ -43,7 +43,7 @@ async function modelPackRoot(server: MinecraftServer) {
   writeFileSync(path.join(pack, "pack.mcmeta"), JSON.stringify({
     pack: { pack_format: value.format, description: "Folkways e2e resident models" },
   }, null, 2) + "\n");
-  return path.join(pack, "data", "folkways", "folkways", "resident_model");
+  return path.join(pack, "data", "folkways_vanilla", "folkways", "resident_model");
 }
 
 export async function placeServerModels(
@@ -72,12 +72,12 @@ export async function reloadServerModels(server: MinecraftServer) {
 
 export async function readServerLibrary(server: MinecraftServer) {
   const held = await reflect.invoke(server, {
-    target: { kind: "static", className: "io.github.izakyl.folkways.plugins.person.look.ResidentModels" },
+    target: { kind: "static", className: "io.github.izakyl.folkways.vanilla.person.look.ResidentModels" },
     method: "current",
     limits: { maxDepth: 4 },
   });
   const text = JSON.stringify(held ?? {});
-  const entryIds = [...new Set([...text.matchAll(/folkways:model\/[a-z0-9_./-]+/g)].map((match) => match[0]))];
+  const entryIds = [...new Set([...text.matchAll(/folkways_vanilla:model\/[a-z0-9_./-]+/g)].map((match) => match[0]))];
   entryIds.sort();
   return {
     resolved: held?.found === true,
@@ -111,7 +111,7 @@ export async function waitForModelsOnClient(client: MinecraftClient, packPath: s
 
 export async function readResidentLooks(server: MinecraftServer): Promise<string[]> {
   const listed = await world
-    .entities(server, { dimension: "minecraft:overworld", types: ["folkways:resident"], limit: 200 })
+    .entities(server, { dimension: "minecraft:overworld", types: ["folkways_vanilla:resident"], limit: 200 })
     .catch(() => ({ entities: [] }));
   const looks: string[] = [];
   for (const entity of listed.entities ?? []) {
@@ -119,7 +119,7 @@ export async function readResidentLooks(server: MinecraftServer): Promise<string
     const held = await reflect
       .invoke(server, { target: { kind: "entity", uuid: entity.uuid }, method: "lookId", returnType: "java.util.Optional", limits: { maxDepth: 4 } })
       .catch(() => null);
-    const ids = [...JSON.stringify(held?.returned ?? {}).matchAll(/folkways:([a-z0-9_./-]+)/g)].map((match) => match[1]);
+    const ids = [...JSON.stringify(held?.returned ?? {}).matchAll(/folkways_vanilla:([a-z0-9_./-]+)/g)].map((match) => match[1]);
     looks.push(ids.find((id) => id !== "resident_look") ?? "");
   }
   return looks;

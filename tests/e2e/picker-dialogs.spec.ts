@@ -16,14 +16,14 @@ const POOL = defineTask<void, string>({
   name: "folkways.picker-dialogs.pool", side: "server",
   source: javaTask({ imports: [
     "io.github.izakyl.folkways.core.colony.api.Colonies",
-    "io.github.izakyl.folkways.plugins.person.look.LookPool",
+    "io.github.izakyl.folkways.vanilla.person.look.LookPool",
   ], body: `return LookPool.of(Colonies.all(ctx.server()).getFirst()).save().toString();` }),
 });
 const FIRST_LOOK = defineTask<void, string>({
   name: "folkways.picker-dialogs.first-look", side: "client",
   source: javaTask({ imports: [
-    "io.github.izakyl.folkways.plugins.person.look.ResidentLooks",
-    "io.github.izakyl.folkways.plugins.person.look.LookPicker",
+    "io.github.izakyl.folkways.vanilla.person.look.ResidentLooks",
+    "io.github.izakyl.folkways.vanilla.person.look.LookPicker",
     "net.minecraft.client.Minecraft",
   ], body: `
 return ResidentLooks.pool(Minecraft.getInstance().level.registryAccess()).keySet().stream()
@@ -35,9 +35,9 @@ const DROP = defineTask<{ action: string }, string>({
   name: "folkways.picker-dialogs.drop", side: "client",
   source: javaTask({ imports: [
     "io.github.izakyl.folkways.core.item.api.ItemFilter",
-    "io.github.izakyl.folkways.front.api.ui.FilterStacks",
-    "io.github.izakyl.folkways.front.api.ui.ItemDrops",
-    "io.github.izakyl.folkways.front.client.SelectorWindow",
+    "io.github.izakyl.folkways.core.front.api.ui.FilterStacks",
+    "io.github.izakyl.folkways.core.front.api.ui.ItemDrops",
+    "io.github.izakyl.folkways.core.front.client.SelectorWindow",
     "com.lowdragmc.lowdraglib2.gui.ui.ModularUI",
     "net.minecraft.client.Minecraft",
     "net.minecraft.core.registries.BuiltInRegistries",
@@ -75,7 +75,7 @@ test("the looks page stages its pool in a dialog until confirm", async ({}, test
     const founded = await foundColonyFast(server, client, player.name, { origin, residentCount: 1 });
     await openColonyPanelViaBook(server, client, player.name, founded.standBlock);
     await clickTab(client, "folkways.page.person");
-    const opens = await boardActs(client, "open", "folkways.person");
+    const opens = await boardActs(client, "open", "folkways_vanilla.person");
     expect(opens.length).toBeGreaterThan(1);
     await clickElement(client, { id: opens[1].id });
     await waitForElement(client, { id: "folkways.pool.looks.choose" });

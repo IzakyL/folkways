@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.core.runtime;
 
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.colony.internal.ColonyData;
 import io.github.izakyl.folkways.core.inventory.internal.Stands;
 import io.github.izakyl.folkways.core.plan.api.Grown;
@@ -37,8 +37,8 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
-@EventBusSubscriber(modid = FolkwaysMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@EventBusSubscriber(modid = FolkwaysCoreMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
+@GameTestHolder(FolkwaysCoreMod.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class SimulationClockGameTests {
 
@@ -47,7 +47,7 @@ public final class SimulationClockGameTests {
         event.register(SimulationClockGameTests.class);
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void planningBeginsOnlyWhenToldAndOneAtATime(GameTestHelper helper) {
         var level = helper.getLevel();
         var colony = new ColonyData();
@@ -88,7 +88,7 @@ public final class SimulationClockGameTests {
         return Nodes.done(spec);
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void frozenServerEventsDoNotAdvanceLaborButTheLastStepDoes(GameTestHelper helper)
             throws ReflectiveOperationException {
         var server = helper.getLevel().getServer();
@@ -129,7 +129,7 @@ public final class SimulationClockGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void retiredPipelinesRejectReadyAndLateResults(GameTestHelper helper) throws InterruptedException {
         var level = helper.getLevel();
         Situation empty = new Situation(WayGraph.UNBUILT, new Stock(List.of(), Map.of()),
@@ -156,7 +156,7 @@ public final class SimulationClockGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void backgroundResultWaitsForASimulationTick(GameTestHelper helper) throws InterruptedException {
         var level = helper.getLevel();
         var clock = level.getServer().tickRateManager();

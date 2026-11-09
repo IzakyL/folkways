@@ -12,7 +12,7 @@ import { commandPos, tryCommand, waitMatched } from "../shared/harness/bw-helper
 import { newRunId } from "../shared/harness/run-id";
 import { twins } from "../shared/harness/stage";
 
-const RESIDENT_TYPE = "folkways:resident";
+const RESIDENT_TYPE = "folkways_vanilla:resident";
 const ITEM_TYPE = "minecraft:item";
 
 const SMITH_TEMPLATE = "minecraft:netherite_upgrade_smithing_template";

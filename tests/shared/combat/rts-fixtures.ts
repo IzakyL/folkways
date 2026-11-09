@@ -42,7 +42,7 @@ export const READ_CLIENT = defineTask<void, ClientState>({
   name: "folkways.combat-rts-input.observe-client-and-rendered-hits", side: "client",
   source: javaTask({
     imports: ["java.util.List", "java.util.Map", "java.util.Set", "java.util.LinkedHashMap", "java.util.ArrayList",
-      "io.github.izakyl.folkways.front.api.ui.OverheadTools", "io.github.izakyl.folkways.rts.combat.net.CombatPackets"],
+      "io.github.izakyl.folkways.core.front.api.ui.OverheadTools", "io.github.izakyl.folkways.core.rts.combat.net.CombatPackets"],
     body: `
 var out=new LinkedHashMap<String,Object>();var control=CombatPackets.controls().orElse(null);var route=CombatPackets.route().orElse(null);var state=CombatPackets.state();
 var gui = net.minecraft.client.Minecraft.getInstance().gui;
@@ -112,7 +112,7 @@ export const PROJECT = defineTask<Vec & { entity: string }, Pixel>({
   source: javaTask({
     imports: ["java.util.Map", "java.util.Optional", "java.util.UUID", "net.minecraft.client.Minecraft", "net.minecraft.world.phys.Vec3", "net.minecraft.world.phys.AABB"],
     body: `
-var a=Args.of(ctx);var mc=Minecraft.getInstance();var type=Class.forName("io.github.izakyl.folkways.rts.client.CombatProjection");
+var a=Args.of(ctx);var mc=Minecraft.getInstance();var type=Class.forName("io.github.izakyl.folkways.core.rts.client.CombatProjection");
 var constructor=type.getDeclaredConstructor(Minecraft.class);constructor.setAccessible(true);var projection=constructor.newInstance(mc);
 double left,top,right,bottom;
 if(!a.string("entity").isEmpty()){

@@ -36,7 +36,7 @@ test("residents step between the ground and a docked Sable ship, and only while 
       client: { trace: tracePath("sable", "sable-boarding-client"), instance: `sable-boarding-client-${runId}` },
       snapshot: () => ({
         containers: [shipChest && ship.structure ? ship.at(shipChest) : undefined, groundChest],
-        entityTypes: ["folkways:resident"],
+        entityTypes: ["folkways_vanilla:resident"],
       }),
     });
     const { server, client } = pair;

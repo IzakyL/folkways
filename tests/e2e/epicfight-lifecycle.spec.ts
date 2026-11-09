@@ -27,7 +27,7 @@ test("Epic Fight saves a real borrowed weapon, fully exits and reloads the same 
   let verified = false;
   try {
     pair = await launchPair({ config: "blockwright.toml#epicfight", server, client,
-      snapshot: { entityTypes: ["folkways:resident", "minecraft:zombie", "minecraft:item"] } });
+      snapshot: { entityTypes: ["folkways_vanilla:resident", "minecraft:zombie", "minecraft:item"] } });
     const player = await waitForGroundedPlayer(pair.server);
     const origin = { x: Math.round(player.pos.x) + 4, y: Math.round(player.pos.y), z: Math.round(player.pos.z) + 4 };
     await flat(pair, origin);
@@ -62,7 +62,7 @@ test("Epic Fight saves a real borrowed weapon, fully exits and reloads the same 
 
     pair = await launchPair({ config: "blockwright.toml#epicfight",
       server: { ...server, reuseInstanceDir: true }, client: { ...client, reuseInstanceDir: true },
-      snapshot: { entityTypes: ["folkways:resident", "minecraft:zombie", "minecraft:item"] } });
+      snapshot: { entityTypes: ["folkways_vanilla:resident", "minecraft:zombie", "minecraft:item"] } });
     await waitForGroundedPlayer(pair.server);
     const loaded = await pair.server.run(READ, scene);
     evidence.push({ step: "same resident UUID and physical components loaded from the same world on a new JVM", value: loaded });
@@ -149,7 +149,7 @@ async function flat(pair: E2EPair, p: Vec) {
   if (!clear.success && !clear.output.every(line => line.trim() === "No blocks were filled")) throw new Error(JSON.stringify(clear));
 }
 
-const IMPORTS = ["java.util.Set", "java.util.Optional", "io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfiles", "io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfile", "io.github.izakyl.folkways.core.item.api.ItemSpec", "io.github.izakyl.folkways.plugins.patrol.PatrolContent", "io.github.izakyl.folkways.plugins.patrol.PatrolStaffing", "io.github.izakyl.folkways.plugins.combat.DefenseControl", "java.util.UUID", "java.util.List", "java.util.Map", "java.util.ArrayList", "java.util.LinkedHashMap",
+const IMPORTS = ["java.util.Set", "java.util.Optional", "io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutProfiles", "io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutProfile", "io.github.izakyl.folkways.core.item.api.ItemSpec", "io.github.izakyl.folkways.vanilla.patrol.PatrolContent", "io.github.izakyl.folkways.vanilla.patrol.PatrolStaffing", "io.github.izakyl.folkways.core.combat.api.DefenseControl", "java.util.UUID", "java.util.List", "java.util.Map", "java.util.ArrayList", "java.util.LinkedHashMap",
   "net.minecraft.server.MinecraftServer", "net.minecraft.resources.ResourceLocation", "net.minecraft.core.component.DataComponents",
   "net.minecraft.network.chat.Component", "net.minecraft.nbt.CompoundTag", "net.minecraft.nbt.TagParser",
   "net.minecraft.world.entity.EntityType", "net.minecraft.world.entity.EquipmentSlot", "net.minecraft.world.entity.Mob",
@@ -157,8 +157,8 @@ const IMPORTS = ["java.util.Set", "java.util.Optional", "io.github.izakyl.folkwa
   "net.minecraft.world.item.ItemStack", "net.minecraft.world.phys.Vec3", "io.github.izakyl.folkways.core.colony.api.Colonies",
   "io.github.izakyl.folkways.core.colony.api.Claimed",
   "io.github.izakyl.folkways.core.world.api.WorldPos",
-  "io.github.izakyl.folkways.plugins.person.PersonBody", "io.github.izakyl.folkways.plugins.person.PersonContent",
-  "io.github.izakyl.folkways.plugins.person.ResidentEntity",
+  "io.github.izakyl.folkways.vanilla.person.PersonBody", "io.github.izakyl.folkways.vanilla.person.PersonContent",
+  "io.github.izakyl.folkways.vanilla.person.ResidentEntity",
   "io.github.izakyl.folkways.epicfight.ResidentEpicFightPatch", "io.github.izakyl.folkways.epicfight.EpicFightWeaponSession",
   "yesman.epicfight.api.animation.types.AttackAnimation"];
 const SETUP = defineTask<Vec & { token: string }, Scene>({ name: "folkways.epicfight.lifecycle.real-fixture", side: "server", source: javaTask({ imports: IMPORTS, body: `

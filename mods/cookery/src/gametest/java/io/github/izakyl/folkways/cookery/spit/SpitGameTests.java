@@ -4,7 +4,7 @@ import com.github.ysbbbbbb.kaleidoscopecookery.block.kitchen.ShawarmaSpitBlock;
 import com.github.ysbbbbbb.kaleidoscopecookery.blockentity.kitchen.ShawarmaSpitBlockEntity;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems;
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.cookery.CookeryContent;
 import io.github.izakyl.folkways.cookery.KitchenBookings;
 import io.github.izakyl.folkways.cookery.testing.NativeCookingMatrix;
@@ -25,9 +25,9 @@ import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.core.work.support.WorkStances;
 import io.github.izakyl.folkways.core.world.api.Reach;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
-import io.github.izakyl.folkways.effect.Effects;
-import io.github.izakyl.folkways.plugins.person.PersonBody;
-import io.github.izakyl.folkways.plugins.person.ResidentEntity;
+import io.github.izakyl.folkways.core.effect.Effects;
+import io.github.izakyl.folkways.vanilla.person.PersonBody;
+import io.github.izakyl.folkways.vanilla.person.ResidentEntity;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -57,13 +57,13 @@ import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
 @EventBusSubscriber(modid = "folkways_cookery", bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@GameTestHolder("folkways_cookery")
 @PrefixGameTestTemplate(false)
 public final class SpitGameTests {
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) { event.register(SpitGameTests.class); }
 
-    @GameTest(template = "empty", timeoutTicks = 850)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 850)
     public static void hardUrgesPreserveTheAcceptedPoweredBatch(GameTestHelper helper) {
         Rig rig = new Rig(helper, false);
         SpitWork work = rig.plan();
@@ -85,7 +85,7 @@ public final class SpitGameTests {
             });
     }
 
-    @GameTest(template = "empty", timeoutTicks = 850)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 850)
     public static void aBookedKnifeCollectsRealCookedMeatWithoutBurnsOrHiddenPowerChanges(GameTestHelper helper) {
         Rig rig = new Rig(helper, false);
         SpitWork work = rig.load();
@@ -112,7 +112,7 @@ public final class SpitGameTests {
         });
     }
 
-    @GameTest(template = "empty", timeoutTicks = 850)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 850)
     public static void anUnscopedKnifeHolderStillReceivesTheNativeBurn(GameTestHelper helper) {
         Rig rig = new Rig(helper, false);
         rig.load();
@@ -127,7 +127,7 @@ public final class SpitGameTests {
         });
     }
 
-    @GameTest(template = "empty", timeoutTicks = 850)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 850)
     public static void anEmptyHandOutsideTheTaskStillUsesNativeDamageAndDelivery(GameTestHelper helper) {
         Rig rig = new Rig(helper, false);
         rig.load();
@@ -141,7 +141,7 @@ public final class SpitGameTests {
         });
     }
 
-    @GameTest(template = "empty", timeoutTicks = 850)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 850)
     public static void theUpperHalfWorksWhilePlayerFoodInTheLowerHalfIsProtected(GameTestHelper helper) {
         Rig rig = new Rig(helper, true);
         ItemStack lower = rig.lower().cookingItem.copy();
@@ -154,7 +154,7 @@ public final class SpitGameTests {
         });
     }
 
-    @GameTest(template = "empty", timeoutTicks = 900)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 900)
     public static void aPhysicalPowerLossPausesTheNativeClockAndRestoringItResumesCooking(GameTestHelper helper) {
         Rig rig = new Rig(helper, false);
         SpitWork work = rig.load();
@@ -171,7 +171,7 @@ public final class SpitGameTests {
         });
     }
 
-    @GameTest(template = "empty", timeoutTicks = 850)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 850)
     public static void aCanceledBatchRecoversWithoutAnotherRawMeatBudget(GameTestHelper helper) {
         Rig rig = new Rig(helper, false);
         rig.load();
@@ -187,7 +187,7 @@ public final class SpitGameTests {
         });
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void withdrawalInvalidatesAnAlreadyPreparedLoad(GameTestHelper helper) {
         try (Rig rig = new Rig(helper, false)) {
             SpitWork work = rig.plan();
@@ -209,11 +209,11 @@ public final class SpitGameTests {
             throw new IllegalStateException("expected all 7 native-owned campfire recipes, got " + owned.size());
         }
         List<TestFunction> tests = new ArrayList<>(owned.stream().map(id -> new TestFunction("cookery_spit_owned_matrix",
-            "folkways:spit_owned_matrix_" + id.getPath(), "folkways:empty", 1000, 0L, true, helper -> campfire(helper, id))).toList());
+            "folkways_cookery:spit_owned_matrix_" + id.getPath(), "folkways_core:empty", 1000, 0L, true, helper -> campfire(helper, id))).toList());
         for (String name : List.of("baked_potato", "cooked_beef", "cooked_chicken", "cooked_cod", "cooked_mutton", "cooked_porkchop",
                 "cooked_rabbit", "cooked_salmon", "dried_kelp")) {
             var id = ResourceLocation.withDefaultNamespace(name + "_from_campfire_cooking");
-            tests.add(new TestFunction("cookery_spit_matrix", "folkways:spit_matrix_" + name, "folkways:empty", 1000, 0L, true,
+            tests.add(new TestFunction("cookery_spit_matrix", "folkways_cookery:spit_matrix_" + name, "folkways_core:empty", 1000, 0L, true,
                 helper -> campfire(helper, id)));
         }
         return tests;
@@ -267,7 +267,7 @@ public final class SpitGameTests {
                 try { check.accept(rig); } finally { rig.close(); }
             }).thenSucceed();
     }
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void anUpperSpitCannotPlanFromAStanceThatOnlyReachesItsLowerAnchor(GameTestHelper helper) {
         try (Rig rig = new Rig(helper, true)) {
             BlockPos edge = boundaryApron(rig);
@@ -284,7 +284,7 @@ public final class SpitGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 850)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 850)
     public static void upperSpitPlansAndRecoversOnlyStancesThatPerformItsActualNativeAction(GameTestHelper helper) {
         Rig rig = new Rig(helper, true); BlockPos edge = boundaryApron(rig);
         BlockPos near = rig.cell.south();
@@ -325,7 +325,7 @@ public final class SpitGameTests {
         return rig.cell.offset(4, 0, 2);
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void anOldRecoveryEndingCannotEraseANewerInstanceForTheSameNativeBatch(GameTestHelper helper) {
         try (Rig rig = new Rig(helper, false)) {
             rig.load(); rig.power(false); rig.hold.release(Ending.DROPPED); rig.hold = null;

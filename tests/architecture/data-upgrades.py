@@ -9,8 +9,27 @@ import runpy
 
 # Use the same comment/literal stripping as the existing architecture check.
 NON_CODE = runpy.run_path("tests/architecture/core-packages.py")["NON_CODE"]
-FRAMEWORK = "io.github.izakyl.folkways.base.persist.upgrade"
+FRAMEWORK = "io.github.izakyl.folkways.core.base.persist.upgrade"
+CODEC_ADAPTER = "io.github.izakyl.folkways.core.upgrade.ComponentCodecs"
+VALUE_CODEC = "com.mojang.serialization.Codec"
 STEP = re.compile(r"(?:^|/)V(\d+)_[^/]+\.java$")
+# Package moves since a release, applied to its paths and sources; already-relocated text is left unchanged.
+RELOCATIONS = [
+    (re.compile(r"(io[./]github[./]izakyl[./]folkways)([./])(base|library|effect|front|upgrade"
+                r"|FolkwaysMod|FolkwaysConfig|FolkwaysClientConfig|ExtensionGameTests)\b"), r"\1\2core\2\3"),
+    (re.compile(r"(io[./]github[./]izakyl[./]folkways)([./])plugins\b"), r"\1\2vanilla"),
+    (re.compile(r"(io[./]github[./]izakyl[./]folkways)([./])rts\b"), r"\1\2vanilla\2rts"),
+    (re.compile(r"(io[./]github[./]izakyl[./]folkways)([./])firefighting\b"), r"\1\2create\2firefighting"),
+    (re.compile(r"(io[./]github[./]izakyl[./]folkways)([./])(warfare|tacz)\b"), r"\1\2firearms\2\3"),
+    (re.compile(r"\bFolkwaysMod\b"), "FolkwaysCoreMod"),
+    (re.compile(r"\bFolkwaysEpicFight\b"), "FolkwaysEpicFightMod"),
+]
+
+
+def relocate(text):
+    for pattern, replacement in RELOCATIONS:
+        text = pattern.sub(replacement, text)
+    return text
 
 
 def git(*args):
@@ -23,21 +42,30 @@ def main():
         code = NON_CODE.sub(" ", path.read_text())
         package = re.search(r"\bpackage\s+([\w.]+)\s*;", code).group(1)
         migration = "upgrade" in package.split(".") and not package.startswith(FRAMEWORK)
+        component_codecs = package == "io.github.izakyl.folkways.core.upgrade" and path.name == "ComponentCodecs.java"
+        component_registry = str(path).endswith("/front/engine/registry/FolkwaysDataComponents.java")
         main_mod = bool(re.search(r"@Mod\s*\(", code))
         imports = re.findall(r"\bimport\s+(?:static\s+)?([\w.*]+)\s*;", code)
         for imported in imports:
-            if migration and not imported.startswith(("java.", "net.minecraft.nbt.", FRAMEWORK + ".")):
+            codec_import = component_codecs and imported == VALUE_CODEC
+            adapter_import = component_registry and imported == CODEC_ADAPTER
+            if migration and not codec_import and not imported.startswith(
+                    ("java.", "net.minecraft.nbt.", FRAMEWORK + ".")):
                 errors.append(f"{path}: migration imports business/platform code: {imported}")
-            if not migration and not main_mod and ".upgrade." in imported and not imported.startswith(FRAMEWORK + "."):
+            if (not migration and not main_mod and not adapter_import and ".upgrade." in imported
+                    and not imported.startswith(FRAMEWORK + ".")):
                 errors.append(f"{path}: business code imports a migration: {imported}")
         # Fully-qualified references must not bypass the import boundary.
         references = re.findall(r"\b(?:io|net|com|org)\.[\w.]+", code)
         for reference in references:
             if reference == package:
                 continue
-            if migration and not reference.startswith(("net.minecraft.nbt.", FRAMEWORK + ".")):
+            codec_reference = component_codecs and reference == VALUE_CODEC
+            adapter_reference = component_registry and reference == CODEC_ADAPTER
+            if migration and not codec_reference and not reference.startswith(("net.minecraft.nbt.", FRAMEWORK + ".")):
                 errors.append(f"{path}: migration references forbidden type: {reference}")
-            if not migration and not main_mod and ".upgrade." in reference and not reference.startswith(FRAMEWORK + "."):
+            if (not migration and not main_mod and not adapter_reference and ".upgrade." in reference
+                    and not reference.startswith(FRAMEWORK + ".")):
                 errors.append(f"{path}: business code references a migration: {reference}")
         if migration and "implements Step" in code and not STEP.search(str(path)):
             errors.append(f"{path}: step filenames must contain target: V3_Description.java")
@@ -50,19 +78,19 @@ def main():
 
     # Compare every release, not just the latest: deleted or renamed shipped steps must also fail.
     for tag in git("tag", "--list", "v*").splitlines():
-        version_path = "mods/core/src/main/java/io/github/izakyl/folkways/base/persist/upgrade/DataVersion.java"
-        listing = git("ls-tree", "-r", "--name-only", tag, "mods").splitlines()
-        if version_path not in listing:
+        version_path = "mods/core/src/main/java/io/github/izakyl/folkways/core/base/persist/upgrade/DataVersion.java"
+        released = {relocate(name): name for name in git("ls-tree", "-r", "--name-only", tag, "mods").splitlines()}
+        if version_path not in released:
             continue
-        version_source = git("show", f"{tag}:{version_path}")
+        version_source = git("show", f"{tag}:{released[version_path]}")
         current = int(re.search(r"\bCURRENT\s*=\s*(\d+)", version_source)[1])
         current_paths = [str(path) for path in Path("mods").glob("*/src/main/java/**/upgrade/V*.java")]
-        for name in sorted(set(listing) | set(current_paths)):
+        for name in sorted(set(released) | set(current_paths)):
             match = STEP.search(name)
             if "/upgrade/" in name and match and int(match[1]) <= current:
                 path = Path(name)
-                if (name not in listing or not path.is_file()
-                        or path.read_bytes() != subprocess.check_output(["git", "show", f"{tag}:{name}"])):
+                if (name not in released or not path.is_file()
+                        or path.read_text() != relocate(git("show", f"{tag}:{released[name]}"))):
                     errors.append(f"{name}: released migration frozen by {tag}")
     if errors:
         raise SystemExit("\n".join(sorted(set(errors))))

@@ -7,7 +7,7 @@ import type { TaskLimits } from "@izakyl/blockwright-client";
 import { defineTask, tick, type MinecraftServer } from "@izakyl/blockwright-minecraft";
 import { REPO_ROOT } from "../harness/out-paths";
 
-const PATTERNS = path.join(REPO_ROOT, "mods/vanilla/src/main/resources/data/folkways/folkways/pattern");
+const PATTERNS = path.join(REPO_ROOT, "mods/vanilla/src/main/resources/data/folkways_vanilla/folkways/pattern");
 const LIMITS: TaskLimits = { maxDepth: 10, maxNodes: 1_000_000, maxItems: 100_000, maxString: 1_000_000 };
 
 export const DRAW_PATTERNS = defineTask<Record<string, unknown>, any>({
@@ -21,10 +21,10 @@ export type Point = { x: number; y: number; z: number };
 export async function drawRailway(server: MinecraftServer, pieces: Point[][], name = "line") {
   // The pattern and the libraries it loads.
   const sources = Object.fromEntries(["railway", "materials"]
-    .map((one) => [`folkways:${one}`, readFileSync(path.join(PATTERNS, `${one}.star`), "utf8")]));
+    .map((one) => [`folkways_vanilla:${one}`, readFileSync(path.join(PATTERNS, `${one}.star`), "utf8")]));
   const reports: any[] = [];
   for (const [i, piece] of pieces.entries()) {
-    const out = await server.run(DRAW_PATTERNS, { sources, drawings: [{ name: `${name}-${i}`, pattern: "folkways:railway", kind: "path",
+    const out = await server.run(DRAW_PATTERNS, { sources, drawings: [{ name: `${name}-${i}`, pattern: "folkways_vanilla:railway", kind: "path",
       points: piece.map((p) => [p.x, p.y, p.z]), collect: ["track", "ballast"] }] }, { timeoutMs: 600_000 });
     reports.push(...out.drawings);
   }

@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.core.runtime;
 
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.colony.internal.ColonyData;
 import io.github.izakyl.folkways.core.plan.api.Grown;
 import io.github.izakyl.folkways.core.plan.internal.Gone;
@@ -34,8 +34,8 @@ import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
-@EventBusSubscriber(modid = FolkwaysMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@EventBusSubscriber(modid = FolkwaysCoreMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
+@GameTestHolder(FolkwaysCoreMod.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class AskedLifecycleGameTests {
     @SubscribeEvent
@@ -43,9 +43,9 @@ public final class AskedLifecycleGameTests {
         event.register(AskedLifecycleGameTests.class);
     }
 
-    private static final ResourceLocation OWNER = ResourceLocation.fromNamespaceAndPath("folkways", "asked_lifecycle");
+    private static final ResourceLocation OWNER = ResourceLocation.fromNamespaceAndPath("folkways_core", "asked_lifecycle");
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void aFailedAskEndsOnceAndItsOwnerMayAskAgainAtOnce(GameTestHelper helper) {
         try (Scene s = new Scene(helper)) {
             UUID id = UUID.randomUUID();
@@ -73,7 +73,7 @@ public final class AskedLifecycleGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void anAskEndsDoneOnceAndIsNotSwallowedWhenAskedAgain(GameTestHelper helper) {
         try (Scene s = new Scene(helper)) {
             Node asked = s.node(UUID.randomUUID());
@@ -99,7 +99,7 @@ public final class AskedLifecycleGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void aWithdrawnAskEndsOnceThePlannerHasLetItGo(GameTestHelper helper) {
         try (Scene s = new Scene(helper)) {
             Node planted = s.node(UUID.randomUUID());
@@ -125,7 +125,7 @@ public final class AskedLifecycleGameTests {
     }
 
     // Held off the plan it has not ended; let go once it is no longer held, it ends as dropped.
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void anAskHeldOffThePlanHasNotEnded(GameTestHelper helper) {
         try (Scene s = new Scene(helper)) {
             Node asked = s.node(UUID.randomUUID());
@@ -145,7 +145,7 @@ public final class AskedLifecycleGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void anAskThePlannerGivesUpEndsAsThePlannerSays(GameTestHelper helper) {
         try (Scene s = new Scene(helper)) {
             Node planted = s.node(UUID.randomUUID());
@@ -166,7 +166,7 @@ public final class AskedLifecycleGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void wordAboutAnOldLifetimeDoesNotReachTheNewOne(GameTestHelper helper) {
         try (Scene s = new Scene(helper)) {
             UUID id = UUID.randomUUID();

@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.core.travel.api;
 
-import io.github.izakyl.folkways.base.Ledger;
+import io.github.izakyl.folkways.core.base.Ledger;
 import java.util.List;
 import java.util.Optional;
 import net.minecraft.resources.ResourceLocation;

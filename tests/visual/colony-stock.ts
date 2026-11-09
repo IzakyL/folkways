@@ -113,12 +113,12 @@ export async function stockColony(
     members: [...stores, ...stations.map(station => station.at)].map(cell => [cell.x, cell.y, cell.z]),
     demands: DEMANDS.map(demand => ({ ...demand, at: stores[demand.store] })),
     zones: [
-      ...plots.map(plot => ({ kind: "folkways:farm", cells: boxCells(plot.min, plot.max), choice: { crop: plot.crop } })),
+      ...plots.map(plot => ({ kind: "folkways_vanilla:farm", cells: boxCells(plot.min, plot.max), choice: { crop: plot.crop } })),
       ...pens.map(plan => ({
-        kind: "folkways:pasture", cells: boxCells(plan.pen.min, plan.pen.max),
+        kind: "folkways_vanilla:pasture", cells: boxCells(plan.pen.min, plan.pen.max),
         choice: { animal: `minecraft:${plan.animal}` }, count: { target: plan.target },
       })),
-      { kind: "folkways:fish", cells: boxCells(pond.min, pond.max) },
+      { kind: "folkways_vanilla:fish", cells: boxCells(pond.min, pond.max) },
     ],
     sites: sites.map(site => ({ name: site.name, anchor: [site.anchor.x, site.anchor.y, site.anchor.z], blocks: site.blocks })),
   });
@@ -256,17 +256,17 @@ const STOCK_COLONY = defineTask<Record<string, any>, Record<string, any>>({
       "io.github.izakyl.folkways.core.vocation.api.Keenness",
       "io.github.izakyl.folkways.core.item.api.ItemFilter",
       "io.github.izakyl.folkways.core.vocation.api.Vocations",
-      "io.github.izakyl.folkways.front.engine.colony.ColonyBoards",
-      "io.github.izakyl.folkways.front.engine.colony.ColonyFront",
-      "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
-      "io.github.izakyl.folkways.front.engine.colony.ColonySettings",
-      "io.github.izakyl.folkways.front.engine.colony.ColonySettings.Value",
-      "io.github.izakyl.folkways.front.engine.colony.MemberToggle",
-      "io.github.izakyl.folkways.plugins.build.Blueprint",
-      "io.github.izakyl.folkways.plugins.build.BlueprintBlock",
-      "io.github.izakyl.folkways.plugins.build.BlueprintVolume",
-      "io.github.izakyl.folkways.plugins.build.BuildContent",
-      "io.github.izakyl.folkways.plugins.orders.OrdersContent",
+      "io.github.izakyl.folkways.core.front.engine.colony.ColonyBoards",
+      "io.github.izakyl.folkways.core.front.engine.colony.ColonyFront",
+      "io.github.izakyl.folkways.core.front.engine.colony.ColonyGround",
+      "io.github.izakyl.folkways.core.front.engine.colony.ColonySettings",
+      "io.github.izakyl.folkways.core.front.engine.colony.ColonySettings.Value",
+      "io.github.izakyl.folkways.core.front.engine.colony.MemberToggle",
+      "io.github.izakyl.folkways.vanilla.build.Blueprint",
+      "io.github.izakyl.folkways.vanilla.build.BlueprintBlock",
+      "io.github.izakyl.folkways.vanilla.build.BlueprintVolume",
+      "io.github.izakyl.folkways.vanilla.build.BuildContent",
+      "io.github.izakyl.folkways.vanilla.orders.OrdersContent",
       "java.lang.reflect.Method",
       "net.minecraft.commands.arguments.blocks.BlockStateParser",
       "net.minecraft.core.BlockPos",
@@ -334,7 +334,7 @@ for (Object raw : args.list("demands")) {
 out.put("orders", orders);
 
 Object build = colony.service(BuildContent.ID, Object.class)
-    .orElseThrow(() -> Fail.unavailable("the colony has no folkways:build presence"));
+    .orElseThrow(() -> Fail.unavailable("the colony has no folkways_vanilla:build presence"));
 Method file = build.getClass().getDeclaredMethod("file", ServerLevel.class, Blueprint.class, BlockPos.class,
     String.class, Optional.class, String.class);
 file.setAccessible(true);

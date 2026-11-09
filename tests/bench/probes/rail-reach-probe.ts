@@ -39,7 +39,7 @@ public final class Task {
   public static Object run(Context ctx) throws Exception {
     Field graphs = ColonyWays.class.getDeclaredField("GRAPHS"); graphs.setAccessible(true);
     List<Object> out = new ArrayList<>();
-    ResourceLocation resident = ResourceLocation.fromNamespaceAndPath("folkways", "resident");
+    ResourceLocation resident = ResourceLocation.fromNamespaceAndPath("folkways_vanilla", "resident");
     for (Object roaming : ((Map<?,?>)graphs.get(null)).values()) {
       long now = ((ServerLevel)field(roaming,"level")).getGameTime();
       Object graph = field(roaming,"published");

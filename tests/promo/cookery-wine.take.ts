@@ -21,7 +21,7 @@ var args = Args.of(ctx);
 int cleared = 0;
 for (var id : args.strings("uuids")) {
     var body = ctx.server().overworld().getEntity(UUID.fromString(id));
-    if (body != null) { body.getPersistentData().remove("folkways:last_table_drink"); cleared++; }
+    if (body != null) { body.getPersistentData().remove("folkways_vanilla:last_table_drink"); cleared++; }
 }
 return Map.of("cleared", cleared);
 ` }),

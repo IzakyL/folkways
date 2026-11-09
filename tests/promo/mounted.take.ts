@@ -126,7 +126,7 @@ test("mounted: residents ride their horses to work", async ({}, testInfo) => {
     run.note("ready", ready);
     for (const row of ready.riders as Row[]) {
       expect(row.horse?.saddled, `${row.uuid} has its own saddled pasture horse`).toBe(true);
-      expect(row.locomotion).toBe("folkways:riding");
+      expect(row.locomotion).toBe("folkways_vanilla:riding");
       expect(row.passenger).toBe(false);
     }
     run.note("staging", {
@@ -452,11 +452,11 @@ const POSTS = defineTask<Record<string, any>, any>({
   source: javaTask({
     imports: [
       "io.github.izakyl.folkways.core.api.colony.Colonies",
-      "io.github.izakyl.folkways.front.engine.colony.ColonyFront",
-      "io.github.izakyl.folkways.front.engine.colony.ColonySettings",
-      "io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfiles",
-      "io.github.izakyl.folkways.plugins.patrol.PatrolStaffing",
-      "io.github.izakyl.folkways.plugins.patrol.SentryPosts",
+      "io.github.izakyl.folkways.core.front.engine.colony.ColonyFront",
+      "io.github.izakyl.folkways.core.front.engine.colony.ColonySettings",
+      "io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutProfiles",
+      "io.github.izakyl.folkways.vanilla.patrol.PatrolStaffing",
+      "io.github.izakyl.folkways.vanilla.patrol.SentryPosts",
       "net.minecraft.core.BlockPos",
     ],
     body: `
@@ -489,7 +489,7 @@ const ORDERS = defineTask<Record<string, any>, any>({
       "io.github.izakyl.folkways.core.api.colony.Colonies",
       "io.github.izakyl.folkways.core.api.resident.body.Bodies",
       "io.github.izakyl.folkways.core.api.terms.WorldPos",
-      "io.github.izakyl.folkways.rts.combat.command.ResidentCommands",
+      "io.github.izakyl.folkways.core.rts.combat.command.ResidentCommands",
       "net.minecraft.core.BlockPos",
       "net.minecraft.world.entity.Mob",
     ],
@@ -536,9 +536,9 @@ const WORKSHOP_KITS = defineTask<Record<string, any>, Array<{ uuid: string; torc
     imports: [
       "io.github.izakyl.folkways.core.api.colony.Colonies",
       "io.github.izakyl.folkways.core.api.terms.ItemSpec",
-      "io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfile",
-      "io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfiles",
-      "io.github.izakyl.folkways.plugins.person.ResidentEntity",
+      "io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutProfile",
+      "io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutProfiles",
+      "io.github.izakyl.folkways.vanilla.person.ResidentEntity",
       "net.minecraft.world.item.Items",
     ],
     body: `

@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.cookery;
 
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.work.api.Ending;
 import io.github.izakyl.folkways.core.work.api.Hold;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
@@ -15,7 +15,7 @@ import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
 @EventBusSubscriber(modid = "folkways_cookery", bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@GameTestHolder("folkways_cookery")
 @PrefixGameTestTemplate(false)
 public final class KitchenBookingsGameTests {
 
@@ -24,7 +24,7 @@ public final class KitchenBookingsGameTests {
         event.register(KitchenBookingsGameTests.class);
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void withdrawingAndReadmittingNeverRevivesAnOldUntakenHold(GameTestHelper helper) {
         KitchenBookings bookings = new KitchenBookings();
         WorldPos at = WorldPos.of(helper.getLevel(), helper.absolutePos(BlockPos.ZERO));
@@ -43,7 +43,7 @@ public final class KitchenBookingsGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void staleRecoveryIdsCannotReleaseOrBorrowTheNewGeneration(GameTestHelper helper) {
         KitchenBookings bookings = new KitchenBookings();
         WorldPos at = WorldPos.of(helper.getLevel(), helper.absolutePos(BlockPos.ZERO));
@@ -65,7 +65,7 @@ public final class KitchenBookingsGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void queuedTurnsRemainValidUntilTheirOwnStationIsWithdrawn(GameTestHelper helper) {
         KitchenBookings bookings = new KitchenBookings();
         WorldPos at = WorldPos.of(helper.getLevel(), helper.absolutePos(BlockPos.ZERO));
@@ -90,7 +90,7 @@ public final class KitchenBookingsGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void candidatesPriceTheQueueWithoutCountingTheirOwnOrLaterTurns(GameTestHelper helper) {
         var bookings = new KitchenBookings();
         var at = WorldPos.of(helper.getLevel(), helper.absolutePos(BlockPos.ZERO));
@@ -117,7 +117,7 @@ public final class KitchenBookingsGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void clearingBookingsInvalidatesOldHoldsWithoutDisablingNewUnmanagedStations(GameTestHelper helper) {
         KitchenBookings bookings = new KitchenBookings();
         WorldPos at = WorldPos.of(helper.getLevel(), helper.absolutePos(BlockPos.ZERO));

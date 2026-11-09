@@ -14,9 +14,22 @@ dependencies {
     api project(":vanilla")
 
     compileOnly lib("create")
+    compileOnly lib("createfirefightingadd")
     compileOnly("net.createmod.ponder:ponder-neoforge:${project.ponder_version}") {
         transitive = false
     }
 
     gametestImplementation project(":core").sourceSets.gameTestFixtures.output
+}
+
+// Native integration tests enter the server only with their target mod.
+sourceSets { firefightingTest }
+neoForge { addModdingDependenciesTo sourceSets.firefightingTest }
+configurations {
+    firefightingTestCompileOnly.extendsFrom gametestCompileOnly
+    firefightingTestImplementation.extendsFrom gametestImplementation
+    firefightingTestRuntimeOnly.extendsFrom gametestRuntimeOnly
+}
+dependencies {
+    firefightingTestImplementation sourceSets.main.output
 }

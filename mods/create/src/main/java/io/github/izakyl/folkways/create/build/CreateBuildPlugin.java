@@ -1,7 +1,7 @@
 package io.github.izakyl.folkways.create.build;
 
-import io.github.izakyl.folkways.front.api.ponder.Scenes;
-import io.github.izakyl.folkways.plugins.build.BuildContent;
+import io.github.izakyl.folkways.core.front.api.ponder.Scenes;
+import io.github.izakyl.folkways.vanilla.build.BuildContent;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
 import net.neoforged.fml.loading.FMLEnvironment;
@@ -14,10 +14,10 @@ public final class CreateBuildPlugin {
 
     public static void install(IEventBus modBus) {
         CreateTrack.install();
-        io.github.izakyl.folkways.plugins.build.SchematicPlacement.install(new CreateSchematicPlacement());
+        io.github.izakyl.folkways.vanilla.build.SchematicPlacement.install(new CreateSchematicPlacement());
         if (FMLEnvironment.dist.isClient()) {
             modBus.addListener(FMLClientSetupEvent.class, event -> event.enqueueWork(() ->
-                Scenes.add(BuildContent.ID, Scenes.scene("create_handoff", CreateHandoffScene::program))));
+                Scenes.add(BuildContent.ID, Scenes.scene("folkways_create", "create_handoff", CreateHandoffScene::program))));
         }
     }
 }

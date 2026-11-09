@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.core.item.api;
 
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import java.util.List;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
@@ -16,8 +16,8 @@ import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
-@EventBusSubscriber(modid = FolkwaysMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@EventBusSubscriber(modid = FolkwaysCoreMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
+@GameTestHolder(FolkwaysCoreMod.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class ItemDropsGameTests {
 
@@ -26,7 +26,7 @@ public final class ItemDropsGameTests {
         event.register(ItemDropsGameTests.class);
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void separateAreasCaptureOnlyTheirNewDropsAndLeaveTheGapAlone(GameTestHelper helper) {
         var level = helper.getLevel();
         Vec3 left = Vec3.atCenterOf(helper.absolutePos(new BlockPos(1, 1, 1)));

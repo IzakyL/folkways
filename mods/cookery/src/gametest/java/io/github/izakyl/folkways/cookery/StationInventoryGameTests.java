@@ -1,7 +1,7 @@
 package io.github.izakyl.folkways.cookery;
 
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks;
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.cookery.racks.KitchenRacks;
 import io.github.izakyl.folkways.core.colony.api.Claimed;
 import io.github.izakyl.folkways.core.colony.internal.ColonyRegistry;
@@ -9,7 +9,7 @@ import io.github.izakyl.folkways.core.colony.internal.ColonyWorks;
 import io.github.izakyl.folkways.core.inventory.api.Stash;
 import io.github.izakyl.folkways.core.inventory.internal.InventoryObservations;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
-import io.github.izakyl.folkways.plugins.person.PersonBody;
+import io.github.izakyl.folkways.vanilla.person.PersonBody;
 import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.core.BlockPos;
@@ -29,13 +29,13 @@ import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
 @EventBusSubscriber(modid = "folkways_cookery", bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@GameTestHolder("folkways_cookery")
 @PrefixGameTestTemplate(false)
 public final class StationInventoryGameTests {
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) { event.register(StationInventoryGameTests.class); }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void rackPublicationUsesObservationsAndKeepsRulesDuringIncompleteMembership(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         BlockPos rackCell = helper.absolutePos(new BlockPos(1, 1, 1));

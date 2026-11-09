@@ -5,18 +5,19 @@ import io.github.izakyl.folkways.core.colony.api.Colony;
 import io.github.izakyl.folkways.core.extension.api.Declaring;
 import io.github.izakyl.folkways.core.inventory.api.InventoryProviders;
 import io.github.izakyl.folkways.core.vocation.api.Vocation;
+import io.github.izakyl.folkways.core.vocation.api.VocationGroup;
 import io.github.izakyl.folkways.core.vocation.api.VocationSpec;
 import io.github.izakyl.folkways.core.vocation.api.Vocations;
 import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.core.work.api.Workload;
 import io.github.izakyl.folkways.create.FolkwaysCreateConfig;
-import io.github.izakyl.folkways.effect.perk.Perk;
-import io.github.izakyl.folkways.front.api.Delegation;
-import io.github.izakyl.folkways.front.api.Enrollment;
-import io.github.izakyl.folkways.front.api.Registering;
-import io.github.izakyl.folkways.front.api.Schema;
-import io.github.izakyl.folkways.front.api.Shape;
-import io.github.izakyl.folkways.front.api.panel.PageKind;
+import io.github.izakyl.folkways.core.effect.perk.Perk;
+import io.github.izakyl.folkways.core.front.api.Delegation;
+import io.github.izakyl.folkways.core.front.api.Enrollment;
+import io.github.izakyl.folkways.core.front.api.Registering;
+import io.github.izakyl.folkways.core.front.api.Schema;
+import io.github.izakyl.folkways.core.front.api.Shape;
+import io.github.izakyl.folkways.core.front.api.panel.PageKind;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -29,22 +30,22 @@ import net.neoforged.neoforge.event.server.ServerStoppedEvent;
 
 public final class DispatchContent {
 
-    public static final ResourceLocation COLLECTING = ResourceLocation.fromNamespaceAndPath("folkways", "collecting");
+    public static final ResourceLocation COLLECTING = ResourceLocation.fromNamespaceAndPath("folkways_create", "collecting");
 
-    public static final ResourceLocation TIDYING = ResourceLocation.fromNamespaceAndPath("folkways", "tidying");
+    public static final ResourceLocation TIDYING = ResourceLocation.fromNamespaceAndPath("folkways_create", "tidying");
 
-    public static final ResourceLocation PACKING = ResourceLocation.fromNamespaceAndPath("folkways", "packing");
+    public static final ResourceLocation PACKING = ResourceLocation.fromNamespaceAndPath("folkways_create", "packing");
 
-    public static final ResourceLocation KEEPING_POST = ResourceLocation.fromNamespaceAndPath("folkways", "keeping_post");
+    public static final ResourceLocation KEEPING_POST = ResourceLocation.fromNamespaceAndPath("folkways_create", "keeping_post");
 
     public static final ResourceLocation ID =
-        ResourceLocation.fromNamespaceAndPath("folkways", "dispatch");
+        ResourceLocation.fromNamespaceAndPath("folkways_create", "dispatch");
 
     public static final ResourceLocation PORT =
-        ResourceLocation.fromNamespaceAndPath("folkways", "port");
+        ResourceLocation.fromNamespaceAndPath("folkways_create", "port");
 
     public static final ResourceLocation VOCATION =
-        ResourceLocation.fromNamespaceAndPath("folkways", "dispatching");
+        ResourceLocation.fromNamespaceAndPath("folkways_create", "dispatching");
 
     public static final String QUICK_HANDS = "dispatch_quick_hands";
 
@@ -67,7 +68,7 @@ public final class DispatchContent {
         InventoryProviders.register(ID, new DispatchInventory());
         NeoForge.EVENT_BUS.addListener(network::tick);
         NeoForge.EVENT_BUS.addListener(ServerStoppedEvent.class, event -> network.forgetServer());
-        declaring.vocation(SPEC.ordered(800));
+        declaring.vocation(SPEC.ordered(300).grouped(VocationGroup.TRANSPORT));
         declaring.colony(ID, scope -> {
             DispatchPresence state = new DispatchPresence(scope.colony());
             scope.share(state);
@@ -78,7 +79,7 @@ public final class DispatchContent {
 
     public static void enroll(Registering registering) {
         registering.facing(ID, colony -> colony.service(ID, DispatchPresence.class)
-            .map(value -> (io.github.izakyl.folkways.front.api.Facing) value));
+            .map(value -> (io.github.izakyl.folkways.core.front.api.Facing) value));
         registering.enrollment(ID, new Enrollment(
             List.of(new Delegation(PORT, new Shape.Block(state -> PackageNetworks.get().isPostbox(state)))),
             Schema.none(), List.of(PAGE)));

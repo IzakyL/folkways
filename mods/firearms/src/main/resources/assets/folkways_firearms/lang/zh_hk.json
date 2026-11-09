@@ -1,0 +1,8 @@
+{
+  "folkways.tacz.ammo": "彈藥",
+  "folkways.tacz.ammo_count": "已裝 %s · 攜帶 %s",
+  "folkways.tacz.gun": "槍械：%s",
+  "folkways.tacz.missing_pack": "缺少槍械或槍包",
+  "folkways.tacz.reloading": " · 換彈中",
+  "folkways.tacz.unsupported": "這把槍暫不可用"
+}

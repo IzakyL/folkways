@@ -1,7 +1,7 @@
 package io.github.izakyl.folkways.cookery;
 
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks;
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
 import java.util.List;
 import java.util.Set;
@@ -18,13 +18,13 @@ import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
 @EventBusSubscriber(modid = "folkways_cookery", bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@GameTestHolder("folkways_cookery")
 @PrefixGameTestTemplate(false)
 public final class KitchenOperatingGameTests {
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) { event.register(KitchenOperatingGameTests.class); }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void eachRotatedKitchenApplianceOffersOnlyItsAdjacentOperatingColumn(GameTestHelper helper) {
         var level = helper.getLevel();
         BlockPos target = helper.absolutePos(new BlockPos(3, 2, 3));

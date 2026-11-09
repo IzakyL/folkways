@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.core.inventory.internal;
 
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.colony.api.Colonies;
 import io.github.izakyl.folkways.core.colony.api.Colony;
 import io.github.izakyl.folkways.core.colony.internal.ColonyData;
@@ -14,8 +14,8 @@ import io.github.izakyl.folkways.core.inventory.api.StoreRule;
 import io.github.izakyl.folkways.core.item.api.Containers;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
-import io.github.izakyl.folkways.front.engine.colony.ColonyStocks;
-import io.github.izakyl.folkways.plugins.person.PersonBody;
+import io.github.izakyl.folkways.core.front.engine.colony.ColonyStocks;
+import io.github.izakyl.folkways.vanilla.person.PersonBody;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -47,8 +47,8 @@ import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
-@EventBusSubscriber(modid = FolkwaysMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@EventBusSubscriber(modid = FolkwaysCoreMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
+@GameTestHolder(FolkwaysCoreMod.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class InventoryIndexGameTests {
 
@@ -79,7 +79,7 @@ public final class InventoryIndexGameTests {
         });
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void incompleteProviderDiscoveryRetainsStockAndCoverage(GameTestHelper helper) {
         var level = helper.getLevel();
         BlockPos pos = helper.absolutePos(new BlockPos(1, 1, 1));
@@ -127,7 +127,7 @@ public final class InventoryIndexGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void nonInventoryWorksiteDoesNotBlockCoverage(GameTestHelper helper) {
         var level = helper.getLevel();
         BlockPos cell = helper.absolutePos(new BlockPos(1, 1, 1));
@@ -155,7 +155,7 @@ public final class InventoryIndexGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void providerStockIsObservedOnceAndTotalsNeverReadContainers(GameTestHelper helper) {
         var level = helper.getLevel();
         BlockPos pos = helper.absolutePos(new BlockPos(1, 1, 1));
@@ -200,7 +200,7 @@ public final class InventoryIndexGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void noDemandBootstrapsTheColonyIndex(GameTestHelper helper) {
         var level = helper.getLevel();
         var colony = Colonies.mint(level.getServer());
@@ -217,7 +217,7 @@ public final class InventoryIndexGameTests {
         });
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void extraEndpointsShareOrdinaryMembershipAndUnchangedRegistrationDoesNotRead(GameTestHelper helper) {
         var level = helper.getLevel();
         BlockPos cell = helper.absolutePos(new BlockPos(1, 1, 1));
@@ -259,7 +259,7 @@ public final class InventoryIndexGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void partialBudgetKeepsAnEntryAtomicAndSnapshotReadsArePure(GameTestHelper helper) {
         var level = helper.getLevel();
         BlockPos pos = helper.absolutePos(new BlockPos(1, 1, 1));
@@ -299,7 +299,7 @@ public final class InventoryIndexGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void membershipDiscoverySharesTheBudgetAndReportsPendingImmediately(GameTestHelper helper) {
         var level = helper.getLevel();
         ColonyData data = new ColonyData();
@@ -323,7 +323,7 @@ public final class InventoryIndexGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void movingAnIdenticalStackBetweenEmptySlotsChangesContents(GameTestHelper helper) {
         var level = helper.getLevel();
         WorldPos at = barrel(helper);
@@ -343,7 +343,7 @@ public final class InventoryIndexGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void rulesOnlyChangePolicyAndAccessibleSlotMapping(GameTestHelper helper) {
         var level = helper.getLevel();
         WorldPos at = barrel(helper);
@@ -371,7 +371,7 @@ public final class InventoryIndexGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void doubleChestAliasesCountOnePhysicalInventory(GameTestHelper helper) {
         var level = helper.getLevel();
         BlockPos first = helper.absolutePos(new BlockPos(1, 1, 1));
@@ -425,7 +425,7 @@ public final class InventoryIndexGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void aDoubleChestWithOneHalfUnloadedIsNotComplete(GameTestHelper helper) {
         var level = helper.getLevel();
         BlockPos first = new BlockPos(22_000_015, 80, 22_000_000);
@@ -452,7 +452,7 @@ public final class InventoryIndexGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void feedbackIsTargetedAndUnchangedReadsClearDirtyCoverage(GameTestHelper helper) {
         var level = helper.getLevel();
         WorldPos at = barrel(helper);
@@ -483,7 +483,7 @@ public final class InventoryIndexGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void rawResidentSlotsEquipmentAndDefensiveCopiesAreIndependent(GameTestHelper helper) {
         var level = helper.getLevel();
         var body = PersonBody.RESIDENT.get().create(level);
@@ -521,7 +521,7 @@ public final class InventoryIndexGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void replacingAStoreChangesItsIncarnation(GameTestHelper helper) {
         var level = helper.getLevel();
         WorldPos at = barrel(helper);

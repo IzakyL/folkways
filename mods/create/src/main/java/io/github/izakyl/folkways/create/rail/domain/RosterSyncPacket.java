@@ -1,6 +1,5 @@
 package io.github.izakyl.folkways.create.rail.domain;
 
-import io.github.izakyl.folkways.FolkwaysMod;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -19,7 +18,7 @@ public record RosterSyncPacket(List<UUID> trains, Map<UUID, TrainCrew> crews) im
     private static final int MAX_NAME = 64;
 
     public static final Type<RosterSyncPacket> TYPE = new Type<>(
-        ResourceLocation.fromNamespaceAndPath(FolkwaysMod.MOD_ID, "roster_sync"));
+        ResourceLocation.fromNamespaceAndPath("folkways_create", "roster_sync"));
 
     public static final StreamCodec<RegistryFriendlyByteBuf, RosterSyncPacket> STREAM_CODEC =
         StreamCodec.ofMember(RosterSyncPacket::encode, RosterSyncPacket::decode);

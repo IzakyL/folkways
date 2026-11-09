@@ -30,7 +30,7 @@ const SMELT_INPUT = "minecraft:raw_iron";
 const SMELT_OUTPUT = "minecraft:iron_ingot";
 const POLICY_FUEL = "minecraft:oak_planks";
 const CRAFT_TAB = "folkways.page.wares";
-const CRAFT_PAGE = "folkways.wares";
+const CRAFT_PAGE = "folkways_vanilla.wares";
 const BLOCKED_PHASE_TICKS = 800;
 const SMELT_PHASE_TICKS = 12_000;
 
@@ -54,7 +54,7 @@ for (const stage of twins()) test(stage.title("smelting end-to-end: the fuel pol
       config: stage.config,
       server: { trace: serverTrace, instance: seededServer(stage.name(`smelting-server-${runId}`)) },
       client: { trace: clientTrace, instance: clientInstance },
-      snapshot: () => ({ containers: [chest, outputChest].map((at) => at && stage.at(at)), entityTypes: ["folkways:resident", "minecraft:item"] }),
+      snapshot: () => ({ containers: [chest, outputChest].map((at) => at && stage.at(at)), entityTypes: ["folkways_vanilla:resident", "minecraft:item"] }),
     });
     ({ server, client } = pair);
 
@@ -177,9 +177,9 @@ const FUEL_RULES = defineTask<{ colony_id: string }, Record<string, any>>({
   source: javaTask({
     imports: [
       "io.github.izakyl.folkways.core.item.api.ItemFilter",
-      "io.github.izakyl.folkways.front.engine.colony.ColonyFront",
-      "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
-      "io.github.izakyl.folkways.plugins.wares.WaresContent",
+      "io.github.izakyl.folkways.core.front.engine.colony.ColonyFront",
+      "io.github.izakyl.folkways.core.front.engine.colony.ColonyGround",
+      "io.github.izakyl.folkways.vanilla.wares.WaresContent",
     ],
     body: `
 Args args = Args.of(ctx);

@@ -1,7 +1,7 @@
 package io.github.izakyl.folkways.create.rail.domain;
 
-import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.front.api.Books;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
+import io.github.izakyl.folkways.core.front.api.Books;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -20,7 +20,7 @@ public final class RailPackets {
     private RailPackets() {
     }
     public static void registerPayloads(RegisterPayloadHandlersEvent event) {
-        var registrar = event.registrar(FolkwaysMod.NETWORK_VERSION);
+        var registrar = event.registrar(FolkwaysCoreMod.NETWORK_VERSION);
         registrar.playToServer(RequestRosterPacket.TYPE, RequestRosterPacket.STREAM_CODEC,
             RailPackets::handleRequest);
         registrar.playToClient(RosterSyncPacket.TYPE, RosterSyncPacket.STREAM_CODEC,

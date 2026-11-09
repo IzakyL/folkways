@@ -91,7 +91,7 @@ test("a crowd of residents boards the subway and rides off", async ({}, testInfo
     const eye: Vec = { x: railOrigin.x + 11, y: origin.y + 6, z: railOrigin.z + 8 };
     const look = cameraLookingAt(eye, aim);
     // The colony's own book stays in hand: holding it is what floats each resident's card over their head.
-    await world.command(server, `execute if items entity ${playerName} weapon.mainhand folkways:colony_book`);
+    await world.command(server, `execute if items entity ${playerName} weapon.mainhand folkways_core:colony_book`);
     await world.command(server, `gamemode spectator ${playerName}`);
     await world.command(server, `tp ${playerName} ${eye.x} ${eye.y - 1.62} ${eye.z} ${look.yaw} ${look.pitch}`);
     await safeAction(() => screen.dismiss(client));
@@ -202,7 +202,7 @@ async function stageLine(pair: PromoPair, run: ReturnType<typeof take>) {
   const riderUuids = crew.slice(1).map((one) => one.uuid);
   const roles: any[] = [];
   for (const rider of riderUuids) {
-    roles.push(await setVocationPriorityViaPanel(server, client, playerName, founding.standBlock, rider, "folkways:conducting", 0));
+    roles.push(await setVocationPriorityViaPanel(server, client, playerName, founding.standBlock, rider, "folkways_create:conducting", 0));
   }
   run.note("crew", { conductorUuid, riderUuids, roles });
   await world.command(server, `item replace entity ${playerName} inventory.0 from entity ${playerName} weapon.mainhand`);
@@ -242,10 +242,10 @@ const NO_RATIONS = defineTask<Record<string, any>, Record<string, any>>({
   timeoutMs: 20_000,
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.front.engine.colony.ColonyFront",
-      "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
-      "io.github.izakyl.folkways.front.engine.colony.ColonySettings.Value",
-      "io.github.izakyl.folkways.plugins.person.living.LivingContent",
+      "io.github.izakyl.folkways.core.front.engine.colony.ColonyFront",
+      "io.github.izakyl.folkways.core.front.engine.colony.ColonyGround",
+      "io.github.izakyl.folkways.core.front.engine.colony.ColonySettings.Value",
+      "io.github.izakyl.folkways.vanilla.person.living.LivingContent",
     ],
     body: `
 var args=Args.of(ctx);
@@ -261,7 +261,7 @@ return Sync.stamp(Map.of("ok",true,"food",front.settings(LivingContent.ID).items
 async function residents(server: any) {
   const listed = (await world.entities(server, { dimension: "minecraft:overworld", limit: 1000 })).entities;
   return listed
-    .filter((e: any) => entityTypeMatches(e.type, "folkways:resident"))
+    .filter((e: any) => entityTypeMatches(e.type, "folkways_vanilla:resident"))
     .map((e: any) => ({ uuid: e.uuid, position: e.position }));
 }
 

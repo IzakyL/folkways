@@ -16,7 +16,7 @@ import io.github.izakyl.folkways.core.work.api.ToolNeed;
 import io.github.izakyl.folkways.core.work.api.WorkAction;
 import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.core.work.support.Staged;
-import io.github.izakyl.folkways.effect.Effects;
+import io.github.izakyl.folkways.core.effect.Effects;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Predicate;

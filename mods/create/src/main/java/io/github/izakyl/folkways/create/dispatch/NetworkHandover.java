@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.create.dispatch;
 
-import io.github.izakyl.folkways.front.api.notice.Attempt;
+import io.github.izakyl.folkways.core.front.api.notice.Attempt;
 import java.util.Optional;
 import java.util.UUID;
 import net.minecraft.ChatFormatting;

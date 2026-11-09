@@ -1,9 +1,9 @@
 package io.github.izakyl.folkways.core.colony.internal;
 
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.resident.api.Body;
 import io.github.izakyl.folkways.core.travel.internal.ColonyWays;
-import io.github.izakyl.folkways.plugins.person.PersonBody;
+import io.github.izakyl.folkways.vanilla.person.PersonBody;
 import java.util.List;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
@@ -15,8 +15,8 @@ import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
-@EventBusSubscriber(modid = FolkwaysMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@EventBusSubscriber(modid = FolkwaysCoreMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
+@GameTestHolder(FolkwaysCoreMod.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class RidingResidentsGameTests {
     @SubscribeEvent
@@ -24,7 +24,7 @@ public final class RidingResidentsGameTests {
         event.register(RidingResidentsGameTests.class);
     }
 
-    @GameTest(template = "empty", timeoutTicks = 40)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 40)
     public static void boardingTheFirstResidentKeepsWalkingRoutesAvailable(GameTestHelper helper) {
         var driver = PersonBody.RESIDENT.get().create(helper.getLevel());
         var passenger = PersonBody.RESIDENT.get().create(helper.getLevel());
@@ -44,7 +44,7 @@ public final class RidingResidentsGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 40)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 40)
     public static void residentAndPlayerUseTheSameSeatedHipHeight(GameTestHelper helper) {
         var resident = PersonBody.RESIDENT.get().create(helper.getLevel());
         var player = helper.makeMockPlayer(GameType.SURVIVAL);

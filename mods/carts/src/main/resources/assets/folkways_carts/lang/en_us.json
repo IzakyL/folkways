@@ -1,0 +1,18 @@
+{
+  "folkways.choice.folkways_carts.line_closed": "Loop",
+  "folkways.choice.folkways_carts.line_open": "Out and back",
+  "folkways.delegation.folkways_carts.cart_line": "Cart line",
+  "folkways.lessons.carts": "Cargo carts",
+  "folkways.refusal.cart.no_cart": "The line has no cart",
+  "folkways.refusal.cart.no_horse": "The line has no horse",
+  "folkways.refusal.cart.no_room": "The cart is full",
+  "folkways.refusal.cart.not_aboard": "The goods are not aboard",
+  "folkways.refusal.cart.not_at_station": "The cart is not at this station",
+  "folkways.refusal.cart.not_hitched": "The cart is not hitched",
+  "folkways.refusal.cart.nowhere_to_place": "There is no room to set the cart down",
+  "folkways.settings.cart_line.cart": "Cart",
+  "folkways.settings.cart_line.round": "Route",
+  "folkways_carts.ponder.carts.header": "Cart lines: stations and laps",
+  "folkways_carts.ponder.carts.text_1": "Draw a cart line with the colony book: every point is a station. Choose a hand cart or a supply cart, and whether it runs out and back or round a loop. The colony makes the cart and sets it down at the first station.",
+  "folkways_carts.ponder.carts.text_2": "A hauler draws the cart from station to station and it stands a while at each, for goods to go aboard and come off. A supply cart line takes a tamed grown horse from a horse pasture; it is led, and no longer counted or culled there. Lines need wide gateways and room at corners."
+}

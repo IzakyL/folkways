@@ -12,7 +12,7 @@ import { digSites, planOrders, type Dig } from "./orders.ts";
 // Raises the bench city on real ground: reads the lie of the land, picks the flattest site with a mountain in reach,
 // reads the ground, levels the city and lays its grid of streets, builds the halls, draws the field, runs docks out into
 // the nearest water, and beds the railway out to the mine at the mountain's foot.
-const PATTERNS = "mods/vanilla/src/main/resources/data/folkways/folkways/pattern";
+const PATTERNS = "mods/vanilla/src/main/resources/data/folkways_vanilla/folkways/pattern";
 const star = (name: string) => readFileSync(`${PATTERNS}/${name}.star`, "utf8");
 const SOURCES = ["road", "grading", "materials", "terraced_field", "dock"];
 
@@ -64,7 +64,7 @@ type Drawing = { name: string; pattern: string; kind: "zone" | "path"; points: n
   lay?: boolean; collect?: string[]; blueprint?: boolean; seed?: number };
 
 export async function draw(server: MinecraftServer, drawings: Drawing[], keep: number[][] = [], label = "drawing") {
-  const sources = Object.fromEntries(SOURCES.map((s) => [`folkways:${s}`, star(s)]));
+  const sources = Object.fromEntries(SOURCES.map((s) => [`folkways_vanilla:${s}`, star(s)]));
   const reports: any[] = [];
   for (let i = 0; i < drawings.length; i += 12) {
     const out = await run(server, DRAW_PATTERNS,
@@ -227,7 +227,7 @@ export async function raiseTown(server: MinecraftServer, from: { x: number; z: n
   note("pads", await lay(server, plan.pads, "pads"));
   const keep: number[][] = [];
   for (const l of plan.lots) for (let x = l.box.minX - 1; x <= l.box.maxX + 1; x++) for (let z = l.box.minZ - 1; z <= l.box.maxZ + 1; z++) keep.push([x, z]);
-  const roads = await draw(server, plan.roads.map((r) => ({ name: r.name, pattern: "folkways:road", kind: "path" as const,
+  const roads = await draw(server, plan.roads.map((r) => ({ name: r.name, pattern: "folkways_vanilla:road", kind: "path" as const,
     points: r.points, knobs: { width: r.width, spacing: 14 } })), keep, "roads");
   const paths = new Works();
   const refused = roads.map((r, i) => ({ r, road: plan.roads[i] })).filter(({ r }) => r.refused);
@@ -239,7 +239,7 @@ export async function raiseTown(server: MinecraftServer, from: { x: number; z: n
   note("buildings", await lay(server, plan.works, "buildings"));
 
   // The field: the pattern terraces the slope, and the soil it leaves is sown crop by crop.
-  const fieldDrawings = plan.fields.map((f) => ({ name: f.lot.name, pattern: "folkways:terraced_field", kind: "zone" as const,
+  const fieldDrawings = plan.fields.map((f) => ({ name: f.lot.name, pattern: "folkways_vanilla:terraced_field", kind: "zone" as const,
     points: [[f.zone[0].x, f.zone[0].y, f.zone[0].z], [f.zone[1].x, f.zone[1].y, f.zone[1].z]],
     knobs: { fenced: false, rise: 1, spacing: 6 }, collect: ["fill", "bund", "path", "wall", "kerb", "steps", "water", "fence", "post", "lamp"] }));
   const drawnFields = await draw(server, fieldDrawings, [], "fields");
@@ -266,7 +266,7 @@ export async function raiseTown(server: MinecraftServer, from: { x: number; z: n
 
   // Docks where the town meets the water.
   const candidates = dockCandidates(terrain, plan);
-  const dry = await draw(server, candidates.map((c, i) => ({ name: `dock-${i}`, pattern: "folkways:dock", kind: "path" as const,
+  const dry = await draw(server, candidates.map((c, i) => ({ name: `dock-${i}`, pattern: "folkways_vanilla:dock", kind: "path" as const,
     points: [c.from, c.to], knobs: { width: 3, head: i % 3 === 0 ? "l" : "t", shelter: i % 4 === 1 }, lay: false, seed: i })), [], "docks (draft)");
   const chosen: number[] = [];
   dry.forEach((d, i) => {
@@ -274,7 +274,7 @@ export async function raiseTown(server: MinecraftServer, from: { x: number; z: n
     if (chosen.some((j) => overlaps(dry[j].bounds, d.bounds, 3))) return;
     chosen.push(i);
   });
-  const docks = await draw(server, chosen.map((i) => ({ name: `dock-${i}`, pattern: "folkways:dock", kind: "path" as const,
+  const docks = await draw(server, chosen.map((i) => ({ name: `dock-${i}`, pattern: "folkways_vanilla:dock", kind: "path" as const,
     points: [candidates[i].from, candidates[i].to], knobs: { width: 3, head: i % 3 === 0 ? "l" : "t", shelter: i % 4 === 1 },
     collect: ["deck"], seed: i })), [], "docks");
   const fishing: Array<{ name: string; cells: Vec[] }> = [];

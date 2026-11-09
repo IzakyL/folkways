@@ -4,10 +4,10 @@ import com.simibubi.create.content.contraptions.elevator.ElevatorPulleyBlock;
 import com.simibubi.create.content.contraptions.elevator.ElevatorPulleyBlockEntity;
 import io.github.izakyl.folkways.core.extension.api.Declaring;
 import io.github.izakyl.folkways.core.world.api.Keepouts;
-import io.github.izakyl.folkways.front.api.Delegation;
-import io.github.izakyl.folkways.front.api.Enrollment;
-import io.github.izakyl.folkways.front.api.Registering;
-import io.github.izakyl.folkways.front.api.Shape;
+import io.github.izakyl.folkways.core.front.api.Delegation;
+import io.github.izakyl.folkways.core.front.api.Enrollment;
+import io.github.izakyl.folkways.core.front.api.Registering;
+import io.github.izakyl.folkways.core.front.api.Shape;
 import java.util.List;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
@@ -19,9 +19,9 @@ import net.neoforged.neoforge.event.server.ServerStoppedEvent;
 
 public final class ElevatorPlugin {
 
-    public static final ResourceLocation ID = ResourceLocation.fromNamespaceAndPath("folkways", "elevator");
-    public static final ResourceLocation BOARDING = ResourceLocation.fromNamespaceAndPath("folkways", "elevator_boarding");
-    public static final ResourceLocation RIDING = ResourceLocation.fromNamespaceAndPath("folkways", "elevator_riding");
+    public static final ResourceLocation ID = ResourceLocation.fromNamespaceAndPath("folkways_create", "elevator");
+    public static final ResourceLocation BOARDING = ResourceLocation.fromNamespaceAndPath("folkways_create", "elevator_boarding");
+    public static final ResourceLocation RIDING = ResourceLocation.fromNamespaceAndPath("folkways_create", "elevator_riding");
 
     private ElevatorPlugin() {
     }

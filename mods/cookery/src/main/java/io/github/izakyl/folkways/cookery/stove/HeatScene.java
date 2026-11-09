@@ -2,9 +2,9 @@ package io.github.izakyl.folkways.cookery.stove;
 
 import com.github.ysbbbbbb.kaleidoscopecookery.block.kitchen.StoveBlock;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks;
-import io.github.izakyl.folkways.front.api.Shape;
-import io.github.izakyl.folkways.front.api.ponder.PonderScenery;
-import io.github.izakyl.folkways.plugins.person.PersonBody;
+import io.github.izakyl.folkways.core.front.api.Shape;
+import io.github.izakyl.folkways.core.front.api.ponder.PonderScenery;
+import io.github.izakyl.folkways.vanilla.person.PersonBody;
 import net.createmod.catnip.math.Pointing;
 import net.createmod.ponder.api.PonderPalette;
 import net.createmod.ponder.api.scene.SceneBuilder;

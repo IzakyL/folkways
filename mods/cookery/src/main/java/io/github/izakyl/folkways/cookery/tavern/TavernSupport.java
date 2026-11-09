@@ -2,7 +2,7 @@ package io.github.izakyl.folkways.cookery.tavern;
 
 import com.github.ysbbbbbb.kaleidoscopetavern.item.DrinkBlockItem;
 import io.github.izakyl.folkways.cookery.KitchenStations;
-import io.github.izakyl.folkways.plugins.person.living.DiningDrinks;
+import io.github.izakyl.folkways.vanilla.person.living.DiningDrinks;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Mob;
@@ -18,7 +18,7 @@ public final class TavernSupport {
         KitchenStations.register(new TavernStation.Barrel());
         TavernCabinets.register();
         TavernGrapes.register();
-        DiningDrinks.register(ResourceLocation.fromNamespaceAndPath("folkways", "tavern"), new DiningDrinks.Drink() {
+        DiningDrinks.register(ResourceLocation.fromNamespaceAndPath("folkways_cookery", "tavern"), new DiningDrinks.Drink() {
             public boolean matches(ItemStack stack) { return stack.getItem() instanceof DrinkBlockItem; }
             public ItemStack finishUsing(ServerLevel level, Mob diner, ItemStack serving) {
                 // Native Tavern applies the real quality-dependent effects and emits its empty bottle.

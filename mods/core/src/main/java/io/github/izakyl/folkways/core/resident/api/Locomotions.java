@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.core.resident.api;
 
-import io.github.izakyl.folkways.base.Ledger;
+import io.github.izakyl.folkways.core.base.Ledger;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -16,7 +16,7 @@ import net.minecraft.world.phys.Vec3;
 public final class Locomotions {
 
     // Walking on foot. A body the colony has no kind for is surveyed as if it walked.
-    public static final ResourceLocation WALKING = ResourceLocation.fromNamespaceAndPath("folkways", "walking");
+    public static final ResourceLocation WALKING = ResourceLocation.fromNamespaceAndPath("folkways_core", "walking");
 
     private static final Ledger<Locomotion> GAITS = new Ledger<>("a gait", Locomotion::id);
 

@@ -38,11 +38,11 @@ const RESIDENT_COUNT = 2;
 const WARD_TICKS = 400;
 const WARD_RADIUS = 8;
 
-const PATROL = "folkways:patrol";
-const PATROL_KIND = "folkways.zoneconfig.kind.folkways.patrol";
+const PATROL = "folkways_vanilla:patrol";
+const PATROL_KIND = "folkways.zoneconfig.kind.folkways_vanilla.patrol";
 const WEAPON = "minecraft:stone_sword";
 
-const WARDS = "io.github.izakyl.folkways.plugins.patrol.Wards";
+const WARDS = "io.github.izakyl.folkways.vanilla.patrol.Wards";
 
 for (const stage of twins()) test(stage.title("patrol: player draws a route with the book, a patroller wards it lap after lap and strikes a monster on it"), async ({}, testInfo) => {
   test.setTimeout(BUDGET.standard);
@@ -62,7 +62,7 @@ for (const stage of twins()) test(stage.title("patrol: player draws a route with
         instance: seededServer(stage.name(`patrol-server-${runId}`), { patrolWardTicks: WARD_TICKS, patrolWardRadius: WARD_RADIUS }),
       },
       client: { trace: tracePath("e2e", stage.name("patrol-client")), instance: stage.name(`patrol-client-${runId}`) },
-      snapshot: () => ({ containers: [founding?.foodChest && stage.at(founding.foodChest)], entityTypes: ["folkways:resident", "minecraft:husk"] }),
+      snapshot: () => ({ containers: [founding?.foodChest && stage.at(founding.foodChest)], entityTypes: ["folkways_vanilla:resident", "minecraft:husk"] }),
     });
     ({ server, client } = pair);
 
@@ -211,7 +211,7 @@ async function waitForFoeGone(server: MinecraftServer) {
 }
 
 async function anyResidentHolds(server: MinecraftServer, itemId: string) {
-  return world.probe(server, `as @e[type=folkways:resident] if data entity @s HandItems[{id:"${itemId}"}]`);
+  return world.probe(server, `as @e[type=folkways_vanilla:resident] if data entity @s HandItems[{id:"${itemId}"}]`);
 }
 
 async function isWarded(server: MinecraftServer, playerName: string, at: Vec): Promise<boolean> {

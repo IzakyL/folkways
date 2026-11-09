@@ -5,7 +5,7 @@ import io.github.izakyl.folkways.core.work.api.Stances;
 import io.github.izakyl.folkways.core.world.api.Footing;
 import io.github.izakyl.folkways.core.world.api.Reach;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
-import io.github.izakyl.folkways.front.api.PathView;
+import io.github.izakyl.folkways.core.front.api.PathView;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;

@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.core.plan.internal;
 
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.inventory.api.Stash;
 import io.github.izakyl.folkways.core.item.api.Goods;
 import io.github.izakyl.folkways.core.plan.api.Grown;
@@ -28,8 +28,8 @@ import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
-@EventBusSubscriber(modid = FolkwaysMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@EventBusSubscriber(modid = FolkwaysCoreMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
+@GameTestHolder(FolkwaysCoreMod.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class OutputBudgetGameTests {
     private static final ResourceLocation OWNER = ResourceLocation.fromNamespaceAndPath("folkways_test", "output_budget");
@@ -37,7 +37,7 @@ public final class OutputBudgetGameTests {
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) { event.register(OutputBudgetGameTests.class); }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void additiveSameItemRemainderNeedsTwoCells(GameTestHelper helper) {
         for (int cells : new int[] {1, 2}) {
             check(helper, cells);

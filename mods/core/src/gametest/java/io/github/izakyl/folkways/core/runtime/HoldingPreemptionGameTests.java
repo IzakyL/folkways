@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.core.runtime;
 
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import io.github.izakyl.folkways.core.resident.api.RefusalKind;
 import io.github.izakyl.folkways.core.work.api.Disposition;
@@ -39,8 +39,8 @@ import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
-@EventBusSubscriber(modid = FolkwaysMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@EventBusSubscriber(modid = FolkwaysCoreMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
+@GameTestHolder(FolkwaysCoreMod.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class HoldingPreemptionGameTests {
     @SubscribeEvent
@@ -48,7 +48,7 @@ public final class HoldingPreemptionGameTests {
         event.register(HoldingPreemptionGameTests.class);
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void standardSoftSuspensionAbortsWindupWithoutCommit(GameTestHelper helper) {
         try (HoldingGameTests.Harness h = new HoldingGameTests.Harness(helper)) {
             AtomicInteger commits = new AtomicInteger();
@@ -69,7 +69,7 @@ public final class HoldingPreemptionGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void urgentUrgeInterruptsSoftCleanup(GameTestHelper helper) throws Exception {
         for (boolean stillOffered : List.of(true, false)) {
             try (HoldingGameTests.Harness h = new HoldingGameTests.Harness(helper)) {
@@ -78,12 +78,12 @@ public final class HoldingPreemptionGameTests {
                 TestHolding probe = install(h);
                 probe.cooperates = false;
                 Node slow = h.node(Workload.Once.of(100), new AtomicInteger(), false);
-                Urge first = new Urge(ResourceLocation.fromNamespaceAndPath("folkways", "soft_urge"), 1, true, () -> slow);
+                Urge first = new Urge(ResourceLocation.fromNamespaceAndPath("folkways_core", "soft_urge"), 1, true, () -> slow);
                 HoldingGameTests.OFFERS.put(h.colony.id(), List.of(first));
                 h.interrupt();
                 helper.assertValueEqual(probe.requests, 1, "ordinary urge requests soft suspension");
                 Node fast = h.node(Workload.Once.of(100), new AtomicInteger(), false);
-                Urge urgent = new Urge(ResourceLocation.fromNamespaceAndPath("folkways", "urgent_urge"), 2, true,
+                Urge urgent = new Urge(ResourceLocation.fromNamespaceAndPath("folkways_core", "urgent_urge"), 2, true,
                     () -> fast).asUrgent();
                 HoldingGameTests.OFFERS.put(h.colony.id(), stillOffered ? List.of(first, urgent) : List.of(urgent));
                 h.interrupt();
@@ -95,17 +95,17 @@ public final class HoldingPreemptionGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void withdrawnSuspendedUrgeDoesNotResume(GameTestHelper helper) throws Exception {
         try (HoldingGameTests.Harness h = new HoldingGameTests.Harness(helper)) {
             Node firstNode = h.node(Workload.Once.of(100), new AtomicInteger(), false);
-            Urge first = new Urge(ResourceLocation.fromNamespaceAndPath("folkways", "first_need"), 1, true,
+            Urge first = new Urge(ResourceLocation.fromNamespaceAndPath("folkways_core", "first_need"), 1, true,
                 () -> firstNode);
             HoldingGameTests.OFFERS.put(h.colony.id(), List.of(first));
             h.interrupt();
             TestHolding probe = install(h);
             Node nextNode = h.node(Workload.Once.of(100), new AtomicInteger(), false);
-            Urge next = new Urge(ResourceLocation.fromNamespaceAndPath("folkways", "next_need"), 2, true,
+            Urge next = new Urge(ResourceLocation.fromNamespaceAndPath("folkways_core", "next_need"), 2, true,
                 () -> nextNode);
             HoldingGameTests.OFFERS.put(h.colony.id(), List.of(first, next));
             h.interrupt();
@@ -120,7 +120,7 @@ public final class HoldingPreemptionGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void revokedSuspendedWorkEndsOnlyOnce(GameTestHelper helper) throws Exception {
         try (HoldingGameTests.Harness h = new HoldingGameTests.Harness(helper)) {
             AtomicInteger releases = new AtomicInteger();
@@ -140,7 +140,7 @@ public final class HoldingPreemptionGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 2300)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 2300)
     public static void suspensionKeepsItemsAndReservationsPastTwoThousandTicks(GameTestHelper helper) {
         HoldingGameTests.Harness h = new HoldingGameTests.Harness(helper);
         AtomicBoolean fail = new AtomicBoolean();
@@ -188,7 +188,7 @@ public final class HoldingPreemptionGameTests {
         });
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void controllerDeadlineHardEndsWithoutRenewing(GameTestHelper helper) throws Exception {
         try (HoldingGameTests.Harness h = new HoldingGameTests.Harness(helper)) {
             Node node = h.node(Workload.Once.of(100), new AtomicInteger(), false);
@@ -209,7 +209,7 @@ public final class HoldingPreemptionGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void suspendedPersonalWorkResumesBeforeLowerPriorityIdleWork(GameTestHelper helper) throws Exception {
         try (HoldingGameTests.Harness h = new HoldingGameTests.Harness(helper)) {
             Node guardNode = h.node(Workload.Once.of(100), new AtomicInteger(), false);
@@ -218,12 +218,12 @@ public final class HoldingPreemptionGameTests {
             h.interrupt();
             TestHolding probe = install(h);
             Node supplyNode = h.node(Workload.Once.of(100), new AtomicInteger(), false);
-            Urge supply = new Urge(ResourceLocation.fromNamespaceAndPath("folkways", "supply"), 2, true,
+            Urge supply = new Urge(ResourceLocation.fromNamespaceAndPath("folkways_vanilla", "supply"), 2, true,
                 () -> supplyNode).asUrgent();
             HoldingGameTests.OFFERS.put(h.colony.id(), List.of(guard, supply));
             h.interrupt();
             Node idleNode = h.node(Workload.Once.of(100), new AtomicInteger(), false);
-            Urge idle = new Urge(ResourceLocation.fromNamespaceAndPath("folkways", "idle"), .1, false,
+            Urge idle = new Urge(ResourceLocation.fromNamespaceAndPath("folkways_core", "idle"), .1, false,
                 () -> idleNode);
             HoldingGameTests.OFFERS.put(h.colony.id(), List.of(guard, idle));
             h.interrupt();
@@ -234,7 +234,7 @@ public final class HoldingPreemptionGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void urgentUrgePreservesPendingControllerEnd(GameTestHelper helper) throws Exception {
         try (HoldingGameTests.Harness h = new HoldingGameTests.Harness(helper)) {
             Node node = h.node(Workload.Once.of(100), new AtomicInteger(), false);
@@ -243,7 +243,7 @@ public final class HoldingPreemptionGameTests {
             probe.cooperates = false;
             h.runner.controllerTakeover(h.level, h.body, false);
             Node fearNode = h.node(Workload.Once.of(100), new AtomicInteger(), false);
-            Urge fear = new Urge(ResourceLocation.fromNamespaceAndPath("folkways", "fear"), 2, true,
+            Urge fear = new Urge(ResourceLocation.fromNamespaceAndPath("folkways_vanilla", "fear"), 2, true,
                 () -> fearNode).asUrgent();
             HoldingGameTests.OFFERS.put(h.colony.id(), List.of(fear));
             h.interrupt();
@@ -256,7 +256,7 @@ public final class HoldingPreemptionGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void controllerEndCleansUpPrivateActionAndRequeuesWork(GameTestHelper helper) throws Exception {
         for (boolean ordered : List.of(false, true)) {
             try (HoldingGameTests.Harness h = new HoldingGameTests.Harness(helper)) {

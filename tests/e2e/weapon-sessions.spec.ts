@@ -26,7 +26,7 @@ test("GUARD uses real bow and crossbow sessions, and retreat stops pending fire"
       config: "blockwright.toml#rts",
       server: { instance: `weapon-sessions-server-${run}` },
       client: { instance: `weapon-sessions-client-${run}` },
-      snapshot: { entityTypes: ["folkways:resident", "minecraft:zombie", "minecraft:arrow"] },
+      snapshot: { entityTypes: ["folkways_vanilla:resident", "minecraft:zombie", "minecraft:arrow"] },
     });
     const { server } = pair;
     const player = await waitForGroundedPlayer(server);
@@ -121,11 +121,11 @@ const IMPORTS = [
   "net.minecraft.world.item.ItemStack", "net.minecraft.world.item.Items", "net.minecraft.core.component.DataComponents",
   "net.minecraft.network.chat.Component", "io.github.izakyl.folkways.core.colony.api.Colonies",
   "io.github.izakyl.folkways.core.colony.api.Claimed", "io.github.izakyl.folkways.core.world.api.WorldPos",
-  "io.github.izakyl.folkways.plugins.person.PersonBody", "io.github.izakyl.folkways.plugins.person.PersonContent",
-  "io.github.izakyl.folkways.plugins.person.ResidentEntity",
-  "io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfiles", "io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfile",
+  "io.github.izakyl.folkways.vanilla.person.PersonBody", "io.github.izakyl.folkways.vanilla.person.PersonContent",
+  "io.github.izakyl.folkways.vanilla.person.ResidentEntity",
+  "io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutProfiles", "io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutProfile",
   "io.github.izakyl.folkways.core.item.api.ItemSpec",
-  "io.github.izakyl.folkways.rts.combat.command.ResidentCommands",
+  "io.github.izakyl.folkways.core.rts.combat.command.ResidentCommands",
 ];
 
 const SETUP = defineTask<{ weapon: Weapon; x: string; y: string; z: string }, Scene>({

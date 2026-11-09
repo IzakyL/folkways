@@ -5,7 +5,7 @@ import com.simibubi.create.content.kinetics.belt.BeltBlock;
 import com.simibubi.create.content.kinetics.belt.BeltPart;
 import com.simibubi.create.content.kinetics.belt.BeltSlope;
 import com.simibubi.create.content.schematics.requirement.ItemRequirement;
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.item.api.Goods;
 import io.github.izakyl.folkways.core.plan.internal.PlanningFixture;
 import io.github.izakyl.folkways.core.work.api.Need;
@@ -18,9 +18,9 @@ import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.core.work.api.Workload;
 import io.github.izakyl.folkways.core.work.internal.Commit;
 import io.github.izakyl.folkways.create.FolkwaysCreateMod;
-import io.github.izakyl.folkways.plugins.build.BlockData;
-import io.github.izakyl.folkways.plugins.build.Costs;
-import io.github.izakyl.folkways.plugins.build.SchematicPlacement;
+import io.github.izakyl.folkways.vanilla.build.BlockData;
+import io.github.izakyl.folkways.vanilla.build.Costs;
+import io.github.izakyl.folkways.vanilla.build.SchematicPlacement;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -59,7 +59,7 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 import net.neoforged.neoforge.registries.RegisterEvent;
 
 @EventBusSubscriber(modid = FolkwaysCreateMod.ID, bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@GameTestHolder("folkways_create")
 @PrefixGameTestTemplate(false)
 public final class CreateBuildCostsGameTests {
     private static final List<Block> FIXTURES = new ArrayList<>();
@@ -96,7 +96,7 @@ public final class CreateBuildCostsGameTests {
 
     private record Translation(String what, int fixture, BlockEntity entity, Predicate<Costs.Quote> holds) { }
 
-    @GameTest(template = "empty", timeoutTicks = 10)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 10)
     public static void addonSchematicRequirementsTranslateAsTheCannonReadsThem(GameTestHelper helper) {
         BlockEntity configured = new BannerBlockEntity(BlockPos.ZERO, Blocks.WHITE_BANNER.defaultBlockState());
         configured.getPersistentData().putInt("cost", 6);
@@ -125,7 +125,7 @@ public final class CreateBuildCostsGameTests {
             .filter(need -> need.spec().item().orElseThrow().getPath().equals(item)).mapToLong(Need::count).sum();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 10)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 10)
     public static void aPairedAddonPlacementOnlyPaysOnce(GameTestHelper helper) {
         Block block = FIXTURES.get(1);
         BlockState lower = block.defaultBlockState().setValue(BlockStateProperties.DOUBLE_BLOCK_HALF, DoubleBlockHalf.LOWER);
@@ -137,7 +137,7 @@ public final class CreateBuildCostsGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 20)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 20)
     public static void aBeltIsShotWholeFromItsLastSegment(GameTestHelper helper) {
         BlockPos start = helper.absolutePos(new BlockPos(1, 2, 2));
         Block beltBlock = BuiltInRegistries.BLOCK.get(ResourceLocation.fromNamespaceAndPath("create", "belt"));
@@ -169,7 +169,7 @@ public final class CreateBuildCostsGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 10)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 10)
     public static void strictAddonComponentsOnlyAcceptTheMatchingMaterial(GameTestHelper helper) {
         var need =
             SchematicPlacement.adapter()

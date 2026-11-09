@@ -3,11 +3,11 @@ package io.github.izakyl.folkways.cookery.dining;
 import com.github.ysbbbbbb.kaleidoscopecookery.blockentity.decoration.TableBlockEntity;
 import com.github.ysbbbbbb.kaleidoscopecookery.entity.SitEntity;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks;
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.item.api.Containers;
-import io.github.izakyl.folkways.plugins.person.PersonBody;
-import io.github.izakyl.folkways.plugins.person.ResidentEntity;
-import io.github.izakyl.folkways.plugins.person.living.DiningTables;
+import io.github.izakyl.folkways.vanilla.person.PersonBody;
+import io.github.izakyl.folkways.vanilla.person.ResidentEntity;
+import io.github.izakyl.folkways.vanilla.person.living.DiningTables;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.gametest.framework.GameTest;
@@ -25,12 +25,12 @@ import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
 @EventBusSubscriber(modid = "folkways_cookery", bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@GameTestHolder("folkways_cookery")
 @PrefixGameTestTemplate(false)
 public final class DiningTableGameTests {
     @SubscribeEvent public static void register(RegisterGameTestsEvent event) { event.register(DiningTableGameTests.class); }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void tableSelectsPlacedDishWithoutReplacingTheRealServing(GameTestHelper helper) {
         var dishId = com.github.ysbbbbbb.kaleidoscopecookery.init.registry.FoodBiteRegistry.DARK_CUISINE;
         ItemStack serving = com.github.ysbbbbbb.kaleidoscopecookery.init.registry.FoodBiteRegistry
@@ -47,7 +47,7 @@ public final class DiningTableGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void nativeDiningTableHasFourRealSingleFoodSlotsAndPreservesComponents(GameTestHelper helper) {
         CookeryDiningTables.register();
         helper.assertTrue(DiningTables.anyTable(), "the common Cookery adapter makes dining available");
@@ -75,7 +75,7 @@ public final class DiningTableGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void nativeChairHoldsResidentAndReleasesOnlyDiningMount(GameTestHelper helper) {
         CookeryDiningTables.register();
         var level = helper.getLevel();
@@ -108,7 +108,7 @@ public final class DiningTableGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void basicDiningFurnitureDoesNotInventStorageOrMounts(GameTestHelper helper) {
         var level = helper.getLevel();
         BlockPos at = helper.absolutePos(new BlockPos(3, 2, 3));

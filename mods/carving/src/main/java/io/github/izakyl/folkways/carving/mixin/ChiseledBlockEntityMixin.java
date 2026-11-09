@@ -1,0 +1,100 @@
+package io.github.izakyl.folkways.carving.mixin;
+
+import io.github.izakyl.folkways.carving.CandBStructureCodec;
+import io.github.izakyl.folkways.carving.SchematicBits;
+import io.github.izakyl.folkways.carving.SchematicStatistics;
+import io.github.izakyl.folkways.core.work.api.StructureCompat;
+import java.util.Map;
+import mod.chiselsandbits.api.block.storage.StateEntryStorage;
+import mod.chiselsandbits.api.blockinformation.BlockInformation;
+import mod.chiselsandbits.block.entities.ChiseledBlockEntity;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.Tag;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
+import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+
+@Mixin(value = ChiseledBlockEntity.class, remap = false)
+abstract class ChiseledBlockEntityMixin extends BlockEntity implements SchematicBits {
+    private ChiseledBlockEntityMixin(net.minecraft.world.level.block.entity.BlockEntityType<?> type,
+            net.minecraft.core.BlockPos pos, net.minecraft.world.level.block.state.BlockState state) {
+        super(type, pos, state);
+    }
+
+    @Shadow private StateEntryStorage storage;
+    @Shadow public abstract void receivePayload(ChiseledBlockEntity.Payload payload);
+    @Shadow private Tag lastTag;
+    @Unique private boolean folkways$valid;
+    @Unique private boolean folkways$pendingStatistics;
+    @Unique private Map<BlockInformation, Integer> folkways$counts = Map.of();
+
+    @Inject(method = "setLevel", at = @At("RETURN"))
+    private void folkways$finishStatistics(net.minecraft.world.level.Level level, CallbackInfo ci) {
+        if (folkways$pendingStatistics) {
+            var self = (ChiseledBlockEntity) (Object) this;
+            ((SchematicStatistics) (Object) self.payload().mutableStatistics())
+                .folkways$recalculate(level, storage, getBlockPos());
+            folkways$pendingStatistics = false;
+        }
+    }
+
+    @Inject(method = "setChanged", at = @At("HEAD"))
+    private void folkways$invalidateCounts(CallbackInfo ci) {
+        folkways$counts = Map.of();
+    }
+
+    @Override
+    public boolean folkways$valid() {
+        return folkways$valid;
+    }
+
+    @Override
+    public Map<BlockInformation, Integer> folkways$counts() {
+        return folkways$counts;
+    }
+
+    @Inject(method = "saveAdditional", at = @At("RETURN"))
+    private void folkways$saveResolution(CompoundTag tag, HolderLookup.Provider registries, CallbackInfo ci) {
+        if (storage.getSize() != 16) {
+            tag.putInt("folkways_carving:resolution", storage.getSize());
+            tag.putBoolean("folkways_carving:schematic", true);
+        }
+    }
+
+    @Inject(method = "loadAdditional", at = @At("HEAD"), cancellable = true)
+    private void folkways$readSchematic(CompoundTag tag, HolderLookup.Provider registries, CallbackInfo ci) {
+        BlockEntity self = (BlockEntity) (Object) this;
+        if (!tag.getBoolean("folkways_carving:schematic")) {
+            // Chunk restoration keeps C&B's queued read and statistics until a real level is attached.
+            return;
+        }
+        folkways$valid = false;
+        folkways$counts = Map.of();
+        try {
+            var decoded = CandBStructureCodec.validated(tag);
+            storage = decoded.storage();
+            folkways$counts = decoded.counts();
+            var empty = new ChiseledBlockEntity(self.getBlockPos(), self.getBlockState()).payload();
+            if (self.getLevel() != null) {
+                ((SchematicStatistics) (Object) empty.mutableStatistics())
+                    .folkways$recalculate(self.getLevel(), storage, self.getBlockPos());
+            }
+            folkways$pendingStatistics = self.getLevel() == null;
+            receivePayload(new ChiseledBlockEntity.Payload(storage, empty.mutableStatistics()));
+            lastTag = tag.get("data").copy();
+            folkways$valid = true;
+        } catch (RuntimeException invalid) {
+            if (invalid instanceof StructureCompat.Failure budget) {
+                throw budget;
+            }
+            // Keep invalid data so placement cannot silently turn it into an empty, free block.
+            lastTag = tag.get("data");
+        }
+        ci.cancel();
+    }
+}

@@ -4,7 +4,7 @@ import com.github.ysbbbbbb.kaleidoscopecookery.blockentity.kitchen.ChoppingBoard
 import com.github.ysbbbbbb.kaleidoscopecookery.blockentity.kitchen.StockpotBlockEntity;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems;
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.colony.api.Claimed;
 import io.github.izakyl.folkways.core.colony.api.Closing;
 import io.github.izakyl.folkways.core.colony.api.Colonies;
@@ -27,15 +27,15 @@ import io.github.izakyl.folkways.core.work.api.Outcome;
 import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.core.work.internal.Commit;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
-import io.github.izakyl.folkways.front.api.Facing;
-import io.github.izakyl.folkways.front.api.Shape;
-import io.github.izakyl.folkways.front.api.panel.Board;
-import io.github.izakyl.folkways.front.engine.Enrollments;
-import io.github.izakyl.folkways.front.engine.colony.MemberToggle;
-import io.github.izakyl.folkways.plugins.compost.CompostContent;
-import io.github.izakyl.folkways.plugins.compost.CompostPresence;
-import io.github.izakyl.folkways.plugins.person.PersonBody;
-import io.github.izakyl.folkways.plugins.person.ResidentEntity;
+import io.github.izakyl.folkways.core.front.api.Facing;
+import io.github.izakyl.folkways.core.front.api.Shape;
+import io.github.izakyl.folkways.core.front.api.panel.Board;
+import io.github.izakyl.folkways.core.front.engine.Enrollments;
+import io.github.izakyl.folkways.core.front.engine.colony.MemberToggle;
+import io.github.izakyl.folkways.vanilla.compost.CompostContent;
+import io.github.izakyl.folkways.vanilla.compost.CompostPresence;
+import io.github.izakyl.folkways.vanilla.person.PersonBody;
+import io.github.izakyl.folkways.vanilla.person.ResidentEntity;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
@@ -63,7 +63,7 @@ import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
 @EventBusSubscriber(modid = "folkways_cookery", bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@GameTestHolder("folkways_cookery")
 @PrefixGameTestTemplate(false)
 public final class CookeryRegistrationGameTests {
     @SubscribeEvent
@@ -71,7 +71,7 @@ public final class CookeryRegistrationGameTests {
         event.register(CookeryRegistrationGameTests.class);
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void realKitchenRegistrationMarksBlocksPublishesWorkshopsAndSuppliesItsPage(GameTestHelper helper) {
         try (Kitchen rig = new Kitchen(helper)) {
             helper.assertTrue(Enrollments.of(CookeryContent.ID).pages().stream()
@@ -88,9 +88,9 @@ public final class CookeryRegistrationGameTests {
                 "the published pot can expand a rice demand");
             var page = Facing.of(rig.colony, CookeryContent.ID).orElseThrow()
                 .board(CookeryContent.ID, rig.colony.view(rig.level)).orElseThrow();
-            helper.assertValueEqual(page.rows().stream().filter(row -> row.acts().stream().anyMatch(act -> act instanceof io.github.izakyl.folkways.front.api.panel.Board.Act.Ping)).count(), 2L, "the real facing provider lists both stations");
-            helper.assertValueEqual(page.rows().stream().flatMap(row -> row.acts().stream()).filter(act -> act instanceof io.github.izakyl.folkways.front.api.panel.Board.Act.Edit).count(), 3L, "all three clothing settings can actually be edited through the kitchen page");
-            helper.assertTrue(page.rows().stream().filter(row -> row.acts().stream().anyMatch(act -> act instanceof io.github.izakyl.folkways.front.api.panel.Board.Act.Ping)).allMatch(row -> row.detail().getContents() instanceof TranslatableContents),
+            helper.assertValueEqual(page.rows().stream().filter(row -> row.acts().stream().anyMatch(act -> act instanceof io.github.izakyl.folkways.core.front.api.panel.Board.Act.Ping)).count(), 2L, "the real facing provider lists both stations");
+            helper.assertValueEqual(page.rows().stream().flatMap(row -> row.acts().stream()).filter(act -> act instanceof io.github.izakyl.folkways.core.front.api.panel.Board.Act.Edit).count(), 3L, "all three clothing settings can actually be edited through the kitchen page");
+            helper.assertTrue(page.rows().stream().filter(row -> row.acts().stream().anyMatch(act -> act instanceof io.github.izakyl.folkways.core.front.api.panel.Board.Act.Ping)).allMatch(row -> row.detail().getContents() instanceof TranslatableContents),
                 "the page keeps translated status components until the client");
             rig.mark(rig.boardCell);
             rig.mark(rig.potCell);
@@ -100,7 +100,7 @@ public final class CookeryRegistrationGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void anEnclosedMarkedStationStaysVisibleWithAnUnreachableStatus(GameTestHelper helper) {
         try (Kitchen rig = new Kitchen(helper)) {
             rig.mark(rig.boardCell);
@@ -111,7 +111,7 @@ public final class CookeryRegistrationGameTests {
             }
             rig.presence.refresh(rig.level.getServer());
             var page = rig.presence.board(CookeryContent.ID, rig.colony.view(rig.level)).orElseThrow();
-            helper.assertValueEqual(page.rows().stream().filter(row -> row.acts().stream().anyMatch(act -> act instanceof io.github.izakyl.folkways.front.api.panel.Board.Act.Ping)).count(), 1L, "being enclosed does not erase the marked station");
+            helper.assertValueEqual(page.rows().stream().filter(row -> row.acts().stream().anyMatch(act -> act instanceof io.github.izakyl.folkways.core.front.api.panel.Board.Act.Ping)).count(), 1L, "being enclosed does not erase the marked station");
             var stationRow = page.rows().stream().filter(row -> row.acts().stream()
                 .anyMatch(act -> act instanceof Board.Act.Ping)).findFirst().orElseThrow();
             helper.assertTrue(stationRow.detail().getContents() instanceof TranslatableContents text
@@ -121,7 +121,7 @@ public final class CookeryRegistrationGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void unmarkingAnInvestedPotPreservesGoodsAndLetsANewColonyReuseIt(GameTestHelper helper) {
         releasedPotKeepsItsBatchAndCanJoinANewColony(helper, rig -> {
             rig.mark(rig.potCell);
@@ -130,7 +130,7 @@ public final class CookeryRegistrationGameTests {
         });
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void razingAColonyReleasesItsLoadedPotWithoutDestroyingTheBatch(GameTestHelper helper) {
         releasedPotKeepsItsBatchAndCanJoinANewColony(helper, rig -> rig.colony.raze());
     }
@@ -160,7 +160,7 @@ public final class CookeryRegistrationGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void serverShutdownKeepsTheNativeBatchAndItsRecoveryOwnership(GameTestHelper helper) {
         try (Kitchen rig = new Kitchen(helper)) {
             rig.mark(rig.potCell);
@@ -181,7 +181,7 @@ public final class CookeryRegistrationGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void unmarkingABoardPreservesTheIngredientAndDoesNotAdoptItOnRemark(GameTestHelper helper) {
         try (Kitchen rig = new Kitchen(helper)) {
             rig.mark(rig.boardCell);
@@ -202,7 +202,7 @@ public final class CookeryRegistrationGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void theRealBookRegistersANativeStovePointAndItsPresenceLightsItWithoutABlockEntity(GameTestHelper helper) {
         try (Kitchen rig = new Kitchen(helper)) {
             BlockPos cell = helper.absolutePos(new BlockPos(4, 1, 4)); WorldPos at = WorldPos.of(rig.level, cell);
@@ -243,7 +243,7 @@ public final class CookeryRegistrationGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void theRealBookRegistersANativeComposterPointOutsideTheKitchenPage(GameTestHelper helper) {
         try (Kitchen rig = new Kitchen(helper)) {
             var compost = rig.colony.service(CompostContent.ID, CompostPresence.class).orElseThrow();
@@ -270,7 +270,7 @@ public final class CookeryRegistrationGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void unmarkingANativeComposterRejectsItsOldCollectionAndRemarkingRecoversOnlyOneBoneMeal(GameTestHelper helper) {
         try (Kitchen rig = new Kitchen(helper)) {
             var compost = rig.colony.service(CompostContent.ID, CompostPresence.class).orElseThrow();
@@ -299,7 +299,7 @@ public final class CookeryRegistrationGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void nativeComposterPointsExcludeOtherColoniesAndRazeReleasesThemWithoutChangingCompost(GameTestHelper helper) {
         try (Kitchen rig = new Kitchen(helper)) {
             var compost = rig.colony.service(CompostContent.ID, CompostPresence.class).orElseThrow();
@@ -323,7 +323,7 @@ public final class CookeryRegistrationGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void removingANativeComposterReconcilesItsRealPointAndWithdrawsTheKitchenRow(GameTestHelper helper) {
         try (Kitchen rig = new Kitchen(helper)) {
             BlockPos cell = helper.absolutePos(new BlockPos(4, 1, 4)); WorldPos at = WorldPos.of(rig.level, cell);

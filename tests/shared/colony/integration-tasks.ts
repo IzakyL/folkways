@@ -18,7 +18,7 @@ const NETWORK_IMPORTS = [
   "io.github.izakyl.folkways.create.dispatch.PackageNetworks",
   "io.github.izakyl.folkways.core.vocation.api.Vocations",
   "io.github.izakyl.folkways.core.resident.api.Bodies",
-  "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
+  "io.github.izakyl.folkways.core.front.engine.colony.ColonyGround",
   "net.minecraft.core.BlockPos",
   "net.minecraft.core.GlobalPos",
   "net.minecraft.server.MinecraftServer",
@@ -42,8 +42,8 @@ export const GOLEM_CAST = defineTask<Answer, Answer>({
     imports: [
       "dev.xkmc.modulargolems.content.item.golem.GolemHolder",
       "io.github.izakyl.folkways.core.resident.api.Bodies",
-      "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
-      "io.github.izakyl.folkways.front.engine.colony.Endorsements",
+      "io.github.izakyl.folkways.core.front.engine.colony.ColonyGround",
+      "io.github.izakyl.folkways.core.front.engine.colony.Endorsements",
       "io.github.izakyl.folkways.core.vocation.api.Vocations",
       "net.minecraft.core.registries.BuiltInRegistries",
       "net.minecraft.resources.ResourceLocation",
@@ -120,10 +120,10 @@ export const PATROL_ROUTES = defineTask<Answer, Answer>({
   timeoutMs: 20_000,
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.front.engine.colony.ColonyFront",
-      "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
-      "io.github.izakyl.folkways.front.engine.colony.ColonySchemas",
-      "io.github.izakyl.folkways.front.engine.colony.ColonySettings",
+      "io.github.izakyl.folkways.core.front.engine.colony.ColonyFront",
+      "io.github.izakyl.folkways.core.front.engine.colony.ColonyGround",
+      "io.github.izakyl.folkways.core.front.engine.colony.ColonySchemas",
+      "io.github.izakyl.folkways.core.front.engine.colony.ColonySettings",
       "net.minecraft.core.BlockPos",
       "net.minecraft.resources.ResourceLocation",
     ],
@@ -133,7 +133,7 @@ var args = Args.of(ctx);
 var level = server.overworld();
 var colony = ColonyGround.of(server, UUID.fromString(args.string("colony_id"))).orElseThrow();
 var front = ColonyFront.of(colony);
-var beat = ResourceLocation.fromNamespaceAndPath("folkways", "patrol");
+var beat = ResourceLocation.fromNamespaceAndPath("folkways_vanilla", "patrol");
 var settings = ColonySettings.byDefault(ColonySchemas.ofDelegation(beat));
 var drawn = new ArrayList<Object>();
 for (var rawRoute : args.list("routes")) {
@@ -339,7 +339,7 @@ export const COLONY_PACKS = defineTask<Answer, Answer>({
   source: javaTask({
     imports: [
       "io.github.izakyl.folkways.core.resident.api.Bodies",
-      "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
+      "io.github.izakyl.folkways.core.front.engine.colony.ColonyGround",
       "net.minecraft.core.registries.BuiltInRegistries",
       "net.minecraft.server.MinecraftServer",
     ],

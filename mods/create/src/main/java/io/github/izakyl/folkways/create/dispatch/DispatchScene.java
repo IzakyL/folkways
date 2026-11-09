@@ -1,11 +1,11 @@
 package io.github.izakyl.folkways.create.dispatch;
 
 import io.github.izakyl.folkways.create.CreateMod;
-import io.github.izakyl.folkways.front.api.Shape;
-import io.github.izakyl.folkways.front.api.ponder.PonderScenery.Body;
-import io.github.izakyl.folkways.front.api.ponder.PonderScenery;
-import io.github.izakyl.folkways.front.api.ponder.Scenes;
-import io.github.izakyl.folkways.plugins.person.PersonBody;
+import io.github.izakyl.folkways.core.front.api.Shape;
+import io.github.izakyl.folkways.core.front.api.ponder.PonderScenery.Body;
+import io.github.izakyl.folkways.core.front.api.ponder.PonderScenery;
+import io.github.izakyl.folkways.core.front.api.ponder.Scenes;
+import io.github.izakyl.folkways.vanilla.person.PersonBody;
 import net.createmod.catnip.math.Pointing;
 import net.createmod.ponder.api.PonderPalette;
 import net.createmod.ponder.api.scene.SceneBuilder;
@@ -39,7 +39,7 @@ public final class DispatchScene {
     public static void declare(FMLClientSetupEvent event) {
         event.enqueueWork(() -> Scenes.folder(DispatchContent.ID, "folkways.page.dispatch",
             ResourceLocation.withDefaultNamespace("chest_minecart"),
-            Scenes.scene("dispatch", DispatchScene::program)));
+            Scenes.scene("folkways_create", "dispatch", DispatchScene::program)));
     }
 
     public static void program(SceneBuilder scene, SceneBuildingUtil util) {

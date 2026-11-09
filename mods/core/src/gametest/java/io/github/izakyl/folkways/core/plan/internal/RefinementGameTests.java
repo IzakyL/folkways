@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.core.plan.internal;
 
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.extension.api.Declaring;
 import io.github.izakyl.folkways.core.plan.api.Before;
 import io.github.izakyl.folkways.core.plan.api.Grown;
@@ -32,8 +32,8 @@ import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
-@EventBusSubscriber(modid = FolkwaysMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@EventBusSubscriber(modid = FolkwaysCoreMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
+@GameTestHolder(FolkwaysCoreMod.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class RefinementGameTests {
     private static final ResourceLocation OWNER = ResourceLocation.fromNamespaceAndPath("folkways_test", "refinement");
@@ -76,7 +76,7 @@ public final class RefinementGameTests {
         helper.assertTrue(rejected, "invalid graph substitution must be rejected");
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void recursivelyRefinesAndRewiresBoundaries(GameTestHelper helper) {
         WorldPos at = at(helper);
         Node before = Nodes.done(spec(at));
@@ -98,7 +98,7 @@ public final class RefinementGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void pendingRefinementsPersistAndResumeWithoutReplacingTheAsk(GameTestHelper helper) {
         var f = new PlanningFixture(helper);
         var ready = new AtomicBoolean();
@@ -131,7 +131,7 @@ public final class RefinementGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void cancellationRemovesPendingAndExpandedWork(GameTestHelper helper) {
         var f = new PlanningFixture(helper);
         var known = new Known(f.situation(new Stock(List.of(), Map.of()), List.of()), f.crew.hands());
@@ -148,7 +148,7 @@ public final class RefinementGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void unknownObligationDoesNotBlockIndependentRefinement(GameTestHelper helper) {
         WorldPos at = at(helper);
         var unknown = new Obligation(spec(at), 0, new AtomicBoolean());
@@ -161,7 +161,7 @@ public final class RefinementGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void aPendingAskDoesNotPreventOtherAsksFromExecuting(GameTestHelper helper) {
         var f = new PlanningFixture(helper);
         NodeSpec unknownSpec = spec(f.source);
@@ -178,7 +178,7 @@ public final class RefinementGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void rejectsLostBoundaryEscapedWorkAndIdentityCollision(GameTestHelper helper) {
         WorldPos at = at(helper);
         var intent = new Obligation(spec(at), 0, new AtomicBoolean(true));
@@ -193,7 +193,7 @@ public final class RefinementGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void relationCanConstrainExistingNodesOutsideItsReplacement(GameTestHelper helper) {
         WorldPos at = at(helper);
         Node first = Nodes.done(spec(at));
@@ -234,7 +234,7 @@ public final class RefinementGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void acceptsTerminationExactlyAtRefinementLimit(GameTestHelper helper) {
         WorldPos at = at(helper);
         var intent = new Obligation(spec(at), 255, new AtomicBoolean(true));
@@ -244,7 +244,7 @@ public final class RefinementGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void boundsNonTerminatingRules(GameTestHelper helper) {
         WorldPos at = at(helper);
         var intent = new Obligation(spec(at), 0, new AtomicBoolean(true));

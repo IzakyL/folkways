@@ -45,7 +45,7 @@ export async function checkModeLayers(client: MinecraftClient, server: Minecraft
       return (await client.run(MODE_PROBE)).alpha[mode];
     }).toBeCloseTo(1, 4);
     const state = await client.run(MODE_PROBE);
-    expect(state.mode).toBe(`folkways:${mode}`);
+    expect(state.mode).toBe(`${mode === "damage_control" ? "folkways_vanilla" : "folkways_core"}:${mode}`);
     expect(state.zones).toBeGreaterThan(0);
     expect(state.ghosts).toBeGreaterThan(0);
     expect(state.marks).toBeGreaterThan(1);
@@ -79,17 +79,17 @@ export const MODE_PROBE = defineTask<void, Modes>({
   side: "client",
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.front.api.ui.OverheadTools",
-      "io.github.izakyl.folkways.front.api.ui.ModeOverlays",
-      "io.github.izakyl.folkways.front.client.ColonyHighlightState",
+      "io.github.izakyl.folkways.core.front.api.ui.OverheadTools",
+      "io.github.izakyl.folkways.core.front.api.ui.ModeOverlays",
+      "io.github.izakyl.folkways.core.front.client.ColonyHighlightState",
       "net.minecraft.resources.ResourceLocation",
     ],
     body: `
 var alpha = new LinkedHashMap<String, Float>();
 for (String name : List.of("build", "rts", "damage_control")) {
-    alpha.put(name, ModeOverlays.alpha(ResourceLocation.fromNamespaceAndPath("folkways", name)));
+    alpha.put(name, ModeOverlays.alpha(ResourceLocation.fromNamespaceAndPath(name.equals("damage_control") ? "folkways_vanilla" : "folkways_core", name)));
 }
-var aimed = Class.forName("io.github.izakyl.folkways.front.client.ToolOverlay").getDeclaredMethod("aimed");
+var aimed = Class.forName("io.github.izakyl.folkways.core.front.client.ToolOverlay").getDeclaredMethod("aimed");
 aimed.setAccessible(true);
 var owed = ColonyHighlightState.class.getDeclaredField("OWED");
 owed.setAccessible(true);
@@ -117,12 +117,12 @@ const PREPARE = defineTask<Scene, boolean>({
   source: javaTask({
     imports: [
       "io.github.izakyl.folkways.core.colony.api.Colonies",
-      "io.github.izakyl.folkways.front.api.Facing",
-      "io.github.izakyl.folkways.front.engine.colony.ColonySettings",
-      "io.github.izakyl.folkways.front.engine.colony.ZoneDrafts",
-      "io.github.izakyl.folkways.plugins.build.Blueprint",
-      "io.github.izakyl.folkways.plugins.build.BlueprintBlock",
-      "io.github.izakyl.folkways.plugins.build.BlueprintVolume",
+      "io.github.izakyl.folkways.core.front.api.Facing",
+      "io.github.izakyl.folkways.core.front.engine.colony.ColonySettings",
+      "io.github.izakyl.folkways.core.front.engine.colony.ZoneDrafts",
+      "io.github.izakyl.folkways.vanilla.build.Blueprint",
+      "io.github.izakyl.folkways.vanilla.build.BlueprintBlock",
+      "io.github.izakyl.folkways.vanilla.build.BlueprintVolume",
       "net.minecraft.core.BlockPos",
       "net.minecraft.resources.ResourceLocation",
       "net.minecraft.server.MinecraftServer",
@@ -134,8 +134,8 @@ var args = Args.of(ctx);
 var level = ((MinecraftServer) ctx.server()).overworld();
 var colony = Colonies.of(level.getServer(), UUID.fromString(args.string("colony"))).orElseThrow();
 var origin = new BlockPos((int) args.integer("x"), (int) args.integer("y"), (int) args.integer("z"));
-var dc = ResourceLocation.parse("folkways:damage_control");
-ZoneDrafts.zone(level, colony, ResourceLocation.parse("folkways:farm"),
+var dc = ResourceLocation.parse("folkways_vanilla:damage_control");
+ZoneDrafts.zone(level, colony, ResourceLocation.parse("folkways_vanilla:farm"),
     origin.offset(-8, 0, 2), origin.offset(-3, 1, 7), ColonySettings.empty()).orElseThrow();
 var protectedArea = ZoneDrafts.zone(level, colony, dc, origin.offset(3, 0, 2), origin.offset(7, 2, 6),
     ColonySettings.empty().with("repair", new ColonySettings.Value.Flag(false))
@@ -158,7 +158,7 @@ for (int x = 0; x < 4; x++) {
 }
 var blueprint = new Blueprint(UUID.randomUUID(), "Mode layer preview", blocks,
     BlueprintVolume.of(4, 3, 1).orElseThrow(), level.getGameTime());
-var build = Facing.of(colony, ResourceLocation.parse("folkways:build")).orElseThrow();
+var build = Facing.of(colony, ResourceLocation.parse("folkways_vanilla:build")).orElseThrow();
 var file = build.getClass().getDeclaredMethod("file", ServerLevel.class, Blueprint.class,
     BlockPos.class, String.class, Optional.class, String.class);
 file.setAccessible(true);

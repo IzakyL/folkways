@@ -1,6 +1,5 @@
 package io.github.izakyl.folkways.create.rail.domain;
 
-import io.github.izakyl.folkways.FolkwaysMod;
 import java.util.UUID;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
@@ -10,7 +9,7 @@ import net.minecraft.resources.ResourceLocation;
 public record RequestRosterPacket(UUID colonyId) implements CustomPacketPayload {
 
     public static final Type<RequestRosterPacket> TYPE = new Type<>(
-        ResourceLocation.fromNamespaceAndPath(FolkwaysMod.MOD_ID, "request_roster"));
+        ResourceLocation.fromNamespaceAndPath("folkways_create", "request_roster"));
 
     public static final StreamCodec<RegistryFriendlyByteBuf, RequestRosterPacket> STREAM_CODEC =
         StreamCodec.ofMember(RequestRosterPacket::encode, RequestRosterPacket::decode);

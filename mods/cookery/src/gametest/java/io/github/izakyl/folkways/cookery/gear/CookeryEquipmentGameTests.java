@@ -2,7 +2,7 @@ package io.github.izakyl.folkways.cookery.gear;
 
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.tag.TagMod;
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.cookery.CookeryContent;
 import io.github.izakyl.folkways.cookery.CookeryPresence;
 import io.github.izakyl.folkways.cookery.seeds.GrassSources;
@@ -30,11 +30,11 @@ import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.core.work.api.Workload;
 import io.github.izakyl.folkways.core.work.support.Tools;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
-import io.github.izakyl.folkways.front.engine.colony.ColonyFront;
-import io.github.izakyl.folkways.front.engine.colony.ColonySettings;
-import io.github.izakyl.folkways.plugins.farming.FarmingContent;
-import io.github.izakyl.folkways.plugins.person.PersonBody;
-import io.github.izakyl.folkways.plugins.person.ResidentEntity;
+import io.github.izakyl.folkways.core.front.engine.colony.ColonyFront;
+import io.github.izakyl.folkways.core.front.engine.colony.ColonySettings;
+import io.github.izakyl.folkways.vanilla.farming.FarmingContent;
+import io.github.izakyl.folkways.vanilla.person.PersonBody;
+import io.github.izakyl.folkways.vanilla.person.ResidentEntity;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -61,7 +61,7 @@ import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
 @EventBusSubscriber(modid = "folkways_cookery", bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@GameTestHolder("folkways_cookery")
 @PrefixGameTestTemplate(false)
 public final class CookeryEquipmentGameTests {
     private static final ItemSpec HATS = ItemSpec.of(TagMod.STRAW_HAT);
@@ -69,7 +69,7 @@ public final class CookeryEquipmentGameTests {
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) { event.register(CookeryEquipmentGameTests.class); }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void hardUrgesAndSoftControllerEndConserveTheWornGarment(GameTestHelper helper) {
         try (Rig rig = new Rig(helper)) {
             ItemStack original = rig.stockHat();
@@ -103,7 +103,7 @@ public final class CookeryEquipmentGameTests {
         }
         helper.succeed(); }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void idleAndVanillaFarmWorkNeverRequestOrEquipCookeryClothing(GameTestHelper helper) {
         try (var rig = new Rig(helper)) {
             rig.stockHat();
@@ -121,7 +121,7 @@ public final class CookeryEquipmentGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void clothingWaitsForTheResidentObservation(GameTestHelper helper) {
         try (var rig = new Rig(helper)) {
             rig.body.setItemSlot(EquipmentSlot.HEAD, new ItemStack(ModItems.STRAW_HAT.get()));
@@ -138,7 +138,7 @@ public final class CookeryEquipmentGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void twoRealFarmersBorrowOneNamedHatInTurnAndReturnItsOriginalComponents(GameTestHelper helper) {
         try (var rig = new Rig(helper)) {
             ItemStack expected = rig.stockHat();
@@ -164,7 +164,7 @@ public final class CookeryEquipmentGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void cancellationUnwearsOnlyItsLoanAndRealRecoveryReturnsItWithoutHarvesting(GameTestHelper helper) {
         try (var rig = new Rig(helper)) {
             rig.stockHat();
@@ -182,7 +182,7 @@ public final class CookeryEquipmentGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void disablingBorrowingOrTheFarmLicenceRefusesThePreparedActionAndReturnsTheHat(GameTestHelper helper) {
         for (boolean licence : List.of(false, true)) {
             try (var rig = new Rig(helper)) {
@@ -208,7 +208,7 @@ public final class CookeryEquipmentGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void aPlayersOwnSuitableHatIsUsedWithoutBecomingAColonyLoan(GameTestHelper helper) {
         try (var rig = new Rig(helper)) {
             ItemStack playerHat = new ItemStack(ModItems.STRAW_HAT_FLOWER.get());
@@ -224,7 +224,7 @@ public final class CookeryEquipmentGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void anUnrelatedPlayerHelmetIsNeverOverwrittenBySeedOrPaddyClothing(GameTestHelper helper) {
         try (var rig = new Rig(helper)) {
             rig.stockHat();
@@ -239,7 +239,7 @@ public final class CookeryEquipmentGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void aPartialFarmerSetCannotMoveOrHoldHalfAnOutfit(GameTestHelper helper) {
         try (var rig = new Rig(helper)) {
             rig.flag("wear_farmer_armor", true);
@@ -262,7 +262,7 @@ public final class CookeryEquipmentGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 90)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 90)
     public static void aBorrowedWholeFarmerSetReceivesTheNativeWaterEffectAndThenReturns(GameTestHelper helper) {
         var rig = new Rig(helper);
         rig.flag("wear_farmer_armor", true);
@@ -290,7 +290,7 @@ public final class CookeryEquipmentGameTests {
         });
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void nativeBodyAndLoanReloadRecoverTheWornHatWithoutResumingItsTask(GameTestHelper helper) {
         try (var rig = new Rig(helper)) {
             ItemStack expected = rig.stockHat();
@@ -315,7 +315,7 @@ public final class CookeryEquipmentGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void aPlayerReplacementFromTheSameHatFamilyNeverBecomesTheOldLoan(GameTestHelper helper) {
         try (var rig = new Rig(helper)) {
             ItemStack original = rig.stockHat();
@@ -343,7 +343,7 @@ public final class CookeryEquipmentGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void suitablePlayerEquipmentReservesNoFictionalBorrowingCargoCell(GameTestHelper helper) {
         try (var rig = new Rig(helper)) {
             rig.body.setItemSlot(EquipmentSlot.HEAD, new ItemStack(ModItems.STRAW_HAT_FLOWER.get()));
@@ -358,7 +358,7 @@ public final class CookeryEquipmentGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void aFullCargoPackKeepsTheOwnedLoanSafeUntilRealReturnRoomExists(GameTestHelper helper) {
         try (var rig = new Rig(helper)) {
             ItemStack expected = rig.stockHat();
@@ -382,7 +382,7 @@ public final class CookeryEquipmentGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void changingTheClothingSelectionCancelsItsActiveLoanButStillReturnsTheOldPhysicalHat(GameTestHelper helper) {
         try (var rig = new Rig(helper)) {
             ItemStack expected = rig.stockHat(); Node task = rig.gather(rig.body);
@@ -407,7 +407,7 @@ public final class CookeryEquipmentGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void razingWithFullCargoDropsTheRealBorrowedHatBeforeItsResidentLeaves(GameTestHelper helper) {
         try (var rig = new Rig(helper, true)) {
             ItemStack expected = rig.stockHat();
@@ -434,7 +434,7 @@ public final class CookeryEquipmentGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void anUnloadedBorrowerReloadsAfterRazingAndPreservesItsHatThroughTheRealLeaveTick(GameTestHelper helper) {
         try (var rig = new Rig(helper, true)) {
             ItemStack expected = rig.stockHat();
@@ -456,7 +456,7 @@ public final class CookeryEquipmentGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void aRazedReloadNeverReleasesAPlayersSameFamilyReplacementFromItsNativeSlot(GameTestHelper helper) {
         try (var rig = new Rig(helper, true)) {
             ItemStack expected = rig.stockHat();

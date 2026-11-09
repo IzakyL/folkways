@@ -13,15 +13,17 @@ import { GROUND } from "../shared/harness/stage";
 import { clickTab } from "../shared/ui/colony-pages";
 import { boardActs, wheelCell } from "../shared/ui/site-panel";
 
-const CELL = "folkways.work_defaults.folkways.hauling";
+const CELL = "folkways.work_defaults.folkways_core.hauling";
+const GROUP = "folkways.work_defaults.group.folkways_core.transport";
+const OPEN_GROUP = "folkways.work_defaults.open.folkways_core.transport";
 const READ = defineTask<{ player: string }, { allowed: boolean; priority: number; residents: Array<{ id: string; allowed: boolean; priority: number }> }>({
   name: "folkways.defaults.read", side: "server",
   source: javaTask({ imports: [
-    "io.github.izakyl.folkways.front.engine.charter.CurrentColony",
-    "io.github.izakyl.folkways.front.engine.colony.Residents",
+    "io.github.izakyl.folkways.core.front.engine.charter.CurrentColony",
+    "io.github.izakyl.folkways.core.front.engine.colony.Residents",
     "io.github.izakyl.folkways.core.colony.api.WorkDefaults",
     "io.github.izakyl.folkways.core.vocation.api.Vocations",
-    "io.github.izakyl.folkways.plugins.person.PersonBody",
+    "io.github.izakyl.folkways.vanilla.person.PersonBody",
   ], body: `
 var server=ctx.server();var player=server.getPlayerList().getPlayerByName(Args.of(ctx).string("player"));
 var colony=CurrentColony.of(player).orElseThrow();var trade=Vocations.required(Vocations.HAULING);
@@ -99,8 +101,11 @@ async function text(client: MinecraftClient, id: string): Promise<string | undef
 
 async function openDefaults(client: MinecraftClient) {
   await clickTab(client, "folkways.page.person");
-  const opens = await boardActs(client, "open", "folkways.person");
+  const opens = await boardActs(client, "open", "folkways_vanilla.person");
   expect(opens, "the person board opens names, looks, then work defaults").toHaveLength(3);
   await clickElement(client, { id: opens[2].id });
+  // Each vocation group stands as one column until it is opened into its vocations.
+  await waitForElement(client, { id: GROUP });
+  await clickElement(client, { id: OPEN_GROUP });
   await waitForElement(client, { id: CELL });
 }

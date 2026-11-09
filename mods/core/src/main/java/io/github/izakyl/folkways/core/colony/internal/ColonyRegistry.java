@@ -1,11 +1,11 @@
 package io.github.izakyl.folkways.core.colony.internal;
 
-import io.github.izakyl.folkways.base.persist.Reader;
-import io.github.izakyl.folkways.base.persist.Required;
-import io.github.izakyl.folkways.base.persist.Writer;
-import io.github.izakyl.folkways.base.persist.upgrade.DataVersion;
-import io.github.izakyl.folkways.base.persist.upgrade.Surface;
-import io.github.izakyl.folkways.base.persist.upgrade.Upgrades;
+import io.github.izakyl.folkways.core.base.persist.Reader;
+import io.github.izakyl.folkways.core.base.persist.Required;
+import io.github.izakyl.folkways.core.base.persist.Writer;
+import io.github.izakyl.folkways.core.base.persist.upgrade.DataVersion;
+import io.github.izakyl.folkways.core.base.persist.upgrade.Surface;
+import io.github.izakyl.folkways.core.base.persist.upgrade.Upgrades;
 import io.github.izakyl.folkways.core.colony.api.Claimed;
 import io.github.izakyl.folkways.core.colony.api.Closing;
 import io.github.izakyl.folkways.core.travel.internal.ColonyWays;

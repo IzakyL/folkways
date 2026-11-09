@@ -100,7 +100,7 @@ test("each declaration is carried out by the colony on its own", async ({}, test
 
     run.note("ground", await stageGround(server, o, set, spots));
     await world.command(server, `tp ${player} ${o.x + 0.5} ${o.y} ${o.z + 12.5} 180 20`);
-    await world.command(server, `item replace entity ${player} weapon.mainhand with folkways:colony_book`);
+    await world.command(server, `item replace entity ${player} weapon.mainhand with folkways_core:colony_book`);
     await tick.sprint(server, 10);
     const founded = await foundPromoColonyFast(server, player, [
       ...set.quarters.beds, set.quarters.food,
@@ -153,7 +153,7 @@ test("each declaration is carried out by the colony on its own", async ({}, test
           }
           for (const one of (crew.crew as any[]).slice(0, CRAFTERS)) {
             stuck[one.uuid] = (await tryCommand(server,
-              `data get entity ${one.uuid} "neoforge:attachments"."folkways:body_state".Pack.Items`)).output;
+              `data get entity ${one.uuid} "neoforge:attachments"."folkways_core:body_state".Pack.Items`)).output;
           }
           stuck.placards = await runColonyTask(server, PLACARDS, { colony_id });
         }
@@ -474,7 +474,7 @@ async function stageGround(server: any, o: Vec, set: any, spots: Record<string, 
 }
 
 async function castCrew(server: any, set: any) {
-  const standing = await world.entities(server, { dimension: "minecraft:overworld", limit: 100, types: ["folkways:resident"] });
+  const standing = await world.entities(server, { dimension: "minecraft:overworld", limit: 100, types: ["folkways_vanilla:resident"] });
   const uuids: string[] = standing.entities.map((one: any) => String(one.uuid));
   if (uuids.length < CRAFTERS + FARMERS) throw new Error(`only ${uuids.length} residents to cast`);
   const crew: Array<{ uuid: string; trades: string[] }> = [];
@@ -484,7 +484,7 @@ async function castCrew(server: any, set: any) {
     const items: Array<[string, number]> = crafter ? [] : [["minecraft:wooden_hoe", 1], ["minecraft:iron_axe", 1],
       ["minecraft:wheat_seeds", 64], [SAPLING, 8]];
     for (let k = 0; k < items.length; k++) {
-      await world.command(server, `data modify entity ${uuids[i]} "neoforge:attachments"."folkways:body_state".Pack.Items `
+      await world.command(server, `data modify entity ${uuids[i]} "neoforge:attachments"."folkways_core:body_state".Pack.Items `
         + `append value {Slot:${8 + k}b,Stack:{id:"${items[k][0]}",count:${items[k][1]}}}`);
     }
     await world.command(server, `tp ${uuids[i]} ${post.x + 0.5 + (i % 3)} ${post.y} ${post.z + 0.5 + Math.floor(i / 3)} 180 0`);
@@ -551,9 +551,9 @@ const PLACARDS = defineTask<Record<string, any>, Record<string, any>>({
   timeoutMs: 20_000,
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.front.api.Facing",
-      "io.github.izakyl.folkways.front.api.notice.Line",
-      "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
+      "io.github.izakyl.folkways.core.front.api.Facing",
+      "io.github.izakyl.folkways.core.front.api.notice.Line",
+      "io.github.izakyl.folkways.core.front.engine.colony.ColonyGround",
     ],
     body: `
 var server=ctx.server();var level=server.overworld();var args=Args.of(ctx);

@@ -62,7 +62,7 @@ const PREPARE = defineTask<Record<string, any>, Record<string, any>>({
     "com.github.ysbbbbbb.kaleidoscopetavern.api.blockentity.IBarrel",
     "io.github.izakyl.folkways.core.resident.api.Bodies",
     "io.github.izakyl.folkways.core.vocation.api.Keenness",
-    "io.github.izakyl.folkways.plugins.wares.WaresContent",
+    "io.github.izakyl.folkways.vanilla.wares.WaresContent",
     "io.github.izakyl.folkways.core.vocation.api.Vocations",
     "net.minecraft.core.Direction", "net.minecraft.world.item.ItemStack", "net.minecraft.world.item.Items",
     "net.minecraft.world.level.block.state.properties.AttachFace",

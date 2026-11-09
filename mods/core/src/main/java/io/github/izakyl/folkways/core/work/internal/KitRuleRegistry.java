@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.core.work.internal;
 
-import io.github.izakyl.folkways.base.Ledger;
+import io.github.izakyl.folkways.core.base.Ledger;
 import io.github.izakyl.folkways.core.colony.api.Colony;
 import io.github.izakyl.folkways.core.colony.api.KitRules.SupplyPolicy;
 import io.github.izakyl.folkways.core.colony.api.KitRules;

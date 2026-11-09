@@ -1,0 +1,290 @@
+package io.github.izakyl.folkways.vanilla.farming;
+
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
+import io.github.izakyl.folkways.core.testing.Proxies;
+import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
+import io.github.izakyl.folkways.vanilla.FolkwaysVanillaMod;
+import io.github.izakyl.folkways.vanilla.person.PersonBody;
+import java.util.List;
+import java.util.UUID;
+import net.minecraft.core.BlockPos;
+import net.minecraft.gametest.framework.GameTest;
+import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.DoublePlantBlock;
+import net.minecraft.world.level.block.SnowLayerBlock;
+import net.minecraft.world.level.block.SnowyDirtBlock;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.event.RegisterGameTestsEvent;
+import net.neoforged.neoforge.gametest.GameTestHolder;
+import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
+
+@EventBusSubscriber(modid = FolkwaysVanillaMod.ID, bus = EventBusSubscriber.Bus.MOD)
+@GameTestHolder("folkways_vanilla")
+@PrefixGameTestTemplate(false)
+public final class TillageGameTests {
+    @SubscribeEvent
+    public static void register(RegisterGameTestsEvent event) {
+        event.register(TillageGameTests.class);
+    }
+
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 20)
+    public static void grassAndFernsAreClearedBeforeTilling(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos ground = helper.absolutePos(new BlockPos(2, 1, 2));
+        for (Block soil : List.of(Blocks.DIRT, Blocks.GRASS_BLOCK, Blocks.DIRT_PATH)) {
+            for (Block grass : List.of(Blocks.SHORT_GRASS, Blocks.TALL_GRASS, Blocks.FERN, Blocks.LARGE_FERN)) {
+                place(level, ground, soil.defaultBlockState());
+                place(level, ground.above(), grass.defaultBlockState());
+                if (grass instanceof DoublePlantBlock) {
+                    place(level, ground.above(2), grass.defaultBlockState()
+                        .setValue(DoublePlantBlock.HALF, DoubleBlockHalf.UPPER));
+                }
+                Outcome outcome = till(level, ground, new ItemStack(Items.WOODEN_HOE));
+                helper.assertTrue(outcome instanceof Outcome.Done done && done.xp().isPresent()
+                    && done.noises().size() == 2, "clearing and tilling finish as one piece of work");
+                helper.assertTrue(level.getBlockState(ground).is(Blocks.FARMLAND), "the soil is tilled");
+                helper.assertTrue(level.getBlockState(ground.above()).isAir(), "the grass is removed");
+                helper.assertTrue(level.getBlockState(ground.above(2)).isAir(), "no upper half is left behind");
+            }
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 20)
+    public static void otherBlocksAndPlantsAreLeftAlone(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos ground = helper.absolutePos(new BlockPos(2, 1, 2));
+        for (Block obstacle : List.of(Blocks.STONE, Blocks.WHEAT,
+                Blocks.OAK_SAPLING, Blocks.WATER, Blocks.SNOW_BLOCK, Blocks.POWDER_SNOW)) {
+            place(level, ground, Blocks.DIRT.defaultBlockState());
+            place(level, ground.above(), obstacle.defaultBlockState());
+            helper.assertFalse(Tillage.canTill(level, ground, level.getBlockState(ground), Tillage.PLAIN_HOE,
+                Tillage.Clearing.ALL), "a field must not plan to clear " + obstacle);
+            till(level, ground, new ItemStack(Items.WOODEN_HOE));
+            helper.assertTrue(level.getBlockState(ground).is(Blocks.DIRT), "blocked soil is left alone");
+            helper.assertTrue(level.getBlockState(ground.above()).is(obstacle), "the obstacle is left alone");
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 20)
+    public static void snowIsClearedBeforeTillingEvenWhenPlantsAreKept(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos ground = helper.absolutePos(new BlockPos(2, 1, 2));
+        for (Tillage.Clearing clearing : List.of(Tillage.Clearing.ALL, new Tillage.Clearing(true, false),
+                new Tillage.Clearing(false, true), new Tillage.Clearing(false, false))) {
+            for (BlockState soil : List.of(Blocks.DIRT.defaultBlockState(), Blocks.GRASS_BLOCK.defaultBlockState(),
+                    Blocks.GRASS_BLOCK.defaultBlockState().setValue(SnowyDirtBlock.SNOWY, true),
+                    Blocks.DIRT_PATH.defaultBlockState())) {
+                for (int layers = 1; layers <= 8; layers++) {
+                    BlockState snow = Blocks.SNOW.defaultBlockState().setValue(SnowLayerBlock.LAYERS, layers);
+                    place(level, ground, soil);
+                    place(level, ground.above(), snow);
+                    Outcome outcome = till(level, ground, new ItemStack(Items.WOODEN_HOE), clearing);
+                    helper.assertTrue(outcome instanceof Outcome.Done done && done.xp().isPresent()
+                        && done.noises().size() == 2, "snow clearing and tilling finish as one piece of work: "
+                            + soil + ", " + layers + " layers, " + clearing);
+                    helper.assertTrue(level.getBlockState(ground).is(Blocks.FARMLAND), "the soil is tilled");
+                    helper.assertTrue(level.getBlockState(ground.above()).isAir(), "all snow layers are removed");
+                }
+            }
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 20)
+    public static void snowOverUntillableSoilOrWithoutAHoeIsLeftAlone(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos ground = helper.absolutePos(new BlockPos(2, 1, 2));
+        for (Block soil : List.of(Blocks.STONE, Blocks.FARMLAND, Blocks.COARSE_DIRT, Blocks.ROOTED_DIRT)) {
+            place(level, ground, soil.defaultBlockState());
+            place(level, ground.above(), Blocks.SNOW.defaultBlockState());
+            helper.assertFalse(Tillage.canTill(level, ground, level.getBlockState(ground), Tillage.PLAIN_HOE,
+                Tillage.Clearing.ALL), "snow does not make untillable soil eligible for work");
+            till(level, ground, new ItemStack(Items.WOODEN_HOE));
+            helper.assertTrue(level.getBlockState(ground).is(soil), "untillable soil is left alone");
+            helper.assertTrue(level.getBlockState(ground.above()).is(Blocks.SNOW), "the snow is left alone");
+        }
+        place(level, ground, Blocks.DIRT.defaultBlockState());
+        for (ItemStack tool : List.of(ItemStack.EMPTY, new ItemStack(Items.STICK),
+                new ItemStack(Items.WOODEN_SHOVEL))) {
+            till(level, ground, tool);
+            helper.assertTrue(level.getBlockState(ground).is(Blocks.DIRT), "tilling still requires a hoe");
+            helper.assertTrue(level.getBlockState(ground.above()).is(Blocks.SNOW),
+                "a worker without a hoe does not clear the snow");
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 20)
+    public static void snowyGroundIsCheckedAgainBeforeWork(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos ground = helper.absolutePos(new BlockPos(2, 1, 2));
+        place(level, ground, Blocks.DIRT.defaultBlockState());
+        place(level, ground.above(), Blocks.SNOW.defaultBlockState());
+        helper.assertTrue(Tillage.canTill(level, ground, level.getBlockState(ground), Tillage.PLAIN_HOE,
+            Tillage.Clearing.ALL), "the snow-covered cell starts out tillable");
+
+        place(level, ground, Blocks.STONE.defaultBlockState());
+        till(level, ground, new ItemStack(Items.WOODEN_HOE));
+        helper.assertTrue(level.getBlockState(ground).is(Blocks.STONE), "work rechecks the soil");
+        helper.assertTrue(level.getBlockState(ground.above()).is(Blocks.SNOW), "snow over changed soil stays");
+
+        place(level, ground, Blocks.DIRT.defaultBlockState());
+        place(level, ground.above(), Blocks.SNOW_BLOCK.defaultBlockState());
+        till(level, ground, new ItemStack(Items.WOODEN_HOE));
+        helper.assertTrue(level.getBlockState(ground).is(Blocks.DIRT), "blocked soil is left alone");
+        helper.assertTrue(level.getBlockState(ground.above()).is(Blocks.SNOW_BLOCK),
+            "a solid snow block that replaced the snow layers stays");
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 20)
+    public static void snowyGrassThatTurnsToDirtAfterPlanningIsStillTilled(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos ground = helper.absolutePos(new BlockPos(2, 1, 2));
+        BlockState snowyGrass = Blocks.GRASS_BLOCK.defaultBlockState().setValue(SnowyDirtBlock.SNOWY, true);
+        BlockState snow = Blocks.SNOW.defaultBlockState().setValue(SnowLayerBlock.LAYERS, 8);
+        place(level, ground, snowyGrass);
+        place(level, ground.above(), snow);
+        helper.assertTrue(Tillage.canTill(level, ground, snowyGrass, Tillage.PLAIN_HOE,
+            new Tillage.Clearing(false, false)), "snowy grass is planned without changing the world");
+        helper.assertTrue(level.getBlockState(ground).equals(snowyGrass)
+            && level.getBlockState(ground.above()).equals(snow), "planning leaves the snowy grass and snow intact");
+
+        level.getBlockState(ground).randomTick(level, ground, level.random);
+        helper.assertTrue(level.getBlockState(ground).is(Blocks.DIRT),
+            "vanilla replaces grass under thick snow with dirt before the worker arrives");
+        till(level, ground, new ItemStack(Items.WOODEN_HOE), new Tillage.Clearing(false, false));
+        helper.assertTrue(level.getBlockState(ground).is(Blocks.FARMLAND)
+            && level.getBlockState(ground.above()).isAir(), "the changed soil is cleared and tilled using its live state");
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 20)
+    public static void flowersAreClearedOnlyWhenThePlotAllowsIt(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos ground = helper.absolutePos(new BlockPos(2, 1, 2));
+        Tillage.Clearing grassOnly = new Tillage.Clearing(true, false);
+        for (Block flower : List.of(Blocks.DANDELION, Blocks.OXEYE_DAISY, Blocks.SUNFLOWER)) {
+            place(level, ground, Blocks.DIRT.defaultBlockState());
+            placePlant(level, ground.above(), flower);
+            helper.assertFalse(Tillage.canTill(level, ground, level.getBlockState(ground), Tillage.PLAIN_HOE,
+                grassOnly), "a plot that keeps its flowers must not plan to clear " + flower);
+            till(level, ground, new ItemStack(Items.WOODEN_HOE), grassOnly);
+            helper.assertTrue(level.getBlockState(ground).is(Blocks.DIRT), "soil under a kept flower is left alone");
+            helper.assertTrue(level.getBlockState(ground.above()).is(flower), "the kept flower stays");
+
+            helper.assertTrue(Tillage.canTill(level, ground, level.getBlockState(ground), Tillage.PLAIN_HOE,
+                Tillage.Clearing.ALL), "a plot that clears flowers plans to clear " + flower);
+            till(level, ground, new ItemStack(Items.WOODEN_HOE), Tillage.Clearing.ALL);
+            helper.assertTrue(level.getBlockState(ground).is(Blocks.FARMLAND), "the soil is tilled");
+            helper.assertTrue(level.getBlockState(ground.above()).isAir(), "the flower is pulled up");
+            helper.assertTrue(level.getBlockState(ground.above(2)).isAir(), "no upper half is left behind");
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 20)
+    public static void grassIsKeptWhenThePlotSaysSo(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos ground = helper.absolutePos(new BlockPos(2, 1, 2));
+        Tillage.Clearing flowersOnly = new Tillage.Clearing(false, true);
+        place(level, ground, Blocks.DIRT.defaultBlockState());
+        place(level, ground.above(), Blocks.SHORT_GRASS.defaultBlockState());
+        helper.assertFalse(Tillage.canTill(level, ground, level.getBlockState(ground), Tillage.PLAIN_HOE,
+            flowersOnly), "a plot that keeps its grass must not plan to clear it");
+        till(level, ground, new ItemStack(Items.WOODEN_HOE), flowersOnly);
+        helper.assertTrue(level.getBlockState(ground).is(Blocks.DIRT), "soil under kept grass is left alone");
+        helper.assertTrue(level.getBlockState(ground.above()).is(Blocks.SHORT_GRASS), "the kept grass stays");
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 20)
+    public static void grassOverUntillableSoilOrWithoutAHoeIsLeftAlone(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos ground = helper.absolutePos(new BlockPos(2, 1, 2));
+        for (Block soil : List.of(Blocks.STONE, Blocks.FARMLAND, Blocks.COARSE_DIRT)) {
+            place(level, ground, soil.defaultBlockState());
+            place(level, ground.above(), Blocks.SHORT_GRASS.defaultBlockState());
+            till(level, ground, new ItemStack(Items.WOODEN_HOE));
+            helper.assertTrue(level.getBlockState(ground).is(soil), "only soil that becomes farmland is worked");
+            helper.assertTrue(level.getBlockState(ground.above()).is(Blocks.SHORT_GRASS),
+                "grass over untillable soil is left alone");
+        }
+        place(level, ground, Blocks.DIRT.defaultBlockState());
+        till(level, ground, ItemStack.EMPTY);
+        helper.assertTrue(level.getBlockState(ground).is(Blocks.DIRT), "tilling still requires a hoe");
+        helper.assertTrue(level.getBlockState(ground.above()).is(Blocks.SHORT_GRASS),
+            "a worker without a hoe does not clear the grass");
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 20)
+    public static void anObstructionAddedAfterPlanningIsLeftAlone(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos ground = helper.absolutePos(new BlockPos(2, 1, 2));
+        place(level, ground, Blocks.DIRT.defaultBlockState());
+        place(level, ground.above(), Blocks.SHORT_GRASS.defaultBlockState());
+        helper.assertTrue(Tillage.canTill(level, ground, level.getBlockState(ground), Tillage.PLAIN_HOE,
+            Tillage.Clearing.ALL), "the grass-covered cell starts out tillable");
+        place(level, ground.above(), Blocks.STONE.defaultBlockState());
+        till(level, ground, new ItemStack(Items.WOODEN_HOE));
+        helper.assertTrue(level.getBlockState(ground).is(Blocks.DIRT), "work checks the soil again");
+        helper.assertTrue(level.getBlockState(ground.above()).is(Blocks.STONE), "the new obstruction survives");
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 20)
+    public static void bareSoilIsStillTilled(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos ground = helper.absolutePos(new BlockPos(2, 1, 2));
+        place(level, ground, Blocks.DIRT.defaultBlockState());
+        place(level, ground.above(), Blocks.AIR.defaultBlockState());
+        Outcome outcome = till(level, ground, new ItemStack(Items.WOODEN_HOE));
+        helper.assertTrue(level.getBlockState(ground).is(Blocks.FARMLAND), "bare soil is still tilled");
+        helper.assertTrue(outcome instanceof Outcome.Done done && done.noises().size() == 1,
+            "bare soil only makes the tilling noise");
+        helper.succeed();
+    }
+
+    private static Outcome till(ServerLevel level, BlockPos ground, ItemStack hoe) {
+        return till(level, ground, hoe, Tillage.Clearing.ALL);
+    }
+
+    private static Outcome till(ServerLevel level, BlockPos ground, ItemStack hoe, Tillage.Clearing clearing) {
+        var body = PersonBody.RESIDENT.get().create(level);
+        Worker worker = Proxies.of(Worker.class, (proxy, method, args) -> switch (method.getName()) {
+            case "held" -> hoe;
+            case "body" -> body.mob();
+            default -> throw new AssertionError(method.getName());
+        });
+        Crop crop = Crop.of(level, ground, ResourceLocation.withDefaultNamespace("wheat")).orElseThrow();
+        Job job = new Job(WorldPos.of(level, ground), List.of(ground), Stances.WHEREVER, ground);
+        TillNode node = new TillNode(new FarmNode.Chore(UUID.randomUUID(), crop, job, null), clearing);
+        return node.work(level, worker, job);
+    }
+
+    private static void placePlant(ServerLevel level, BlockPos at, Block plant) {
+        place(level, at, plant.defaultBlockState());
+        if (plant instanceof DoublePlantBlock) {
+            place(level, at.above(), plant.defaultBlockState().setValue(DoublePlantBlock.HALF, DoubleBlockHalf.UPPER));
+        }
+    }
+
+    private static void place(ServerLevel level, BlockPos at, BlockState state) {
+        level.setBlock(at, state, Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE);
+    }
+}

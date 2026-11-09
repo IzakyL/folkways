@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.core.world.api;
 
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import java.util.List;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -20,8 +20,8 @@ import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
-@EventBusSubscriber(modid = FolkwaysMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@EventBusSubscriber(modid = FolkwaysCoreMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
+@GameTestHolder(FolkwaysCoreMod.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class FootingGameTests {
 
@@ -30,7 +30,7 @@ public final class FootingGameTests {
         event.register(FootingGameTests.class);
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void taggedTopsOfferNoPlaceToStand(GameTestHelper helper) {
         var level = helper.getLevel();
         BlockPos floor = helper.absolutePos(new BlockPos(2, 1, 2));
@@ -67,7 +67,7 @@ public final class FootingGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void ordinaryTopsAndStairTreadsHoldSomeoneUp(GameTestHelper helper) {
         var level = helper.getLevel();
         BlockPos floor = helper.absolutePos(new BlockPos(2, 1, 2));
@@ -105,7 +105,7 @@ public final class FootingGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void lowerSlabsKeepTheirFeetInsideTheBlockCell(GameTestHelper helper) {
         var level = helper.getLevel();
         BlockPos slab = helper.absolutePos(new BlockPos(2, 1, 2));
@@ -119,7 +119,7 @@ public final class FootingGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void taggedTopsDoNotBecomeFootingsInsideAClimb(GameTestHelper helper) {
         var level = helper.getLevel();
         BlockPos feet = helper.absolutePos(new BlockPos(2, 2, 2));

@@ -1,7 +1,7 @@
 package io.github.izakyl.folkways.core.resident.api;
 
-import io.github.izakyl.folkways.effect.Effects;
-import io.github.izakyl.folkways.effect.perk.Perks;
+import io.github.izakyl.folkways.core.effect.Effects;
+import io.github.izakyl.folkways.core.effect.perk.Perks;
 import java.util.Optional;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;

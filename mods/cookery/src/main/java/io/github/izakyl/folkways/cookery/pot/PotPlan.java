@@ -16,7 +16,7 @@ import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import io.github.izakyl.folkways.core.work.api.Amount;
 import io.github.izakyl.folkways.core.work.api.Need;
 import io.github.izakyl.folkways.core.work.support.Leaves;
-import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
+import io.github.izakyl.folkways.vanilla.FolkwaysVanillaConfig;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -65,7 +65,7 @@ record PotPlan(ResourceLocation id, PotRecipe recipe, Tag definition, boolean fl
     }
 
     static ResourceLocation proceduralId(Mode mode) {
-        return ResourceLocation.fromNamespaceAndPath("folkways", "cookery/procedural/" +
+        return ResourceLocation.fromNamespaceAndPath("folkways_cookery", "cookery/procedural/" +
             (mode == Mode.DARK ? "dark_cuisine" : "suspicious_stir_fry"));
     }
 

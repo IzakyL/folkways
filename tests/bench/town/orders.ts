@@ -69,26 +69,26 @@ export function planOrders(t: Terrain, centre: { x: number; z: number }, city: B
   const orders: Order[] = [];
   const skipped: Array<{ what: string; why: string }> = [];
   const mines = digs ?? [mineSite(t, centre, Math.hypot(city.maxX - centre.x, city.maxZ - centre.z) + 20, NEAR + 100, busy)].filter((m) => !!m);
-  mines.forEach((mine, i) => orders.push({ pattern: "folkways:mine", name: i ? `Mine ${i + 1}` : "Mine", min: mine.min, max: mine.max,
-    ...(digs ? { pattern: "folkways:quarry", name: i ? `Quarry ${i + 1}` : "Quarry", knobs: { depth: 3 } } : { knobs: MAKEABLE.mine }), why: digs ? `up the mountain from the mine's halt (${mine.y})` : `the highest free ground past the city's edge (${mine.y})` }));
+  mines.forEach((mine, i) => orders.push({ pattern: "folkways_vanilla:mine", name: i ? `Mine ${i + 1}` : "Mine", min: mine.min, max: mine.max,
+    ...(digs ? { pattern: "folkways_vanilla:quarry", name: i ? `Quarry ${i + 1}` : "Quarry", knobs: { depth: 3 } } : { knobs: MAKEABLE.mine }), why: digs ? `up the mountain from the mine's halt (${mine.y})` : `the highest free ground past the city's edge (${mine.y})` }));
   if (!mines.length) skipped.push({ what: "mine", why: "no free high ground past the city's edge" });
   // The bridge as near the city as a river allows: within NEAR, or failing that a little further out.
   const bridge = bridgeSite(t, centre, busy, NEAR) ?? bridgeSite(t, centre, busy, FAR);
-  if (bridge) orders.push({ pattern: "folkways:arch_bridge", name: "River bridge", points: bridge, knobs: MAKEABLE.arch_bridge,
+  if (bridge) orders.push({ pattern: "folkways_vanilla:arch_bridge", name: "River bridge", points: bridge, knobs: MAKEABLE.arch_bridge,
     why: "the narrowest river crossing near the city" });
   else skipped.push({ what: "bridge", why: `no river narrow enough within ${FAR} of the city` });
   const arcade = arcadeSite(city, centre, roads);
-  if (arcade) orders.push({ pattern: "folkways:arcade", name: "Market arcade", points: arcade, knobs: MAKEABLE.arcade,
+  if (arcade) orders.push({ pattern: "folkways_vanilla:arcade", name: "Market arcade", points: arcade, knobs: MAKEABLE.arcade,
     why: "a street by the middle of the city" });
   else skipped.push({ what: "arcade", why: "no street runs straight long enough" });
   // The wall east of the city (the railway runs along its west), just past the ground eased round it.
   const half = Math.ceil((city.maxX - city.minX) / 2);
   const wall = wallAcross(t, centre, 0, half + 18, half + 80, busy);
-  if (wall) orders.push({ pattern: "folkways:city_wall", name: "City wall", points: wall, knobs: MAKEABLE.city_wall,
+  if (wall) orders.push({ pattern: "folkways_vanilla:city_wall", name: "City wall", points: wall, knobs: MAKEABLE.city_wall,
     why: "beyond the city's east side, where nothing else stands" });
   else skipped.push({ what: "wall", why: "no free ground east of the city" });
   const dock = docks[0];
-  if (dock) orders.push({ pattern: "folkways:dock", name: "New dock",
+  if (dock) orders.push({ pattern: "folkways_vanilla:dock", name: "New dock",
     points: [{ x: dock.from[0], y: dock.from[1], z: dock.from[2] }, { x: dock.to[0], y: dock.to[1], z: dock.to[2] }], knobs: MAKEABLE.dock,
     why: "a shore the laid docks left free" });
   return { orders, skipped };

@@ -7,7 +7,7 @@ import io.github.izakyl.folkways.core.work.api.Placement;
 import io.github.izakyl.folkways.core.work.api.ToolNeed;
 import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.core.work.support.Tools;
-import io.github.izakyl.folkways.effect.Effects;
+import io.github.izakyl.folkways.core.effect.Effects;
 import java.util.List;
 import java.util.Map;
 import net.minecraft.world.Container;

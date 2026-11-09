@@ -20,8 +20,8 @@ const STAGE = defineTask<{ x: number; y: number; z: number; models: string[] }, 
   name: "folkways.visual.winefox.stage", side: "server", timeoutMs: 20_000,
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.plugins.person.PersonBody",
-      "io.github.izakyl.folkways.plugins.person.look.ResidentLooks",
+      "io.github.izakyl.folkways.vanilla.person.PersonBody",
+      "io.github.izakyl.folkways.vanilla.person.look.ResidentLooks",
       "net.minecraft.resources.*",
       "net.minecraft.core.registries.BuiltInRegistries",
       "net.minecraft.world.entity.Mob",
@@ -77,11 +77,11 @@ const CLIENT_STATE = defineTask<{ uuid: string; mode: "read" | "prepare" | "alig
   source: javaTask({
     imports: [
       "net.minecraft.client.Minecraft", "net.minecraft.world.entity.LivingEntity", "net.minecraft.world.entity.Mob",
-      "io.github.izakyl.folkways.plugins.person.ResidentEntity",
-      "io.github.izakyl.folkways.plugins.person.ResidentGeoBackend",
-      "io.github.izakyl.folkways.plugins.person.look.ResidentLook",
-      "io.github.izakyl.folkways.plugins.person.look.ResidentLooks",
-      "io.github.izakyl.folkways.plugins.person.look.ResidentMolang",
+      "io.github.izakyl.folkways.vanilla.person.ResidentEntity",
+      "io.github.izakyl.folkways.vanilla.person.ResidentGeoBackend",
+      "io.github.izakyl.folkways.vanilla.person.look.ResidentLook",
+      "io.github.izakyl.folkways.vanilla.person.look.ResidentLooks",
+      "io.github.izakyl.folkways.vanilla.person.look.ResidentMolang",
       "com.github.tartaricacid.touhoulittlemaid.client.entity.GeckoMaidEntity",
       "com.github.tartaricacid.touhoulittlemaid.init.InitAttribute",
     ],
@@ -218,12 +218,12 @@ const EXPRESSIONS = defineTask<undefined, Record<string, any>>({
     imports: ["net.minecraft.client.Minecraft", "net.minecraft.resources.ResourceLocation", "com.google.gson.JsonParser"],
     body: `
 var result=new LinkedHashMap<String,Object>();
-var portable=Class.forName("io.github.izakyl.folkways.plugins.person.look.Molang").getDeclaredMethod("portable",String.class);
+var portable=Class.forName("io.github.izakyl.folkways.vanilla.person.look.Molang").getDeclaredMethod("portable",String.class);
 portable.setAccessible(true);
 result.put("portableFoodQuery",portable.invoke(null,"ysm.food_level"));
 result.put("portableHungryEyelid",portable.invoke(null,"ysm.food_level<=6?0.7:1"));
 for(String model:List.of("winefox_tactics","winefox_magical")) {
-    var file=ResourceLocation.parse("folkways:animations/resident_models/maid/geckolib/"+model+".animation.json");
+    var file=ResourceLocation.parse("folkways_vanilla:animations/resident_models/maid/geckolib/"+model+".animation.json");
     try(var reader=Minecraft.getInstance().getResourceManager().getResource(file).orElseThrow().openAsReader()) {
         var clips=JsonParser.parseReader(reader).getAsJsonObject().getAsJsonObject("animations");
         var bones=clips.getAsJsonObject("maid.geckolib."+model+".idle").getAsJsonObject("bones");

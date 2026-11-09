@@ -6,10 +6,10 @@ import io.github.izakyl.folkways.core.resident.api.Locomotion;
 import io.github.izakyl.folkways.core.resident.api.MobControls;
 import io.github.izakyl.folkways.core.resident.api.RefusalKind;
 import io.github.izakyl.folkways.core.resident.api.Search;
-import io.github.izakyl.folkways.plugins.person.walk.OnFoot;
-import io.github.izakyl.folkways.plugins.person.walk.ResidentMoveControl;
-import io.github.izakyl.folkways.plugins.person.walk.ResidentNodeEvaluator;
-import io.github.izakyl.folkways.plugins.person.walk.ResidentPathNavigation;
+import io.github.izakyl.folkways.vanilla.person.walk.OnFoot;
+import io.github.izakyl.folkways.vanilla.person.walk.ResidentMoveControl;
+import io.github.izakyl.folkways.vanilla.person.walk.ResidentNodeEvaluator;
+import io.github.izakyl.folkways.vanilla.person.walk.ResidentPathNavigation;
 import java.util.List;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.Mob;
@@ -19,7 +19,7 @@ import net.minecraft.world.phys.AABB;
 
 public final class Carting implements Locomotion {
     public static final Carting INSTANCE = new Carting();
-    private static final ResourceLocation ID = ResourceLocation.fromNamespaceAndPath("folkways", "carting");
+    private static final ResourceLocation ID = ResourceLocation.fromNamespaceAndPath("folkways_carts", "carting");
 
     private Carting() {
     }

@@ -51,11 +51,11 @@ const MAINTAIN_DEMANDS = defineTask<Record<string, any>, Record<string, any>>({
   source: javaTask({
     imports: [
       "io.github.izakyl.folkways.core.item.api.ItemFilter",
-      "io.github.izakyl.folkways.plugins.orders.OrdersContent",
-      "io.github.izakyl.folkways.front.engine.colony.ColonyBoards",
-      "io.github.izakyl.folkways.front.engine.colony.ColonyFront",
-      "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
-      "io.github.izakyl.folkways.front.engine.colony.ColonySettings.Value",
+      "io.github.izakyl.folkways.vanilla.orders.OrdersContent",
+      "io.github.izakyl.folkways.core.front.engine.colony.ColonyBoards",
+      "io.github.izakyl.folkways.core.front.engine.colony.ColonyFront",
+      "io.github.izakyl.folkways.core.front.engine.colony.ColonyGround",
+      "io.github.izakyl.folkways.core.front.engine.colony.ColonySettings.Value",
       "java.util.ArrayList",
       "java.util.List",
       "java.util.Map",

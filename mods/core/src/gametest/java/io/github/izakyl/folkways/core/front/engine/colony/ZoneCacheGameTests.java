@@ -1,0 +1,83 @@
+package io.github.izakyl.folkways.core.front.engine.colony;
+
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
+import io.github.izakyl.folkways.core.colony.api.Claimed;
+import io.github.izakyl.folkways.core.colony.api.Colonies;
+import io.github.izakyl.folkways.core.testing.TestFrame;
+import io.github.izakyl.folkways.core.world.api.Realm;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
+import java.util.Set;
+import net.minecraft.core.BlockPos;
+import net.minecraft.gametest.framework.GameTest;
+import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.resources.ResourceLocation;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.event.RegisterGameTestsEvent;
+import net.neoforged.neoforge.gametest.GameTestHolder;
+import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
+
+@EventBusSubscriber(modid = FolkwaysCoreMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
+@GameTestHolder(FolkwaysCoreMod.MOD_ID)
+@PrefixGameTestTemplate(false)
+public final class ZoneCacheGameTests {
+    private static final ResourceLocation OWNER = ResourceLocation.fromNamespaceAndPath("folkways_core", "zone_cache_test");
+
+    @SubscribeEvent
+    public static void register(RegisterGameTestsEvent event) {
+        event.register(ZoneCacheGameTests.class);
+    }
+
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
+    public static void stableZonesReuseCoordinatesAndSettingsChangesInvalidateThem(GameTestHelper helper) {
+        var level = helper.getLevel();
+        var colony = Colonies.mint(level.getServer());
+        try {
+            var front = ColonyFront.of(colony);
+            var zone =
+                front.addZone(level, OWNER, Set.of(helper.absolutePos(BlockPos.ZERO)), ColonySettings.empty())
+                .orElseThrow();
+            var first = front.zonesIn(level).getFirst();
+            for (int i = 0; i < 100; i++) {
+                helper.assertTrue(
+                    front.zonesIn(level).getFirst() == first, "unchanged zones reuse their entire coordinate map");
+            }
+            front.setDrawn(zone.id(), ColonySettings.empty().with("enabled", new ColonySettings.Value.Flag(false)));
+            var changed = front.zonesIn(level).getFirst();
+            helper.assertTrue(changed != first, "a setting change invalidates the cached view");
+            helper.assertFalse(changed.settings().flag("enabled"), "the fresh view carries the changed setting");
+            front.erase(zone.id());
+            helper.assertTrue(front.zonesIn(level).isEmpty(), "erased zones leave no cached view");
+        } finally {
+            colony.raze();
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
+    public static void aFrameStorageChangeRebuildsCachedCoordinates(GameTestHelper helper) {
+        var level = helper.getLevel();
+        var colony = Colonies.mint(level.getServer());
+        TestFrame frame = TestFrame.stored(level, helper.absolutePos(new BlockPos(1, 1, 1)));
+        Runnable remove = frame.install(false);
+        try {
+            WorldPos at = new WorldPos(new Realm.Frame(frame.id()), BlockPos.ZERO);
+            colony.hold(OWNER, new Claimed.Area(Set.of(at))).orElseThrow();
+            var front = ColonyFront.of(colony);
+            var first = front.zonesIn(level).getFirst();
+            helper.assertTrue(front.zonesIn(level).getFirst() == first, "a stable frame needs no coordinate rebuild");
+            frame.store(frame.storageOrigin().east(2));
+            var moved = front.zonesIn(level).getFirst();
+            helper.assertTrue(
+                moved != first && moved.cells().contains(frame.storageOrigin()),
+                "changed storage coordinates invalidate the cache");
+            helper.assertValueEqual(moved.at(frame.storageOrigin()), at, "the frame address keeps its identity");
+            remove.run();
+            helper.assertTrue(front.zonesIn(level).isEmpty(), "an unavailable frame cannot leave stale coordinates");
+        } finally {
+            remove.run();
+            colony.raze();
+        }
+        helper.succeed();
+    }
+}

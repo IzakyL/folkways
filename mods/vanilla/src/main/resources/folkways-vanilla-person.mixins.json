@@ -1,0 +1,17 @@
+{
+  "required": false,
+  "minVersion": "0.8.5",
+  "package": "io.github.izakyl.folkways.vanilla.person.mixin",
+  "plugin": "io.github.izakyl.folkways.vanilla.person.mixin.PersonMixinPlugin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "PathNavigationMixin",
+    "ProjectileWeaponInvoker"
+  ],
+  "injectors": {
+    "defaultRequire": 0
+  },
+  "client": [
+    "FontManagerMixin"
+  ]
+}

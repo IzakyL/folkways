@@ -54,7 +54,7 @@ const HOLD_AFTER_MS = 8_000;
 const FOV = 62;
 // The panel drawn larger than the default, so the page reads in a 1080p frame.
 const GUI_SCALE = 3;
-const PRIORITY_CELL = (vocation: string, uuid: string) => `folkways.resident.vocation.folkways.${vocation}.${uuid}`;
+const PRIORITY_CELL = (vocation: string, uuid: string) => `folkways.resident.vocation.${vocation === "hauling" ? "folkways_core" : "folkways_vanilla"}.${vocation}.${uuid}`;
 
 type Box = { min: Vec; max: Vec };
 type Spot = { feet: Vec; aim: Vec };
@@ -89,7 +89,7 @@ test("residents work by their licences, fetch their own tools, eat and sleep", a
 
     run.note("ground", await stageGround(server, o, set, spot));
     await world.command(server, `tp ${player} ${o.x + 0.5} ${o.y} ${o.z + 0.5} 180 20`);
-    await world.command(server, `item replace entity ${player} weapon.mainhand with folkways:colony_book`);
+    await world.command(server, `item replace entity ${player} weapon.mainhand with folkways_core:colony_book`);
     await tick.sprint(server, 10);
     const founded = await foundPromoColonyFast(server, player, [
       set.table, set.store, set.spare, set.barn, set.catch, set.larder, ...set.beds,
@@ -110,8 +110,8 @@ test("residents work by their licences, fetch their own tools, eat and sleep", a
     const crew = await castCrew(server, at);
     run.note("crew", crew);
     run.note("zones", await runColonyTask(server, MAKE_ZONES, { colony_id, zones: [
-      { kind: "folkways:farm", ...set.field, crop: "minecraft:wheat" },
-      { kind: "folkways:fish", ...set.bank },
+      { kind: "folkways_vanilla:farm", ...set.field, crop: "minecraft:wheat" },
+      { kind: "folkways_vanilla:fish", ...set.bank },
     ] }));
     run.note("vitals", await runColonyTask(server, SET_VITALS, { colony_id, vitals: crew.map((one) => ({
       uuid: one.uuid, ...VITALS[one.role],
@@ -266,8 +266,8 @@ async function watch(server: any, colony_id: string, mark: Mark,
     const was = { ...seen };
     seen.hoes ||= who.farmers.every((id) => crew.get(id)?.tools.some((tool: string) => tool.endsWith("_hoe")));
     seen.rod ||= crew.get(who.fisher)?.tools.includes("minecraft:fishing_rod") ?? false;
-    seen.ate ||= crew.get(who.hungry)?.what === "folkways:eating" || (crew.get(who.hungry)?.food ?? 0) > 14;
-    seen.slept ||= crew.get(who.tired)?.what === "folkways:sleeping";
+    seen.ate ||= crew.get(who.hungry)?.what === "folkways_vanilla:eating" || (crew.get(who.hungry)?.food ?? 0) > 14;
+    seen.slept ||= crew.get(who.tired)?.what === "folkways_vanilla:sleeping";
     seen.sown ||= read.wheat > 0;
     seen.fishing ||= String(crew.get(who.fisher)?.what ?? "").includes("fish");
     for (const key of Object.keys(seen) as Array<keyof typeof seen>) {
@@ -360,7 +360,7 @@ async function stageGround(server: any, o: Vec, set: any, spot: Spot) {
 
 // Each resident to its post, allowed its own trades only and holding none of the tools for them.
 async function castCrew(server: any, at: (x: number, z: number, dy?: number) => Vec) {
-  const standing = await world.entities(server, { dimension: "minecraft:overworld", limit: 100, types: ["folkways:resident"] });
+  const standing = await world.entities(server, { dimension: "minecraft:overworld", limit: 100, types: ["folkways_vanilla:resident"] });
   const uuids: string[] = standing.entities.map((one: any) => String(one.uuid));
   if (uuids.length < CREW.length) throw new Error(`only ${uuids.length} residents to cast`);
   const crew = CREW.map((one, i) => ({ uuid: uuids[i], role: one.role, trades: one.trades }));
@@ -379,7 +379,7 @@ const MAKE_ZONES = defineTask<Record<string, any>, Record<string, any>>({
   timeoutMs: 20_000,
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.front.engine.colony.*",
+      "io.github.izakyl.folkways.core.front.engine.colony.*",
       "net.minecraft.core.BlockPos",
       "net.minecraft.resources.ResourceLocation",
     ],
@@ -435,8 +435,8 @@ const SET_VITALS = defineTask<Record<string, any>, Record<string, any>>({
   source: javaTask({
     imports: [
       "io.github.izakyl.folkways.core.colony.api.Colony",
-      "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
-      "io.github.izakyl.folkways.plugins.person.living.LivingContent",
+      "io.github.izakyl.folkways.core.front.engine.colony.ColonyGround",
+      "io.github.izakyl.folkways.vanilla.person.living.LivingContent",
       "java.lang.reflect.AccessibleObject",
       "java.lang.reflect.Constructor",
     ],
@@ -448,8 +448,8 @@ Object presence=colony.service(LivingContent.ID,Object.class).orElseThrow();
 Map<UUID,Object> bellies=(Map<UUID,Object>)open(presence.getClass().getDeclaredField("bellies")).get(presence);
 @SuppressWarnings("unchecked")
 Map<UUID,Object> wear=(Map<UUID,Object>)open(presence.getClass().getDeclaredField("wear")).get(presence);
-Class<?> hungerType=Class.forName("io.github.izakyl.folkways.plugins.person.living.Hunger");
-Class<?> restType=Class.forName("io.github.izakyl.folkways.plugins.person.living.Rest");
+Class<?> hungerType=Class.forName("io.github.izakyl.folkways.vanilla.person.living.Hunger");
+Class<?> restType=Class.forName("io.github.izakyl.folkways.vanilla.person.living.Rest");
 Constructor<?> newHunger=open(hungerType.getDeclaredConstructor());
 Constructor<?> newRest=open(restType.getDeclaredConstructor());
 var set=new ArrayList<Object>();
@@ -490,8 +490,8 @@ const READ_CREW = defineTask<Record<string, any>, Record<string, any>>({
     imports: [
       "io.github.izakyl.folkways.core.colony.api.Colony",
       "io.github.izakyl.folkways.core.resident.api.Bodies",
-      "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
-      "io.github.izakyl.folkways.plugins.person.living.LivingContent",
+      "io.github.izakyl.folkways.core.front.engine.colony.ColonyGround",
+      "io.github.izakyl.folkways.vanilla.person.living.LivingContent",
       "java.lang.reflect.AccessibleObject",
       "net.minecraft.core.BlockPos",
       "net.minecraft.core.registries.BuiltInRegistries",
@@ -505,7 +505,7 @@ Colony colony=ColonyGround.of(server,UUID.fromString(args.string("colony_id"))).
 Object presence=colony.service(LivingContent.ID,Object.class).orElseThrow();
 @SuppressWarnings("unchecked")
 Map<UUID,Object> bellies=(Map<UUID,Object>)open(presence.getClass().getDeclaredField("bellies")).get(presence);
-var foodLevel=open(Class.forName("io.github.izakyl.folkways.plugins.person.living.Hunger").getDeclaredField("foodLevel"));
+var foodLevel=open(Class.forName("io.github.izakyl.folkways.vanilla.person.living.Hunger").getDeclaredField("foodLevel"));
 var crew=new ArrayList<Object>();
 for(var resident:colony.residents()){
   var entity=level.getEntity(resident.id());if(entity==null)continue;
@@ -540,9 +540,9 @@ const PLACARDS = defineTask<Record<string, any>, Record<string, any>>({
   timeoutMs: 20_000,
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.front.api.Facing",
-      "io.github.izakyl.folkways.front.api.notice.Line",
-      "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
+      "io.github.izakyl.folkways.core.front.api.Facing",
+      "io.github.izakyl.folkways.core.front.api.notice.Line",
+      "io.github.izakyl.folkways.core.front.engine.colony.ColonyGround",
     ],
     body: `
 var server=ctx.server();var level=server.overworld();var args=Args.of(ctx);
@@ -571,7 +571,7 @@ const HEARTBEAT = defineTask<Record<string, any>, Record<string, any>>({
   source: javaTask({
     imports: [
       "io.github.izakyl.folkways.core.resident.api.Bodies",
-      "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
+      "io.github.izakyl.folkways.core.front.engine.colony.ColonyGround",
       "net.minecraft.core.registries.BuiltInRegistries",
       "net.minecraft.resources.ResourceKey",
       "net.minecraft.world.level.Level",

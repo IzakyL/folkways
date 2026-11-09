@@ -9,7 +9,7 @@ export const BODY_SNAPSHOT = defineTask<{ colony_id: string; uuids: string[] }, 
   source: javaTask({
     imports: [
       "io.github.izakyl.folkways.core.resident.api.Bodies",
-      "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
+      "io.github.izakyl.folkways.core.front.engine.colony.ColonyGround",
     ],
     body: `
 var server = ctx.server();

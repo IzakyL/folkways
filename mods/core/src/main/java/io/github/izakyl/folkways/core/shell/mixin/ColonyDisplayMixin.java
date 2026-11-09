@@ -4,7 +4,7 @@ import com.lowdragmc.lowdraglib2.gui.holder.ModularUIContainerMenu;
 import com.lowdragmc.lowdraglib2.gui.ui.UIElement;
 import com.lowdragmc.lowdraglib2.gui.ui.layout.LayoutProperties;
 import dev.vfyjxf.taffy.style.TaffyDisplay;
-import io.github.izakyl.folkways.front.ui.screen.ColonyShell;
+import io.github.izakyl.folkways.core.front.ui.screen.ColonyShell;
 import net.minecraft.server.level.ServerPlayer;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;

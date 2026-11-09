@@ -21,7 +21,7 @@ test("four residents patrol both ways through single-file bends and two steps", 
       config: "blockwright.toml#rts",
       server: { instance: `formation-terrain-server-${run}` },
       client: { instance: `formation-terrain-client-${run}` },
-      snapshot: { entityTypes: ["folkways:resident"] },
+      snapshot: { entityTypes: ["folkways_vanilla:resident"] },
     });
     const { server } = pair;
     const player = await waitForGroundedPlayer(server);

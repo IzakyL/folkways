@@ -2,7 +2,7 @@ package io.github.izakyl.folkways.carts;
 
 import com.jusipat.astikorcartsredux.entity.AbstractCargoCart;
 import com.mojang.logging.LogUtils;
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.colony.api.Claimed;
 import io.github.izakyl.folkways.core.colony.api.Colonies;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
@@ -10,7 +10,7 @@ import io.github.izakyl.folkways.core.testing.TestWorker;
 import io.github.izakyl.folkways.core.work.api.Outcome;
 import io.github.izakyl.folkways.core.work.api.Stances;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
-import io.github.izakyl.folkways.plugins.person.PersonBody;
+import io.github.izakyl.folkways.vanilla.person.PersonBody;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -32,7 +32,7 @@ import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
 @EventBusSubscriber(modid = FolkwaysCartsMod.ID, bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@GameTestHolder("folkways_carts")
 @PrefixGameTestTemplate(false)
 public final class HorseLineGameTests {
     private static final double MIN_SPEED = 0.03;
@@ -42,12 +42,12 @@ public final class HorseLineGameTests {
         event.register(HorseLineGameTests.class);
     }
 
-    @GameTest(template = "empty", batch = "horse_line_straight", timeoutTicks = 3600)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", batch = "horse_line_straight", timeoutTicks = 3600)
     public static void horseHaulsWithoutALeaderAndWaitsForHandlersOnBothLegs(GameTestHelper helper) {
         haul(helper, false);
     }
 
-    @GameTest(template = "empty", batch = "horse_line_corner", timeoutTicks = 4000)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", batch = "horse_line_corner", timeoutTicks = 4000)
     public static void steeringMarksAndACornerDoNotStopTheHorse(GameTestHelper helper) {
         haul(helper, true);
     }

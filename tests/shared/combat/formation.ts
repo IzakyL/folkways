@@ -25,12 +25,12 @@ const IMPORTS = [
   "net.minecraft.world.entity.Mob", "net.minecraft.world.item.ItemStack", "net.minecraft.world.item.Items",
   "io.github.izakyl.folkways.core.colony.api.Colonies", "io.github.izakyl.folkways.core.colony.api.Claimed",
   "io.github.izakyl.folkways.core.resident.api.Body", "io.github.izakyl.folkways.core.world.api.WorldPos",
-  "io.github.izakyl.folkways.core.world.api.Reach", "io.github.izakyl.folkways.plugins.person.PersonBody",
-  "io.github.izakyl.folkways.plugins.person.PersonContent", "io.github.izakyl.folkways.plugins.person.ResidentEntity",
-  "io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfiles", "io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfile",
+  "io.github.izakyl.folkways.core.world.api.Reach", "io.github.izakyl.folkways.vanilla.person.PersonBody",
+  "io.github.izakyl.folkways.vanilla.person.PersonContent", "io.github.izakyl.folkways.vanilla.person.ResidentEntity",
+  "io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutProfiles", "io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutProfile",
   "io.github.izakyl.folkways.core.item.api.ItemSpec", "net.neoforged.neoforge.common.Tags",
-  "io.github.izakyl.folkways.rts.combat.command.ResidentCommands",
-  "io.github.izakyl.folkways.rts.combat.group.UnitGroups", "io.github.izakyl.folkways.rts.combat.group.Deployment",
+  "io.github.izakyl.folkways.core.rts.combat.command.ResidentCommands",
+  "io.github.izakyl.folkways.core.rts.combat.group.UnitGroups", "io.github.izakyl.folkways.core.rts.combat.group.Deployment",
 ];
 
 /**

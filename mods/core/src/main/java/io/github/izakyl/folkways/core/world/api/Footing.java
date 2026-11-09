@@ -16,7 +16,7 @@ public final class Footing {
     private static final double NEARLY_FULL = 14.0D / 16.0D;
 
     public static final TagKey<Block> NO_FOOTING = TagKey.create(Registries.BLOCK,
-        ResourceLocation.fromNamespaceAndPath("folkways", "no_footing"));
+        ResourceLocation.fromNamespaceAndPath("folkways_core", "no_footing"));
 
     private Footing() {
     }

@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.core.plan.internal;
 
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.plan.api.Before;
 import io.github.izakyl.folkways.core.plan.api.Grown;
 import io.github.izakyl.folkways.core.work.api.Ending;
@@ -31,8 +31,8 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
 // An order between asked work is a logic edge: when the work before ends undone, the plan cannot feed it again some
 // other way, so the owner of the work after says what is left of the order.
-@EventBusSubscriber(modid = FolkwaysMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@EventBusSubscriber(modid = FolkwaysCoreMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
+@GameTestHolder(FolkwaysCoreMod.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class UnmetOrderGameTests {
     @SubscribeEvent
@@ -42,7 +42,7 @@ public final class UnmetOrderGameTests {
 
     private static final ResourceLocation OWNER = ResourceLocation.fromNamespaceAndPath("folkways_test", "unmet");
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void workGoesOnWhenItsOwnerLetsTheOrderGo(GameTestHelper helper) {
         PlanningFixture f = new PlanningFixture(helper);
         Asked first = new Asked(f.source, Unmet.GO_ON);
@@ -66,7 +66,7 @@ public final class UnmetOrderGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void workFailsWithWhatItComesAfterAndTellsWhatComesAfterIt(GameTestHelper helper) {
         PlanningFixture f = new PlanningFixture(helper);
         Asked first = new Asked(f.source, Unmet.GO_ON);
@@ -94,7 +94,7 @@ public final class UnmetOrderGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void workWaitsOffThePlanUntilWhatItComesAfterIsAskedAgainAndDone(GameTestHelper helper) {
         PlanningFixture f = new PlanningFixture(helper);
         Asked first = new Asked(f.source, Unmet.GO_ON);
@@ -125,7 +125,7 @@ public final class UnmetOrderGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void withdrawnWorkIsAnUnmetOrderAndHeldWorkMayBeWithdrawn(GameTestHelper helper) {
         PlanningFixture f = new PlanningFixture(helper);
         Asked first = new Asked(f.source, Unmet.GO_ON);
@@ -146,7 +146,7 @@ public final class UnmetOrderGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void askingAgainKeepsTheOrderOfWorkStillAsked(GameTestHelper helper) {
         PlanningFixture f = new PlanningFixture(helper);
         Asked first = new Asked(f.source, Unmet.GO_ON);

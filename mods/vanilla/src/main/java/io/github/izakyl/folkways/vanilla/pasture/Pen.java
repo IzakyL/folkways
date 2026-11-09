@@ -1,0 +1,221 @@
+package io.github.izakyl.folkways.vanilla.pasture;
+
+import io.github.izakyl.folkways.core.colony.api.ColonyView;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.world.api.Reach;
+import io.github.izakyl.folkways.core.world.api.Realm;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
+import io.github.izakyl.folkways.core.world.api.WorldSpaces;
+import io.github.izakyl.folkways.core.front.api.FrontView;
+import io.github.izakyl.folkways.core.front.api.Settings;
+import io.github.izakyl.folkways.core.front.api.ZoneView;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
+import java.util.stream.Collectors;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.util.Mth;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.animal.Animal;
+import net.minecraft.world.level.BlockGetter;
+import net.minecraft.world.level.ClipContext;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.HitResult;
+import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.phys.shapes.CollisionContext;
+import net.minecraft.world.phys.shapes.VoxelShape;
+
+record Pen(UUID zone, Livestock keeps, int target, boolean shear, WorldPos anchor,
+           Set<BlockPos> floor, int minY, int maxY) {
+
+    private static final int HEADROOM = 4;
+
+    private static final int OVER_THE_FENCE = Mth.ceil(Reach.PLAYER_BLOCK_REACH);
+
+    static List<Pen> markedOut(ColonyView colony, FrontView front) {
+        List<Pen> found = new ArrayList<>();
+        for (ZoneView zone : front.zonesIn(colony.level())) {
+            marked(zone).ifPresent(found::add);
+        }
+        return List.copyOf(found);
+    }
+
+    // Read only the current zone at commit time: a target edit or an erased pen invalidates old work.
+    static Optional<Pen> find(ColonyView colony, FrontView front, UUID id) {
+        return front.zonesIn(colony.level()).stream().filter(zone -> zone.id().equals(id))
+            .findFirst().flatMap(Pen::marked);
+    }
+
+    private static Optional<Pen> marked(ZoneView zone) {
+        if (!zone.delegation().equals(PastureContent.PASTURE) || zone.cells().isEmpty()) {
+            return Optional.empty();
+        }
+        Settings filled = zone.settings();
+        return Livestock.named(filled.choice(PastureContent.ANIMAL.key())).map(keeps -> of(zone, keeps,
+            filled.count(PastureContent.TARGET.key()), filled.flag(PastureContent.SHEAR.key())));
+    }
+
+    List<Animal> stock(ServerLevel level) {
+        return level.getEntitiesOfClass(Animal.class, reach(level), this::keeps);
+    }
+
+    // An animal put to other work, such as a horse drawing a cart line, is no longer stock: it is neither counted
+    // nor culled, even while it stands in the pen.
+    boolean keeps(Animal beast) {
+        return beast.isAlive() && !beast.isRemoved() && !beast.getTags().contains(PastureContent.CLAIMED)
+            && BuiltInRegistries.ENTITY_TYPE.getKey(beast.getType()).equals(keeps.type()) && holds(beast);
+    }
+
+    int surplus(List<Animal> stock) {
+        return Math.max(0, (int) stock.stream().filter(beast -> !beast.isBaby()).count() - target);
+    }
+
+    // At the target one calf is wanted, not another whole round of pairs. Pairs already in love
+    // reserve their births until they breed or their love ends, including between parallel commits.
+    int feedings(List<Animal> stock) {
+        if (target <= 0 || stock.size() > target) {
+            return 0;
+        }
+        int pending = (int) stock.stream().filter(beast -> !beast.isBaby() && beast.isInLove()).count() / 2;
+        return Math.max(0, Math.max(1, target - stock.size()) - pending);
+    }
+
+    boolean holds(Entity animal) {
+        var local = WorldSpaces.relative(animal.level(), anchor.realm(), animal.position());
+        if (local.isEmpty()) {
+            return false;
+        }
+        return holds(new WorldPos(anchor.realm(), BlockPos.containing(local.get())));
+    }
+
+    boolean holds(WorldPos cell) {
+        if (!cell.realm().equals(anchor.realm())) {
+            return false;
+        }
+        BlockPos at = cell.cell();
+        if (at.getY() < minY || at.getY() > maxY + HEADROOM) {
+            return false;
+        }
+        for (int y = minY; y <= maxY; y++) {
+            if (floor.contains(new BlockPos(at.getX(), y, at.getZ()))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // A keeper works a big pen from inside it, on its own ground, and a small one from outside, over the fence. A
+    // pen whose ground is not one closed piece is worked from the ground marked out, as if it were whole.
+    Optional<Stances> workplaces(ServerLevel level, Entity subject, Enclosure enclosure) {
+        BlockPos at = WorldSpaces.at(subject).block(level);
+        if (enclosure.small()) {
+            // Footings aboard are in storage cells, so the line of sight must end at the subject's storage position.
+            Vec3 center = subject.getBoundingBox().getCenter();
+            Vec3 seen = anchor.realm() instanceof Realm.Frame frame
+                ? WorldSpaces.frame(level, frame.structure())
+                    .map(space -> space.toLocal(center).add(Vec3.atLowerCornerOf(space.storageOrigin()))).orElse(center)
+                : center;
+            return Stances.of(level, Reach.footingsAround(level, at, OVER_THE_FENCE, OVER_THE_FENCE).stream()
+                .filter(feet -> !enclosure.inside().contains(feet) && Enclosure.standable(level, feet)
+                    && Reach.withinReach(feet, at) && clearOfDoorway(level, feet)
+                    && seenOver(level, Vec3.atBottomCenterOf(feet).add(0.0D, Reach.EYE_HEIGHT, 0.0D), seen))
+                .toList());
+        }
+        return Stances.of(level, Reach.workableCells(level, at).stream()
+            .filter(cell -> (!enclosure.fenced() || enclosure.inside().contains(cell))
+                && holds(WorldPos.of(level, cell)) && clearOfDoorway(level, cell))
+            .toList());
+    }
+
+    // Seen as a player at a fence sees: over its rail, which stands half a block lower than it stops a body, and
+    // past grass and flowers, which stop neither.
+    static boolean seenOver(Level level, Vec3 eye, Entity subject) {
+        return seenOver(level, eye, subject.getBoundingBox().getCenter());
+    }
+
+    private static boolean seenOver(Level level, Vec3 eye, Vec3 target) {
+        return level.clip(new OverTheFence(eye, target)).getType() == HitResult.Type.MISS;
+    }
+
+    private static final class OverTheFence extends ClipContext {
+
+        OverTheFence(Vec3 from, Vec3 to) {
+            super(from, to, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, CollisionContext.empty());
+        }
+
+        @Override
+        public VoxelShape getBlockShape(BlockState state, BlockGetter level, BlockPos pos) {
+            VoxelShape solid = super.getBlockShape(state, level, pos);
+            return solid.isEmpty() ? solid : state.getShape(level, pos);
+        }
+    }
+
+    // Arrival allows almost a block of slack. A workplace one cell from a gate can still leave the body in it,
+    // so keep the surrounding cells clear as well, whether the doorway is currently open or shut.
+    private static boolean clearOfDoorway(ServerLevel level, BlockPos feet) {
+        for (BlockPos cell : BlockPos.betweenClosed(feet.offset(-1, -1, -1), feet.offset(1, 1, 1))) {
+            if (level.isLoaded(cell) && Enclosure.doorway(level.getBlockState(cell))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    AABB reach(Level level) {
+        BlockPos low = anchor.cell();
+        BlockPos high = anchor.cell();
+        for (BlockPos cell : floor) {
+            low = new BlockPos(Math.min(low.getX(), cell.getX()), minY, Math.min(low.getZ(), cell.getZ()));
+            high = new BlockPos(Math.max(high.getX(), cell.getX()), maxY,
+                Math.max(high.getZ(), cell.getZ()));
+        }
+        AABB local = new AABB(low.getX(), minY, low.getZ(),
+            high.getX() + 1.0D, maxY + 1.0D + HEADROOM, high.getZ() + 1.0D);
+        if (!(anchor.realm() instanceof Realm.Frame frame)) {
+            return local;
+        }
+        var space = WorldSpaces.frame(level, frame.structure()).orElseThrow();
+        AABB world = null;
+        for (int corner = 0; corner < 8; corner++) {
+            Vec3 point = space.toWorld(new Vec3(
+                (corner & 1) == 0 ? local.minX : local.maxX,
+                (corner & 2) == 0 ? local.minY : local.maxY,
+                (corner & 4) == 0 ? local.minZ : local.maxZ));
+            AABB one = new AABB(point, point);
+            world = world == null ? one : world.minmax(one);
+        }
+        return world;
+    }
+
+    private static Pen of(ZoneView zone, Livestock keeps, int target,
+            boolean shear) {
+        Set<BlockPos> cells = zone.cells().stream().map(cell -> zone.at(cell).cell()).collect(Collectors.toSet());
+        BlockPos anchor = null;
+        int minY = Integer.MAX_VALUE;
+        int maxY = Integer.MIN_VALUE;
+        for (BlockPos cell : cells) {
+            minY = Math.min(minY, cell.getY());
+            maxY = Math.max(maxY, cell.getY());
+            if (anchor == null || compare(cell, anchor) < 0) {
+                anchor = cell.immutable();
+            }
+        }
+        return new Pen(zone.id(), keeps, target, shear, zone.at(zone.cells().iterator().next()).at(anchor),
+            Set.copyOf(cells), minY, maxY);
+    }
+
+    private static int compare(BlockPos left, BlockPos right) {
+        int byX = Integer.compare(left.getX(), right.getX());
+        if (byX != 0) {
+            return byX;
+        }
+        int byY = Integer.compare(left.getY(), right.getY());
+        return byY != 0 ? byY : Integer.compare(left.getZ(), right.getZ());
+    }
+}

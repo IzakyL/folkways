@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.create;
 
-import io.github.izakyl.folkways.FolkwaysConfig;
+import io.github.izakyl.folkways.core.FolkwaysConfig;
 import java.util.List;
 import java.util.function.Predicate;
 import net.neoforged.neoforge.common.ModConfigSpec;

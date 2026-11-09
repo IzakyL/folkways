@@ -9,7 +9,7 @@ import com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.registry.FoodBiteRegistry;
 import com.github.ysbbbbbb.kaleidoscopecookery.util.ItemUtils;
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.cookery.CookeryContent;
 import io.github.izakyl.folkways.cookery.CookeryRefusal;
 import io.github.izakyl.folkways.cookery.KitchenBookings;
@@ -25,6 +25,7 @@ import io.github.izakyl.folkways.core.testing.TestWorker;
 import io.github.izakyl.folkways.core.work.api.Amount;
 import io.github.izakyl.folkways.core.work.api.Ending;
 import io.github.izakyl.folkways.core.work.api.Hold;
+import io.github.izakyl.folkways.core.base.persist.upgrade.NamespaceIds;
 import io.github.izakyl.folkways.core.work.api.Node;
 import io.github.izakyl.folkways.core.work.api.Outcome;
 import io.github.izakyl.folkways.core.work.api.Stances;
@@ -36,8 +37,8 @@ import io.github.izakyl.folkways.core.work.support.WorkStances;
 import io.github.izakyl.folkways.core.world.api.Realm;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.core.world.api.WorldSpaces;
-import io.github.izakyl.folkways.plugins.person.PersonBody;
-import io.github.izakyl.folkways.plugins.person.ResidentEntity;
+import io.github.izakyl.folkways.vanilla.person.PersonBody;
+import io.github.izakyl.folkways.vanilla.person.ResidentEntity;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -77,13 +78,25 @@ import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
 @EventBusSubscriber(modid = "folkways_cookery", bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@GameTestHolder("folkways_cookery")
 @PrefixGameTestTemplate(false)
 public final class PotGameTests {
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) { event.register(PotGameTests.class); }
 
-    @GameTest(template = "empty", timeoutTicks = 1500)
+    // A batch saved by v0.1.0 names its procedural recipe in the released namespace; the v3 table must reach the
+    // id the pot reads today, or the batch is dropped on load.
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
+    public static void releasedProceduralRecipeIdsUpgradeToTheIdsThePotReads(GameTestHelper helper) {
+        for (PotPlan.Mode mode : List.of(PotPlan.Mode.SUSPICIOUS, PotPlan.Mode.DARK)) {
+            ResourceLocation now = PotPlan.proceduralId(mode);
+            String released = "folkways:" + now.getPath();
+            helper.assertValueEqual(NamespaceIds.current(released), now.toString(), released + " upgrades");
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 1500)
     public static void hardUrgesPreserveTheLoadedStirredAndServedBatch(GameTestHelper helper) {
         Rig rig = new Rig(helper, "pot/beef_to_cooked_beef_3", 1);
         rig.stockBeef(3, 1);
@@ -108,7 +121,7 @@ public final class PotGameTests {
             });
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void theNativePotHandleDefinesTheOnlyAdjacentOperatingCellInEveryRotation(GameTestHelper helper) {
         var level = helper.getLevel();
         BlockPos pot = helper.absolutePos(new BlockPos(3, 2, 3));
@@ -137,7 +150,7 @@ public final class PotGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void rotatingAPlannedPotRejectsTheOldHandleSideWithoutLoadingAnyFood(GameTestHelper helper) {
         try (Rig rig = new Rig(helper, "pot/beef_to_cooked_beef_3", 1)) {
             rig.stockBeef(3, 1);
@@ -154,7 +167,7 @@ public final class PotGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 150)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 150)
     public static void aCookReallyWalksToTheHandleAndLoadsAndStirsUsingTheSharedArrivalTolerance(GameTestHelper helper) {
         Rig rig = new Rig(helper, "pot/beef_to_cooked_beef_3", 1);
         rig.stockBeef(3, 1);
@@ -179,7 +192,7 @@ public final class PotGameTests {
                 net.minecraft.world.level.ChunkPos.getZ(chunk), false));
         };
         helper.runAtTickTime(145, cleanup);
-        var walking = new io.github.izakyl.folkways.plugins.person.walk.OnFoot(0.6D, CookeryRefusal.STATION_CHANGED);
+        var walking = new io.github.izakyl.folkways.vanilla.person.walk.OnFoot(0.6D, CookeryRefusal.STATION_CHANGED);
         walking.setOut(rig.level, rig.body, rig.stances.cells());
         helper.succeedWhen(() -> {
             var result = walking.step(rig.level, rig.body, rig.stances.cells());
@@ -195,7 +208,7 @@ public final class PotGameTests {
         });
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void rotatingALoadedPotAlsoPreventsNativeStirringFromItsOldHandle(GameTestHelper helper) {
         try (Rig rig = new Rig(helper, "pot/beef_to_cooked_beef_3", 1)) {
             rig.stockBeef(3, 1);
@@ -211,7 +224,7 @@ public final class PotGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void aRotatedMovingFrameKeepsTheHandleCellInThePotsOwnRealm(GameTestHelper helper) {
         try (Rig rig = new Rig(helper, "pot/beef_to_cooked_beef_3", 1)) {
             rig.stockBeef(3, 1);
@@ -258,7 +271,7 @@ public final class PotGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void potBudgetDeduplicatesThePromisedBeefButRetainsUnexpectedResultRoom(GameTestHelper helper) {
         try (Rig rig = new Rig(helper, "pot/beef_to_cooked_beef_3", 1)) {
             var beef = Goods.specOf(Items.COOKED_BEEF.getDefaultInstance());
@@ -273,7 +286,7 @@ public final class PotGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void missingCarriersNeverOilOrLoadTheRealPot(GameTestHelper helper) {
         try (Rig rig = new Rig(helper, "flex_pot/scramble_egg_with_tomatoes", 1)) {
             rig.stockEggTomato(false);
@@ -289,7 +302,7 @@ public final class PotGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 350)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 350)
     public static void nativeFoodContainersReturnFromPotInsertionExactlyOnce(GameTestHelper helper) {
         Rig rig = new Rig(helper, "pot/cooked_rice_to_sticky_rice_cake_1", 1);
         ItemStack rice = new ItemStack(ModItems.COOKED_RICE.get());
@@ -312,7 +325,7 @@ public final class PotGameTests {
         });
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void aFailureAfterNativeIngredientAcceptanceRollsBackOilFoodAndClaimTogether(GameTestHelper helper) {
         try (Rig rig = new Rig(helper, "pot/beef_to_cooked_beef_3", 1)) {
             rig.stockBeef(3, 1);
@@ -339,7 +352,7 @@ public final class PotGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 350)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 350)
     public static void aFailureAfterNativeTakeOutRestoresTheBatchAndDiscardsItsCapturedProduct(GameTestHelper helper) {
         Rig rig = new Rig(helper, "flex_pot/scramble_egg_with_tomatoes", 1);
         rig.stockEggTomato(true);
@@ -387,7 +400,7 @@ public final class PotGameTests {
         });
     }
 
-    @GameTest(template = "empty", timeoutTicks = 350)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 350)
     public static void aReloadedOwnedPotContinuesItsNativeTickerWithoutReinvestingFood(GameTestHelper helper) {
         Rig rig = new Rig(helper, "flex_pot/scramble_egg_with_tomatoes", 1);
         rig.stockEggTomato(true);
@@ -413,7 +426,7 @@ public final class PotGameTests {
         });
     }
 
-    @GameTest(template = "empty", timeoutTicks = 600)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 600)
     public static void twoNativePotBatchesReuseTheSameShovelAndConsumeOnlyTwoOilItems(GameTestHelper helper) {
         Rig rig = new Rig(helper, "pot/beef_to_cooked_beef_3", 2);
         rig.stockBeef(6, 2);
@@ -436,7 +449,7 @@ public final class PotGameTests {
         }).thenSucceed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 1200)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 1200)
     public static void aTimedOutNativePotReturnsDarkCuisineButDoesNotSucceedOrRefundTheOriginalDish(GameTestHelper helper) {
         Rig rig = new Rig(helper, "pot/beef_to_cooked_beef_3", 1);
         rig.stockBeef(3, 1);
@@ -455,7 +468,7 @@ public final class PotGameTests {
             }).thenSucceed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 1600)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 1600)
     public static void aFullyBurntNativePotLeavesRealCharcoalAndEndsItsOldClaimWithoutRefundingInputs(GameTestHelper helper) {
         Rig rig = new Rig(helper, "pot/beef_to_cooked_beef_3", 1);
         rig.stockBeef(3, 1);
@@ -478,7 +491,7 @@ public final class PotGameTests {
             }).thenSucceed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void withdrawnAndReadmittedPotTurnsCannotReviveAnOldLoadingPiece(GameTestHelper helper) {
         try (Rig rig = new Rig(helper, "pot/beef_to_cooked_beef_3", 1)) {
             rig.stockBeef(3, 1);
@@ -539,7 +552,7 @@ public final class PotGameTests {
                 "native products and containers are not duplicated as loose drops: " + recipe);
         });
     }
-    @GameTest(template = "empty", timeoutTicks = 350)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 350)
     public static void explicitSuspiciousStirFryUsesNativeNoMatchCookingAndOneActualBowl(GameTestHelper helper) {
         Rig rig = new Rig(helper, PotPlan.Mode.SUSPICIOUS);
         rig.stockProcedural(true); long started = rig.level.getGameTime(); rig.start();
@@ -552,7 +565,7 @@ public final class PotGameTests {
         });
     }
 
-    @GameTest(template = "empty", timeoutTicks = 1350)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 1350)
     public static void explicitDarkCuisineWaitsThroughTheNativeTakeoutWindowBeforeCollecting(GameTestHelper helper) {
         Rig rig = new Rig(helper, PotPlan.Mode.DARK); rig.stockProcedural(true);
         long started = rig.level.getGameTime(); rig.start();
@@ -572,7 +585,7 @@ public final class PotGameTests {
             }).thenSucceed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void aMissingBowlRejectsProceduralCookingBeforeOilOrSeedInvestment(GameTestHelper helper) {
         try (Rig rig = new Rig(helper, PotPlan.Mode.SUSPICIOUS)) {
             rig.stockProcedural(false); CompoundTag before = rig.pot.saveWithFullMetadata(rig.level.registryAccess());
@@ -586,7 +599,7 @@ public final class PotGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void proceduralPotTargetsRequireAnExactDishWithoutInjectingManagerRecipes(GameTestHelper helper) {
         try (Rig rig = new Rig(helper, PotPlan.Mode.DARK)) {
             var bench = rig.station.freeze(UUID.randomUUID(), rig.colony, rig.level, rig.at, rig.stances, rig.bookings, () -> {}).orElseThrow();
@@ -605,7 +618,7 @@ public final class PotGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void aNewMatchingRecipeRejectsAnUnspentProceduralPotLoad(GameTestHelper helper) {
         try (Rig rig = new Rig(helper, PotPlan.Mode.SUSPICIOUS)) {
             rig.stockProcedural(true);
@@ -622,7 +635,7 @@ public final class PotGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void aNewMatchingRecipeRejectsStartingButNeverRefundsAcceptedProceduralInputs(GameTestHelper helper) {
         try (Rig rig = new Rig(helper, PotPlan.Mode.SUSPICIOUS)) {
             rig.stockProcedural(true); rig.step();
@@ -639,7 +652,7 @@ public final class PotGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 1350)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 1350)
     public static void cancelledReloadedDarkCuisineKeepsItsNativeModeAndSpendsNoSecondInput(GameTestHelper helper) {
         Rig rig = new Rig(helper, PotPlan.Mode.DARK); rig.stockProcedural(true); rig.start();
         rig.work.ended(rig.level, Ending.REVOKED); rig.claim.release(Ending.REVOKED);
@@ -665,7 +678,7 @@ public final class PotGameTests {
     private static void withMatchingSeedRecipe(Rig rig, Runnable check) {
         List<RecipeHolder<?>> saved = List.copyOf(rig.level.getRecipeManager().getRecipes());
         List<RecipeHolder<?>> changed = new ArrayList<>(saved);
-        changed.add(new RecipeHolder<>(ResourceLocation.fromNamespaceAndPath("folkways", "test/matching_seed_pot"),
+        changed.add(new RecipeHolder<>(ResourceLocation.fromNamespaceAndPath("folkways_cookery", "test/matching_seed_pot"),
             new PotRecipe(200, 0, Ingredient.of(Items.BOWL), List.of(Ingredient.of(Items.WHEAT_SEEDS)), Items.COOKED_BEEF.getDefaultInstance())));
         try { rig.level.getRecipeManager().replaceRecipes(changed); check.run(); }
         finally { rig.level.getRecipeManager().replaceRecipes(saved); }

@@ -67,13 +67,13 @@ test("zone and route panels select interchangeable loadouts and total headcounts
   finally { await pair?.teardown(testInfo); }
 });
 
-const IMPORTS = ["io.github.izakyl.folkways.front.api.ui.Pages",
-  "io.github.izakyl.folkways.front.ui.screen.ColonyShell",
-  "io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfiles",
-  "io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfile",
-  "io.github.izakyl.folkways.plugins.patrol.PatrolStaffing",
-  "io.github.izakyl.folkways.plugins.patrol.PatrolContent",
-  "io.github.izakyl.folkways.plugins.patrol.SentryPosts",
+const IMPORTS = ["io.github.izakyl.folkways.core.front.api.ui.Pages",
+  "io.github.izakyl.folkways.core.front.ui.screen.ColonyShell",
+  "io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutProfiles",
+  "io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutProfile",
+  "io.github.izakyl.folkways.vanilla.patrol.PatrolStaffing",
+  "io.github.izakyl.folkways.vanilla.patrol.PatrolContent",
+  "io.github.izakyl.folkways.vanilla.patrol.SentryPosts",
   "io.github.izakyl.folkways.core.colony.api.Claimed",
   "io.github.izakyl.folkways.core.world.api.WorldPos",
   "io.github.izakyl.folkways.core.item.api.ItemSpec", "net.minecraft.world.item.Items"];

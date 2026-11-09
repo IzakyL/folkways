@@ -6,7 +6,7 @@ import { waitForResourceReload } from "../harness/resource-reload";
 
 export const PONDER_FOLDERS = defineTask<void, { id: string; scenes: string[] }[]>({
   name: "folkways.visual.ponder-folders", side: "client",
-  source: javaTask({ imports: ["io.github.izakyl.folkways.front.client.Lessons"], body: `
+  source: javaTask({ imports: ["io.github.izakyl.folkways.core.front.client.Lessons"], body: `
 return Lessons.folders().stream().map(folder -> Map.of("id", folder.id().toString(),
  "scenes", folder.scenes().stream().map(scene -> scene.id().toString()).toList())).toList();
 ` }),
@@ -15,14 +15,14 @@ return Lessons.folders().stream().map(folder -> Map.of("id", folder.id().toStrin
 export const PONDER_DINING = defineTask<void, { lesson: boolean; indexed: boolean; playback: boolean }>({
   name: "folkways.visual.ponder-dining", side: "client",
   source: javaTask({ imports: [
-    "io.github.izakyl.folkways.front.api.ponder.Scenes",
-    "io.github.izakyl.folkways.front.client.Lessons",
-    "io.github.izakyl.folkways.front.engine.registry.FolkwaysItems",
+    "io.github.izakyl.folkways.core.front.api.ponder.Scenes",
+    "io.github.izakyl.folkways.core.front.client.Lessons",
+    "io.github.izakyl.folkways.core.front.engine.registry.FolkwaysItems",
     "net.createmod.ponder.foundation.PonderIndex",
     "net.createmod.ponder.foundation.PonderStoryBoardEntry",
     "net.minecraft.resources.ResourceLocation",
   ], body: `
-var id = ResourceLocation.fromNamespaceAndPath("folkways", "dining");
+var id = ResourceLocation.fromNamespaceAndPath("folkways_vanilla", "dining");
 var folder = Scenes.declared().stream()
     .filter(candidate -> candidate.scenes().stream().anyMatch(scene -> scene.id().equals(id)))
     .findFirst().orElseThrow();
@@ -30,7 +30,7 @@ var scene = folder.scenes().stream().filter(candidate -> candidate.id().equals(i
 var access = PonderIndex.getSceneAccess();
 boolean indexed = access.getRegisteredEntries().stream().anyMatch(entry ->
     entry.getValue().getBoard() instanceof Scenes.Scene board && board.id().equals(id));
-var entry = new PonderStoryBoardEntry(scene, "folkways", folder.id().getPath() + "/dining",
+var entry = new PonderStoryBoardEntry(scene, "folkways_vanilla", folder.id().getPath() + "/dining",
     FolkwaysItems.COLONY_BOOK.getId());
 return Map.of("lesson", Lessons.has(id), "indexed", indexed, "playback", !access.compile(List.of(entry)).isEmpty());
 ` }),
@@ -38,7 +38,7 @@ return Map.of("lesson", Lessons.has(id), "indexed", indexed, "playback", !access
 
 export const OPEN_PONDER = defineTask<{ id: string }, boolean>({
   name: "folkways.visual.ponder-open", side: "client",
-  source: javaTask({ imports: ["io.github.izakyl.folkways.front.client.ponder.PonderHint", "net.minecraft.resources.ResourceLocation", "net.minecraft.client.Minecraft"], body: `
+  source: javaTask({ imports: ["io.github.izakyl.folkways.core.front.client.ponder.PonderHint", "net.minecraft.resources.ResourceLocation", "net.minecraft.client.Minecraft"], body: `
 Minecraft.getInstance().setScreen(null);
 PonderHint.play(ResourceLocation.parse(Args.of(ctx).string("id"))); return true;
 ` }),
@@ -77,7 +77,7 @@ minecraft.reloadResourcePacks(); return locale;
 const LANGUAGE_READY = defineTask<void, string>({
   name: "folkways.visual.language-ready", side: "client",
   source: javaTask({ imports: ["net.minecraft.network.chat.Component"], body: `
-return Component.translatable("folkways.ponder.housing.header").getString();
+return Component.translatable("folkways_vanilla.ponder.housing.header").getString();
 ` }),
 });
 export const SET_GUI_SCALE = defineTask<{ scale: number }, boolean>({
@@ -89,14 +89,15 @@ minecraft.options.guiScale().set((int)Args.of(ctx).number("scale")); minecraft.r
 });
 
 export function ponderCatalog(locale: string): Record<string, string> {
-  return JSON.parse(readFileSync(`mods/core/src/main/resources/assets/folkways/lang/${locale}.json`, "utf8"));
+  return Object.assign({}, ...["core", "vanilla", "create", "cookery", "firearms", "carts", "golems"]
+    .map(mod => JSON.parse(readFileSync(`mods/${mod}/src/main/resources/assets/folkways_${mod}/lang/${locale}.json`, "utf8"))));
 }
 
 export async function setVisualLanguage(client: MinecraftClient, locale: string) {
   await client.run(SET_LANGUAGE, { locale });
   await waitForResourceReload(client);
   await expect.poll(() => client.run(LANGUAGE_READY), { timeout: 60_000 })
-    .toBe(ponderCatalog(locale)["folkways.ponder.housing.header"]);
+    .toBe(ponderCatalog(locale)["folkways_vanilla.ponder.housing.header"]);
   await frames(client, 5);
 }
 

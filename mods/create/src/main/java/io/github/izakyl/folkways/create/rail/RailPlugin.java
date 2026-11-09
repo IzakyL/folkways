@@ -8,7 +8,7 @@ import io.github.izakyl.folkways.create.rail.domain.RailHighlight;
 import io.github.izakyl.folkways.create.rail.domain.RailPackets;
 import io.github.izakyl.folkways.create.rail.domain.Trackways;
 import io.github.izakyl.folkways.create.rail.passage.RailPassage;
-import io.github.izakyl.folkways.front.api.Registering;
+import io.github.izakyl.folkways.core.front.api.Registering;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
 import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;

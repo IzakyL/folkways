@@ -1,5 +1,6 @@
 package io.github.izakyl.folkways.core.world.api;
 
+import io.github.izakyl.folkways.core.base.persist.upgrade.NamespaceIds;
 import net.minecraft.nbt.CompoundTag;
 
 /** A structure cell's configuration, without a live block entity or inventory. */
@@ -10,6 +11,8 @@ public record StructurePayload(CompoundTag tag) {
 
     public StructurePayload {
         tag = tag.copy();
+        // Exported files have no world data version and can be imported long after a world was upgraded.
+        NamespaceIds.rewrite(tag);
     }
 
     @Override

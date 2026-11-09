@@ -1,8 +1,8 @@
 package io.github.izakyl.folkways.core.item.api;
 
-import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.base.persist.Reader;
-import io.github.izakyl.folkways.front.engine.colony.ColonySettings;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
+import io.github.izakyl.folkways.core.base.persist.Reader;
+import io.github.izakyl.folkways.core.front.engine.colony.ColonySettings;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -19,8 +19,8 @@ import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
-@EventBusSubscriber(modid = FolkwaysMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@EventBusSubscriber(modid = FolkwaysCoreMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
+@GameTestHolder(FolkwaysCoreMod.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class ItemQueryGameTests {
 
@@ -30,7 +30,7 @@ public final class ItemQueryGameTests {
     }
 
     // A whole name is that one alone; part of one is any it is part of; stars and marks stand for letters.
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void wordsMatchWholeNamesPartsAndPatterns(GameTestHelper helper) {
         expect(helper, "#minecraft:logs", Items.OAK_LOG, true);
         expect(helper, "#minecraft:logs", Items.OAK_PLANKS, false);
@@ -56,7 +56,7 @@ public final class ItemQueryGameTests {
     }
 
     // A bare word finds a name only in a search: a rule is read on the server, which knows no reader's words.
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void namesAreSearchedButNotRuled(GameTestHelper helper) {
         ItemQuery query = ItemQuery.parse("chicken").orElseThrow();
         helper.assertTrue(query.matches(Items.EGG, "a chicken's egg"), "a search finds the name");
@@ -65,7 +65,7 @@ public final class ItemQueryGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void displayNameMatchersLeaveRulesAndQueryOperatorsAlone(GameTestHelper helper) {
         var spelling = (java.util.function.BiPredicate<String, String>) (name, word) ->
             name.equals("铁锭") && word.equals("tieding");
@@ -85,7 +85,7 @@ public final class ItemQueryGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void missingDisplayNamesNeverReachTheNameMatcher(GameTestHelper helper) {
         helper.assertFalse(ItemQuery.parse("tieding").orElseThrow().matches(Items.IRON_INGOT, null,
             (name, word) -> { throw new AssertionError("a rule has no display name to match"); }),
@@ -94,7 +94,7 @@ public final class ItemQueryGameTests {
     }
 
     // A rule naming one whole item or tag is that item or tag, kept the cheaper way, and the same rule as ticking it.
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void aLoneIdIsKeptAsItsItemOrTag(GameTestHelper helper) {
         ResourceLocation arrow = BuiltInRegistries.ITEM.getKey(Items.ARROW);
         helper.assertTrue(ItemFilter.query("minecraft:arrow").equals(Optional.of(ItemFilter.item(arrow))),
@@ -109,7 +109,7 @@ public final class ItemQueryGameTests {
     }
 
     // A search kept as a rule is saved as it was typed, and stands for every item it finds.
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void aQueryRuleIsKeptAndStandsForWhatItFinds(GameTestHelper helper) {
         ItemFilter rule = ItemFilter.query("  #minecraft:logs   @minecraft ").orElseThrow();
         helper.assertTrue(rule.text().equals("#minecraft:logs @minecraft"), "kept as typed, spaces evened");
@@ -129,7 +129,7 @@ public final class ItemQueryGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void genericOptionsUseTheSameGrammar(GameTestHelper helper) {
         OptionQuery.Known known = new OptionQuery.Known(Set.of("own", "other"),
             Set.of("archer", "archer_captain", "pack:builder"), Set.of("work:ranged", "work:ranged_elite"),

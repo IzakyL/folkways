@@ -25,10 +25,10 @@ function probe(server: MinecraftServer, condition: string): Promise<boolean> {
 
 const REPO_ROOT = process.cwd();
 
-const RESIDENT_TYPE = "folkways:resident";
+const RESIDENT_TYPE = "folkways_vanilla:resident";
 
-const PACK_NBT_PATH = '"neoforge:attachments"."folkways:body_state".Pack';
-const PACK_QUERY_PATH = "neoforge:attachments.folkways:body_state.Pack";
+const PACK_NBT_PATH = '"neoforge:attachments"."folkways_core:body_state".Pack';
+const PACK_QUERY_PATH = "neoforge:attachments.folkways_core:body_state.Pack";
 
 export async function packHasItem(server: MinecraftServer, itemId: string) {
   return probe(

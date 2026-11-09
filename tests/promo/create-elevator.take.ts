@@ -75,7 +75,7 @@ test("elevator: tired residents ride a Create elevator up to their beds", async 
     expect(asleep, "residents must lie down in the loft beds on camera").toBeGreaterThanOrEqual(2);
     await world.command(server, `item replace entity ${scene.name} weapon.mainhand with minecraft:air`);
     await expect.poll(async () => (await scene.client.run(OUTLINES)).length).toBe(0);
-    await world.command(server, `item replace entity ${scene.name} weapon.mainhand with folkways:colony_book`);
+    await world.command(server, `item replace entity ${scene.name} weapon.mainhand with folkways_core:colony_book`);
     run.note("shaders", shaderEvidence(scene.pair.clientInstance));
   } catch (error) {
     pair?.failing(error);

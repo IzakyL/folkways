@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.cookery.steamer;
 
-import io.github.izakyl.folkways.base.persist.Required;
+import io.github.izakyl.folkways.core.base.persist.Required;
 import com.github.ysbbbbbb.kaleidoscopecookery.block.kitchen.SteamerBlock;
 import com.github.ysbbbbbb.kaleidoscopecookery.blockentity.kitchen.SteamerBlockEntity;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks;
@@ -23,8 +23,8 @@ import io.github.izakyl.folkways.core.work.api.Node;
 import io.github.izakyl.folkways.core.work.api.Stances;
 import io.github.izakyl.folkways.core.work.api.WorkSite;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
-import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
-import io.github.izakyl.folkways.plugins.wares.WaresContent;
+import io.github.izakyl.folkways.vanilla.FolkwaysVanillaConfig;
+import io.github.izakyl.folkways.vanilla.wares.WaresContent;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;

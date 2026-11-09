@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.core.colony.internal;
 
-import io.github.izakyl.folkways.base.Ledger;
+import io.github.izakyl.folkways.core.base.Ledger;
 import io.github.izakyl.folkways.core.colony.api.ColonyContext;
 import io.github.izakyl.folkways.core.colony.api.UrgeSource;
 import java.util.LinkedHashMap;

@@ -3,7 +3,7 @@ package io.github.izakyl.folkways.create.dispatch;
 import com.simibubi.create.content.logistics.box.PackageItem;
 import com.simibubi.create.content.logistics.packagePort.PackagePortBlockEntity;
 import com.simibubi.create.content.logistics.stockTicker.PackageOrderWithCrafts;
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.colony.api.Claimed;
 import io.github.izakyl.folkways.core.colony.api.Colonies;
 import io.github.izakyl.folkways.core.colony.api.Colony;
@@ -36,7 +36,7 @@ import io.github.izakyl.folkways.core.work.internal.Commit;
 import io.github.izakyl.folkways.core.world.api.Stand;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.create.FolkwaysCreateMod;
-import io.github.izakyl.folkways.front.engine.colony.ColonyStocks;
+import io.github.izakyl.folkways.core.front.engine.colony.ColonyStocks;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -66,7 +66,7 @@ import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
 @EventBusSubscriber(modid = FolkwaysCreateMod.ID, bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@GameTestHolder("folkways_create")
 @PrefixGameTestTemplate(false)
 public final class DispatchPlanningGameTests {
     @SubscribeEvent
@@ -74,7 +74,7 @@ public final class DispatchPlanningGameTests {
         event.register(DispatchPlanningGameTests.class);
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void nativePortArrivalsAndRemovalsReviseTheSharedObservation(GameTestHelper helper) {
         var level = helper.getLevel();
         BlockPos at = helper.absolutePos(new BlockPos(1, 1, 1));
@@ -116,7 +116,7 @@ public final class DispatchPlanningGameTests {
         });
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void networkContainersAppearInColonyStockOnce(GameTestHelper helper) {
         var level = helper.getLevel();
         BlockPos chest = helper.absolutePos(new BlockPos(1, 1, 1));
@@ -161,7 +161,7 @@ public final class DispatchPlanningGameTests {
         }
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void aHandPackedOrderIsAdoptedOnlyWhenItsEntireSpecificationIsAccepted(GameTestHelper helper) {
         withFake(helper, fake -> {
             var fixture = new PlanningFixture(helper);
@@ -214,7 +214,7 @@ public final class DispatchPlanningGameTests {
         });
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void acceptedPendingNodeSurvivesReplanningWithoutOrderingAgain(GameTestHelper helper) {
         withFake(helper, (fake, solver) -> {
             PlanningFixture fixture = new PlanningFixture(helper);
@@ -285,7 +285,7 @@ public final class DispatchPlanningGameTests {
         });
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void rejectedSpeculationNeverOrdersAndPartialSupplyIsNotOverstated(GameTestHelper helper) {
         withFake(helper, (fake, solver) -> {
             fake.stock = 16;
@@ -312,7 +312,7 @@ public final class DispatchPlanningGameTests {
         });
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void collectionsOrderInFullAndTakeOnlyTheirOwnParcels(GameTestHelper helper) {
         withFake(helper, fake -> {
             PackageNetwork.Parcel stray = new PackageNetwork.Parcel(List.of(new ItemStack(Items.IRON_INGOT, 10)), OptionalInt.empty());
@@ -348,7 +348,7 @@ public final class DispatchPlanningGameTests {
         });
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void strayParcelsAreClearedAndOwnedOnesKept(GameTestHelper helper) {
         withFake(helper, fake -> {
             fake.strays.add(new PackageNetwork.Parcel(List.of(new ItemStack(Items.IRON_INGOT, 10)), OptionalInt.empty()));
@@ -371,7 +371,7 @@ public final class DispatchPlanningGameTests {
         });
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void aBusyNetworkDefersTheOrderInsteadOfRefusingIt(GameTestHelper helper) {
         withFake(helper, fake -> {
             fake.busy = true;
@@ -402,7 +402,7 @@ public final class DispatchPlanningGameTests {
         });
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void anOrderWhoseWorkWasDroppedIsAdoptedNotOrderedAgain(GameTestHelper helper) {
         withFake(helper, fake -> {
             PlanningFixture fixture = new PlanningFixture(helper);
@@ -444,7 +444,7 @@ public final class DispatchPlanningGameTests {
         });
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void anUnadoptedOrderTurnsStrayInTime(GameTestHelper helper) {
         withFake(helper, fake -> {
             PlanningFixture fixture = new PlanningFixture(helper);
@@ -463,7 +463,7 @@ public final class DispatchPlanningGameTests {
         });
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void createParcelsAreTakenWholeByTheirOrder(GameTestHelper helper) {
         BlockPos port = new BlockPos(1, 1, 1);
         helper.setBlock(port, BuiltInRegistries.BLOCK.get(ResourceLocation.fromNamespaceAndPath("create", "package_frogport")));
@@ -491,7 +491,7 @@ public final class DispatchPlanningGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void takesAndOrdersAreCountedOnOneTally(GameTestHelper helper) {
         PlanningFixture fixture = new PlanningFixture(helper);
         ItemSpec iron = ItemSpec.of(ResourceLocation.withDefaultNamespace("iron_ingot"));
@@ -518,7 +518,7 @@ public final class DispatchPlanningGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void aNetworkContainerIsTakenFromByHandWithNoOneAtTheDesk(GameTestHelper helper) {
         withFake(helper, (fake, solver) -> {
             PlanningFixture fixture = new PlanningFixture(helper);
@@ -545,7 +545,7 @@ public final class DispatchPlanningGameTests {
         });
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void aFrogportOverAContainerIsNoPickUpPoint(GameTestHelper helper) {
         ResourceLocation frogport = ResourceLocation.fromNamespaceAndPath("create", "package_frogport");
         ResourceLocation postbox = ResourceLocation.fromNamespaceAndPath("create", "white_postbox");
@@ -581,7 +581,7 @@ public final class DispatchPlanningGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void theContainerNearestTheCrewIsTakenFromAndTakenFromAgainWhenTheyMove(GameTestHelper helper) {
         withFake(helper, (fake, solver) -> {
             PlanningFixture fixture = new PlanningFixture(helper);
@@ -619,7 +619,7 @@ public final class DispatchPlanningGameTests {
         });
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void goodsAreSentByHandWhenThatBeatsCarryingThem(GameTestHelper helper) {
         withFake(helper, (fake, solver) -> {
             PlanningFixture fixture = new PlanningFixture(helper);
@@ -674,7 +674,7 @@ public final class DispatchPlanningGameTests {
         });
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void parcelsOnTheBooksOutlastASave(GameTestHelper helper) {
         var level = helper.getLevel();
         Mailroom kept = new Mailroom();
@@ -684,7 +684,7 @@ public final class DispatchPlanningGameTests {
             Optional.of(UUID.randomUUID()), "Alpha");
         kept.take(one);
         Mailroom loaded = new Mailroom();
-        loaded.load(io.github.izakyl.folkways.base.persist.Reader.of(kept.save()));
+        loaded.load(io.github.izakyl.folkways.core.base.persist.Reader.of(kept.save()));
         helper.assertTrue(loaded.all().equals(List.of(one)), "a booking is read back as it was kept");
         Mailroom.Consignment unbooked = one.booked(Optional.empty());
         helper.assertTrue(unbooked.train().isEmpty() && !unbooked.boards(one.train().get(), "Alpha")

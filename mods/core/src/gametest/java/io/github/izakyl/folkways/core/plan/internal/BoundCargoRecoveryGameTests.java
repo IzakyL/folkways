@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.core.plan.internal;
 
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.inventory.api.Stash;
 import io.github.izakyl.folkways.core.item.api.Goods;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
@@ -35,8 +35,8 @@ import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
-@EventBusSubscriber(modid = FolkwaysMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@EventBusSubscriber(modid = FolkwaysCoreMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
+@GameTestHolder(FolkwaysCoreMod.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class BoundCargoRecoveryGameTests {
     private static final ResourceLocation OWNER = ResourceLocation.fromNamespaceAndPath("folkways_test", "bound_cargo");
@@ -46,17 +46,17 @@ public final class BoundCargoRecoveryGameTests {
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) { event.register(BoundCargoRecoveryGameTests.class); }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void pendingBoundInputStowsOnlyUnclaimedCargoThenCompletes(GameTestHelper helper) {
         recovery(helper, false, true);
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void packBlockedWorkCanRequestStowingAlongsideAnExistingRoute(GameTestHelper helper) {
         recovery(helper, true, true);
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void fullPackWithNoRouteStillRecoversWithoutAnIdleMessage(GameTestHelper helper) {
         recovery(helper, false, false);
     }
@@ -102,7 +102,7 @@ public final class BoundCargoRecoveryGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void workAlreadyInHandDefersRecoveryUntilItSettles(GameTestHelper helper) {
         try (var scene = new Scene(helper, true)) {
             Node active = scene.action();
@@ -127,7 +127,7 @@ public final class BoundCargoRecoveryGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void cargoIsKeptUntilWorkNeedsRoomOrTheResidentIdles(GameTestHelper helper) {
         try (var scene = new Scene(helper, true)) {
             Planned kept = scene.round(List.of(new Message.Submitted(OWNER, Grown.of(scene.action()))));
@@ -144,7 +144,7 @@ public final class BoundCargoRecoveryGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void fullyClaimedCargoIsNeverRecoveredOrRequestedRepeatedly(GameTestHelper helper) {
         try (var scene = new Scene(helper, true)) {
             Node task = new Action(NodeSpec.of(UUID.randomUUID(), OWNER, new WorkSite.AtBlock(scene.f.target),
@@ -164,7 +164,7 @@ public final class BoundCargoRecoveryGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void recoveryWaitsForStoreRoomWithoutRepeatingTheScheduleRequest(GameTestHelper helper) {
         try (var scene = new Scene(helper, true)) {
             for (int slot = 1; slot < scene.source.getContainerSize(); slot++) {

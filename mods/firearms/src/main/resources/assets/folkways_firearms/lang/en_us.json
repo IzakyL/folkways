@@ -1,0 +1,8 @@
+{
+  "folkways.tacz.ammo": "Ammunition",
+  "folkways.tacz.ammo_count": "Loaded %s · carried %s",
+  "folkways.tacz.gun": "Firearm: %s",
+  "folkways.tacz.missing_pack": "Missing firearm or gun pack",
+  "folkways.tacz.reloading": " · Reloading",
+  "folkways.tacz.unsupported": "This firearm is unavailable"
+}

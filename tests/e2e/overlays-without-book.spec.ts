@@ -14,7 +14,7 @@ import { GROUND } from "../shared/harness/stage";
 import { frames, tryCommand, waitForElement } from "../shared/harness/bw-helpers";
 import { clickTab } from "../shared/ui/colony-pages";
 
-const BOOK_ITEM = "folkways:colony_book";
+const BOOK_ITEM = "folkways_core:colony_book";
 const SETTING = "folkways.settings.overlays_without_book";
 
 type Drawn = { zones: number; outlines: number; residents: number; cards: number; held: boolean; option: boolean };
@@ -24,13 +24,13 @@ type Drawn = { zones: number; outlines: number; residents: number; cards: number
 const DRAWN = defineTask<void, Drawn>({
   name: "folkways.overlays-without-book.drawn", side: "client",
   source: javaTask({ imports: [
-    "io.github.izakyl.folkways.FolkwaysClientConfig",
-    "io.github.izakyl.folkways.front.client.ColonyHighlightState",
-    "io.github.izakyl.folkways.front.client.ColonyLookState",
-    "io.github.izakyl.folkways.front.engine.item.HeldBook",
+    "io.github.izakyl.folkways.core.FolkwaysClientConfig",
+    "io.github.izakyl.folkways.core.front.client.ColonyHighlightState",
+    "io.github.izakyl.folkways.core.front.client.ColonyLookState",
+    "io.github.izakyl.folkways.core.front.engine.item.HeldBook",
     "net.minecraft.client.Minecraft",
   ], body: `
-var inks = Class.forName("io.github.izakyl.folkways.front.client.WorldCards").getDeclaredField("INKS");
+var inks = Class.forName("io.github.izakyl.folkways.core.front.client.WorldCards").getDeclaredField("INKS");
 inks.setAccessible(true);
 return Map.of("zones", ColonyHighlightState.zones().size(), "outlines", ColonyHighlightState.outlinesDrawn(),
   "residents", ColonyLookState.residents().size(),
@@ -43,15 +43,15 @@ return Map.of("zones", ColonyHighlightState.zones().size(), "outlines", ColonyHi
 const ZONE = defineTask<{ player: string }, string>({
   name: "folkways.overlays-without-book.zone", side: "server",
   source: javaTask({ imports: [
-    "io.github.izakyl.folkways.front.engine.colony.ZoneDrafts",
-    "io.github.izakyl.folkways.front.engine.colony.ColonySettings",
-    "io.github.izakyl.folkways.front.engine.charter.CurrentColony",
+    "io.github.izakyl.folkways.core.front.engine.colony.ZoneDrafts",
+    "io.github.izakyl.folkways.core.front.engine.colony.ColonySettings",
+    "io.github.izakyl.folkways.core.front.engine.charter.CurrentColony",
     "net.minecraft.resources.ResourceLocation",
   ], body: `
 var player = ctx.server().getPlayerList().getPlayerByName(Args.of(ctx).string("player"));
 var colony = CurrentColony.of(player).orElseThrow();
 var at = player.blockPosition().below();
-return ZoneDrafts.zone(player.serverLevel(), colony, ResourceLocation.parse("folkways:farm"), at.offset(2, 0, 2),
+return ZoneDrafts.zone(player.serverLevel(), colony, ResourceLocation.parse("folkways_vanilla:farm"), at.offset(2, 0, 2),
   at.offset(5, 0, 5), ColonySettings.empty()).orElseThrow().id().toString();
 ` }),
 });

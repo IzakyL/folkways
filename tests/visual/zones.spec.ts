@@ -13,7 +13,7 @@ import { BUDGET } from "../shared/harness/budgets";
 import { commandPos, tryCommand } from "../shared/harness/bw-helpers";
 import { newRunId } from "../shared/harness/run-id";
 
-const BOOK_ITEM = "folkways:colony_book";
+const BOOK_ITEM = "folkways_core:colony_book";
 
 test("world rendering on camera", async ({}, testInfo) => {
   test.setTimeout(BUDGET.heavy);

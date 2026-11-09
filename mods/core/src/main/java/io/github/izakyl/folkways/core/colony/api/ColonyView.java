@@ -1,7 +1,7 @@
 package io.github.izakyl.folkways.core.colony.api;
 
 import io.github.izakyl.folkways.core.resident.api.Resident;
-import io.github.izakyl.folkways.effect.Effects;
+import io.github.izakyl.folkways.core.effect.Effects;
 import java.util.List;
 import java.util.Set;
 import net.minecraft.core.BlockPos;

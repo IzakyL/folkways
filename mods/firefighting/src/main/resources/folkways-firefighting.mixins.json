@@ -1,8 +1,0 @@
-{
-  "required": true,
-  "minVersion": "0.8.5",
-  "package": "io.github.izakyl.folkways.firefighting.mixin",
-  "compatibilityLevel": "JAVA_21",
-  "mixins": ["HydrantCabinetMixin"],
-  "injectors": { "defaultRequire": 1 }
-}

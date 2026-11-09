@@ -22,20 +22,15 @@ path = "build/libs/folkways-vanilla-*.jar"
 [mods.folkways_create]
 path = "build/libs/folkways-create-*.jar"
 
-[mods.folkways_modulargolems]
-path = "build/libs/folkways-modulargolems-*.jar"
+[mods.folkways_golems]
+path = "build/libs/folkways-golems-*.jar"
 
 # The optional Folkways extension is installed beside its native mod only by Cookery profiles.
 [mods.folkways_cookery]
 path = "build/libs/folkways-cookery-*.jar"
 target = []
 
-# Optional RTS input layer; installed explicitly by profiles that exercise it.
-[mods.folkways_rts]
-path = "build/libs/folkways-rts-neoforge-*.jar"
-target = []
 
-# Compiled against, and installed only by the cookery test and promo profiles.
 [mods.kaleidoscope_cookery]
 url = "https://cdn.modrinth.com/data/v17FatAc/versions/g8w0b2ly/kaleidoscopecookery-1.6.0-neoforge%2Bmc1.21.1.jar"
 sha512 = "b562f73395f70d39fb26d89ca62a5b5cebe7d66b11e8930217f0daf03fdcea617629728f55e4c8ced690406204c44462a8a568e5c15f05f5940274904ce0b77f"
@@ -48,8 +43,8 @@ sha512 = "2481f11727ee303004d2e849739651f63bc28493a79d2e6a784f45632fc92e27ce4a43
 target = []
 
 # Chisels & Bits bundles Scena and its API/core; the extracted jars are compile-only fixtures.
-[mods.folkways_chiselsandbits]
-path = "build/libs/folkways-chiselsandbits-*.jar"
+[mods.folkways_carving]
+path = "build/libs/folkways-carving-*.jar"
 target = []
 
 [mods.chiselsandbits]
@@ -236,8 +231,8 @@ target = []
 
 # Measures folkways itself, mixins included; off unless BLOCKWRIGHT_COVERAGE=1 (npm run test:coverage).
 [coverage]
-mods = ["folkways_core", "folkways_vanilla", "folkways_create", "folkways_modulargolems", "folkways_cookery"]
-sources = ["mods/core/src/main/java", "mods/vanilla/src/main/java", "mods/create/src/main/java", "mods/modulargolems/src/main/java", "mods/cookery/src/main/java"]
+mods = ["folkways_core", "folkways_vanilla", "folkways_create", "folkways_golems", "folkways_cookery"]
+sources = ["mods/core/src/main/java", "mods/vanilla/src/main/java", "mods/create/src/main/java", "mods/golems/src/main/java", "mods/cookery/src/main/java"]
 
 [profile.bench.neoforge]
 jvm_args = ["-Xmx3G"]
@@ -433,9 +428,9 @@ iris = { target = ["client"] }
 [profile.maids.mods]
 touhou_little_maid = { target = ["server", "client"] }
 
-# The optional RTS selection and command handler must be present for battle input tests.
+# RTS selection and commands are part of Vanilla.
 [profile.rts.mods]
-folkways_rts = { target = ["server", "client"] }
+folkways_vanilla = { target = ["server", "client"] }
 
 # The e2e pair with Shoulder Surfing Reloaded on the client, for the book's aim under its camera.
 [profile.shoulder.mods]
@@ -476,8 +471,8 @@ folkways_cookery = { target = ["server", "client"] }
 kaleidoscope_cookery = { target = ["server", "client"] }
 kaleidoscope_tavern = { target = ["server", "client"] }
 
-[mods.folkways_warfare]
-path = "build/libs/folkways-warfare-*.jar"
+[mods.folkways_firearms]
+path = "build/libs/folkways-firearms-*.jar"
 target = []
 
 [mods.superbwarfare]
@@ -491,7 +486,7 @@ sha512 = "b8c3942f4d33179edf3f102f3d870b99dd436f8b8236dbbd31aa51b888162c692cfd88
 target = []
 
 [profile.warfare.mods]
-folkways_warfare = { target = ["client", "server"] }
+folkways_firearms = { target = ["client", "server"] }
 superbwarfare = { target = ["client", "server"] }
 kotlinforforge = { target = ["client", "server"] }
 
@@ -500,17 +495,14 @@ url = "https://cdn.modrinth.com/data/OypNE65K/versions/62q6mB5Q/tacz-neoforge-1.
 sha512 = "7700ed99a080729c3aa21f9619e018fbe9e2303cfbcaa463175ee5170553a000b692bc4cfa2e8ce0778747eed34dcc0197fb5e4344bb258cff1ba90adc842642"
 target = []
 
-[mods.folkways_tacz]
-path = "build/libs/folkways-tacz-*.jar"
-target = []
 
 [profile.tacz.mods]
 tacz = { target = ["server", "client"] }
-folkways_tacz = { target = ["server", "client"] }
+folkways_firearms = { target = ["server", "client"] }
 
 [profile.tacz_models.mods]
 tacz = { target = ["server", "client"] }
-folkways_tacz = { target = ["server", "client"] }
+folkways_firearms = { target = ["server", "client"] }
 touhou_little_maid = { target = ["server", "client"] }
 
 [profile.weapon_poses.neoforge.client.display]
@@ -520,18 +512,13 @@ height = 720
 
 [profile.weapon_poses.mods]
 folkways_capture = { target = ["client"] }
-folkways_warfare = { target = ["server", "client"] }
+folkways_firearms = { target = ["server", "client"] }
 superbwarfare = { target = ["server", "client"] }
 kotlinforforge = { target = ["server", "client"] }
-folkways_tacz = { target = ["server", "client"] }
 tacz = { target = ["server", "client"] }
 
-# The firefighting extension is opt-in, beside the pinned addon and Create.
-[mods.folkways_firefighting]
-path = "build/libs/folkways-firefighting-*.jar"
-target = []
+# Create activates firefighting when the pinned addon is installed.
 
-# Optional native Epic Fight bridge, installed only in its integration profiles.
 [mods.folkways_epicfight]
 path = "build/libs/folkways-epicfight-*.jar"
 target = []
@@ -547,11 +534,11 @@ sha512 = "f0d4cb80163efd03f17c2791c235600cbadfca294f7d33d2b05256044239a449a3342e
 target = []
 
 [profile.firefighting.mods]
-folkways_firefighting = { target = ["server", "client"] }
+folkways_create = { target = ["server", "client"] }
 createfirefightingadd = { target = ["server", "client"] }
 
 [profile.firefighting_visuals.mods]
-folkways_firefighting = { target = ["server", "client"] }
+folkways_create = { target = ["server", "client"] }
 createfirefightingadd = { target = ["server", "client"] }
 sodium = { target = ["client"] }
 iris = { target = ["client"] }
@@ -582,7 +569,7 @@ account = { username = "EpicFightGuest", uuid = "00000000000000000000000000ef002
 epicfight = { target = ["server", "client"] }
 folkways_epicfight = { target = ["server", "client"] }
 
-# RTS input is opt-in for the combined Epic Fight acceptance scenarios.
+# RTS input is included in Vanilla for the combined Epic Fight acceptance scenarios.
 # Pairing and render evidence is test-only; the acceptance specs read it.
 [profile.epicfight-acceptance.neoforge]
 jvm_args = ["-Xmx2G", "-Dfolkways.epicfight.evidence=true"]
@@ -590,7 +577,7 @@ jvm_args = ["-Xmx2G", "-Dfolkways.epicfight.evidence=true"]
 [profile.epicfight-acceptance.mods]
 epicfight = { target = ["server", "client"] }
 folkways_epicfight = { target = ["server", "client"] }
-folkways_rts = { target = ["server", "client"] }
+folkways_vanilla = { target = ["server", "client"] }
 
 [mods.folkways_capture]
 path = "tests/promo/capture/build/libs/folkways-capture-neoforge-*.jar"
@@ -621,19 +608,18 @@ sodium = { target = ["client"] }
 iris = { target = ["client"] }
 sable = { target = ["server", "client"] }
 create-aeronautics = { target = ["server", "client"] }
-folkways_rts = { target = ["server", "client"] }
-folkways_warfare = { target = ["server", "client"] }
+folkways_vanilla = { target = ["server", "client"] }
+folkways_firearms = { target = ["server", "client"] }
 superbwarfare = { target = ["server", "client"] }
 kotlinforforge = { target = ["server", "client"] }
-folkways_tacz = { target = ["server", "client"] }
 tacz = { target = ["server", "client"] }
-folkways_firefighting = { target = ["server", "client"] }
+folkways_create = { target = ["server", "client"] }
 createfirefightingadd = { target = ["server", "client"] }
 folkways_capture = { target = ["client"] }
 
 # Review the RTS cards at both physical sizes on a GPU display large enough for the full-size shot.
 [profile.visual-rts.mods]
-folkways_rts = { target = ["server", "client"] }
+folkways_vanilla = { target = ["server", "client"] }
 
 [profile.visual-rts.neoforge.client]
 game_args = ["--width", "1920", "--height", "1080"]
@@ -644,11 +630,11 @@ device = "gpu"
 width = 1920
 height = 1080
 
-[profile.chiselsandbits.mods]
-folkways_chiselsandbits = { target = ["server", "client"] }
+[profile.carving.mods]
+folkways_carving = { target = ["server", "client"] }
 chiselsandbits = { target = ["server", "client"] }
 
-[profile.chiselsandbits.neoforge.client.display]
+[profile.carving.neoforge.client.display]
 device = "gpu"
 width = 1280
 height = 720
@@ -670,7 +656,7 @@ width = 1920
 height = 1080
 
 [profile.promo-candb.mods]
-folkways_chiselsandbits = { target = ["server", "client"] }
+folkways_carving = { target = ["server", "client"] }
 chiselsandbits = { target = ["server", "client"] }
 
 [profile.promo-candb-land.neoforge]
@@ -694,7 +680,7 @@ lithostitched = { target = ["server", "client"] }
 terralith = { target = ["server", "client"] }
 tectonic = { target = ["server", "client"] }
 
-folkways_chiselsandbits = { target = ["server", "client"] }
+folkways_carving = { target = ["server", "client"] }
 chiselsandbits = { target = ["server", "client"] }
 
 [mods.folkways_carts]
@@ -731,6 +717,6 @@ height = 1080
 [profile.promo-mounted.mods]
 sodium = { target = ["client"] }
 iris = { target = ["client"] }
-folkways_rts = { target = ["server", "client"] }
+folkways_vanilla = { target = ["server", "client"] }
 folkways_carts = { target = ["server", "client"] }
 astikorcartsredux = { target = ["server", "client"] }

@@ -3,7 +3,7 @@ package io.github.izakyl.folkways.core.item.api;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.DynamicOps;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
-import io.github.izakyl.folkways.base.persist.Reader;
+import io.github.izakyl.folkways.core.base.persist.Reader;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashSet;

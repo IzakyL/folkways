@@ -1,5 +1,6 @@
 import { drainActionBar, readActionBar } from "../ui/zone-receipt";
 import { boardActs, scrollCellIntoView, wheelCell, type BoardAct } from "../ui/site-panel";
+import { showVocationColumn } from "../ui/vocation-groups";
 import {
   input,
   defineTask,
@@ -83,8 +84,8 @@ export async function stockToolsForResidents(
 
 const PANEL_SCREEN = /ModularUIContainerScreen/;
 
-const RESIDENT_TYPE = "folkways:resident";
-const BOOK_ITEM = "folkways:colony_book";
+const RESIDENT_TYPE = "folkways_vanilla:resident";
+const BOOK_ITEM = "folkways_core:colony_book";
 const DEFAULT_FOOD = "minecraft:cooked_beef";
 const OPT_IN_ATTEMPTS = 4;
 const TICKS_PER_DAY = 24000;
@@ -225,7 +226,7 @@ export async function foundColonyFast(
   evidence.steps.push({ step: "createColony", via: "task", ...bind });
   if (!(await actsForColony(server, playerName))) {
     throw new Error(
-      `foundColonyFast: the task founded ${colonyId}, but ${playerName} has no folkways:current_colony `
+      `foundColonyFast: the task founded ${colonyId}, but ${playerName} has no folkways_core:current_colony `
         + `(task receipt ${JSON.stringify(bind)})`);
   }
   evidence.colonyId = colonyId;
@@ -297,7 +298,7 @@ export async function razeFoundingSet(server: MinecraftServer, origin: Vec, stag
 
 /** Whether the player has a colony they act for: the one any colony book in hand reaches. */
 export function actsForColony(server: MinecraftServer, playerName: string): Promise<boolean> {
-  return probe(server, `if data entity ${playerName} "neoforge:attachments"."folkways:current_colony"`);
+  return probe(server, `if data entity ${playerName} "neoforge:attachments"."folkways_core:current_colony"`);
 }
 
 export async function createColonyViaBook(server: MinecraftServer, client: MinecraftClient, playerName: string, standBlock: Vec,
@@ -511,6 +512,8 @@ export async function setVocationPriorityViaPanel(
     await waitForElement(client, { id: rowId }, { timeoutMs: 10_000 });
     // A trade's column may sit past the table's right edge, so it is only on the page until it is scrolled to.
     await waitForElementOnPage(client, cellId, 8_000);
+    // The table shows one column per vocation group until the vocation's group is opened.
+    steps.group = await showVocationColumn(server, client, "folkways.resident", vocation, cellId);
     steps.scrolled = await scrollCellIntoView(server, client, rowId, cellId);
     if ((target === 0) !== (current === 0)) {
       steps.toggle = await softly(() => clickElement(client, { id: cellId }));
@@ -647,7 +650,7 @@ async function selectorMiss(client: MinecraftClient, error: unknown, evidence: u
 }
 
 const SETTLERS_TAB = "folkways.page.person";
-const SETTLERS_BOARD = "folkways.person";
+const SETTLERS_BOARD = "folkways_vanilla.person";
 
 async function admitAct(
   server: MinecraftServer, client: MinecraftClient, attempts = 20,
@@ -743,7 +746,7 @@ export async function countResidents(server: MinecraftServer): Promise<number> {
 }
 
 export async function isColonyMember(server: MinecraftServer, target: Vec, stage: Stage = GROUND): Promise<boolean> {
-  if (await world.probe(server, `if data block ${commandPos(stage.at(target))} "neoforge:attachments"."folkways:colony_member"`)) return true;
+  if (await world.probe(server, `if data block ${commandPos(stage.at(target))} "neoforge:attachments"."folkways_core:colony_member"`)) return true;
   // Native points have no block entity to carry NBT. Read the actual public colony ledger.
   return (await runColonyTask(server, POINT_MEMBERSHIP, { target: stage.at(target) })).member === true;
 }

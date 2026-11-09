@@ -29,7 +29,7 @@ import { waitForElement, softly } from "../shared/harness/bw-helpers";
 import { newRunId } from "../shared/harness/run-id";
 import { twins, type Stage } from "../shared/harness/stage";
 
-const BOOK_ITEM = "folkways:colony_book";
+const BOOK_ITEM = "folkways_core:colony_book";
 
 const MARKED_SIZE = /^(\d+)x(\d+)x(\d+) marked/;
 

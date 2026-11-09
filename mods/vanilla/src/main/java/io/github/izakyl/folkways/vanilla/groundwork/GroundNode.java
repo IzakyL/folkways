@@ -1,0 +1,82 @@
+package io.github.izakyl.folkways.vanilla.groundwork;
+
+import io.github.izakyl.folkways.core.resident.api.RefusalKind;
+import io.github.izakyl.folkways.core.vocation.api.Vocation;
+import io.github.izakyl.folkways.core.work.api.Ending;
+import io.github.izakyl.folkways.core.work.api.Node;
+import io.github.izakyl.folkways.core.work.api.NodeSpec;
+import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.WorkGesture;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.work.api.Workload;
+import java.util.List;
+import java.util.Optional;
+import net.minecraft.core.BlockPos;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.state.BlockState;
+
+abstract class GroundNode implements Node {
+
+    private final NodeSpec spec;
+    private final Chores.Chore chore;
+
+    GroundNode(NodeSpec spec, Chores.Chore chore) {
+        this.spec = spec;
+        this.chore = chore;
+    }
+
+    static NodeSpec.Builder declare(Chores.Chore chore, Vocation by, Workload workload) {
+        Job job = chore.job();
+        return NodeSpec.of(chore.id(), GroundworkContent.ID, job.site(), job.footings(), workload)
+            .vocation(by)
+            .gesture(WorkGesture.SWING)
+            .focus(job.cell());
+    }
+
+    @Override
+    public final NodeSpec spec() {
+        return spec;
+    }
+
+    @Override
+    public final Optional<RefusalKind> planned(ServerLevel level) {
+        chore.tending().planned(chore);
+        return Optional.empty();
+    }
+
+    @Override
+    public final void ended(ServerLevel level, Ending how) {
+        chore.tending().ended(chore, how);
+    }
+
+    @Override
+    public boolean ready(ServerLevel level) {
+        return level.isLoaded(chore.job().cell());
+    }
+
+    @Override
+    public final Outcome commit(ServerLevel level, Worker who) {
+        Outcome done = work(level, who, chore.job());
+        chore.tending().made().record(spec, done, level.getGameTime());
+        return done;
+    }
+
+    abstract Outcome work(ServerLevel level, Worker who, Job job);
+
+    final Outcome refuse(GroundRefusal why) {
+        return Outcome.failed(why);
+    }
+
+    // Breaks the block as a hand with this tool would, and hands back what it drops.
+    static List<ItemStack> take(ServerLevel level, LivingEntity body, BlockPos cell, BlockState state, ItemStack tool) {
+        List<ItemStack> drops = Block.getDrops(state, level, cell, level.getBlockEntity(cell), body, tool);
+        if (!level.removeBlock(cell, false)) {
+            return List.of();
+        }
+        state.spawnAfterBreak(level, cell, tool, true);
+        return drops;
+    }
+}

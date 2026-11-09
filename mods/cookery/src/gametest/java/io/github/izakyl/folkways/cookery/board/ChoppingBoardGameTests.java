@@ -4,7 +4,7 @@ import com.github.ysbbbbbb.kaleidoscopecookery.blockentity.kitchen.ChoppingBoard
 import com.github.ysbbbbbb.kaleidoscopecookery.crafting.recipe.ChoppingBoardRecipe;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems;
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.cookery.CookeryContent;
 import io.github.izakyl.folkways.cookery.KitchenBookings;
 import io.github.izakyl.folkways.core.item.api.Containers;
@@ -27,8 +27,8 @@ import io.github.izakyl.folkways.core.work.support.Leaves;
 import io.github.izakyl.folkways.core.world.api.Realm;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.core.world.api.WorldSpaces;
-import io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig;
-import io.github.izakyl.folkways.plugins.person.PersonBody;
+import io.github.izakyl.folkways.vanilla.FolkwaysVanillaConfig;
+import io.github.izakyl.folkways.vanilla.person.PersonBody;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -63,7 +63,7 @@ import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
 @EventBusSubscriber(modid = "folkways_cookery", bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@GameTestHolder("folkways_cookery")
 @PrefixGameTestTemplate(false)
 public final class ChoppingBoardGameTests {
 
@@ -72,7 +72,7 @@ public final class ChoppingBoardGameTests {
         event.register(ChoppingBoardGameTests.class);
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void hardUrgesPreserveLoadingCutsAndExtraction(GameTestHelper helper) {
         try (Fixture fixture = new Fixture(helper)) {
             BoardWork work = fixture.plan(new ItemStack(ModItems.RAW_CUT_SMALL_MEATS.get()));
@@ -89,7 +89,7 @@ public final class ChoppingBoardGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void nonStrictBoardRecipesAcceptNamedComponentIngredients(GameTestHelper helper) {
         var ingredient =
             DataComponentIngredient.of(
@@ -101,7 +101,7 @@ public final class ChoppingBoardGameTests {
             1,
             ResourceLocation.withDefaultNamespace("paper"));
         var holder =
-            new RecipeHolder<>(ResourceLocation.fromNamespaceAndPath("folkways", "test/component_board"), recipe);
+            new RecipeHolder<>(ResourceLocation.fromNamespaceAndPath("folkways_cookery", "test/component_board"), recipe);
         var job = ChoppingBoardWorkshops.Job.of(holder).orElseThrow();
         ItemStack named = ingredient.getItems()[0].copy();
         named.set(DataComponents.CUSTOM_NAME, Component.literal("Medicine"));
@@ -111,7 +111,7 @@ public final class ChoppingBoardGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void plannedMeatDoesNotDoubleCountButTheUnrequestedBoneStillNeedsRoom(GameTestHelper helper) {
         try (Fixture fixture = new Fixture(helper)) {
             BoardWork work = fixture.plan(new ItemStack(ModItems.RAW_CUT_SMALL_MEATS.get()));
@@ -132,7 +132,7 @@ public final class ChoppingBoardGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void secondaryProductCanBeRequestedByProduction(GameTestHelper helper) {
         try (Fixture fixture = new Fixture(helper)) {
             BoardWork work = fixture.plan(new ItemStack(Items.BONE));
@@ -144,7 +144,7 @@ public final class ChoppingBoardGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void playerIngredientsAndProductsAreNeverAdopted(GameTestHelper helper) {
         try (Fixture fixture = new Fixture(helper)) {
             ItemStack chicken = new ItemStack(Items.CHICKEN);
@@ -162,7 +162,7 @@ public final class ChoppingBoardGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void losingTheKnifeBeforeStartingLeavesTheIngredientInThePack(GameTestHelper helper) {
         try (Fixture fixture = new Fixture(helper)) {
             BoardWork work = fixture.plan(new ItemStack(ModItems.RAW_CUT_SMALL_MEATS.get()));
@@ -175,7 +175,7 @@ public final class ChoppingBoardGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void workAtOneBoardRunsInTheBookedOrder(GameTestHelper helper) {
         try (Fixture fixture = new Fixture(helper)) {
             fixture.pack.getItem(0).setCount(2);
@@ -192,7 +192,7 @@ public final class ChoppingBoardGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void interruptedCuttingSurvivesASaveAndResumesWithoutDrawingAnotherIngredient(GameTestHelper helper) {
         try (Fixture fixture = new Fixture(helper)) {
             Component name = Component.literal("Reserved chicken");
@@ -223,7 +223,7 @@ public final class ChoppingBoardGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void playerChangesInvalidateOwnershipWithoutClearingTheBoard(GameTestHelper helper) {
         try (Fixture fixture = new Fixture(helper)) {
             BoardWork work = fixture.plan(new ItemStack(ModItems.RAW_CUT_SMALL_MEATS.get()));
@@ -245,7 +245,7 @@ public final class ChoppingBoardGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void newDeliveryNeverCollectsUnrelatedItemsAlreadyBesideTheBoard(GameTestHelper helper) {
         try (Fixture fixture = new Fixture(helper)) {
             ItemEntity playerDrop = new ItemEntity(fixture.level, fixture.pos.getX() + 0.5,
@@ -261,7 +261,7 @@ public final class ChoppingBoardGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void anotherColonyCannotRecoverAnOwnedBatch(GameTestHelper helper) {
         try (Fixture fixture = new Fixture(helper)) {
             BoardWork work = fixture.plan(new ItemStack(ModItems.RAW_CUT_SMALL_MEATS.get()));
@@ -274,7 +274,7 @@ public final class ChoppingBoardGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void anInteractionThrowingAfterInsertionNeverRefundsTheInsertedIngredient(GameTestHelper helper) {
         try (Fixture fixture = new Fixture(helper)) {
             ChoppingBoardBlockEntity throwing = new ChoppingBoardBlockEntity(fixture.pos,
@@ -301,7 +301,7 @@ public final class ChoppingBoardGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void removingTheBoardFailsItsTaskWithoutRefundingAlreadySpentInput(GameTestHelper helper) {
         try (Fixture fixture = new Fixture(helper)) {
             BoardWork work = fixture.plan(new ItemStack(ModItems.RAW_CUT_SMALL_MEATS.get()));
@@ -315,7 +315,7 @@ public final class ChoppingBoardGameTests {
         }
         helper.succeed();
     }
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void anExceptionAfterTheBoardEmptiesStillDeliversAllCapturedProductsOnce(GameTestHelper helper) {
         try (Fixture fixture = new Fixture(helper)) {
             ChoppingBoardBlockEntity throwing = new ChoppingBoardBlockEntity(fixture.pos,
@@ -342,7 +342,7 @@ public final class ChoppingBoardGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void anExceptionBetweenTwoProductsRollsBackOnlyTheUncompletedTakeOut(GameTestHelper helper) {
         try (Fixture fixture = new Fixture(helper)) {
             ChoppingBoardBlockEntity throwing = new ChoppingBoardBlockEntity(fixture.pos,
@@ -381,7 +381,7 @@ public final class ChoppingBoardGameTests {
         }
         helper.succeed();
     }
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void aPlayerFillingTheIdleBoardRejectsOnlyTheCurrentTurn(GameTestHelper helper) {
         try (Fixture fixture = new Fixture(helper)) {
             BoardWork first = fixture.plan(new ItemStack(ModItems.RAW_CUT_SMALL_MEATS.get()));
@@ -401,7 +401,7 @@ public final class ChoppingBoardGameTests {
     }
 
     @SuppressWarnings("unchecked")
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void aRecipeDisabledAfterPlanningCannotConsumeItsIngredient(GameTestHelper helper) {
         try (Fixture fixture = new Fixture(helper)) {
             BoardWork work = fixture.plan(new ItemStack(ModItems.RAW_CUT_SMALL_MEATS.get()));
@@ -422,7 +422,7 @@ public final class ChoppingBoardGameTests {
         }
         helper.succeed();
     }
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void choppingUsesStorageFootingsOnARotatedMovingFrame(GameTestHelper helper) {
         try (Fixture fixture = new Fixture(helper)) {
             UUID frameId = UUID.randomUUID();
@@ -448,7 +448,7 @@ public final class ChoppingBoardGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void aMovingFrameCannotLeaveItsOldResidentOperatingRemotely(GameTestHelper helper) {
         try (Fixture fixture = new Fixture(helper)) {
             UUID frameId = UUID.randomUUID();
@@ -473,7 +473,7 @@ public final class ChoppingBoardGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void withdrawingAPlannedBoardStopsItsPreparedPutEvenAfterTheSameIdIsReadmitted(GameTestHelper helper) {
         try (Fixture fixture = new Fixture(helper)) {
             BoardWork work = fixture.plan(new ItemStack(ModItems.RAW_CUT_SMALL_MEATS.get()));
@@ -494,7 +494,7 @@ public final class ChoppingBoardGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void readmittingTheSameBoardAndTurnIdCannotReviveAnOldPut(GameTestHelper helper) {
         try (Fixture fixture = new Fixture(helper)) {
             BoardWork old = fixture.plan(new ItemStack(ModItems.RAW_CUT_SMALL_MEATS.get()));
@@ -538,7 +538,7 @@ public final class ChoppingBoardGameTests {
             }
         });
     }
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void nativeKnifeChanceWearsOneRealPointOrNoneWithoutGenericDoubleWear(GameTestHelper helper) {
         for (boolean wears : List.of(false, true)) {
             try (Fixture fixture = new Fixture(helper, wears ? new BlockPos(4, 1, 4) : new BlockPos(1, 1, 1))) {
@@ -556,7 +556,7 @@ public final class ChoppingBoardGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void failedKnifeHitDoesNotWearAndLastDurabilityDoesNotRefundItsIngredient(GameTestHelper helper) {
         try (Fixture fixture = new Fixture(helper)) {
             BoardWork work = fixture.plan(new ItemStack(ModItems.RAW_CUT_SMALL_MEATS.get()));

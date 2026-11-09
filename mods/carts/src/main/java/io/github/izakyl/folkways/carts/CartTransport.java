@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.carts;
 
-import io.github.izakyl.folkways.FolkwaysConfig;
+import io.github.izakyl.folkways.core.FolkwaysConfig;
 import io.github.izakyl.folkways.core.item.api.Goods;
 import io.github.izakyl.folkways.core.resident.api.RefusalKind;
 import io.github.izakyl.folkways.core.transport.api.BatchRequest;
@@ -32,8 +32,8 @@ import net.minecraft.resources.ResourceLocation;
 // whether or not it carries anything, so a batch waits for the cart as for a train.
 record CartTransport(CartLines lines, List<Running> running) implements TransportMode {
 
-    static final ResourceLocation ID = ResourceLocation.fromNamespaceAndPath("folkways", "cart_line");
-    private static final ResourceLocation CELLS = ResourceLocation.fromNamespaceAndPath("folkways", "cart_cells");
+    static final ResourceLocation ID = ResourceLocation.fromNamespaceAndPath("folkways_carts", "cart_line");
+    private static final ResourceLocation CELLS = ResourceLocation.fromNamespaceAndPath("folkways_carts", "cart_cells");
 
     // A line whose cart stands ready, and how many of the cart's cells no batch has taken.
     record Running(Line line, UUID cart, int free) {

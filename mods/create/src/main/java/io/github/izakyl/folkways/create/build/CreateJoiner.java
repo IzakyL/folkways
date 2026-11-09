@@ -8,7 +8,7 @@ import com.simibubi.create.content.trains.track.TrackBlockItem;
 import com.simibubi.create.content.trains.track.TrackPlacement;
 import com.simibubi.create.content.trains.track.TrackPropagator;
 import io.github.izakyl.folkways.create.CreateMod;
-import io.github.izakyl.folkways.plugins.build.Joints;
+import io.github.izakyl.folkways.vanilla.build.Joints;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -32,7 +32,7 @@ import net.neoforged.neoforge.common.util.FakePlayerFactory;
 final class CreateJoiner implements Joints.Joiner {
 
     private static final GameProfile HANDS =
-        new GameProfile(UUID.nameUUIDFromBytes("folkways:track-layer".getBytes()), "[Folkways track layer]");
+        new GameProfile(UUID.nameUUIDFromBytes("folkways_create:track-layer".getBytes()), "[Folkways track layer]");
 
     private static final Supplier<Item> GIRDER = () ->
         BuiltInRegistries.ITEM.get(ResourceLocation.fromNamespaceAndPath(CreateMod.ID, "metal_girder"));

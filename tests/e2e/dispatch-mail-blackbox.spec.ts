@@ -39,7 +39,7 @@ test("a parcel the colony sends by train waits in its postbox for the train book
       config: CONFIG_PATH,
       server: { trace: tracePath("e2e", "dispatch-mail-server"), instance: seededServer(`dispatch-mail-server-${runId}`) },
       client: { trace: tracePath("e2e", "dispatch-mail-client"), instance: `dispatch-mail-client-${runId}` },
-      snapshot: () => ({ containers: target ? [target] : [], entityTypes: ["folkways:resident"] }),
+      snapshot: () => ({ containers: target ? [target] : [], entityTypes: ["folkways_vanilla:resident"] }),
     });
     ({ server, client } = pair);
 
@@ -251,7 +251,7 @@ const HANDED_OVER = defineTask<Record<string, any>, Record<string, any>>({
   source: javaTask({
     imports: [
       "io.github.izakyl.folkways.core.colony.api.Claimed",
-      "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
+      "io.github.izakyl.folkways.core.front.engine.colony.ColonyGround",
       "io.github.izakyl.folkways.create.dispatch.DispatchContent",
       "io.github.izakyl.folkways.create.dispatch.DispatchPresence",
       "net.minecraft.core.BlockPos",
@@ -285,7 +285,7 @@ const MAIL_STATE = defineTask<Record<string, any>, Record<string, any>>({
       "com.simibubi.create.Create",
       "com.simibubi.create.content.logistics.box.PackageItem",
       "com.simibubi.create.content.logistics.packagePort.PackagePortBlockEntity",
-      "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
+      "io.github.izakyl.folkways.core.front.engine.colony.ColonyGround",
       "io.github.izakyl.folkways.create.dispatch.DispatchContent",
       "io.github.izakyl.folkways.create.dispatch.MailGate",
       "net.minecraft.core.BlockPos",

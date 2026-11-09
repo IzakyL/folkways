@@ -370,7 +370,7 @@ const PLACE_CREW = defineTask<Record<string, any>, any>({
   source: javaTask({
     imports: ["net.minecraft.core.registries.BuiltInRegistries", "net.minecraft.resources.ResourceLocation",
       "net.minecraft.world.item.ItemStack", "net.minecraft.world.item.Items",
-      "io.github.izakyl.folkways.plugins.person.ResidentEntity"],
+      "io.github.izakyl.folkways.vanilla.person.ResidentEntity"],
     body: `
 var level = ctx.server().overworld();
 var out = new ArrayList<Object>();
@@ -396,8 +396,8 @@ const DRAW_LINE = defineTask<Record<string, any>, any>({
   source: javaTask({
     imports: [
       "io.github.izakyl.folkways.core.api.colony.Colonies",
-      "io.github.izakyl.folkways.front.engine.colony.ColonyFront",
-      "io.github.izakyl.folkways.front.engine.colony.ColonySettings",
+      "io.github.izakyl.folkways.core.front.engine.colony.ColonyFront",
+      "io.github.izakyl.folkways.core.front.engine.colony.ColonySettings",
       "io.github.izakyl.folkways.carts.FolkwaysCartsMod",
       "net.minecraft.core.BlockPos",
       "net.minecraft.resources.ResourceLocation",
@@ -413,7 +413,7 @@ for (var raw : a.list("points")) {
 }
 var path = ColonyFront.of(colony).addPath(level, FolkwaysCartsMod.LINE, points, ColonySettings.empty()
     .with("cart", new ColonySettings.Value.Choice(ResourceLocation.parse("astikorcartsredux:supply_cart")))
-    .with("round", new ColonySettings.Value.Choice(ResourceLocation.parse("folkways:line_open"))))
+    .with("round", new ColonySettings.Value.Choice(ResourceLocation.parse("folkways_carts:line_open"))))
     .orElseThrow(() -> new IllegalStateException("line refused"));
 return Map.of("path", path.id().toString(), "points", points.size());`,
   }),
@@ -430,7 +430,7 @@ const CART = defineTask<Record<string, any>, any>({
       "net.minecraft.core.registries.BuiltInRegistries",
       "net.minecraft.world.entity.Mob",
       "net.minecraft.world.item.Items",
-      "io.github.izakyl.folkways.plugins.person.ResidentEntity",
+      "io.github.izakyl.folkways.vanilla.person.ResidentEntity",
     ],
     body: `
 var a = Args.of(ctx);
@@ -558,8 +558,8 @@ const BAKERY = defineTask<Record<string, any>, any>({
       "io.github.izakyl.folkways.core.api.colony.Colonies",
       "io.github.izakyl.folkways.core.api.terms.Containers",
       "io.github.izakyl.folkways.core.api.terms.Reach",
-      "io.github.izakyl.folkways.plugins.wares.WaresContent",
-      "io.github.izakyl.folkways.plugins.person.ResidentEntity",
+      "io.github.izakyl.folkways.vanilla.wares.WaresContent",
+      "io.github.izakyl.folkways.vanilla.person.ResidentEntity",
       "net.minecraft.core.BlockPos",
       "net.minecraft.core.component.DataComponents",
       "net.minecraft.world.Container",
@@ -710,12 +710,12 @@ const CARD_VIEW = defineTask<Record<string, never>, CardView>({
   source: javaTask({
     imports: [
       "net.minecraft.client.Minecraft",
-      "io.github.izakyl.folkways.front.engine.item.HeldBook",
-      "io.github.izakyl.folkways.front.client.ColonyLookState",
+      "io.github.izakyl.folkways.core.front.engine.item.HeldBook",
+      "io.github.izakyl.folkways.core.front.client.ColonyLookState",
       "io.github.izakyl.folkways.carts.CartsCards",
       "io.github.izakyl.folkways.carts.CartContents",
       "com.jusipat.astikorcartsredux.entity.AbstractCargoCart",
-      "io.github.izakyl.folkways.front.api.notice.Line",
+      "io.github.izakyl.folkways.core.front.api.notice.Line",
     ],
     body: `
 var mc = Minecraft.getInstance();

@@ -16,7 +16,7 @@ type Shot = Awaited<ReturnType<typeof media.screenshot>>;
 type Vec = { x: number; y: number; z: number };
 const MARKED = defineTask<undefined, { marked: boolean; drafting: boolean; sneaking: boolean; min?: Vec; max?: Vec }>({
   name: "folkways.water-selection.marked", side: "client", source: javaTask({ body: `
-var type=Class.forName("io.github.izakyl.folkways.front.client.ZoneSelection");
+var type=Class.forName("io.github.izakyl.folkways.core.front.client.ZoneSelection");
 var marked=(java.util.Optional<?>)type.getMethod("marked").invoke(null);
 boolean drafting=(Boolean)type.getMethod("drafting").invoke(null);
 boolean sneaking=((net.minecraft.client.Minecraft)ctx.client()).player.isShiftKeyDown();
@@ -50,7 +50,7 @@ for (const stage of twins()) test(stage.title("water selection: the actual marke
     }
     await world.command(server, `fill ${block({ ...plot.min, y: origin.y - 3 })} ${block({ ...plot.max, y: origin.y - 1 })} minecraft:smooth_stone`);
     await world.command(server, `setblock ${block(origin)} minecraft:smooth_stone`);
-    await world.command(server, `item replace entity ${player} weapon.mainhand with folkways:colony_book`);
+    await world.command(server, `item replace entity ${player} weapon.mainhand with folkways_core:colony_book`);
     await world.command(server, `tp ${player} ${origin.x - 3.5} ${origin.y + 0.2} ${origin.z + 0.5}`);
     await tick.sprint(server, 5);
     evidence.founding = await createColonyViaBook(server, client, player, origin, stage);

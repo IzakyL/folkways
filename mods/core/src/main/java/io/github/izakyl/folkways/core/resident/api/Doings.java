@@ -55,6 +55,6 @@ public final class Doings {
     }
 
     private static ResourceLocation named(String path) {
-        return ResourceLocation.fromNamespaceAndPath("folkways", path);
+        return ResourceLocation.fromNamespaceAndPath("folkways_core", path);
     }
 }

@@ -78,7 +78,7 @@ final class ConductorSeats {
     }
 
     private UUID idOf(Cab cab, String step) {
-        return UUID.nameUUIDFromBytes(("folkways:rail/" + train + "/" + cab.seat() + "/"
+        return UUID.nameUUIDFromBytes(("folkways_create:rail/" + train + "/" + cab.seat() + "/"
                 + rides.getOrDefault(cab.seat(), 0) + "/" + step)
             .getBytes(StandardCharsets.UTF_8));
     }

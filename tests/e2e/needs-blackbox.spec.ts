@@ -13,7 +13,7 @@ import { commandPos, tryCommand } from "../shared/harness/bw-helpers";
 import { newRunId } from "../shared/harness/run-id";
 import { twins } from "../shared/harness/stage";
 
-const RESIDENT_TYPE = "folkways:resident";
+const RESIDENT_TYPE = "folkways_vanilla:resident";
 const ITEM_TYPE = "minecraft:item";
 const FOOD_ITEM = "minecraft:bread";
 const RESIDENT_COUNT = 3;
@@ -68,7 +68,7 @@ for (const stage of twins()) test(stage.title("a resident eats out of his own pa
     await tryCommand(
       server,
       `execute as @e[type=${RESIDENT_TYPE}] run data merge entity @s `
-      + `{"neoforge:attachments":{"folkways:body_state":{Pack:{Items:[`
+      + `{"neoforge:attachments":{"folkways_core:body_state":{Pack:{Items:[`
       + `{Slot:0b,Stack:{id:"${FOOD_ITEM}",count:${RATION}}}]}}}}`,
     );
 

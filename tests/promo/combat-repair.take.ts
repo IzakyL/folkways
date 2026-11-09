@@ -291,7 +291,7 @@ net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(
             }
         }
         if (Bodies.of(actor).orElseThrow().doing().map(d -> d.what().toString())
-            .orElse("").equals("folkways:repairing")) {
+            .orElse("").equals("folkways_vanilla:repairing")) {
             data.putInt("repairTicks", data.getInt("repairTicks") + 1);
         }
         previous[0] = missing;
@@ -340,7 +340,7 @@ overlay.setAccessible(true);
 var time = net.minecraft.client.gui.Gui.class.getDeclaredField("overlayMessageTime");
 time.setAccessible(true);
 var message = (net.minecraft.network.chat.Component) overlay.get(mc.gui);
-var bound = io.github.izakyl.folkways.front.engine.item.HeldBook.bound(mc.player);
+var bound = io.github.izakyl.folkways.core.front.engine.item.HeldBook.bound(mc.player);
 var visible = mc.getToasts().getClass().getDeclaredField("visible");
 visible.setAccessible(true);
 return Map.of("overlay", time.getInt(mc.gui) > 0 && message != null ? message.getString() : "",
@@ -370,7 +370,7 @@ const REPAIR_DIAGNOSTIC = defineTask<Record<string, any>, any>({
   source: javaTask({
     imports: [
       "io.github.izakyl.folkways.core.colony.api.Colonies",
-      "io.github.izakyl.folkways.plugins.damagecontrol.DamageControlContent",
+      "io.github.izakyl.folkways.vanilla.damagecontrol.DamageControlContent",
       "io.github.izakyl.folkways.core.world.api.Footing",
       "io.github.izakyl.folkways.core.world.api.Reach",
       "io.github.izakyl.folkways.core.work.api.Node",

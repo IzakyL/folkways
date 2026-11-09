@@ -12,10 +12,10 @@ import { waitForResourceReload } from "../shared/harness/resource-reload";
 import { MODEL_ASSETS, clientHasModelFile, placeServerModel, readServerLibrary, reloadServerModels } from "../shared/ui/model-folder";
 import { mustCommand } from "../shared/ui/world-ui";
 
-const LOOK = "folkways:model/steve/tartaric_acid";
-const GEOMETRY = "folkways:geo/resident_models/steve.geo.json";
-const TEXTURE = "folkways:textures/entity/resident_models/steve/tartaric_acid.png";
-const GEOMETRY_FILE = "assets/folkways/geo/resident_models/steve.geo.json";
+const LOOK = "folkways_vanilla:model/steve/tartaric_acid";
+const GEOMETRY = "folkways_vanilla:geo/resident_models/steve.geo.json";
+const TEXTURE = "folkways_vanilla:textures/entity/resident_models/steve/tartaric_acid.png";
+const GEOMETRY_FILE = "assets/folkways_vanilla/geo/resident_models/steve.geo.json";
 type Scene = { colony: string; resident: string; monster: string };
 type ServerState = { patch: boolean; nativeTarget: boolean; attackAnimation: boolean; hitByResident: boolean;
   targetHealth: number; targetMaxHealth: number; look: string; armor: string[]; session: boolean };
@@ -50,14 +50,14 @@ for (const scenario of ["startup", "online", "disconnect"] as const) test(scenar
       const pack = "world/datapacks/folkways-e2e-models";
       seeded.write(`${pack}/pack.mcmeta`, JSON.stringify({ pack: {
         pack_format: 48, description: "Folkways Minecraft 1.21.1 GEO acceptance" } }));
-      seeded.copy(path.join(MODEL_ASSETS, "steve"), `${pack}/data/folkways/folkways/resident_model/steve`);
-      seeded.write(`${pack}/data/folkways/folkways/resident_model/steve/folkways.json`, JSON.stringify({ weight: 400 }));
+      seeded.copy(path.join(MODEL_ASSETS, "steve"), `${pack}/data/folkways_vanilla/folkways/resident_model/steve`);
+      seeded.write(`${pack}/data/folkways_vanilla/folkways/resident_model/steve/folkways.json`, JSON.stringify({ weight: 400 }));
       serverOptions = seeded.launch;
       evidence.push({ step: "real data pack installed before dedicated-server startup", value: { instance: seeded.instance, pack } });
     }
     pair = await launchPair({ config: "blockwright.toml#epicfight",
       server: serverOptions, client: { instance: `epicfight-geo-${onlineServerReload ? "online" : "startup"}-client-${run}` },
-      snapshot: { entityTypes: ["folkways:resident", "minecraft:zombie"] } });
+      snapshot: { entityTypes: ["folkways_vanilla:resident", "minecraft:zombie"] } });
     const player = await waitForGroundedPlayer(pair.server);
     const origin = { x: Math.round(player.pos.x) + 4, y: Math.round(player.pos.y), z: Math.round(player.pos.z) + 4 };
     await flat(pair, origin);
@@ -375,7 +375,7 @@ function assertGeo(draw: Draw) {
   expect(draw.mode, "a fallback skin or vanilla biped cannot satisfy GEO acceptance").toBe("converted_geo");
   expect(draw.mesh).toMatch(/^folkways_epicfight:resident_geo\//);
   expect(draw.texture).toBe(TEXTURE);
-  expect(draw.sourceRenderer).toBe("io.github.izakyl.folkways.plugins.person.ResidentGeoBackend");
+  expect(draw.sourceRenderer).toBe("io.github.izakyl.folkways.vanilla.person.ResidentGeoBackend");
   expect(draw.entryScale).toBeGreaterThan(0);
   expect(draw.meshIdentity).toBeGreaterThan(0);
 }
@@ -416,18 +416,18 @@ const SERVER_IMPORTS = ["java.util.UUID", "java.util.List", "java.util.Map", "ja
   "net.minecraft.world.entity.ai.attributes.Attributes", "net.minecraft.world.item.ItemStack", "net.minecraft.world.item.Items",
   "net.minecraft.world.level.block.Blocks", "net.minecraft.core.registries.BuiltInRegistries", "io.github.izakyl.folkways.core.colony.api.Colonies",
   "io.github.izakyl.folkways.core.colony.api.Claimed", "io.github.izakyl.folkways.core.world.api.WorldPos",
-  "io.github.izakyl.folkways.plugins.person.PersonBody", "io.github.izakyl.folkways.plugins.person.PersonContent",
-  "io.github.izakyl.folkways.plugins.person.ResidentEntity", "io.github.izakyl.folkways.plugins.person.look.ResidentLooks",
-  "io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfiles", "io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfile",
-  "io.github.izakyl.folkways.plugins.combat.weapon.LoadoutRegistry",
-  "io.github.izakyl.folkways.plugins.patrol.PatrolContent", "io.github.izakyl.folkways.plugins.patrol.PatrolStaffing",
+  "io.github.izakyl.folkways.vanilla.person.PersonBody", "io.github.izakyl.folkways.vanilla.person.PersonContent",
+  "io.github.izakyl.folkways.vanilla.person.ResidentEntity", "io.github.izakyl.folkways.vanilla.person.look.ResidentLooks",
+  "io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutProfiles", "io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutProfile",
+  "io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutRegistry",
+  "io.github.izakyl.folkways.vanilla.patrol.PatrolContent", "io.github.izakyl.folkways.vanilla.patrol.PatrolStaffing",
   "io.github.izakyl.folkways.core.item.api.ItemSpec", "io.github.izakyl.folkways.epicfight.ResidentEpicFightPatch",
   "yesman.epicfight.api.animation.types.AttackAnimation"];
 const SETUP = defineTask<Vec, Scene>({ name: "folkways.epicfight.geo.real-fixture", side: "server", source: javaTask({ imports: SERVER_IMPORTS, body: `
 var a=Args.of(ctx);var level=((MinecraftServer)ctx.server()).overworld();var colony=Colonies.mint(level.getServer());
 int x=(int)a.integer("x"),y=(int)a.integer("y"),z=(int)a.integer("z");
 for(int dx=-4;dx<15;dx++)for(int dz=-5;dz<12;dz++){level.setBlockAndUpdate(new BlockPos(x+dx,y-1,z+dz),Blocks.STONE.defaultBlockState());for(int dy=0;dy<4;dy++)level.setBlockAndUpdate(new BlockPos(x+dx,y+dy,z+dz),Blocks.AIR.defaultBlockState());}
-var look=ResourceLocation.parse("folkways:model/steve/tartaric_acid");
+var look=ResourceLocation.parse("folkways_vanilla:model/steve/tartaric_acid");
 if(!ResidentLooks.pool(level.registryAccess()).containsKey(look))throw new IllegalStateException("synced Steve look absent from server pool: "+look);
 var body=PersonBody.RESIDENT.get().create(level);body.moveTo(x+2.5,y,z+6.5,-90,0);
 body.setLookId(ResourceKey.create(ResidentLooks.REGISTRY,look));
@@ -468,8 +468,8 @@ var target=level.getEntity(UUID.fromString(a.string("monster")));if(target!=null
 Colonies.of(level.getServer(),UUID.fromString(a.string("colony"))).ifPresent(c->c.raze());return true;` }) });
 const DRAW = defineTask<Scene, Draw>({ name: "folkways.epicfight.geo.production-draw", side: "client", source: javaTask({ imports: [
   "java.util.List", "java.util.LinkedHashMap", "net.minecraft.client.Minecraft", "net.minecraft.world.entity.EquipmentSlot",
-  "net.minecraft.core.registries.BuiltInRegistries", "io.github.izakyl.folkways.plugins.person.ResidentEntity",
-  "io.github.izakyl.folkways.plugins.person.look.ResidentLook", "io.github.izakyl.folkways.plugins.person.look.ResidentLooks",
+  "net.minecraft.core.registries.BuiltInRegistries", "io.github.izakyl.folkways.vanilla.person.ResidentEntity",
+  "io.github.izakyl.folkways.vanilla.person.look.ResidentLook", "io.github.izakyl.folkways.vanilla.person.look.ResidentLooks",
   "io.github.izakyl.folkways.epicfight.ResidentEpicFightPatch", "io.github.izakyl.folkways.epicfight.client.ResidentGeoMeshes",
   "io.github.izakyl.folkways.epicfight.client.ResidentRenderEvidence"], body: `
 var a=Args.of(ctx);var mc=Minecraft.getInstance();var out=new LinkedHashMap<String,Object>();out.put("present",false);out.put("overlay",mc.getOverlay()!=null);out.put("screen",mc.screen==null?"":mc.screen.getClass().getSimpleName());

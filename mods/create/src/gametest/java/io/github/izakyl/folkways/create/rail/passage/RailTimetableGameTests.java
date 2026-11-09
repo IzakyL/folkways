@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.create.rail.passage;
 
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.travel.api.Hop;
 import io.github.izakyl.folkways.core.work.api.Stances;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
@@ -30,7 +30,7 @@ import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
 @EventBusSubscriber(modid = FolkwaysCreateMod.ID, bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@GameTestHolder("folkways_create")
 @PrefixGameTestTemplate(false)
 public final class RailTimetableGameTests {
 
@@ -48,7 +48,7 @@ public final class RailTimetableGameTests {
 
     private record Told(String what, List<Itinerary.Call> calls, boolean loops, List<TransitNetwork.Stop> expected) { }
 
-    @GameTest(template = TEMPLATE, timeoutTicks = 100)
+    @GameTest(template = TEMPLATE, templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void theStopsStillToComeAreOnlyThoseTheTrainCanBeSeenToMake(GameTestHelper helper) {
         List<Told> cases = List.of(
             new Told("having left A on a line that does not loop, only B is still to come",
@@ -71,7 +71,7 @@ public final class RailTimetableGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = TEMPLATE, timeoutTicks = 100)
+    @GameTest(template = TEMPLATE, templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void theTimetableIsReadFromWhenItWasTakenAndCountedFromTheNextDeparture(GameTestHelper helper) {
         TransitSnapshot.Line seen = line(List.of("A", "B"), "A",
             new TransitNetwork.Stop("A", 0, 20), new TransitNetwork.Stop("B", 120, 140));
@@ -89,7 +89,7 @@ public final class RailTimetableGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = TEMPLATE, timeoutTicks = 100)
+    @GameTest(template = TEMPLATE, templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void aRiderCatchesTheFirstRunStillAtThePlatform(GameTestHelper helper) {
         Timetable once = new Timetable(List.of("A", "B"), new long[] {0, 100}, new long[] {20, 120});
         helper.assertTrue(once.arriveBy("A", "B", 20).equals(OptionalLong.of(100)),
@@ -116,7 +116,7 @@ public final class RailTimetableGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = TEMPLATE, timeoutTicks = 100)
+    @GameTest(template = TEMPLATE, templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void aRideThroughAStopIsBoardedWhereItGotOnForTheRunItCaught(GameTestHelper helper) {
         Timetable runs = new Timetable(List.of("A", "B", "C", "B", "A"),
             new long[] {0, 100, 200, 300, 400}, new long[] {20, 120, 220, 320, 420});

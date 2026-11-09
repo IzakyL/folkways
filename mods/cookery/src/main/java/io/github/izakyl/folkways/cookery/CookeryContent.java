@@ -6,15 +6,15 @@ import io.github.izakyl.folkways.cookery.seeds.SeedPresence;
 import io.github.izakyl.folkways.core.extension.api.Declaring;
 import io.github.izakyl.folkways.core.item.api.Goods;
 import io.github.izakyl.folkways.core.item.api.ItemFilter;
-import io.github.izakyl.folkways.front.api.Delegation;
-import io.github.izakyl.folkways.front.api.Enrollment;
-import io.github.izakyl.folkways.front.api.Fronts;
-import io.github.izakyl.folkways.front.api.Registering;
-import io.github.izakyl.folkways.front.api.Schema;
-import io.github.izakyl.folkways.front.api.Shape;
-import io.github.izakyl.folkways.front.api.panel.PageKind;
-import io.github.izakyl.folkways.plugins.compost.SeedSupport;
-import io.github.izakyl.folkways.plugins.wares.WaresContent;
+import io.github.izakyl.folkways.core.front.api.Delegation;
+import io.github.izakyl.folkways.core.front.api.Enrollment;
+import io.github.izakyl.folkways.core.front.api.Fronts;
+import io.github.izakyl.folkways.core.front.api.Registering;
+import io.github.izakyl.folkways.core.front.api.Schema;
+import io.github.izakyl.folkways.core.front.api.Shape;
+import io.github.izakyl.folkways.core.front.api.panel.PageKind;
+import io.github.izakyl.folkways.vanilla.compost.SeedSupport;
+import io.github.izakyl.folkways.vanilla.wares.WaresContent;
 import java.util.List;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.state.BlockState;
@@ -41,7 +41,7 @@ public final class CookeryContent {
     }
 
     public static void declare(Declaring event) {
-        io.github.izakyl.folkways.plugins.compost.SeedReserves.register(List.of(
+        io.github.izakyl.folkways.vanilla.compost.SeedReserves.register(List.of(
             com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems.WILD_RICE_SEED.get(),
             com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems.RICE_SEED.get()));
         io.github.izakyl.folkways.cookery.dining.CookeryDiningTables.register();
@@ -90,13 +90,13 @@ public final class CookeryContent {
 
     public static void enroll(Registering event) {
         event.facing(ID, colony -> colony.service(ID, CookeryPresence.class)
-            .map(state -> (io.github.izakyl.folkways.front.api.Facing) state));
+            .map(state -> (io.github.izakyl.folkways.core.front.api.Facing) state));
         event.enrollment(ID, new Enrollment(List.of(
             new Delegation(STATION, new Shape.Block(state -> !state.is(net.minecraft.world.level.block.Blocks.COMPOSTER)
                 && !state.is(com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks.STOVE.get()) && station(state), KitchenStations::anchor)),
             new Delegation(STOVE, new Shape.Point(state -> state.is(com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks.STOVE.get())),
                 ResourceLocation.fromNamespaceAndPath("kaleidoscope_cookery", "stove")),
-            new Delegation(SeedPresence.GRASS, new Shape.Volume(io.github.izakyl.folkways.plugins.FolkwaysVanillaConfig.maxFarmCells()),
+            new Delegation(SeedPresence.GRASS, new Shape.Volume(io.github.izakyl.folkways.vanilla.FolkwaysVanillaConfig.maxFarmCells()),
                 new Schema(List.of(new Schema.Setting.Flag(SeedPresence.RESTORE_GRASS,
                     "folkways.settings.restore_grass", ResourceLocation.withDefaultNamespace("bone_meal"), true))),
                 ResourceLocation.fromNamespaceAndPath("kaleidoscope_cookery", "wild_rice"))),
@@ -113,6 +113,6 @@ public final class CookeryContent {
     }
 
     private static ResourceLocation id(String path) {
-        return ResourceLocation.fromNamespaceAndPath("folkways", path);
+        return ResourceLocation.fromNamespaceAndPath("folkways_cookery", path);
     }
 }

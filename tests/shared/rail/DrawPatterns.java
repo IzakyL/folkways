@@ -1,7 +1,7 @@
-import io.github.izakyl.folkways.plugins.build.draft.*;
-import io.github.izakyl.folkways.plugins.build.Joints;
-import io.github.izakyl.folkways.front.api.Schema;
-import io.github.izakyl.folkways.front.api.Settings;
+import io.github.izakyl.folkways.vanilla.build.draft.*;
+import io.github.izakyl.folkways.vanilla.build.Joints;
+import io.github.izakyl.folkways.core.front.api.Schema;
+import io.github.izakyl.folkways.core.front.api.Settings;
 import io.github.izakyl.folkways.core.item.api.ItemFilter;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import net.minecraft.commands.arguments.blocks.BlockStateParser;

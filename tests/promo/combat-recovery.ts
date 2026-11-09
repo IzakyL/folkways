@@ -3,10 +3,10 @@ import { defineTask, javaTask } from "@izakyl/blockwright-minecraft";
 const IMPORTS = [
   "java.util.Random",
   "io.github.izakyl.folkways.core.colony.api.Colonies",
-  "io.github.izakyl.folkways.front.engine.colony.ZoneDrafts",
-  "io.github.izakyl.folkways.front.engine.colony.ColonySettings",
-  "io.github.izakyl.folkways.front.engine.colony.ColonyFront",
-  "io.github.izakyl.folkways.plugins.damagecontrol.DamageControlContent",
+  "io.github.izakyl.folkways.core.front.engine.colony.ZoneDrafts",
+  "io.github.izakyl.folkways.core.front.engine.colony.ColonySettings",
+  "io.github.izakyl.folkways.core.front.engine.colony.ColonyFront",
+  "io.github.izakyl.folkways.vanilla.damagecontrol.DamageControlContent",
   "io.github.izakyl.folkways.core.resident.api.Bodies",
   "net.minecraft.core.BlockPos",
   "net.minecraft.world.level.block.Blocks",
@@ -368,12 +368,12 @@ export const DAMAGE_HUD = defineTask<void, any>({
   name: "folkways.promo.recovery-client-evidence",
   side: "client",
   source: javaTask({
-    imports: ["io.github.izakyl.folkways.front.api.ui.OverheadTools", "net.minecraft.client.Minecraft"],
+    imports: ["io.github.izakyl.folkways.core.front.api.ui.OverheadTools", "net.minecraft.client.Minecraft"],
     body: `
 var mc = Minecraft.getInstance();
 var active = OverheadTools.active().orElse(null);
 boolean damage = active != null && active.getClass().getSimpleName().equals("DamageControlTool");
-var aimed = Class.forName("io.github.izakyl.folkways.front.client.ToolOverlay").getDeclaredMethod("aimed");
+var aimed = Class.forName("io.github.izakyl.folkways.core.front.client.ToolOverlay").getDeclaredMethod("aimed");
 aimed.setAccessible(true);
 var hovered = (Optional<?>) aimed.invoke(null);
 int spray = 0;
@@ -386,7 +386,7 @@ for (var queue : ((Map<?, ?>) particles.get(mc.particleEngine)).values()) {
         }
     }
 }
-var connections = Class.forName("io.github.izakyl.folkways.firefighting.ResidentSprayVisuals")
+var connections = Class.forName("io.github.izakyl.folkways.create.firefighting.ResidentSprayVisuals")
     .getDeclaredField("ACTIVE");
 connections.setAccessible(true);
 return Map.of("active", damage && mc.screen != null && mc.screen.getClass().getSimpleName().equals("OverheadScreen"),
@@ -462,12 +462,12 @@ export const DAMAGE_PANEL_INPUT = defineTask<void, any>({
   name: "folkways.promo.damage-panel-input",
   side: "client",
   source: javaTask({
-    imports: ["io.github.izakyl.folkways.front.engine.item.HeldBook"],
+    imports: ["io.github.izakyl.folkways.core.front.engine.item.HeldBook"],
     body: `
 var mc = net.minecraft.client.Minecraft.getInstance();
-var aimed = Class.forName("io.github.izakyl.folkways.front.client.ToolOverlay").getDeclaredMethod("aimed");
+var aimed = Class.forName("io.github.izakyl.folkways.core.front.client.ToolOverlay").getDeclaredMethod("aimed");
 aimed.setAccessible(true);
-var mark = (Optional<io.github.izakyl.folkways.front.api.ui.OverheadTools.Mark>) aimed.invoke(null);
+var mark = (Optional<io.github.izakyl.folkways.core.front.api.ui.OverheadTools.Mark>) aimed.invoke(null);
 return Map.of("creative", mc.gameMode.getPlayerMode() == net.minecraft.world.level.GameType.CREATIVE,
     "bookColony", HeldBook.bound(mc.player).map(book -> book.colonyId().toString()).orElse(""),
     "aimedZone", mark.map(one -> one.area().toString()).orElse(""));`,

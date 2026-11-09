@@ -29,7 +29,7 @@ test("bits gothic cloister gallery", async ({}, testInfo) => {
   let pair: E2EPair | undefined;
   try {
     pair = await launchPair({
-      config: "blockwright.toml#chiselsandbits",
+      config: "blockwright.toml#carving",
       server: { trace: tracePath("pattern", "gothic-server"),
         instance: seededOffThreadServer(`gothic-server-${runId}`), startFrozen: false },
       client: { trace: tracePath("pattern", "gothic-client"), instance: `gothic-client-${runId}` },

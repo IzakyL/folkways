@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.core.colony.internal;
 
-import io.github.izakyl.folkways.base.task.Cleanup;
+import io.github.izakyl.folkways.core.base.task.Cleanup;
 import io.github.izakyl.folkways.core.colony.api.Closing;
 import java.util.ArrayList;
 import java.util.List;

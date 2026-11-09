@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.core.resident.internal;
 
-import io.github.izakyl.folkways.base.persist.Reader;
+import io.github.izakyl.folkways.core.base.persist.Reader;
 import io.github.izakyl.folkways.core.resident.api.Balk;
 import io.github.izakyl.folkways.core.resident.api.Body;
 import io.github.izakyl.folkways.core.colony.api.Equipment;
@@ -8,7 +8,7 @@ import io.github.izakyl.folkways.core.resident.api.BodyStateAccess;
 import io.github.izakyl.folkways.core.resident.api.Doing;
 import io.github.izakyl.folkways.core.resident.api.Pack;
 import io.github.izakyl.folkways.core.resident.api.ResidentKind;
-import io.github.izakyl.folkways.effect.perk.Perks;
+import io.github.izakyl.folkways.core.effect.perk.Perks;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;

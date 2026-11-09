@@ -2,14 +2,14 @@ package io.github.izakyl.folkways.create.elevator;
 
 import com.simibubi.create.content.contraptions.elevator.ElevatorPulleyBlockEntity;
 import com.simibubi.create.content.contraptions.glue.SuperGlueEntity;
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.resident.api.Going;
 import io.github.izakyl.folkways.core.world.api.Footing;
 import io.github.izakyl.folkways.core.world.api.Keepouts;
 import io.github.izakyl.folkways.core.world.api.Structures;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.create.FolkwaysCreateMod;
-import io.github.izakyl.folkways.plugins.person.PersonBody;
+import io.github.izakyl.folkways.vanilla.person.PersonBody;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
@@ -33,7 +33,7 @@ import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
 @EventBusSubscriber(modid = FolkwaysCreateMod.ID, bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@GameTestHolder("folkways_create")
 @PrefixGameTestTemplate(false)
 public final class CreateElevatorGameTests {
     @SubscribeEvent public static void register(RegisterGameTestsEvent event) { event.register(CreateElevatorGameTests.class); }
@@ -98,7 +98,7 @@ public final class CreateElevatorGameTests {
             + " ticking=" + ((net.minecraft.server.level.ServerLevel) pulley.getLevel()).isPositionEntityTicking(pulley.getBlockPos()) + " bodyTicks=" + f.body.tickCount;
     }
 
-    @GameTest(template = "empty", timeoutTicks = 200)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 200)
     public static void ordinaryWalkingAvoidsTheWholeShaftWhileOnlyThisStoppedDeckCanBeEntered(GameTestHelper helper) {
         var level = helper.getLevel();
         var f = fixture(helper);
@@ -144,7 +144,7 @@ public final class CreateElevatorGameTests {
         });
     }
 
-    @GameTest(template = "empty", timeoutTicks = 1200)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 1200)
     public static void twoUnreservedMobsShareTheCabinAndRestoreItsPhysicalCapacityAfterWalkingOut(GameTestHelper helper) {
         var level = helper.getLevel();
         var f = fixture(helper);
@@ -248,7 +248,7 @@ public final class CreateElevatorGameTests {
         });
     }
 
-    @GameTest(template = "empty", timeoutTicks = 1200)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 1200)
     public static void aSpecifiedFartherExitWinsOverTheNearestDisconnectedLanding(GameTestHelper helper) {
         var level = helper.getLevel();
         var f = fixture(helper);
@@ -298,7 +298,7 @@ public final class CreateElevatorGameTests {
         });
     }
 
-    @GameTest(template = "empty", timeoutTicks = 1200)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 1200)
     public static void aResidentCallsBoardsAndLeavesARealElevatorThroughTheController(GameTestHelper helper) {
         var level = helper.getLevel();
         var f = fixture(helper);

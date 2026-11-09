@@ -82,13 +82,13 @@ ordering = "AFTER"
 side = "CLIENT"
 
 [[mixins]]
-config = "folkways.mixins.json"
+config = "folkways-core.mixins.json"
 
 [[mixins]]
-config = "folkways-optional.mixins.json"
+config = "folkways-core-optional.mixins.json"
 
 [[mixins]]
-config = "folkways-front.mixins.json"
+config = "folkways-core-front.mixins.json"
 
 [[mixins]]
-config = "folkways-desk.mixins.json"
+config = "folkways-core-desk.mixins.json"

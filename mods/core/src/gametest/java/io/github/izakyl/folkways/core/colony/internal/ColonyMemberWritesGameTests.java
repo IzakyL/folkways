@@ -1,11 +1,11 @@
 package io.github.izakyl.folkways.core.colony.internal;
 
-import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.base.persist.Reader;
-import io.github.izakyl.folkways.base.persist.upgrade.DataVersion;
-import io.github.izakyl.folkways.base.persist.upgrade.Surface;
-import io.github.izakyl.folkways.base.persist.upgrade.Upgrades;
-import io.github.izakyl.folkways.base.persist.Writer;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
+import io.github.izakyl.folkways.core.base.persist.Reader;
+import io.github.izakyl.folkways.core.base.persist.upgrade.DataVersion;
+import io.github.izakyl.folkways.core.base.persist.upgrade.Surface;
+import io.github.izakyl.folkways.core.base.persist.upgrade.Upgrades;
+import io.github.izakyl.folkways.core.base.persist.Writer;
 import io.github.izakyl.folkways.core.colony.api.ClaimRelease;
 import io.github.izakyl.folkways.core.colony.api.Claimed;
 import io.github.izakyl.folkways.core.colony.api.Colonies;
@@ -30,17 +30,17 @@ import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
-@EventBusSubscriber(modid = FolkwaysMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@EventBusSubscriber(modid = FolkwaysCoreMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
+@GameTestHolder(FolkwaysCoreMod.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class ColonyMemberWritesGameTests {
-    private static final ResourceLocation OWNER = ResourceLocation.fromNamespaceAndPath("folkways", "test/changed_site");
+    private static final ResourceLocation OWNER = ResourceLocation.fromNamespaceAndPath("folkways_core", "test/changed_site");
 
     static {
         PointSites.register(OWNER, (level, cell) -> level.getBlockState(cell).is(Blocks.COMPOSTER));
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void colonySaveRejectsUnsupportedDataVersions(GameTestHelper helper) {
         var tag = new net.minecraft.nbt.CompoundTag();
         for (int version : List.of(DataVersion.BASELINE - 1, DataVersion.CURRENT + 1)) {
@@ -56,7 +56,7 @@ public final class ColonyMemberWritesGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void rejectedRegistryCannotBeEditedOrSaved(GameTestHelper helper) {
         var tag = new net.minecraft.nbt.CompoundTag();
         tag.putInt("schemaVersion", DataVersion.BASELINE - 1);
@@ -80,7 +80,7 @@ public final class ColonyMemberWritesGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void unreadableColonyRowsSealTheWholeRegistry(GameTestHelper helper) {
         var provider = helper.getLevel().registryAccess();
         for (String missing : List.of("colonyId", "claims", "keeps")) {
@@ -110,7 +110,7 @@ public final class ColonyMemberWritesGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void malformedClaimShapesSealTheWholeRegistry(GameTestHelper helper) {
         var at = WorldPos.of(helper.getLevel(), helper.absolutePos(new BlockPos(1, 1, 1)));
         Claims claims = new Claims(UUID.randomUUID());
@@ -156,7 +156,7 @@ public final class ColonyMemberWritesGameTests {
         event.register(ColonyMemberWritesGameTests.class);
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void demolishedBlocksAndPointsLeaveOnTheNextTickWithoutLosingNeighboursOrAreas(GameTestHelper helper) {
         var level = helper.getLevel();
         var colony = Colonies.mint(level.getServer());
@@ -209,7 +209,7 @@ public final class ColonyMemberWritesGameTests {
         });
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void changedUnloadedSitesRemainHeldWithoutLoadingTheirChunks(GameTestHelper helper) {
         var level = helper.getLevel();
         var colony = Colonies.mint(level.getServer());
@@ -233,7 +233,7 @@ public final class ColonyMemberWritesGameTests {
         });
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void largeEditsFallBackToAReconcileInsteadOfLosingPendingRemovals(GameTestHelper helper) {
         var level = helper.getLevel();
         var colony = Colonies.mint(level.getServer());

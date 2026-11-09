@@ -1,7 +1,7 @@
 package io.github.izakyl.folkways.create.dispatch;
 
-import io.github.izakyl.folkways.base.persist.Reader;
-import io.github.izakyl.folkways.base.persist.Writer;
+import io.github.izakyl.folkways.core.base.persist.Reader;
+import io.github.izakyl.folkways.core.base.persist.Writer;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;

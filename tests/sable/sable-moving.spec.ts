@@ -36,7 +36,7 @@ test("a colony aboard a Sable ship keeps everyone aboard and its work going whil
       client: { trace: tracePath("sable", "sable-moving-client"), instance: `sable-moving-client-${runId}` },
       snapshot: () => ({
         containers: stage.structure ? [source, target].map((chest) => chest && stage.at(chest)) : [],
-        entityTypes: ["folkways:resident"],
+        entityTypes: ["folkways_vanilla:resident"],
       }),
     });
     const { server, client } = pair;

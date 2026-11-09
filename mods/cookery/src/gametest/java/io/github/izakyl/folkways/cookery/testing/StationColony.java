@@ -11,7 +11,7 @@ import io.github.izakyl.folkways.core.plan.api.Grown;
 import io.github.izakyl.folkways.core.testing.Proxies;
 import io.github.izakyl.folkways.core.work.api.Ending;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
-import io.github.izakyl.folkways.effect.Effects;
+import io.github.izakyl.folkways.core.effect.Effects;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;

@@ -18,14 +18,14 @@ test("TACZ colony gunfire reaches a real target and skins, Geo and maid resident
       config: "blockwright.toml#tacz_models",
       server: { instance: `tacz-server-${run}`, startFrozen: false },
       client: { instance: `tacz-client-${run}` },
-      snapshot: { entityTypes: ["folkways:resident", "minecraft:zombie", "tacz:bullet"] },
+      snapshot: { entityTypes: ["folkways_vanilla:resident", "minecraft:zombie", "tacz:bullet"] },
     });
     const grounded = await waitForGroundedPlayer(pair.server);
     await world.command(pair.server, "gamerule doMobSpawning false");
     await world.command(pair.server, "time set noon");
     await placeServerModel(pair.server, path.join(MODEL_ASSETS, "default_boy"), "default_boy");
     await reloadServerModels(pair.server);
-    await waitForModelsOnClient(pair.client, "assets/folkways/geo/resident_models/default_boy.geo.json");
+    await waitForModelsOnClient(pair.client, "assets/folkways_vanilla/geo/resident_models/default_boy.geo.json");
     scene = await pair.server.run(SETUP, { player: grounded.name });
     await expect.poll(async () => pair!.server.run(READ_DAMAGE, scene!), { timeout: 30_000 }).toBeLessThan(1000);
     await expect.poll(async () => (await pair!.client.run(READ_POSES, scene!)).length, { timeout: 30_000 }).toBe(3);
@@ -46,15 +46,15 @@ const IMPORTS = [
   "net.minecraft.world.phys.Vec3", "net.minecraft.world.level.block.Blocks",
   "com.tacz.guns.api.item.IGun", "com.tacz.guns.api.item.IAmmo", "com.tacz.guns.api.item.gun.FireMode", "com.tacz.guns.init.ModItems",
   "io.github.izakyl.folkways.core.colony.api.Colonies", "io.github.izakyl.folkways.core.colony.api.Claimed",
-  "io.github.izakyl.folkways.core.world.api.WorldSpaces", "io.github.izakyl.folkways.plugins.person.PersonBody",
-  "io.github.izakyl.folkways.plugins.person.PersonContent", "io.github.izakyl.folkways.plugins.person.ResidentEntity",
-  "io.github.izakyl.folkways.plugins.person.look.ResidentLooks", "io.github.izakyl.folkways.plugins.person.look.MaidLooks",
-  "io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfiles",
-  "io.github.izakyl.folkways.plugins.combat.weapon.LoadoutProfile",
-  "io.github.izakyl.folkways.plugins.combat.weapon.LoadoutRegistry",
+  "io.github.izakyl.folkways.core.world.api.WorldSpaces", "io.github.izakyl.folkways.vanilla.person.PersonBody",
+  "io.github.izakyl.folkways.vanilla.person.PersonContent", "io.github.izakyl.folkways.vanilla.person.ResidentEntity",
+  "io.github.izakyl.folkways.vanilla.person.look.ResidentLooks", "io.github.izakyl.folkways.vanilla.person.look.MaidLooks",
+  "io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutProfiles",
+  "io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutProfile",
+  "io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutRegistry",
   "io.github.izakyl.folkways.core.world.api.WorldPos",
-  "io.github.izakyl.folkways.plugins.patrol.SentryPosts",
-  "io.github.izakyl.folkways.plugins.patrol.PatrolStaffing",
+  "io.github.izakyl.folkways.vanilla.patrol.SentryPosts",
+  "io.github.izakyl.folkways.vanilla.patrol.PatrolStaffing",
 ];
 const SETUP = defineTask<{ player: string }, Scene>({
   name: "folkways.tacz.setup", side: "server", source: javaTask({ imports: IMPORTS, body: `
@@ -69,8 +69,8 @@ var colony=Colonies.mint(server);var ids=new ArrayList<String>();
 var maid=MaidLooks.entries().keySet().stream().sorted().findFirst().orElseThrow();
 for(int n=0;n<3;n++){
  var body=PersonBody.RESIDENT.get().create(level);body.moveTo(origin.getX()+.5,origin.getY(),origin.getZ()+n*3+.5);
- var look=n==0?ResourceLocation.parse("folkways:steve_wide"):
-  n==1?ResourceLocation.parse("folkways:model/default_boy/blue"):maid;
+ var look=n==0?ResourceLocation.parse("folkways_vanilla:steve_wide"):
+  n==1?ResourceLocation.parse("folkways_vanilla:model/default_boy/blue"):maid;
  body.setLookId(ResourceKey.create(ResidentLooks.REGISTRY,look));
  level.addFreshEntity(body);colony.hold(PersonContent.ID,Claimed.Entity.of(body)).orElseThrow();body.joinColony(colony.id());
  ItemStack actual=new ItemStack(ModItems.MODERN_KINETIC_GUN.get());IGun gun=(IGun)actual.getItem();
@@ -89,20 +89,20 @@ for(int n=0;n<3;n++){
  ids.add(body.getUUID().toString());
  var target=EntityType.ZOMBIE.create(level);target.setNoAi(true);target.setItemSlot(EquipmentSlot.HEAD,new ItemStack(Items.CARVED_PUMPKIN));
  target.getAttribute(Attributes.MAX_HEALTH).setBaseValue(1000);target.setHealth(1000);
- target.moveTo(body.getX()+8,body.getY(),body.getZ());target.addTag("folkways_tacz_test");level.addFreshEntity(target);
+ target.moveTo(body.getX()+8,body.getY(),body.getZ());target.addTag("folkways_firearms_tacz_test");level.addFreshEntity(target);
 }
 player.teleportTo(origin.getX()+3,origin.getY(),origin.getZ()-5);player.setYRot(0);player.setXRot(10);
 return Map.of("residents",ids,"colony",colony.id().toString(),"player",player.getGameProfile().getName());
 ` }) });
 const READ_DAMAGE = defineTask<Scene, number>({ name: "folkways.tacz.damage", side: "server", source: javaTask({ imports: IMPORTS, body: `
 var level=((MinecraftServer)ctx.server()).overworld();
-return level.getEntities(EntityType.ZOMBIE,e->e.getTags().contains("folkways_tacz_test")).stream().mapToDouble(e->e.getHealth()).min().orElse(1000);
+return level.getEntities(EntityType.ZOMBIE,e->e.getTags().contains("folkways_firearms_tacz_test")).stream().mapToDouble(e->e.getHealth()).min().orElse(1000);
 ` }) });
 const READ_POSES = defineTask<Scene, Array<{ appearance: string; armed: boolean; aiming: boolean }>>({
   name: "folkways.tacz.poses", side: "client", source: javaTask({ imports: [
-    "net.minecraft.client.Minecraft", "io.github.izakyl.folkways.plugins.person.ResidentEntity",
-    "io.github.izakyl.folkways.plugins.person.ResidentWeaponPoses", "io.github.izakyl.folkways.plugins.person.look.ResidentLook",
-    "io.github.izakyl.folkways.plugins.person.look.ResidentLooks", "io.github.izakyl.folkways.plugins.person.look.MaidLooks",
+    "net.minecraft.client.Minecraft", "io.github.izakyl.folkways.vanilla.person.ResidentEntity",
+    "io.github.izakyl.folkways.vanilla.person.ResidentWeaponPoses", "io.github.izakyl.folkways.vanilla.person.look.ResidentLook",
+    "io.github.izakyl.folkways.vanilla.person.look.ResidentLooks", "io.github.izakyl.folkways.vanilla.person.look.MaidLooks",
     "com.tacz.guns.api.item.IGun",
   ], body: `
 var client=(Minecraft)ctx.client();var ids=Args.of(ctx).strings("residents");var rows=new ArrayList<Map<String,Object>>();
@@ -117,6 +117,6 @@ return rows;
 const CLEANUP = defineTask<Scene, boolean>({ name: "folkways.tacz.cleanup", side: "server", source: javaTask({ imports: IMPORTS, body: `
 var a=Args.of(ctx);var server=(MinecraftServer)ctx.server();var level=server.overworld();
 for(String id:a.strings("residents")){var entity=level.getEntity(UUID.fromString(id));if(entity!=null)entity.discard();}
-level.getEntities(EntityType.ZOMBIE,e->e.getTags().contains("folkways_tacz_test")).forEach(e->e.discard());
+level.getEntities(EntityType.ZOMBIE,e->e.getTags().contains("folkways_firearms_tacz_test")).forEach(e->e.discard());
 Colonies.of(server,UUID.fromString(a.string("colony"))).ifPresent(c->c.raze());return true;
 ` }) });

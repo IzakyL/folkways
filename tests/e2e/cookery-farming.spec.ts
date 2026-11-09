@@ -24,7 +24,7 @@ const PANICLE = KCC + "rice_panicle";
 const HAT = KCC + "straw_hat";
 const WHEAT_SEED = "minecraft:wheat_seeds";
 const BONE_MEAL = "minecraft:bone_meal";
-const RESIDENT = "folkways:resident";
+const RESIDENT = "folkways_vanilla:resident";
 const ITEM = "minecraft:item";
 const GRASS_SEEDS = ["tomato_seed", "lettuce_seed", "chili_seed", "tea_seed"].map((id) => KCC + id);
 const PROTECTED_WHEAT = 128;
@@ -230,7 +230,7 @@ async function editClothing(server: MinecraftServer, client: MinecraftClient, pl
   await scrollElementIntoView(client, { id: "folkways.page.cookery" });
   await clickElement(client, { id: "folkways.page.cookery" });
   await settlePanel(server, client);
-  const edits = await boardActs(client, "edit", "folkways.cookery");
+  const edits = await boardActs(client, "edit", "folkways_cookery.cookery");
   expect(edits.length, "the actual kitchen page exposes hat, outfit and clothing settings").toBe(3);
   const edit = edits[setting]!;
   await scrollElementIntoView(client, { id: edit.id });
@@ -253,12 +253,12 @@ async function markSeedGrass(server: MinecraftServer, client: MinecraftClient, p
   await aimAndWorldLeftClick(server, client, player, layout.grass.min, stage);
   await aimAndWorldLeftClick(server, client, player, layout.grass.max, stage);
   await openBookPage(server, client, player, stand, stage);
-  await clickElement(client, { id: "folkways.zoneconfig.kind.folkways.seed_grass" });
+  await clickElement(client, { id: "folkways.zoneconfig.kind.folkways_cookery.seed_grass" });
   await settlePanel(server, client);
   await clickElement(client, { id: "folkways.zoneconfig.confirm" });
   await expect.poll(async () => { await tick.sprint(server, 3); return zoneCount(server, registry); }, { timeout: 8_000 }).toBe(before + 1);
   await screen.dismiss(client);
-  expect(await zoneKindAt(server, registry, before)).toBe("folkways:seed_grass");
+  expect(await zoneKindAt(server, registry, before)).toBe("folkways_cookery:seed_grass");
   expect(await zoneCellsAt(server, registry, before)).toBe(225);
   expect(await zoneFlagSettingAt(server, registry, "restore_grass", before)).toBe(true);
   return { index: before, cells: 225, restoreGrass: true };
@@ -291,7 +291,7 @@ const READ_FARM = defineTask<{ rice: Vec; composter: Vec; min: Vec; max: Vec }, 
   source: javaTask({
     imports: ["net.minecraft.core.BlockPos", "net.minecraft.world.level.block.Blocks", "net.minecraft.world.level.block.ComposterBlock",
       "net.minecraft.world.entity.EquipmentSlot", "net.minecraft.world.item.Items", "io.github.izakyl.folkways.core.colony.api.Colonies",
-      "io.github.izakyl.folkways.core.resident.api.Bodies", "io.github.izakyl.folkways.front.api.Fronts",
+      "io.github.izakyl.folkways.core.resident.api.Bodies", "io.github.izakyl.folkways.core.front.api.Fronts",
       "io.github.izakyl.folkways.cookery.CookeryContent", "io.github.izakyl.folkways.cookery.seeds.SeedPresence",
       "com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems", "com.github.ysbbbbbb.kaleidoscopecookery.init.tag.TagMod"],
     members: `private static BlockPos pos(Object raw) {
@@ -351,7 +351,7 @@ async function inventory(server: MinecraftServer, stage: Stage, containers: Vec[
   for (const entity of sample.entities) {
     const nbt = entity.nbt as Record<string, any> | undefined;
     if (entity.type === RESIDENT) {
-      const pack = nbt?.["neoforge:attachments"]?.["folkways:body_state"]?.Pack;
+      const pack = nbt?.["neoforge:attachments"]?.["folkways_core:body_state"]?.Pack;
       expect(Array.isArray(pack?.Items), "actual resident pack must be readable").toBe(true);
       for (const entry of pack.Items) add(entry.Stack);
       expect(Array.isArray(nbt?.ArmorItems), "native equipment slots must be readable").toBe(true);

@@ -17,15 +17,15 @@ const GROW = defineTask<{ uuid: string }, { ok: boolean }>({
   source: javaTask({
     imports: ["net.minecraft.server.MinecraftServer", "net.minecraft.resources.ResourceLocation", "net.minecraft.util.RandomSource",
       "io.github.izakyl.folkways.core.resident.api.Body", "io.github.izakyl.folkways.core.colony.api.Colonies",
-      "io.github.izakyl.folkways.plugins.person.living.LivingContent", "io.github.izakyl.folkways.front.api.Facing"],
+      "io.github.izakyl.folkways.vanilla.person.living.LivingContent", "io.github.izakyl.folkways.core.front.api.Facing"],
     body: `
 var level = ((MinecraftServer)ctx.server()).overworld();
 var body = (Body)level.getEntity(UUID.fromString(Args.of(ctx).string("uuid")));
 var perks = body.perks();
 var add = perks.getClass().getDeclaredMethod("addXp", ResourceLocation.class, int.class, RandomSource.class);
 add.setAccessible(true);
-add.invoke(perks, ResourceLocation.parse("folkways:building"), 1120, RandomSource.create(17));
-add.invoke(perks, ResourceLocation.parse("folkways:farming"), 200, RandomSource.create(19));
+add.invoke(perks, ResourceLocation.parse("folkways_vanilla:building"), 1120, RandomSource.create(17));
+add.invoke(perks, ResourceLocation.parse("folkways_vanilla:farming"), 200, RandomSource.create(19));
 var colony = Colonies.of(level.getServer(), body.colonyId().orElseThrow()).orElseThrow();
 var living = colony.service(LivingContent.ID, Facing.class).orElseThrow();
 var find = living.getClass().getDeclaredMethod("mood", UUID.class);

@@ -3,9 +3,9 @@ package io.github.izakyl.folkways.create.rail;
 import io.github.izakyl.folkways.core.resident.api.Gait;
 import io.github.izakyl.folkways.create.CreateMod;
 import io.github.izakyl.folkways.create.rail.domain.RailContent;
-import io.github.izakyl.folkways.front.api.ponder.PonderScenery;
-import io.github.izakyl.folkways.front.api.ponder.Scenes;
-import io.github.izakyl.folkways.plugins.person.PersonBody;
+import io.github.izakyl.folkways.core.front.api.ponder.PonderScenery;
+import io.github.izakyl.folkways.core.front.api.ponder.Scenes;
+import io.github.izakyl.folkways.vanilla.person.PersonBody;
 import java.util.List;
 import net.createmod.catnip.math.Pointing;
 import net.createmod.ponder.api.PonderPalette;
@@ -46,7 +46,7 @@ public final class RailScene {
     public static void declare(FMLClientSetupEvent event) {
         event.enqueueWork(() -> Scenes.folder(RailContent.ID, "folkways.page.rail",
             ResourceLocation.withDefaultNamespace("minecart"),
-            Scenes.scene("rail", RailScene::program)));
+            Scenes.scene("folkways_create", "rail", RailScene::program)));
     }
 
     public static void program(SceneBuilder scene, SceneBuildingUtil util) {

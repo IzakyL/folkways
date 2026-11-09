@@ -22,7 +22,7 @@ import { BUDGET } from "../shared/harness/budgets";
 import { frames, safeAction, safeScreen, screenName, screenOpen, tryCommand, clickUnverified, softly } from "../shared/harness/bw-helpers";
 import { newRunId } from "../shared/harness/run-id";
 
-const BOOK_ITEM = "folkways:colony_book";
+const BOOK_ITEM = "folkways_core:colony_book";
 const SCHEMATIC_FILE = "folkways-handoff.nbt";
 
 const AIR = "folkways.blueprint.handoff.air";

@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.core.item.api;
 
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Supplier;
@@ -14,7 +14,7 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
 
 /** The newly dropped goods of one synchronous interaction, for work that delivers them through its outcome. */
-@EventBusSubscriber(modid = FolkwaysMod.CORE_ID)
+@EventBusSubscriber(modid = FolkwaysCoreMod.CORE_ID)
 public final class ItemDrops {
 
     private static final ThreadLocal<Scope> CURRENT = new ThreadLocal<>();

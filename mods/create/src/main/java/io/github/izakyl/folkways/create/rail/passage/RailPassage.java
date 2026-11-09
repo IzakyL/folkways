@@ -18,7 +18,7 @@ public final class RailPassage implements Passage {
     private int lastLaid = -1;
 
     public static final ResourceLocation ID =
-        ResourceLocation.fromNamespaceAndPath("folkways", "train");
+        ResourceLocation.fromNamespaceAndPath("folkways_create", "train");
 
     @Override
     public ResourceLocation id() {

@@ -9,7 +9,7 @@ import net.minecraft.resources.ResourceLocation;
 public final class Vocations {
 
     public static final ResourceLocation HAULING =
-        ResourceLocation.fromNamespaceAndPath("folkways", "hauling");
+        ResourceLocation.fromNamespaceAndPath("folkways_core", "hauling");
 
     public interface Access {
 

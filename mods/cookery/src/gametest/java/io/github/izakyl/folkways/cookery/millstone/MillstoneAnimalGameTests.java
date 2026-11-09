@@ -2,7 +2,7 @@ package io.github.izakyl.folkways.cookery.millstone;
 
 import com.github.ysbbbbbb.kaleidoscopecookery.blockentity.kitchen.MillstoneBlockEntity;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems;
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.cookery.testing.RecoveryAsking;
 import io.github.izakyl.folkways.core.runtime.HoldingFixture;
 import io.github.izakyl.folkways.core.work.api.Ending;
@@ -25,18 +25,18 @@ import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
 @EventBusSubscriber(modid = "folkways_cookery", bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@GameTestHolder("folkways_cookery")
 @PrefixGameTestTemplate(false)
 public final class MillstoneAnimalGameTests {
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) { event.register(MillstoneAnimalGameTests.class); }
 
-    @GameTest(template = "empty", timeoutTicks = 900)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 900)
     public static void anAlreadyBoundAnimalDrivesThePlannedNativeBatchWithoutBeingReplaced(GameTestHelper helper) {
         grind(helper, true);
     }
 
-    @GameTest(template = "empty", timeoutTicks = 900)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 900)
     public static void anAnimalBindingAfterPlanningStillAllowsTheAcceptedOrderToAdvance(GameTestHelper helper) {
         grind(helper, false);
     }
@@ -68,7 +68,7 @@ public final class MillstoneAnimalGameTests {
             }).thenSucceed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 1000)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 1000)
     public static void cancellationAndReloadKeepTheAnimalDrivenAcceptedBatchRecoverableWithoutNewInput(GameTestHelper helper) {
         var rig = new MillstoneGameTests.Rig(helper);
         Mob cow = cow(rig); rig.mill().bindEntity(cow);
@@ -102,7 +102,7 @@ public final class MillstoneAnimalGameTests {
             }).thenSucceed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 1000)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 1000)
     public static void anAnimalLeavingAnAcceptedBatchLetsTheResidentResumeItsActualRemainingProgress(GameTestHelper helper) {
         var rig = new MillstoneGameTests.Rig(helper);
         Mob cow = cow(rig); rig.mill().bindEntity(cow);
@@ -126,7 +126,7 @@ public final class MillstoneAnimalGameTests {
             }).thenSucceed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 900)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 900)
     public static void aForeignAnimalBatchIsNeverAdoptedOrProtectedFromItsNativeOutputBehaviour(GameTestHelper helper) {
         var rig = new MillstoneGameTests.Rig(helper);
         MillstoneWork planned = rig.plan(3);

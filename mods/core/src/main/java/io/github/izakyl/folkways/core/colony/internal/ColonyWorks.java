@@ -1,7 +1,7 @@
 package io.github.izakyl.folkways.core.colony.internal;
 
-import io.github.izakyl.folkways.FolkwaysConfig;
-import io.github.izakyl.folkways.base.task.Cleanup;
+import io.github.izakyl.folkways.core.FolkwaysConfig;
+import io.github.izakyl.folkways.core.base.task.Cleanup;
 import io.github.izakyl.folkways.core.colony.api.Claim;
 import io.github.izakyl.folkways.core.colony.api.ClaimRelease;
 import io.github.izakyl.folkways.core.colony.api.Claimed;

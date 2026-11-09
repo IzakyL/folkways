@@ -1,9 +1,9 @@
 package io.github.izakyl.folkways.core.shell.neoforge;
 
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.resident.api.Body;
 import io.github.izakyl.folkways.core.resident.api.ResidentKind;
-import io.github.izakyl.folkways.plugins.person.PersonBody;
+import io.github.izakyl.folkways.vanilla.person.PersonBody;
 import java.util.List;
 import java.util.UUID;
 import net.minecraft.gametest.framework.GameTest;
@@ -18,8 +18,8 @@ import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
-@EventBusSubscriber(modid = FolkwaysMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@EventBusSubscriber(modid = FolkwaysCoreMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
+@GameTestHolder(FolkwaysCoreMod.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class BodyAttachmentsGameTests {
 
@@ -28,21 +28,21 @@ public final class BodyAttachmentsGameTests {
         event.register(BodyAttachmentsGameTests.class);
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void nativeBodyCreatesAndSavesBothAttachmentsBeforeUse(GameTestHelper helper) {
         var body = PersonBody.RESIDENT.get().create(helper.getLevel());
         var restored = PersonBody.RESIDENT.get().create(helper.getLevel());
         try {
             assertStores(helper, body);
             CompoundTag saved = body.saveWithoutId(new CompoundTag());
-            helper.assertTrue(saved.getBoolean("folkways:body"), "the writer records the body lifecycle");
+            helper.assertTrue(saved.getBoolean("folkways_core:body"), "the writer records the body lifecycle");
             var attachments = saved.getCompound("neoforge:attachments");
-            helper.assertTrue(attachments.contains("folkways:body_state")
-                && attachments.contains("folkways:resident_capabilities"), "an untouched body saves both stores");
+            helper.assertTrue(attachments.contains("folkways_core:body_state")
+                && attachments.contains("folkways_core:resident_capabilities"), "an untouched body saves both stores");
             restored.load(saved);
             assertStores(helper, restored);
-            for (String missing : List.of("neoforge:attachments", "folkways:body_state",
-                    "folkways:resident_capabilities")) {
+            for (String missing : List.of("neoforge:attachments", "folkways_core:body_state",
+                    "folkways_core:resident_capabilities")) {
                 CompoundTag broken = saved.copy();
                 if (missing.equals("neoforge:attachments")) {
                     broken.remove(missing);
@@ -50,7 +50,7 @@ public final class BodyAttachmentsGameTests {
                     broken.getCompound("neoforge:attachments").remove(missing);
                 }
                 assertReported(helper, restored, broken);
-                broken.remove("folkways:body");
+                broken.remove("folkways_core:body");
                 assertReported(helper, restored, broken);
             }
         } finally {
@@ -60,7 +60,7 @@ public final class BodyAttachmentsGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void adaptedEntitiesStayLazyUntilUseAndRequireBothStoresAfterJoining(GameTestHelper helper) {
         var entity = EntityType.COW.create(helper.getLevel());
         var restored = EntityType.COW.create(helper.getLevel());
@@ -86,7 +86,7 @@ public final class BodyAttachmentsGameTests {
             assertStores(helper, restored);
             helper.assertValueEqual(restored.getData(FolkwaysAttachments.BODY_STATE).colony().orElseThrow(), colony,
                 "adapted colony membership round trips");
-            for (String missing : List.of("folkways:body_state", "folkways:resident_capabilities")) {
+            for (String missing : List.of("folkways_core:body_state", "folkways_core:resident_capabilities")) {
                 CompoundTag broken = saved.copy();
                 broken.getCompound("neoforge:attachments").remove(missing);
                 assertReported(helper, restored, broken);

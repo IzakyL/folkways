@@ -1,7 +1,7 @@
 package io.github.izakyl.folkways.core.vocation.api;
 
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
-import io.github.izakyl.folkways.effect.perk.Perk;
+import io.github.izakyl.folkways.core.effect.perk.Perk;
 import java.util.List;
 import net.minecraft.resources.ResourceLocation;
 
@@ -12,9 +12,16 @@ public final class Vocation {
     private final Keenness defaultPriority;
     private final List<Perk> perks;
     private final List<ItemSpec> kit;
+    private final VocationGroup group;
 
     public Vocation(ResourceLocation id, List<Perk> perks, List<ItemSpec> kit, int order, Keenness defaultPriority) {
+        this(id, perks, kit, order, defaultPriority, VocationGroup.OTHER);
+    }
+
+    public Vocation(ResourceLocation id, List<Perk> perks, List<ItemSpec> kit, int order, Keenness defaultPriority,
+        VocationGroup group) {
         this.id = id;
+        this.group = group == null ? VocationGroup.OTHER : group;
         this.order = order;
         this.defaultPriority = defaultPriority;
         this.perks = List.copyOf(perks);
@@ -27,6 +34,10 @@ public final class Vocation {
 
     public int order() {
         return order;
+    }
+
+    public VocationGroup group() {
+        return group;
     }
 
     public Keenness defaultPriority() {

@@ -31,7 +31,7 @@ test("C&B resident construction", async ({}, testInfo) => {
     }
     const setup = await runColonyTask(server, HEIGHT, { depth: 4 });
     await world.command(server, `tp ${player} -4 64 0`);
-    await world.command(server, `item replace entity ${player} weapon.mainhand with folkways:colony_book`);
+    await world.command(server, `item replace entity ${player} weapon.mainhand with folkways_core:colony_book`);
     const { colony_id } = await foundPromoColonyFast(server, player, setup.members);
     const workers = Number(process.env.FOLKWAYS_CANDB_WORKERS ?? 1);
     const admission = await admitPromoSettlersFast(server, player, colony_id, workers);

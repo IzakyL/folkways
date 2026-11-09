@@ -1,7 +1,7 @@
 package io.github.izakyl.folkways.create.dispatch;
 
-import io.github.izakyl.folkways.base.persist.Reader;
-import io.github.izakyl.folkways.base.persist.Writer;
+import io.github.izakyl.folkways.core.base.persist.Reader;
+import io.github.izakyl.folkways.core.base.persist.Writer;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
 import java.util.ArrayList;
 import java.util.List;

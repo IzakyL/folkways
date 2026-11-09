@@ -1,9 +1,9 @@
 package io.github.izakyl.folkways.carts;
 
 import com.jusipat.astikorcartsredux.entity.AbstractCargoCart;
-import io.github.izakyl.folkways.front.client.ColonyHighlightState;
-import io.github.izakyl.folkways.front.client.LookLineCards;
-import io.github.izakyl.folkways.front.client.ShadowPass;
+import io.github.izakyl.folkways.core.front.client.ColonyHighlightState;
+import io.github.izakyl.folkways.core.front.client.LookLineCards;
+import io.github.izakyl.folkways.core.front.client.ShadowPass;
 import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.client.Minecraft;

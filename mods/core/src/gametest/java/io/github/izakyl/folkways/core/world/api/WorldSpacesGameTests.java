@@ -1,11 +1,11 @@
 package io.github.izakyl.folkways.core.world.api;
 
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.inventory.internal.Stores;
 import io.github.izakyl.folkways.core.testing.TestFrame;
 import io.github.izakyl.folkways.core.work.api.Stances;
 import io.github.izakyl.folkways.core.work.support.WorkStances;
-import io.github.izakyl.folkways.plugins.person.walk.ResidentNodeEvaluator;
+import io.github.izakyl.folkways.vanilla.person.walk.ResidentNodeEvaluator;
 import io.netty.buffer.Unpooled;
 import java.util.List;
 import net.minecraft.core.BlockPos;
@@ -25,8 +25,8 @@ import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
-@EventBusSubscriber(modid = FolkwaysMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@EventBusSubscriber(modid = FolkwaysCoreMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
+@GameTestHolder(FolkwaysCoreMod.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class WorldSpacesGameTests {
     @SubscribeEvent
@@ -34,7 +34,7 @@ public final class WorldSpacesGameTests {
         event.register(WorldSpacesGameTests.class);
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void structureAddressesResolveStorageAndRotatedArrival(GameTestHelper helper) {
         var level = helper.getLevel();
         BlockPos storage = helper.absolutePos(new BlockPos(2, 1, 2));
@@ -73,7 +73,7 @@ public final class WorldSpacesGameTests {
         }
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void movingObstaclesNeverBecomeWalkingFloors(GameTestHelper helper) {
         var level = helper.getLevel();
         BlockPos cell = helper.absolutePos(new BlockPos(2, 1, 2));

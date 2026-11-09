@@ -1,7 +1,7 @@
 package io.github.izakyl.folkways.carts;
 
-import io.github.izakyl.folkways.plugins.person.walk.ResidentNodeEvaluator;
-import io.github.izakyl.folkways.plugins.person.walk.ResidentPathNavigation;
+import io.github.izakyl.folkways.vanilla.person.walk.ResidentNodeEvaluator;
+import io.github.izakyl.folkways.vanilla.person.walk.ResidentPathNavigation;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;

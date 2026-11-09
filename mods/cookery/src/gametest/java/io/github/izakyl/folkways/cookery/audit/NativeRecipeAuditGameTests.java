@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.cookery.audit;
 
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.cookery.testing.NativeCookingMatrix;
 import java.util.HashSet;
 import java.util.List;
@@ -17,13 +17,13 @@ import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
 @EventBusSubscriber(modid = "folkways_cookery", bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@GameTestHolder("folkways_cookery")
 @PrefixGameTestTemplate(false)
 public final class NativeRecipeAuditGameTests {
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) { event.register(NativeRecipeAuditGameTests.class); }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void everyPinnedNativeRecipeIsLoadedWithItsProductionType(GameTestHelper helper) {
         List<ResourceLocation> pinned = NativeCookingMatrix.ids(id -> true);
         helper.assertValueEqual(pinned.size(), 612, "the pinned jar index includes 580 mod IDs and 32 Minecraft IDs");

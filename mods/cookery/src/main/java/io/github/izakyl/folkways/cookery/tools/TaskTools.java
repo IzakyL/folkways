@@ -1,8 +1,8 @@
 package io.github.izakyl.folkways.cookery.tools;
 
 import com.github.ysbbbbbb.kaleidoscopecookery.init.tag.TagMod;
-import io.github.izakyl.folkways.base.persist.Reader;
-import io.github.izakyl.folkways.base.persist.Required;
+import io.github.izakyl.folkways.core.base.persist.Reader;
+import io.github.izakyl.folkways.core.base.persist.Required;
 import io.github.izakyl.folkways.cookery.gear.CookeryGear;
 import io.github.izakyl.folkways.cookery.racks.KitchenRacks;
 import io.github.izakyl.folkways.core.colony.api.Closing;
@@ -24,9 +24,9 @@ import io.github.izakyl.folkways.core.work.api.ToolNeed;
 import io.github.izakyl.folkways.core.work.api.WorkSite;
 import io.github.izakyl.folkways.core.work.support.Tools;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
-import io.github.izakyl.folkways.plugins.orders.OrderReturns;
-import io.github.izakyl.folkways.plugins.orders.Orders;
-import io.github.izakyl.folkways.plugins.wares.WaresContent;
+import io.github.izakyl.folkways.vanilla.orders.OrderReturns;
+import io.github.izakyl.folkways.vanilla.orders.Orders;
+import io.github.izakyl.folkways.vanilla.wares.WaresContent;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -47,7 +47,7 @@ import net.minecraft.world.item.ItemStack;
 // One colony's runtime borrowing and merged missing-tool orders. Food graphs keep their original material budget.
 public final class TaskTools {
 
-    public static final ResourceLocation ID = ResourceLocation.fromNamespaceAndPath("folkways", "cookery_tools");
+    public static final ResourceLocation ID = ResourceLocation.fromNamespaceAndPath("folkways_cookery", "cookery_tools");
 
     private record Supply(KitchenTools.Replenishment request) {
     }

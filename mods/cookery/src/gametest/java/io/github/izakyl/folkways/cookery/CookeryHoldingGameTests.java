@@ -2,7 +2,7 @@ package io.github.izakyl.folkways.cookery;
 
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems;
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.colony.api.Closing;
 import io.github.izakyl.folkways.core.item.api.Containers;
 import io.github.izakyl.folkways.core.item.api.Goods;
@@ -21,8 +21,8 @@ import io.github.izakyl.folkways.core.work.api.WorkSite;
 import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.core.work.support.Tools;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
-import io.github.izakyl.folkways.plugins.person.PersonBody;
-import io.github.izakyl.folkways.plugins.person.ResidentEntity;
+import io.github.izakyl.folkways.vanilla.person.PersonBody;
+import io.github.izakyl.folkways.vanilla.person.ResidentEntity;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -48,7 +48,7 @@ import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 
 @EventBusSubscriber(modid = "folkways_cookery", bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@GameTestHolder("folkways_cookery")
 public final class CookeryHoldingGameTests {
     private record Station(String name, Supplier<Block> block, Supplier<List<ItemStack>> inputs,
         Supplier<ItemStack> product, int loading) {}
@@ -126,12 +126,12 @@ public final class CookeryHoldingGameTests {
         for (Station station : stations) {
             for (boolean controller : List.of(false, true)) {
                 String name =
-                        "folkways:cookery_holding_"
+                        "folkways_cookery:cookery_holding_"
                                 + station.name()
                                 + (controller ? "_controller" : "_revoke");
                 tests.add(
                     new TestFunction(
-                        "cookery_holdings", name, "folkways:empty_large", 4000, 0L, true,
+                        "cookery_holdings", name, "folkways_core:empty_large", 4000, 0L, true,
                         helper -> run(helper, station, controller)));
             }
         }

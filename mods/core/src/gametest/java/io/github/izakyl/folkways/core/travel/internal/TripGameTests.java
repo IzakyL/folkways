@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.core.travel.internal;
 
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.colony.api.Colony;
 import io.github.izakyl.folkways.core.extension.api.Declaring;
 import io.github.izakyl.folkways.core.resident.api.Conveyance;
@@ -18,7 +18,7 @@ import io.github.izakyl.folkways.core.work.api.Stances;
 import io.github.izakyl.folkways.core.world.api.Closures;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.core.world.api.WorldSpaces;
-import io.github.izakyl.folkways.plugins.person.walk.Walking;
+import io.github.izakyl.folkways.vanilla.person.walk.Walking;
 import java.util.List;
 import java.util.OptionalLong;
 import java.util.Set;
@@ -39,8 +39,8 @@ import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
-@EventBusSubscriber(modid = FolkwaysMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@EventBusSubscriber(modid = FolkwaysCoreMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
+@GameTestHolder(FolkwaysCoreMod.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class TripGameTests {
 
@@ -51,7 +51,7 @@ public final class TripGameTests {
         event.register(TripGameTests.class);
     }
 
-    private static final ResourceLocation SERVICE = ResourceLocation.parse("folkways:test_trip");
+    private static final ResourceLocation SERVICE = ResourceLocation.parse("folkways_core:test_trip");
     private static final AtomicInteger BOARDED = new AtomicInteger();
     private static final AtomicInteger RELEASED = new AtomicInteger();
 
@@ -70,7 +70,7 @@ public final class TripGameTests {
         });
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void ridingOnThroughAStopIsOneRideFromTheFirstBoardingToTheLastLanding(GameTestHelper helper) {
         WorldPos a = WorldPos.of(helper.getLevel(), helper.absolutePos(new BlockPos(1, 1, 1)));
         WorldPos b = a.at(a.cell().offset(10, 0, 0));
@@ -89,7 +89,7 @@ public final class TripGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void pendingTripUsesNewlyPublishedRideAndReleasesIt(GameTestHelper helper) {
         Mob mob = helper.spawnWithNoFreeWill(EntityType.ZOMBIE, new BlockPos(1, 2, 1));
         WorldPos from = WorldSpaces.at(mob);
@@ -115,7 +115,7 @@ public final class TripGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void pendingTripIsDeniedWithoutWalkingOrResolvesToWalking(GameTestHelper helper) {
         for (boolean denied : new boolean[] {true, false}) {
             Mob mob = helper.spawnWithNoFreeWill(EntityType.ZOMBIE, new BlockPos(1, 2, 1));
@@ -140,7 +140,7 @@ public final class TripGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void aFailedNativeWalkOutOfClosedGroundDoesNotTeleportTheBody(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         Mob mob = helper.spawnWithNoFreeWill(EntityType.ZOMBIE, new BlockPos(1, 2, 1));
@@ -195,7 +195,7 @@ public final class TripGameTests {
     }
 
     private static Resident resident(Mob mob) {
-        return new Resident(mob.getUUID(), ResourceLocation.parse("folkways:resident"));
+        return new Resident(mob.getUUID(), ResourceLocation.parse("folkways_vanilla:resident"));
     }
 
     private static Ways answer(Faring result) {

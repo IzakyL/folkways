@@ -16,7 +16,7 @@ const STATE = defineTask<{ colony: string; reload?: boolean }, State>({
   name: "folkways.tools.state", side: "server",
   source: javaTask({ imports: [
     "io.github.izakyl.folkways.core.colony.internal.ColonyRegistry",
-    "io.github.izakyl.folkways.front.engine.colony.ColonyFront",
+    "io.github.izakyl.folkways.core.front.engine.colony.ColonyFront",
     "net.minecraft.resources.ResourceLocation",
     "net.minecraft.server.MinecraftServer",
   ], body: `
@@ -25,7 +25,7 @@ if(Boolean.TRUE.equals(ctx.arg("reload")))ColonyFront.forget(id);
 var front=ColonyFront.of(ColonyRegistry.get((MinecraftServer)ctx.server()).find(id).orElseThrow().works());
 var result=new LinkedHashMap<String,Object>();
 for(var name:List.of("building","farming","crafting")) {
- var held=front.settings(ResourceLocation.fromNamespaceAndPath("folkways",name));
+ var held=front.settings(ResourceLocation.fromNamespaceAndPath("folkways_vanilla",name));
  result.put(name,held.valueOf("tool").isPresent());
  if(!name.equals("crafting"))result.put(name+"Rules",held.entries("tool").size());
 }
@@ -53,7 +53,7 @@ test("vocation tool editors isolate lists and persist empty", async ({}, testInf
     await clickTab(client, "folkways.page.build");
     const state = (reload = false) => server.run(STATE, { colony, reload });
     expect(await state()).toMatchObject({ building: false, farming: false, crafting: false });
-    await clickElement(client, { id: "folkways.settings.open.tool.folkways.building.folkways.build" }, { scrollIntoView: true });
+    await clickElement(client, { id: "folkways.settings.open.tool.folkways_vanilla.building.folkways_vanilla.build" }, { scrollIntoView: true });
     await waitForElement(client, { id: "folkways.selector.rule_drop.0" });
     for (let rule = 0; rule < 3; rule++) {
       await clickElement(client, { id: "folkways.selector.rule_drop.0" }, { scrollIntoView: true });
@@ -62,19 +62,19 @@ test("vocation tool editors isolate lists and persist empty", async ({}, testInf
     await expect.poll(state).toMatchObject({ building: true, buildingRules: 0, farming: false });
     expect(await state(true)).toMatchObject({ building: true, buildingRules: 0, farming: false });
     await clickTab(client, "folkways.page.farm");
-    await clickElement(client, { id: "folkways.settings.open.tool.folkways.farming.folkways.farming" }, { scrollIntoView: true });
+    await clickElement(client, { id: "folkways.settings.open.tool.folkways_vanilla.farming.folkways_vanilla.farming" }, { scrollIntoView: true });
     await waitForElement(client, { id: "folkways.selector.rule_drop.0" });
     await clickElement(client, { id: "folkways.selector.confirm" });
     await expect.poll(state).toMatchObject({ buildingRules: 0, farming: true, farmingRules: 1 });
     await clickTab(client, "folkways.page.wares");
-    await clickElement(client, { id: "folkways.settings.open.tool.folkways.crafting.folkways.wares" }, { scrollIntoView: true });
+    await clickElement(client, { id: "folkways.settings.open.tool.folkways_vanilla.crafting.folkways_vanilla.wares" }, { scrollIntoView: true });
     await waitForElement(client, { id: "folkways.selector.confirm" });
     expect((await panelElements(client)).some(e => e.id === "folkways.selector.rule_drop.0" && e.displayed)).toBe(false);
     await clickElement(client, { id: "folkways.selector.confirm" });
     await expect.poll(state).toMatchObject({ crafting: true });
     await clickTab(client, "folkways.page.build");
-    await waitForElement(client, { id: "folkways.settings.open.tool.folkways.building.folkways.build" });
-    await clickElement(client, { id: "folkways.settings.open.tool.folkways.building.folkways.build" }, { scrollIntoView: true });
+    await waitForElement(client, { id: "folkways.settings.open.tool.folkways_vanilla.building.folkways_vanilla.build" });
+    await clickElement(client, { id: "folkways.settings.open.tool.folkways_vanilla.building.folkways_vanilla.build" }, { scrollIntoView: true });
     await waitForElement(client, { id: "folkways.selector.confirm" });
     expect((await panelElements(client)).some(e => e.id === "folkways.selector.rule_drop.0" && e.displayed)).toBe(false);
     await clickElement(client, { id: "folkways.selector.confirm" });

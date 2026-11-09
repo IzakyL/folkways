@@ -31,7 +31,7 @@ test("a colony assembled into a Sable ship keeps every block it held, at the shi
       config: SABLE_CONFIG,
       server: { trace: tracePath("sable", "sable-relocate-server"), instance: seededServer(`sable-relocate-server-${runId}`) },
       client: { trace: tracePath("sable", "sable-relocate-client"), instance: `sable-relocate-client-${runId}` },
-      snapshot: () => ({ containers: [store && offset ? shifted(store, offset) : store], entityTypes: ["folkways:resident"] }),
+      snapshot: () => ({ containers: [store && offset ? shifted(store, offset) : store], entityTypes: ["folkways_vanilla:resident"] }),
     });
     const { server, client } = pair;
 

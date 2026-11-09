@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.core.travel.internal.graph;
 
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.colony.api.Colony;
 import io.github.izakyl.folkways.core.extension.api.Declaring;
 import io.github.izakyl.folkways.core.resident.api.Conveyance;
@@ -33,17 +33,17 @@ import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
-@EventBusSubscriber(modid = FolkwaysMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@EventBusSubscriber(modid = FolkwaysCoreMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
+@GameTestHolder(FolkwaysCoreMod.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class ClosureGameTests {
 
-    private static final ResourceLocation KIND = ResourceLocation.fromNamespaceAndPath("folkways", "resident");
+    private static final ResourceLocation KIND = ResourceLocation.fromNamespaceAndPath("folkways_vanilla", "resident");
 
-    private static final Sort SORT = new Sort(ResourceLocation.fromNamespaceAndPath("folkways", "walking"),
+    private static final Sort SORT = new Sort(ResourceLocation.fromNamespaceAndPath("folkways_core", "walking"),
         new Bulk(1, 2));
 
-    private static final ResourceLocation SERVICE = ResourceLocation.fromNamespaceAndPath("folkways", "test_closure_passage");
+    private static final ResourceLocation SERVICE = ResourceLocation.fromNamespaceAndPath("folkways_core", "test_closure_passage");
 
     @SubscribeEvent
     public static void declare(Declaring event) {
@@ -63,7 +63,7 @@ public final class ClosureGameTests {
         event.register(ClosureGameTests.class);
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void closingTakesUpTheWaysInAndAcrossIt(GameTestHelper helper) {
         Waypoints net = new Waypoints();
         int west = net.pin(cell(0, 0), 0);
@@ -82,7 +82,7 @@ public final class ClosureGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void noWayIsStraightenedAcrossClosedGround(GameTestHelper helper) {
         helper.assertValueEqual(bend(false).straighten(1), 1, "open, a bend round the ground is straightened");
         Waypoints closed = bend(true);
@@ -92,7 +92,7 @@ public final class ClosureGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void closedWorkIsReachedNativelyWithoutPublicWaypoints(GameTestHelper helper) {
         WorldPos outside = pos(helper, 0, 0);
         WorldPos inside = pos(helper, 10, 0);
@@ -117,7 +117,7 @@ public final class ClosureGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void ordinaryTrafficStillRoutesAroundTheClosedWorkArea(GameTestHelper helper) {
         WorldPos west = pos(helper, 0, 0);
         WorldPos east = pos(helper, 20, 0);
@@ -134,7 +134,7 @@ public final class ClosureGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void aWorkAreaDoesNotMakeAnotherRealmReachableOnFoot(GameTestHelper helper) {
         WorldPos inside = pos(helper, 10, 0);
         WorldPos elsewhere = new WorldPos(new Realm.Frame(UUID.randomUUID()), inside.cell());
@@ -150,7 +150,7 @@ public final class ClosureGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void aDisconnectedNearestPublicPointDoesNotHideACrossRealmPassage(GameTestHelper helper) {
         WorldPos inside = pos(helper, 10, 0);
         WorldPos publicGround = pos(helper, 0, 0);
@@ -199,7 +199,7 @@ public final class ClosureGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void aDistantWorkTripKeepsItsPublicRideAndNativeFinalSegment(GameTestHelper helper) {
         WorldPos inside = pos(helper, 10, 0);
         WorldPos nearbyPublic = pos(helper, 0, 0);

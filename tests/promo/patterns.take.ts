@@ -77,7 +77,7 @@ test("a blueprint and a road are laid by hand, then the colony's other works com
 
     const hero = at(0, 14);
     await world.command(server, `tp ${player} ${hero.x + 0.5} ${hero.y} ${hero.z + 0.5} 180 12`);
-    await world.command(server, `item replace entity ${player} weapon.mainhand with folkways:colony_book`);
+    await world.command(server, `item replace entity ${player} weapon.mainhand with folkways_core:colony_book`);
     const founded = await foundPromoColonyFast(server, player, site.members as Vec[]);
     const colony_id = founded.colony_id;
     run.note("admitted", await admitPromoSettlersFast(server, player, colony_id, RESIDENTS));
@@ -86,18 +86,18 @@ test("a blueprint and a road are laid by hand, then the colony's other works com
     // The wall follows the foot of the western hills, the mine sits on their crest, the bridge crosses the river
     // on the line of the road and the dock runs out from the bank upstream, toward the lake.
     const background = [
-      { pattern: "folkways:city_wall", points: [at(-37, -22), at(-37, 12), at(-29, 34)], knobs: {
+      { pattern: "folkways_vanilla:city_wall", points: [at(-37, -22), at(-37, 12), at(-29, 34)], knobs: {
         wall: ["minecraft:deepslate_bricks"], base: ["minecraft:cobbled_deepslate"],
         walkway: ["minecraft:polished_deepslate"], trim: ["minecraft:deepslate_tiles"],
         timber: ["minecraft:stripped_dark_oak_log"], panel: ["minecraft:dark_oak_planks"] } },
-      { pattern: "folkways:mine", min: at(-55, -18, -1), max: { ...at(-43, -6, -1), y: at(-55, -18, -1).y }, knobs: {
+      { pattern: "folkways_vanilla:mine", min: at(-55, -18, -1), max: { ...at(-43, -6, -1), y: at(-55, -18, -1).y }, knobs: {
         y: at(-55, -18, -1).y - 16, timber: ["minecraft:dark_oak_log"], planks: ["minecraft:dark_oak_planks"],
         stairs: ["minecraft:dark_oak_stairs"], rail: ["minecraft:dark_oak_fence"],
         gate: ["minecraft:dark_oak_fence_gate"], lamp: ["minecraft:soul_lantern"], seal: ["minecraft:cobbled_deepslate"] } },
-      { pattern: "folkways:arch_bridge", points: [at(20, 8), at(59, 8)], knobs: {
+      { pattern: "folkways_vanilla:arch_bridge", points: [at(20, 8), at(59, 8)], knobs: {
         arch: ["minecraft:cut_sandstone"], deck: ["minecraft:smooth_sandstone"], parapet: ["minecraft:sandstone_wall"],
         abutment: ["minecraft:chiseled_sandstone"], accent: ["minecraft:red_sandstone"] } },
-      { pattern: "folkways:dock", points: [at(13, -8), at(35, -8)], knobs: {
+      { pattern: "folkways_vanilla:dock", points: [at(13, -8), at(35, -8)], knobs: {
         deck: ["minecraft:birch_planks"], beam: ["minecraft:stripped_birch_log"], pile: ["minecraft:birch_log"],
         rail: ["minecraft:birch_fence"], landing: ["minecraft:mossy_cobblestone"], lantern: ["minecraft:soul_lantern"] } },
     ];
@@ -465,7 +465,7 @@ const CREW = defineTask<Record<string, any>, Record<string, any>>({
   timeoutMs: 20_000,
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.front.engine.colony.*",
+      "io.github.izakyl.folkways.core.front.engine.colony.*",
       "io.github.izakyl.folkways.core.resident.api.Bodies",
       "io.github.izakyl.folkways.core.vocation.api.Vocations",
       "net.minecraft.server.MinecraftServer",
@@ -480,7 +480,7 @@ var colony=ColonyGround.of(server,UUID.fromString(args.string("colony_id"))).orE
 var o=(Map<?,?>)args.value("origin");
 int ox=((Number)o.get("x")).intValue(),oy=((Number)o.get("y")).intValue(),oz=((Number)o.get("z")).intValue();
 var front=ColonyFront.of(colony);
-var zone=ZoneDrafts.zone(level,colony,ResourceLocation.parse("folkways:farm"),
+var zone=ZoneDrafts.zone(level,colony,ResourceLocation.parse("folkways_vanilla:farm"),
   new BlockPos(ox-22,oy-1,oz-8),new BlockPos(ox-10,oy,oz+4),
   ColonySettings.empty().with("crop",new ColonySettings.Value.Choice(ResourceLocation.parse("minecraft:wheat")))).orElseThrow();
 int i=0;var crew=new ArrayList<Object>();
@@ -510,8 +510,8 @@ const DOING = defineTask<Record<string, any>, Record<string, any>>({
   timeoutMs: 20_000,
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
-      "io.github.izakyl.folkways.front.api.notice.Doings",
+      "io.github.izakyl.folkways.core.front.engine.colony.ColonyGround",
+      "io.github.izakyl.folkways.core.front.api.notice.Doings",
       "io.github.izakyl.folkways.core.resident.api.Bodies",
       "net.minecraft.server.MinecraftServer",
     ],
@@ -535,7 +535,7 @@ const GATHER = defineTask<Record<string, any>, Record<string, any>>({
   timeoutMs: 20_000,
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
+      "io.github.izakyl.folkways.core.front.engine.colony.ColonyGround",
       "io.github.izakyl.folkways.core.runtime.ColonyLabor",
       "io.github.izakyl.folkways.core.runtime.Labor",
       "net.minecraft.resources.ResourceKey",
@@ -610,11 +610,11 @@ const COMMISSION = defineTask<Record<string, any>, Record<string, any>>({
   timeoutMs: 20_000,
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
-      "io.github.izakyl.folkways.plugins.build.Commissions",
-      "io.github.izakyl.folkways.plugins.build.draft.Hint",
-      "io.github.izakyl.folkways.plugins.build.draft.Patterns",
-      "io.github.izakyl.folkways.front.api.Schema",
+      "io.github.izakyl.folkways.core.front.engine.colony.ColonyGround",
+      "io.github.izakyl.folkways.vanilla.build.Commissions",
+      "io.github.izakyl.folkways.vanilla.build.draft.Hint",
+      "io.github.izakyl.folkways.vanilla.build.draft.Patterns",
+      "io.github.izakyl.folkways.core.front.api.Schema",
       "io.github.izakyl.folkways.core.item.api.ItemSpec",
       "net.minecraft.core.registries.Registries",
       "net.minecraft.tags.TagKey",
@@ -686,11 +686,11 @@ const PLACARDS = defineTask<Record<string, any>, Record<string, any>>({
   timeoutMs: 20_000,
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.front.api.Facing",
-      "io.github.izakyl.folkways.front.api.Placard",
-      "io.github.izakyl.folkways.front.api.notice.Line",
-      "io.github.izakyl.folkways.front.api.notice.Sentence",
-      "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
+      "io.github.izakyl.folkways.core.front.api.Facing",
+      "io.github.izakyl.folkways.core.front.api.Placard",
+      "io.github.izakyl.folkways.core.front.api.notice.Line",
+      "io.github.izakyl.folkways.core.front.api.notice.Sentence",
+      "io.github.izakyl.folkways.core.front.engine.colony.ColonyGround",
       "net.minecraft.server.MinecraftServer",
     ],
     body: `
@@ -724,11 +724,11 @@ const STOCK = defineTask<Record<string, any>, Record<string, any>>({
   timeoutMs: 20_000,
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.front.api.Facing",
-      "io.github.izakyl.folkways.front.api.Placard",
-      "io.github.izakyl.folkways.front.api.notice.Line",
-      "io.github.izakyl.folkways.front.api.notice.Sentence",
-      "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
+      "io.github.izakyl.folkways.core.front.api.Facing",
+      "io.github.izakyl.folkways.core.front.api.Placard",
+      "io.github.izakyl.folkways.core.front.api.notice.Line",
+      "io.github.izakyl.folkways.core.front.api.notice.Sentence",
+      "io.github.izakyl.folkways.core.front.engine.colony.ColonyGround",
       "net.minecraft.core.BlockPos",
       "net.minecraft.core.registries.BuiltInRegistries",
       "net.minecraft.server.MinecraftServer",
@@ -780,8 +780,8 @@ const STAGE = defineTask<Record<string, any>, Record<string, any>>({
   timeoutMs: 20_000,
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
-      "io.github.izakyl.folkways.plugins.build.BlueprintBlock",
+      "io.github.izakyl.folkways.core.front.engine.colony.ColonyGround",
+      "io.github.izakyl.folkways.vanilla.build.BlueprintBlock",
       "net.minecraft.core.BlockPos",
       "net.minecraft.resources.ResourceLocation",
       "net.minecraft.server.MinecraftServer",
@@ -790,7 +790,7 @@ const STAGE = defineTask<Record<string, any>, Record<string, any>>({
 var server=ctx.server();var level=server.overworld();var args=Args.of(ctx);
 var colony=ColonyGround.of(server,UUID.fromString(args.string("colony_id"))).orElseThrow();
 var shares=(Map<?,?>)args.value("shares");
-var presence=colony.service(ResourceLocation.parse("folkways:build"),Object.class).orElseThrow();
+var presence=colony.service(ResourceLocation.parse("folkways_vanilla:build"),Object.class).orElseThrow();
 var field=presence.getClass().getDeclaredField("book");field.setAccessible(true);var book=field.get(presence);
 var staged=new LinkedHashMap<String,Integer>();
 for(var order:(List<?>)call(book,"allBuildOrders")){
@@ -824,15 +824,15 @@ const CALL_OFF = defineTask<Record<string, any>, Record<string, any>>({
   side: "server",
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.front.api.Facing",
-      "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
-      "io.github.izakyl.folkways.plugins.build.BlueprintBuildOrder",
+      "io.github.izakyl.folkways.core.front.api.Facing",
+      "io.github.izakyl.folkways.core.front.engine.colony.ColonyGround",
+      "io.github.izakyl.folkways.vanilla.build.BlueprintBuildOrder",
       "net.minecraft.resources.ResourceLocation",
     ],
     body: `
 var level=ctx.server().overworld();var args=Args.of(ctx);
 var colony=ColonyGround.of(ctx.server(),UUID.fromString(args.string("colony_id"))).orElseThrow();
-var page=ResourceLocation.parse("folkways:build");
+var page=ResourceLocation.parse("folkways_vanilla:build");
 var facing=Facing.of(colony,page).orElseThrow();int stopped=0;
 var presence=colony.service(page,Object.class).orElseThrow();
 var field=presence.getClass().getDeclaredField("book");field.setAccessible(true);var book=field.get(presence);
@@ -860,12 +860,12 @@ const RESTORE = defineTask<Record<string, any>, Record<string, any>>({
   name: "folkways.promo.patterns-restore",
   side: "server",
   source: javaTask({
-    imports: ["io.github.izakyl.folkways.front.engine.colony.ColonyGround", "net.minecraft.core.BlockPos",
+    imports: ["io.github.izakyl.folkways.core.front.engine.colony.ColonyGround", "net.minecraft.core.BlockPos",
       "net.minecraft.resources.ResourceLocation", "net.minecraft.server.level.ServerLevel"],
     body: `
 var level=ctx.server().overworld();var args=Args.of(ctx);
 var colony=ColonyGround.of(ctx.server(),UUID.fromString(args.string("colony_id"))).orElseThrow();
-var presence=colony.service(ResourceLocation.parse("folkways:build"),Object.class).orElseThrow();
+var presence=colony.service(ResourceLocation.parse("folkways_vanilla:build"),Object.class).orElseThrow();
 var field=presence.getClass().getDeclaredField("book");field.setAccessible(true);var book=field.get(presence);
 var place=book.getClass().getDeclaredMethod("place",ServerLevel.class,UUID.class,String.class,BlockPos.class,Optional.class,String.class,long.class);
 place.setAccessible(true);int restored=0;

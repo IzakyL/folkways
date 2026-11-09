@@ -81,10 +81,10 @@ const SCALE: Scale = {
 };
 
 const ALL_VOCATIONS = [
-  "folkways:farming", "folkways:herding", "folkways:building", "folkways:crafting",
-  "folkways:hauling", "folkways:fishing", "folkways:conducting", "folkways:dispatching",
+  "folkways_vanilla:farming", "folkways_vanilla:herding", "folkways_vanilla:building", "folkways_vanilla:crafting",
+  "folkways_core:hauling", "folkways_vanilla:fishing", "folkways_create:conducting", "folkways_create:dispatching",
   // Human residents do not patrol: the golems keep the watch, and no human is kitted with a weapon for it.
-  "folkways:patrolling",
+  "folkways_vanilla:patrolling",
 ] as const;
 
 // Who does what, from the town's work (fixture.staffing): set once the town is laid out.
@@ -253,7 +253,7 @@ test(`large colony: ${SCALE.residents} residents in a town on real terrain (refl
       report.setup.rail = { enabled: true, centre: net.centre, lines: [], refused: net.refused };
       await runColonyTask(server, SELECT_TOWN, { player: playerName, colony: COLONY_ID });
       await tryCommand(server,
-        `item replace entity ${playerName} inventory.0 with folkways:colony_book 1`);
+        `item replace entity ${playerName} inventory.0 with folkways_core:colony_book 1`);
       for (const [index, line] of net.lines.entries()) {
         const haltBy = (stop: Stop) => {
           const halt = line.halts.find((h) => h.stop === stop.name)!.halt.box;
@@ -347,7 +347,7 @@ test(`large colony: ${SCALE.residents} residents in a town on real terrain (refl
       const p = layout.spawns[POPULATION.humanIndices[i]];
       await tryCommand(
         server,
-        `summon folkways:resident ${p.x + 0.5} ${p.y} ${p.z + 0.5} `
+        `summon folkways_vanilla:resident ${p.x + 0.5} ${p.y} ${p.z + 0.5} `
           + residentNbt(residentUuids[i], colonyIA, trade, i >= unequippedUntil),
       );
     }
@@ -593,10 +593,10 @@ function yardsView(layout: Layout): Shot[] {
 // The quarry from above one of its sides, whichever sees most of it; a shaft mine from inside its hill, a spectator
 // in the rock beside the shaft, looking across at the stair as it is dug.
 function mineView(layout: Layout): Shot[] {
-  const dug = layout.orders.filter((o: any) => (o.pattern === "folkways:quarry" || o.pattern === "folkways:mine") && o.min && o.max);
+  const dug = layout.orders.filter((o: any) => (o.pattern === "folkways_vanilla:quarry" || o.pattern === "folkways_vanilla:mine") && o.min && o.max);
   return dug.map((mine: any, i): Shot => {
     const c = { x: (mine.min.x + mine.max.x) / 2 + 0.5, z: (mine.min.z + mine.max.z) / 2 + 0.5 }, top = mine.min.y;
-    if (mine.pattern === "folkways:mine")
+    if (mine.pattern === "folkways_vanilla:mine")
       return { name: i ? `mine-${i + 1}` : "mine", eye: { x: c.x + 15, y: top - 8, z: c.z + 6 }, target: { x: c.x, y: top - 14, z: c.z }, underground: true };
     const target = { x: c.x, y: top, z: c.z }, reach = mine.max.x - mine.min.x;
     const [eye, ...alternatives] = ring(target, [reach * 0.75, reach], [28, 40]);
@@ -637,8 +637,8 @@ const SELECT_TOWN = defineTask<{ player: string; colony: string }, boolean>({
   name: "folkways.bench.select-town", side: "server",
   source: javaTask({ imports: [
     "io.github.izakyl.folkways.core.colony.api.Colonies",
-    "io.github.izakyl.folkways.front.engine.charter.Charters",
-    "io.github.izakyl.folkways.front.engine.charter.CurrentColony",
+    "io.github.izakyl.folkways.core.front.engine.charter.Charters",
+    "io.github.izakyl.folkways.core.front.engine.charter.CurrentColony",
   ], body: `
 var args = Args.of(ctx);
 var server = ctx.server();
@@ -788,7 +788,7 @@ async function setMembershipAttachments(server: MinecraftServer, layout: Layout)
   for (const t of targets) {
     const wrote = await tryCommand(
       server,
-      `data merge block ${commandPos(t)} {"neoforge:attachments":{"folkways:colony_member":${colonyIA}}}`,
+      `data merge block ${commandPos(t)} {"neoforge:attachments":{"folkways_core:colony_member":${colonyIA}}}`,
     );
     if (wrote?.success === false) {
       refused.push({ pos: t, say: (wrote?.output?.[0] ?? "").slice(0, 80) });
@@ -846,13 +846,13 @@ function residentNbt(uuid: string, colonyIA: string, trade: Trade, equipped: boo
       `{Slot:${trade.tools.length}b,Stack:{id:"minecraft:bread",count:${STARTING_BREAD}}}`].join(",")
     : "";
   return `{UUID:${uuidToSnbt(uuid)},PersistenceRequired:1b,`
-    + `"neoforge:attachments":{"folkways:body_state":{Colony:${colonyIA},Pack:{Items:[${items}]}},`
-    + `"folkways:resident_capabilities":`
+    + `"neoforge:attachments":{"folkways_core:body_state":{Colony:${colonyIA},Pack:{Items:[${items}]}},`
+    + `"folkways_core:resident_capabilities":`
     + `{withheld:[${withheld}],keenness:{${priorities}}}}}`;
 }
 
 const ATTACHMENTS_KEY = "neoforge:attachments";
-const CAPABILITIES_KEY = "folkways:resident_capabilities";
+const CAPABILITIES_KEY = "folkways_core:resident_capabilities";
 
 async function verifyTrades(server: MinecraftServer, uuids: string[]) {
   const checks: any[] = [];
@@ -1183,7 +1183,7 @@ const BUILD_PROGRESS = defineTask<{ colony_id: string }, Record<string, any>>({
   side: "server",
   timeoutMs: 20_000,
   source: javaTask({
-    imports: ["io.github.izakyl.folkways.front.engine.colony.ColonyGround", "io.github.izakyl.folkways.plugins.build.BuildContent"],
+    imports: ["io.github.izakyl.folkways.core.front.engine.colony.ColonyGround", "io.github.izakyl.folkways.vanilla.build.BuildContent"],
     body: `
 var colony = ColonyGround.of(ctx.server(), UUID.fromString(Args.of(ctx).string("colony_id"))).orElseThrow();
 var presence = colony.service(BuildContent.ID, Object.class).orElseThrow();

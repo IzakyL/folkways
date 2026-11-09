@@ -3,9 +3,8 @@ package io.github.izakyl.folkways.create.build;
 import com.simibubi.create.content.schematics.client.tools.ISchematicTool;
 import com.simibubi.create.content.schematics.client.tools.SchematicToolBase;
 import com.simibubi.create.foundation.gui.AllIcons;
-import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.front.api.Books;
-import io.github.izakyl.folkways.plugins.build.BlueprintHandoffPanel;
+import io.github.izakyl.folkways.core.front.api.Books;
+import io.github.izakyl.folkways.vanilla.build.BlueprintHandoffPanel;
 import java.util.List;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -59,7 +58,7 @@ public final class CreateHandoffTool extends SchematicToolBase {
     // their row as one of them.
     private static final class HandOffIcon extends AllIcons {
         private static final ResourceLocation GLYPH =
-            ResourceLocation.fromNamespaceAndPath(FolkwaysMod.MOD_ID, "textures/gui/handoff_tool.png");
+            ResourceLocation.fromNamespaceAndPath("folkways_create", "textures/gui/handoff_tool.png");
 
         private HandOffIcon() {
             super(0, 0);

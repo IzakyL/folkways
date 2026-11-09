@@ -36,7 +36,7 @@ import io.github.izakyl.folkways.core.work.support.Leaves;
 import io.github.izakyl.folkways.core.work.support.WorkStances;
 import io.github.izakyl.folkways.core.world.api.Reach;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
-import io.github.izakyl.folkways.plugins.wares.WaresContent;
+import io.github.izakyl.folkways.vanilla.wares.WaresContent;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
@@ -88,7 +88,7 @@ final class PotWork implements KitchenWork {
         recovering = previous != null;
         loaded = recovering;
         batch = recovering ? previous.id() : UUID.randomUUID();
-        UUID id = recovering ? UUID.nameUUIDFromBytes(("folkways:pot/recover/" + batch).getBytes(StandardCharsets.UTF_8)) : UUID.randomUUID();
+        UUID id = recovering ? UUID.nameUUIDFromBytes(("folkways_cookery:pot/recover/" + batch).getBytes(StandardCharsets.UTF_8)) : UUID.randomUUID();
         List<Need> needs = recovering ? previous.servingNeeds(pot, level) : plan.total(runs);
         List<Amount> gives = recovering && pot.getStatus() >= IPot.FINISHED && plan.mode() != PotPlan.Mode.DARK
             ? Leaves.ofStacks(List.of(previous.product(pot))) : List.of(new Amount(plan.produces(), (long) plan.count() * runs));

@@ -6,6 +6,7 @@ import { foundColonyFast, foundingBox, optInViaBook, vocationPriority, waitForGr
 import { deliverOrderViaSitePanel, filedOrdersAt } from "../shared/colony/membership-optin";
 import { runColonyTask } from "../shared/colony/colony-tasks";
 import { scrollCellIntoView, wheelCell } from "../shared/ui/site-panel";
+import { showVocationColumn } from "../shared/ui/vocation-groups";
 import { launchPair, type E2EPair } from "../shared/harness/pair";
 import { seededServer } from "../shared/harness/mod-settings";
 import { tracePath } from "../shared/harness/out-paths";
@@ -18,7 +19,7 @@ const K = "kaleidoscope_cookery:";
 const WHEAT = "minecraft:wheat";
 const FLOUR = K + "flour";
 const PLANKS = "minecraft:oak_planks";
-const CRAFTING = "folkways:crafting";
+const CRAFTING = "folkways_vanilla:crafting";
 
 for (const stage of twins()) test(stage.title("millstone interruption: release, walk clear and resume the accepted native batch"), async ({}, testInfo) => {
   test.setTimeout(BUDGET.heavy);
@@ -31,7 +32,7 @@ for (const stage of twins()) test(stage.title("millstone interruption: release, 
       config: "blockwright.toml#" + (stage.kind === "ground" ? "cookery" : "cookery-sable"),
       server: { trace: tracePath("e2e", stage.name("millstone-server-" + runId)), instance: seededServer(stage.name("millstone-server-" + runId)) },
       client: { trace: tracePath("e2e", stage.name("millstone-client-" + runId)), instance: stage.name("millstone-client-" + runId) },
-      snapshot: () => ({ containers: cells ? [stage.at(cells.supply), stage.at(cells.flour), stage.at(cells.next), stage.at(cells.mill)] : [], entityTypes: ["folkways:resident", "minecraft:item"] }),
+      snapshot: () => ({ containers: cells ? [stage.at(cells.supply), stage.at(cells.flour), stage.at(cells.next), stage.at(cells.mill)] : [], entityTypes: ["folkways_vanilla:resident", "minecraft:item"] }),
     });
     const { server, client } = pair;
     const player = await waitForGroundedPlayer(server);
@@ -115,13 +116,14 @@ function layout(origin: Vec) {
 
 async function crafting(server: MinecraftServer, client: MinecraftClient, name: string, at: Vec, stage: Stage, uuid: string, target: number) {
   const row = "folkways.resident.row." + uuid.slice(0, 8);
-  const cell = "folkways.resident.vocation.folkways.crafting." + uuid.slice(0, 8);
+  const cell = "folkways.resident.vocation.folkways_vanilla.crafting." + uuid.slice(0, 8);
   const evidence: Record<string, any> = { before: await vocationPriority(server, uuid, CRAFTING), target };
   try {
     // A marked chest opens its own site board. Use the actual book in air for the global residents page.
     await screen.dismiss(client); evidence.open = await player.useItem(client, { hand: "main-hand" });
     await screen.waitFor(client, "ModularUIContainerScreen", { timeoutMs: 10000 });
     await clickElement(client, { id: "folkways.tab.residents" }); await waitForElement(client, { id: row }, { timeoutMs: 10000 });
+    await showVocationColumn(server, client, "folkways.resident", CRAFTING, cell);
     await scrollCellIntoView(server, client, row, cell);
     let priority = evidence.before as number;
     if ((priority === 0) !== (target === 0)) { await clickElement(client, { id: cell }); await tick.sprint(server, 5); priority = await vocationPriority(server, uuid, CRAFTING); }
@@ -178,7 +180,7 @@ var residents=new ArrayList<Object>();var drops=new ArrayList<Object>();var outp
 for(int slot=0;slot<mill.getOutputs().getSlots();slot++){var stack=mill.getOutputs().getStackInSlot(slot);if(!stack.isEmpty())outputs.add(Map.of("id",BuiltInRegistries.ITEM.getKey(stack.getItem()).toString(),"count",stack.getCount()));}
 for(var entity:level.getAllEntities()){
   var body=Bodies.of(entity);
-  if(body.isPresent()&&BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()).toString().equals("folkways:resident")){
+  if(body.isPresent()&&BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()).toString().equals("folkways_vanilla:resident")){
     var local=WorldSpaces.relative(level,station.realm(),entity.position()).orElseThrow();
     var goods=new LinkedHashMap<String,Integer>();for(var stack:body.get().pack().contents())if(!stack.isEmpty())goods.merge(BuiltInRegistries.ITEM.getKey(stack.getItem()).toString(),stack.getCount(),Integer::sum);
     var row=new LinkedHashMap<String,Object>();row.put("uuid",entity.getUUID().toString());row.put("x",entity.getX());row.put("y",entity.getY());row.put("z",entity.getZ());

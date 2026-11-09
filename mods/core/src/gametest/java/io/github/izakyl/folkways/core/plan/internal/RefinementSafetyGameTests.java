@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.core.plan.internal;
 
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import io.github.izakyl.folkways.core.plan.api.Before;
 import io.github.izakyl.folkways.core.resident.api.Resident;
@@ -40,8 +40,8 @@ import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
-@EventBusSubscriber(modid = FolkwaysMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@EventBusSubscriber(modid = FolkwaysCoreMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
+@GameTestHolder(FolkwaysCoreMod.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class RefinementSafetyGameTests {
     private static final ResourceLocation OWNER = ResourceLocation.fromNamespaceAndPath("folkways_test", "refinement");
@@ -49,7 +49,7 @@ public final class RefinementSafetyGameTests {
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) { event.register(RefinementSafetyGameTests.class); }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void exhaustedImprovementStillAssignsReadyWorkAndAcceptsTheNextChange(GameTestHelper helper) {
         Tours tours = new Tours(3000, 8, 0);
         WorldPos origin = WorldPos.of(helper.getLevel(), helper.absolutePos(new BlockPos(1, 1, 1)));
@@ -73,7 +73,7 @@ public final class RefinementSafetyGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void deadlineStopsRefinementEvenBeforeTheWorkCountIsUsedUp(GameTestHelper helper) {
         AtomicLong clock = new AtomicLong();
         RefinementBudget budget = new RefinementBudget(1_000_000, clock::get, 100);
@@ -85,7 +85,7 @@ public final class RefinementSafetyGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     @SuppressWarnings("unchecked")
     public static void failedTransferRestoresTheTargetsContinuousRouteAndItsReservations(GameTestHelper helper) throws Exception {
         Tours tours = new Tours(3000, 8, 17);
@@ -149,7 +149,7 @@ public final class RefinementSafetyGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void overloadedRecoverySurvivesTheRefinementFallback(GameTestHelper helper) throws Exception {
         Scheduler scheduler = new Scheduler();
         Scheduler.Scheduled empty = scheduler.handle(List.of(Scheduler.Input.wake(0)));

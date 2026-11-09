@@ -1,7 +1,7 @@
 package io.github.izakyl.folkways.core.plan.internal;
 
-import io.github.izakyl.folkways.FolkwaysMod;
-import io.github.izakyl.folkways.base.persist.Reader;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
+import io.github.izakyl.folkways.core.base.persist.Reader;
 import io.github.izakyl.folkways.core.item.api.Goods;
 import io.github.izakyl.folkways.core.item.api.IngredientSpecs;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
@@ -27,8 +27,8 @@ import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
-@EventBusSubscriber(modid = FolkwaysMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@EventBusSubscriber(modid = FolkwaysCoreMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
+@GameTestHolder(FolkwaysCoreMod.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class IngredientSpecsGameTests {
     @SubscribeEvent
@@ -36,7 +36,7 @@ public final class IngredientSpecsGameTests {
         event.register(IngredientSpecsGameTests.class);
     }
 
-    @GameTest(template = "empty", timeoutTicks = 10)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 10)
     public static void componentIngredientsAllowOnlyTheExtrasTheirPredicateAllows(GameTestHelper helper) {
         Ingredient partial = potion(false);
         Ingredient strict = potion(true);
@@ -57,7 +57,7 @@ public final class IngredientSpecsGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 10)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 10)
     public static void compoundIntersectionAndDifferenceIngredientsRetainTheirChildren(GameTestHelper helper) {
         Ingredient name =
             DataComponentIngredient.of(false, DataComponents.CUSTOM_NAME, Component.literal("Medicine"), Items.POTION);
@@ -82,7 +82,7 @@ public final class IngredientSpecsGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 10)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 10)
     public static void recipeCustomDataValuesDoNotTurnIntoNbtSubsetPredicates(GameTestHelper helper) {
         CompoundTag data = new CompoundTag();
         data.putString("AmmoId", "tacz:45acp");
@@ -102,7 +102,7 @@ public final class IngredientSpecsGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 10)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 10)
     public static void containmentRequiresEveryOfferedStackToMatch(GameTestHelper helper) {
         ItemSpec broad = ItemSpec.of(Items.POTION);
         ItemSpec partial = IngredientSpecs.of(potion(false)).orElseThrow();

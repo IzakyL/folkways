@@ -13,6 +13,13 @@ SOURCE = "mods/core/src/main/java/io/github/izakyl/folkways/core"
 # Discard comments and literals so examples and diagnostic text do not create edges.
 NON_CODE = re.compile(r'"""[\s\S]*?"""|"(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\'|//[^\n]*|/\*[\s\S]*?\*/')
 REFERENCE = re.compile(r"\bio\.github\.izakyl\.folkways\.core(?:\.[A-Za-z_$][\w$]*)+")
+# Core's infrastructure (entry point, configs, persistence, UI, effects) sits beside the domain, open to every module.
+INFRASTRUCTURE = {"base", "front", "effect", "library", "upgrade"}
+
+
+def domain(path):
+    parts = Path(path).relative_to(SOURCE).parts
+    return len(parts) > 1 and parts[0] not in INFRASTRUCTURE
 
 
 def sources(ref, source=SOURCE):
@@ -69,7 +76,9 @@ def main():
     units = []
     types = {}
     for path, source in sources(args.ref):
-        code = NON_CODE.sub(lambda match: "\n" * match.group().count("\n"), source)
+        if not domain(path):
+            continue
+        code =NON_CODE.sub(lambda match: "\n" * match.group().count("\n"), source)
         package = re.search(r"\bpackage\s+([\w.]+)\s*;", code).group(1)
         types[f"{package}.{Path(path).stem}"] = package
         units.append((path, package, code))
@@ -100,7 +109,7 @@ def main():
                        for part in target.removeprefix(PREFIX).split(".")):
                     edge = f"{package.removeprefix(PREFIX)} -> {target.removeprefix(PREFIX)}"
                     violations.append(f"API dependency {edge}: {', '.join(evidence[edge])}")
-    for module in ["vanilla", "cookery", "create", "warfare", "rts", "tacz", "firefighting", "modulargolems"]:
+    for module in ["vanilla", "cookery", "create", "firearms", "golems"]:
         for path, source in sources(args.ref, f"mods/{module}/src/main/java"):
             code = NON_CODE.sub(lambda match: "\n" * match.group().count("\n"), source)
             for match in REFERENCE.finditer(code):

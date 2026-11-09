@@ -22,7 +22,7 @@ import { BUDGET } from "../shared/harness/budgets";
 import { commandPos, frames, safeAction, tryCommand, clickUnverified } from "../shared/harness/bw-helpers";
 import { newRunId } from "../shared/harness/run-id";
 
-const BOOK_ITEM = "folkways:colony_book";
+const BOOK_ITEM = "folkways_core:colony_book";
 
 test("the zone panel on camera", async ({}, testInfo) => {
   test.setTimeout(BUDGET.heavy);
@@ -136,7 +136,7 @@ test("the zone panel on camera", async ({}, testInfo) => {
 
     const kindRows = (await panelElements(client)).filter(element =>
       offered.includes(element.id ?? "") && element.id?.startsWith("folkways.zoneconfig.kind."));
-    const dining = kindRows.find(element => element.id === "folkways.zoneconfig.kind.folkways.dining");
+    const dining = kindRows.find(element => element.id === "folkways.zoneconfig.kind.folkways_vanilla.dining");
     expect(dining, "dining remains discoverable without a table provider").toBeDefined();
     expect(dining!.active).toBe(false);
     expect(await run.hover(client, dining!.id!, 12)).toBeTruthy();
@@ -166,7 +166,7 @@ return Map.of("lines", ui.getTooltipTexts().stream().map(Component::getString).t
       });
     }
 
-    await clickElement(client, { id: "folkways.zoneconfig.kind.folkways.farm" });
+    await clickElement(client, { id: "folkways.zoneconfig.kind.folkways_vanilla.farm" });
     await safeAction(() => frames(client, 4));
     await expect.poll(async () => (await tokensOf(client)).includes("folkways.draft.value.crop"),
       { timeout: 8000 }).toBe(true);

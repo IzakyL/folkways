@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.core.work.internal;
 
-import io.github.izakyl.folkways.FolkwaysConfig;
+import io.github.izakyl.folkways.core.FolkwaysConfig;
 import io.github.izakyl.folkways.core.inventory.api.InventoryFeedback;
 import io.github.izakyl.folkways.core.inventory.api.Stash;
 import io.github.izakyl.folkways.core.inventory.api.StoreRule;

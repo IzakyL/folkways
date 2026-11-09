@@ -1,10 +1,10 @@
 package io.github.izakyl.folkways.core.travel.internal.graph;
 
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.resident.api.Resident;
 import io.github.izakyl.folkways.core.travel.internal.Faring;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
-import io.github.izakyl.folkways.plugins.person.walk.Walking;
+import io.github.izakyl.folkways.vanilla.person.walk.Walking;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -24,8 +24,8 @@ import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
-@EventBusSubscriber(modid = FolkwaysMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@EventBusSubscriber(modid = FolkwaysCoreMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
+@GameTestHolder(FolkwaysCoreMod.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class TravelRetryGameTests {
 
@@ -34,7 +34,7 @@ public final class TravelRetryGameTests {
         event.register(TravelRetryGameTests.class);
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void multipleGoalsRespectDirectionAndSuspension(GameTestHelper helper) {
         Waypoints net = new Waypoints();
         int start = net.pin(new BlockPos(0, 1, 0).asLong(), 0);
@@ -60,7 +60,7 @@ public final class TravelRetryGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void promotingAPathCellPreservesItsRoute(GameTestHelper helper) {
         Waypoints net = new Waypoints();
         BlockPos a = new BlockPos(0, 1, 0);
@@ -83,7 +83,7 @@ public final class TravelRetryGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void crossingPathsJoinAtTheirSharedCell(GameTestHelper helper) {
         Waypoints net = new Waypoints();
         BlockPos crossing = new BlockPos(6, 1, 0);
@@ -109,7 +109,7 @@ public final class TravelRetryGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void walkingFailureSuspendsRoutesUntilTheyAreWitnessedAgain(GameTestHelper helper) {
         Waypoints net = new Waypoints();
         BlockPos a = new BlockPos(0, 1, 0);
@@ -141,7 +141,7 @@ public final class TravelRetryGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", batch = "long_travel", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", batch = "long_travel", timeoutTicks = 100)
     public static void meetingSearchFrontsFinishThroughTheGraph(GameTestHelper helper) {
         for (int x = 0; x <= 98; x++) {
             for (int z = 0; z <= 2; z++) {
@@ -151,7 +151,7 @@ public final class TravelRetryGameTests {
             }
         }
         Mob body = helper.spawnWithNoFreeWill(EntityType.ZOMBIE, new BlockPos(1, 2, 1));
-        ResourceLocation kind = ResourceLocation.fromNamespaceAndPath("folkways", "resident");
+        ResourceLocation kind = ResourceLocation.fromNamespaceAndPath("folkways_vanilla", "resident");
         WorldPos from = WorldPos.of(helper.getLevel(), helper.absolutePos(new BlockPos(1, 2, 1)));
         WorldPos to = from.at(helper.absolutePos(new BlockPos(97, 2, 1)));
         Waypoints net = new Waypoints();
@@ -168,11 +168,11 @@ public final class TravelRetryGameTests {
     }
 
     @SuppressWarnings("unchecked")
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void expiredDenialReopensAndWaitsToBeAskedAgain(GameTestHelper helper)
             throws ReflectiveOperationException {
         Roaming roaming = new Roaming(helper.getLevel());
-        ResourceLocation kind = ResourceLocation.fromNamespaceAndPath("folkways", "resident");
+        ResourceLocation kind = ResourceLocation.fromNamespaceAndPath("folkways_vanilla", "resident");
         Sort sort = new Sort(kind, new Bulk(1, 2));
         WorldPos from = WorldPos.of(helper.getLevel(), helper.absolutePos(BlockPos.ZERO));
         WorldPos to = from.at(from.cell().offset(20, 0, 0));
@@ -212,7 +212,7 @@ public final class TravelRetryGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void answeringWorksAWayOutOrDeniesItWithoutLater(GameTestHelper helper) {
         for (int x = 0; x <= 8; x++) {
             for (int z = 0; z <= 2; z++) {
@@ -226,7 +226,7 @@ public final class TravelRetryGameTests {
             }
         }
         Mob body = helper.spawnWithNoFreeWill(EntityType.ZOMBIE, new BlockPos(1, 2, 1));
-        ResourceLocation kind = ResourceLocation.fromNamespaceAndPath("folkways", "resident");
+        ResourceLocation kind = ResourceLocation.fromNamespaceAndPath("folkways_vanilla", "resident");
         List<Roamer> roamers = List.of(new Roamer(kind, Walking.INSTANCE, body));
         Resident who = new Resident(body.getUUID(), kind);
         WorldPos from = WorldPos.of(helper.getLevel(), helper.absolutePos(new BlockPos(1, 2, 1)));
@@ -244,13 +244,13 @@ public final class TravelRetryGameTests {
             List.of(), now);
         helper.assertTrue(denied instanceof Faring.No, "a walled-in cell must be answered no, not " + denied);
         helper.assertTrue(roaming.answered(ways -> ways.journey(new Resident(UUID.randomUUID(),
-                ResourceLocation.fromNamespaceAndPath("folkways", "nobody")), from, Set.of(open)),
+                ResourceLocation.fromNamespaceAndPath("folkways_core", "nobody")), from, Set.of(open)),
             roamers, List.of(), now) instanceof Faring.No,
             "a kind nobody here can walk for is a no");
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void droppingAWaypointForgetsOnlyItsOwnAttachments(GameTestHelper helper) {
         Waypoints net = new Waypoints();
         BlockPos a = new BlockPos(0, 1, 0);
@@ -280,7 +280,7 @@ public final class TravelRetryGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void straighteningRehomesAttachmentsOfTheRemovedWaypoint(GameTestHelper helper) {
         Waypoints net = new Waypoints();
         BlockPos a = new BlockPos(0, 1, 0);
@@ -308,7 +308,7 @@ public final class TravelRetryGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void componentStatisticsExcludeDeletedSlots(GameTestHelper helper) {
         Waypoints net = new Waypoints();
         helper.assertTrue(net.size() == 0 && net.freeze(0).apart() == 0,
@@ -346,7 +346,7 @@ public final class TravelRetryGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void attachmentsStayBoundedAndSnapshotsStayApart(GameTestHelper helper) {
         Waypoints net = new Waypoints();
         BlockPos anchor = new BlockPos(0, 1, 0);

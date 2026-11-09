@@ -160,6 +160,6 @@ test("reads task identity and rejects records without the required section", () 
 });
 
 test("completed plugin actions are parsed separately from active-node phases", () => {
-  const real = parseColony(PLAIN + " completed={folkways:wares/CraftNode=5, folkways:pasture/MilkNode=2}");
-  assert.deepEqual(real?.completed, { "folkways:wares/CraftNode": 5, "folkways:pasture/MilkNode": 2 });
+  const real = parseColony(PLAIN + " completed={folkways_vanilla:wares/CraftNode=5, folkways_vanilla:pasture/MilkNode=2}");
+  assert.deepEqual(real?.completed, { "folkways_vanilla:wares/CraftNode": 5, "folkways_vanilla:pasture/MilkNode": 2 });
 });

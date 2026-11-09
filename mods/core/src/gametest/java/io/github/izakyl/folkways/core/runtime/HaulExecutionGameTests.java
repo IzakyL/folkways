@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.core.runtime;
 
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.colony.internal.ColonyData;
 import io.github.izakyl.folkways.core.inventory.api.Stash;
 import io.github.izakyl.folkways.core.item.api.Containers;
@@ -37,10 +37,10 @@ import io.github.izakyl.folkways.core.work.internal.HaulWork;
 import io.github.izakyl.folkways.core.work.internal.Phases;
 import io.github.izakyl.folkways.core.work.internal.TransferNode;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
-import io.github.izakyl.folkways.effect.Effects;
-import io.github.izakyl.folkways.effect.perk.PerkPool;
-import io.github.izakyl.folkways.plugins.person.PersonBody;
-import io.github.izakyl.folkways.plugins.person.ResidentEntity;
+import io.github.izakyl.folkways.core.effect.Effects;
+import io.github.izakyl.folkways.core.effect.perk.PerkPool;
+import io.github.izakyl.folkways.vanilla.person.PersonBody;
+import io.github.izakyl.folkways.vanilla.person.ResidentEntity;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -67,8 +67,8 @@ import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
-@EventBusSubscriber(modid = FolkwaysMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@EventBusSubscriber(modid = FolkwaysCoreMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
+@GameTestHolder(FolkwaysCoreMod.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class HaulExecutionGameTests {
     private static final ResourceLocation OWNER = ResourceLocation.fromNamespaceAndPath("folkways_test", "lifecycle");
@@ -78,7 +78,7 @@ public final class HaulExecutionGameTests {
         event.register(HaulExecutionGameTests.class);
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void consumerWaitsForItsPredecessorToFinish(GameTestHelper helper)
             throws ReflectiveOperationException {
         var level = helper.getLevel();
@@ -103,7 +103,7 @@ public final class HaulExecutionGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void acceptingAPlanRunsOnceAndARejectedNodeCannotExecute(GameTestHelper helper)
             throws ReflectiveOperationException {
         var level = helper.getLevel();
@@ -130,7 +130,7 @@ public final class HaulExecutionGameTests {
     }
 
     // Finite and continuous work alike hand their result over, and the resident leaves before it settles.
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void residentCanLeaveBeforeTheResultSettles(GameTestHelper helper)
             throws ReflectiveOperationException {
         var level = helper.getLevel();
@@ -178,7 +178,7 @@ public final class HaulExecutionGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void failedAndCancelledNodesDoNotRunAgain(GameTestHelper helper)
             throws ReflectiveOperationException {
         var level = helper.getLevel();
@@ -215,7 +215,7 @@ public final class HaulExecutionGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void aFailureItsOwnerWaitsOutKeepsTheNodeTillTheWaitIsUp(GameTestHelper helper) {
         var level = helper.getLevel();
         AtomicReference<RefusalKind> refused = new AtomicReference<>(LaborRefusal.NOWHERE_TO_PUT_IT);
@@ -257,7 +257,7 @@ public final class HaulExecutionGameTests {
         });
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void readyConditionsAreRecheckedBeforeTakingWork(GameTestHelper helper) {
         var level = helper.getLevel();
         AtomicBoolean ready = new AtomicBoolean(true);
@@ -291,7 +291,7 @@ public final class HaulExecutionGameTests {
         return Nodes.done(spec);
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void workThatJoinsTheWorkJustDoneSharesItsWindUp(GameTestHelper helper)
             throws ReflectiveOperationException {
         int alone = ticksForTwo(helper, false);
@@ -341,7 +341,7 @@ public final class HaulExecutionGameTests {
 
     // Work that reaches into stores where it stands turns, in its one wind-up, from the store it takes from to the
     // work, and on to the store what it makes goes into.
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void workAtHandTurnsBetweenItsStoresAndTheWork(GameTestHelper helper)
             throws ReflectiveOperationException {
         var level = helper.getLevel();
@@ -390,7 +390,7 @@ public final class HaulExecutionGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void packBlockedWorkCannotEnterAReadinessQueueBeforeRunnableWork(GameTestHelper helper) {
         var level = helper.getLevel();
         var resident = PersonBody.RESIDENT.get().create(level);
@@ -439,7 +439,7 @@ public final class HaulExecutionGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void gatheringCargoDoesNotPollUnrelatedWorkReadiness(GameTestHelper helper)
             throws ReflectiveOperationException {
         var level = helper.getLevel();
@@ -489,7 +489,7 @@ public final class HaulExecutionGameTests {
         };
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void batchPerksGatherRealCommonSourceLoadsWithinRankAndPackLimits(GameTestHelper helper) {
         for (int rank = 0; rank <= 3; rank++) {
             verifyGatheredRoute(helper, rank, 5, rank == 0 ? 1 : rank + 1);
@@ -502,7 +502,7 @@ public final class HaulExecutionGameTests {
         verifyGatheredRoute(helper, rank, packCells, batchLimit, 0, 5);
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void batchPerksGatherNearbyCommonDestinationLoadsButRejectLongDetours(GameTestHelper helper) {
         verifyGatheredRoute(helper, 1, 2, 2, 1, 2);
         verifyGatheredRoute(helper, 1, 2, 1, -5, 2);

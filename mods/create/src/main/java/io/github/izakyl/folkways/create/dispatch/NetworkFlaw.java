@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.create.dispatch;
 
-import io.github.izakyl.folkways.front.api.notice.NoticeKind;
+import io.github.izakyl.folkways.core.front.api.notice.NoticeKind;
 import java.util.Locale;
 import java.util.Optional;
 import net.minecraft.resources.ResourceLocation;

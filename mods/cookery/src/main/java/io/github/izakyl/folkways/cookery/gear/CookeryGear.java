@@ -8,7 +8,7 @@ import io.github.izakyl.folkways.core.item.api.Goods;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import io.github.izakyl.folkways.core.resident.api.Body;
 import io.github.izakyl.folkways.core.work.api.Node;
-import io.github.izakyl.folkways.plugins.farming.FarmingContent;
+import io.github.izakyl.folkways.vanilla.farming.FarmingContent;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;

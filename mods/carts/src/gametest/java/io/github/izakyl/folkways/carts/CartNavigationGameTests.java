@@ -1,7 +1,7 @@
 package io.github.izakyl.folkways.carts;
 
 import com.jusipat.astikorcartsredux.entity.AbstractCargoCart;
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.colony.api.ClaimRelease;
 import io.github.izakyl.folkways.core.colony.api.Claimed;
 import io.github.izakyl.folkways.core.colony.api.Colonies;
@@ -13,9 +13,9 @@ import io.github.izakyl.folkways.core.travel.internal.Trip;
 import io.github.izakyl.folkways.core.travel.internal.graph.Roamer;
 import io.github.izakyl.folkways.core.travel.internal.graph.Roaming;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
-import io.github.izakyl.folkways.plugins.person.PersonBody;
-import io.github.izakyl.folkways.plugins.person.PersonContent;
-import io.github.izakyl.folkways.plugins.person.ResidentEntity;
+import io.github.izakyl.folkways.vanilla.person.PersonBody;
+import io.github.izakyl.folkways.vanilla.person.PersonContent;
+import io.github.izakyl.folkways.vanilla.person.ResidentEntity;
 import java.util.List;
 import java.util.Set;
 import net.minecraft.core.BlockPos;
@@ -35,7 +35,7 @@ import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
 @EventBusSubscriber(modid = FolkwaysCartsMod.ID, bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@GameTestHolder("folkways_carts")
 @PrefixGameTestTemplate(false)
 public final class CartNavigationGameTests {
     @SubscribeEvent
@@ -43,7 +43,7 @@ public final class CartNavigationGameTests {
         event.register(CartNavigationGameTests.class);
     }
 
-    @GameTest(template = "empty", batch = "cart_navigation", timeoutTicks = 500)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", batch = "cart_navigation", timeoutTicks = 500)
     public static void doorSeparatesSameKindAnswersAndUnhitchingRestoresWalking(GameTestHelper helper) {
         Route rig = new Route(helper, 1, false, "hand_cart");
         var bare = rig.resident(rig.start.south());
@@ -85,12 +85,12 @@ public final class CartNavigationGameTests {
         });
     }
 
-    @GameTest(template = "empty", batch = "cart_gateway", timeoutTicks = 500)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", batch = "cart_gateway", timeoutTicks = 500)
     public static void widerGatewayKeepsHandCartHitchedUnderRealNavigation(GameTestHelper helper) {
         follow(helper, false, "hand_cart");
     }
 
-    @GameTest(template = "empty", batch = "cart_corner", timeoutTicks = 500)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", batch = "cart_corner", timeoutTicks = 500)
     public static void cornerKeepsHandCartHitchedUnderRealNavigation(GameTestHelper helper) {
         follow(helper, true, "hand_cart");
     }

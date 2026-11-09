@@ -17,13 +17,13 @@ export const ZONE_FIXTURES = defineTask<{ player: string }, { ok: true; zones: A
     imports: [
       "net.minecraft.server.MinecraftServer",
       "net.minecraft.world.level.block.Blocks",
-      "io.github.izakyl.folkways.plugins.groundwork.GroundworkContent",
-      "io.github.izakyl.folkways.front.engine.Enrollments",
-      "io.github.izakyl.folkways.front.api.Shape",
-      "io.github.izakyl.folkways.front.engine.colony.ZoneDrafts",
-      "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
-      "io.github.izakyl.folkways.front.engine.colony.ColonySettings",
-      "io.github.izakyl.folkways.front.engine.charter.CurrentColony",
+      "io.github.izakyl.folkways.vanilla.groundwork.GroundworkContent",
+      "io.github.izakyl.folkways.core.front.engine.Enrollments",
+      "io.github.izakyl.folkways.core.front.api.Shape",
+      "io.github.izakyl.folkways.core.front.engine.colony.ZoneDrafts",
+      "io.github.izakyl.folkways.core.front.engine.colony.ColonyGround",
+      "io.github.izakyl.folkways.core.front.engine.colony.ColonySettings",
+      "io.github.izakyl.folkways.core.front.engine.charter.CurrentColony",
     ],
     body: `
 MinecraftServer server = ctx.server();
@@ -61,7 +61,7 @@ export const OPEN_ZONE = defineTask<{ player: string; zone: string }, { ok: true
   side: "server",
   timeoutMs: 20_000,
   source: javaTask({
-    imports: ["net.minecraft.server.MinecraftServer", "io.github.izakyl.folkways.front.ui.screen.ColonyShell"],
+    imports: ["net.minecraft.server.MinecraftServer", "io.github.izakyl.folkways.core.front.ui.screen.ColonyShell"],
     body: `
 MinecraftServer server = ctx.server();
 Args args = Args.of(ctx);

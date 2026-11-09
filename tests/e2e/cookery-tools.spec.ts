@@ -14,6 +14,7 @@ import { twins, type Stage, type Vec } from "../shared/harness/stage";
 import { markSouthRack } from "../shared/cookery/rack";
 import { clickElement } from "../ldlib2";
 import { scrollCellIntoView } from "../shared/ui/site-panel";
+import { showVocationColumn } from "../shared/ui/vocation-groups";
 import { frames, waitForElement } from "../shared/harness/bw-helpers";
 
 const K = "kaleidoscope_cookery:";
@@ -43,7 +44,7 @@ const OBSERVE = defineTask<{ mode: string; player: string; rack: Vec; boards: Ve
     imports: [
       "com.github.ysbbbbbb.kaleidoscopecookery.blockentity.kitchen.ChoppingBoardBlockEntity",
       "com.github.ysbbbbbb.kaleidoscopecookery.init.tag.TagMod",
-      "io.github.izakyl.folkways.front.api.Books",
+      "io.github.izakyl.folkways.core.front.api.Books",
       "io.github.izakyl.folkways.core.colony.api.Colony",
       "io.github.izakyl.folkways.core.resident.api.Bodies",
       "io.github.izakyl.folkways.core.world.api.WorldPos",
@@ -182,7 +183,7 @@ for (const stage of twins()) test(stage.title("shared cookery tools: one named r
       server: { trace: tracePath("e2e", stage.name("cookery-tools-server-" + runId)), instance: seededServer(stage.name("cookery-tools-server-" + runId)) },
       client: { trace: tracePath("e2e", stage.name("cookery-tools-client-" + runId)), instance: stage.name("cookery-tools-client-" + runId) },
       snapshot: () => ({ containers: cells ? [cells.supply, cells.noodles, cells.meat].map(at => stage.at(at)) : [],
-        entityTypes: ["folkways:resident", "minecraft:item"] }),
+        entityTypes: ["folkways_vanilla:resident", "minecraft:item"] }),
     });
     const { server, client } = pair;
     const grounded = await waitForGroundedPlayer(server);
@@ -302,7 +303,7 @@ const ROLES = defineTask<{ player: string }, { residents: string[]; vocations: s
   side: "server",
   timeoutMs: 20000,
   source: javaTask({
-    imports: ["io.github.izakyl.folkways.front.api.Books", "io.github.izakyl.folkways.core.vocation.api.Vocations"],
+    imports: ["io.github.izakyl.folkways.core.front.api.Books", "io.github.izakyl.folkways.core.vocation.api.Vocations"],
     body: `
 var player = ctx.server().getPlayerList().getPlayerByName(Args.of(ctx).string("player"));
 var colony = Books.acting(player).orElseThrow();
@@ -320,11 +321,12 @@ async function cookingRoles(server: MinecraftServer, client: MinecraftClient, pl
   try {
     await clickElement(client, { id: "folkways.tab.residents" });
     for (const resident of roster.residents) for (const vocation of roster.vocations) {
-      const enabled = vocation === "folkways:crafting" || vocation === "folkways:hauling";
+      const enabled = vocation === "folkways_vanilla:crafting" || vocation === "folkways_core:hauling";
       const before = await vocationPriority(server, resident, vocation);
       if ((before > 0) === enabled) continue;
       const row = "folkways.resident.row." + resident.slice(0, 8);
       const cell = "folkways.resident.vocation." + vocation.replace(/[:/]/g, ".") + "." + resident.slice(0, 8);
+      await showVocationColumn(server, client, "folkways.resident", vocation, cell);
       await scrollCellIntoView(server, client, row, cell);
       await waitForElement(client, { id: cell }, { timeoutMs: 8000 });
       const click = await clickElement(client, { id: cell });

@@ -52,7 +52,7 @@ test("the view from above: the book worked by mouse from a flying camera, and a 
     const standing = (at: { x: number; z: number }) => `${at.x + 0.5} ${tops.get(`${at.x},${at.z}`)! + 1} ${at.z + 0.5}`;
 
     await world.command(server, `tp ${player} ${standing(BASE)} 180 14`);
-    await world.command(server, `item replace entity ${player} weapon.mainhand with folkways:colony_book`);
+    await world.command(server, `item replace entity ${player} weapon.mainhand with folkways_core:colony_book`);
     const founded = await foundPromoColonyFast(server, player, site.members as Vec[]);
     const colony_id = founded.colony_id;
     run.note("admitted", await admitPromoSettlersFast(server, player, colony_id, RESIDENTS));
@@ -240,7 +240,7 @@ const CREW = defineTask<Record<string, any>, Record<string, any>>({
   timeoutMs: 20_000,
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.front.engine.colony.*",
+      "io.github.izakyl.folkways.core.front.engine.colony.*",
       "io.github.izakyl.folkways.core.resident.api.Bodies",
       "io.github.izakyl.folkways.core.vocation.api.Vocations",
       "net.minecraft.core.BlockPos",
@@ -253,7 +253,7 @@ var server=ctx.server();var level=server.overworld();var args=Args.of(ctx);
 var colony=ColonyGround.of(server,UUID.fromString(args.string("colony_id"))).orElseThrow();
 var base=(Map<?,?>)args.value("base");var field=(Map<?,?>)args.value("field");int fy=(int)args.integer("y");
 int bx=((Number)base.get("x")).intValue(),bz=((Number)base.get("z")).intValue();
-var zone=ZoneDrafts.zone(level,colony,ResourceLocation.parse("folkways:farm"),
+var zone=ZoneDrafts.zone(level,colony,ResourceLocation.parse("folkways_vanilla:farm"),
   new BlockPos(((Number)field.get("minX")).intValue(),fy,((Number)field.get("minZ")).intValue()),
   new BlockPos(((Number)field.get("maxX")).intValue(),fy+1,((Number)field.get("maxZ")).intValue()),
   ColonySettings.empty().with("crop",new ColonySettings.Value.Choice(ResourceLocation.parse("minecraft:wheat")))).orElseThrow();
@@ -283,7 +283,7 @@ const RESIDENTS_AT = defineTask<Record<string, any>, Record<string, any>>({
   side: "server",
   timeoutMs: 20_000,
   source: javaTask({
-    imports: ["io.github.izakyl.folkways.front.engine.colony.ColonyGround"],
+    imports: ["io.github.izakyl.folkways.core.front.engine.colony.ColonyGround"],
     body: `
 var server=ctx.server();var level=server.overworld();var args=Args.of(ctx);
 var colony=ColonyGround.of(server,UUID.fromString(args.string("colony_id"))).orElseThrow();
@@ -342,9 +342,9 @@ const SITES = defineTask<Record<string, any>, Record<string, any>>({
   timeoutMs: 20_000,
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.front.api.Facing",
-      "io.github.izakyl.folkways.front.api.notice.Line",
-      "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
+      "io.github.izakyl.folkways.core.front.api.Facing",
+      "io.github.izakyl.folkways.core.front.api.notice.Line",
+      "io.github.izakyl.folkways.core.front.engine.colony.ColonyGround",
     ],
     body: `
 var server=ctx.server();var level=server.overworld();var args=Args.of(ctx);

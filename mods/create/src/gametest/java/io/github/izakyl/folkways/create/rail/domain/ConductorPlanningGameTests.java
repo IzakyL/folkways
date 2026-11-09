@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.create.rail.domain;
 
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.inventory.internal.Stands;
 import io.github.izakyl.folkways.core.plan.api.Grown;
 import io.github.izakyl.folkways.core.plan.internal.Claims;
@@ -16,7 +16,7 @@ import io.github.izakyl.folkways.core.travel.internal.Ways;
 import io.github.izakyl.folkways.core.work.api.Stances;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.create.FolkwaysCreateMod;
-import io.github.izakyl.folkways.plugins.person.PersonBody;
+import io.github.izakyl.folkways.vanilla.person.PersonBody;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -33,7 +33,7 @@ import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
 @EventBusSubscriber(modid = FolkwaysCreateMod.ID, bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@GameTestHolder("folkways_create")
 @PrefixGameTestTemplate(false)
 public final class ConductorPlanningGameTests {
     @SubscribeEvent
@@ -41,7 +41,7 @@ public final class ConductorPlanningGameTests {
         event.register(ConductorPlanningGameTests.class);
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void theResidentTakingTheSeatAlsoGetsTheDrivingTask(GameTestHelper helper) {
         var level = helper.getLevel();
         WorldPos at = WorldPos.of(level, helper.absolutePos(BlockPos.ZERO));

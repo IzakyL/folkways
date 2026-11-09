@@ -4,7 +4,7 @@ import com.github.ysbbbbbb.kaleidoscopecookery.blockentity.kitchen.BambooTrayBlo
 import com.github.ysbbbbbb.kaleidoscopecookery.crafting.recipe.BambooTrayRecipe;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModRecipes;
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.cookery.CookeryContent;
 import io.github.izakyl.folkways.cookery.KitchenBookings;
 import io.github.izakyl.folkways.cookery.testing.KitchenRecoveryWanted;
@@ -25,8 +25,8 @@ import io.github.izakyl.folkways.core.work.api.WorkSite;
 import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.core.work.support.Leaves;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
-import io.github.izakyl.folkways.plugins.person.PersonBody;
-import io.github.izakyl.folkways.plugins.person.ResidentEntity;
+import io.github.izakyl.folkways.vanilla.person.PersonBody;
+import io.github.izakyl.folkways.vanilla.person.ResidentEntity;
 import java.util.List;
 import java.util.UUID;
 import java.util.function.BiFunction;
@@ -57,7 +57,7 @@ import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
 @EventBusSubscriber(modid = "folkways_cookery", bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@GameTestHolder("folkways_cookery")
 @PrefixGameTestTemplate(false)
 public final class TrayGameTests {
     private static final String LEAVES = "drying/fresh_tea_leaves_to_dried_tea_leaves";
@@ -65,7 +65,7 @@ public final class TrayGameTests {
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) { event.register(TrayGameTests.class); }
 
-    @GameTest(template = "empty", timeoutTicks = 2200)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 2200)
     public static void hardUrgesPreserveTheAcceptedDryingBatch(GameTestHelper helper) {
         Rig rig = new Rig(helper, LEAVES);
         TrayWork work = rig.plan();
@@ -89,88 +89,88 @@ public final class TrayGameTests {
                 ready.tray().getItem(0).isEmpty() && ready.drops().isEmpty(),
                 "no duplicate remains");
             }); }
-    @GameTest(template = "empty", timeoutTicks = 2200)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 2200)
     public static void drying_fresh_tea_leaves_to_dried_tea_leaves(GameTestHelper helper) { runRecipe(helper, "drying/fresh_tea_leaves_to_dried_tea_leaves"); }
 
-    @GameTest(template = "empty", timeoutTicks = 2200)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 2200)
     public static void drying_kelp_to_dried_kelp(GameTestHelper helper) { runRecipe(helper, "drying/kelp_to_dried_kelp"); }
 
-    @GameTest(template = "empty", timeoutTicks = 2200)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 2200)
     public static void drying_mud_to_clay(GameTestHelper helper) { runRecipe(helper, "drying/mud_to_clay"); }
 
-    @GameTest(template = "empty", timeoutTicks = 2200)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 2200)
     public static void drying_rotten_flesh_to_leather(GameTestHelper helper) { runRecipe(helper, "drying/rotten_flesh_to_leather"); }
 
-    @GameTest(template = "empty", timeoutTicks = 2200)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 2200)
     public static void drying_wet_sponge_to_sponge(GameTestHelper helper) { runRecipe(helper, "drying/wet_sponge_to_sponge"); }
 
-    @GameTest(template = "empty", timeoutTicks = 2200)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 2200)
     public static void wetting_black_concrete_powder_to_black_concrete(GameTestHelper helper) { runRecipe(helper, "wetting/black_concrete_powder_to_black_concrete"); }
 
-    @GameTest(template = "empty", timeoutTicks = 2200)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 2200)
     public static void wetting_blue_concrete_powder_to_blue_concrete(GameTestHelper helper) { runRecipe(helper, "wetting/blue_concrete_powder_to_blue_concrete"); }
 
-    @GameTest(template = "empty", timeoutTicks = 2200)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 2200)
     public static void wetting_brown_concrete_powder_to_brown_concrete(GameTestHelper helper) { runRecipe(helper, "wetting/brown_concrete_powder_to_brown_concrete"); }
 
-    @GameTest(template = "empty", timeoutTicks = 2200)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 2200)
     public static void wetting_clay_to_mud(GameTestHelper helper) { runRecipe(helper, "wetting/clay_to_mud"); }
 
-    @GameTest(template = "empty", timeoutTicks = 2200)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 2200)
     public static void wetting_copper_block_to_oxidized_copper(GameTestHelper helper) { runRecipe(helper, "wetting/copper_block_to_oxidized_copper"); }
 
-    @GameTest(template = "empty", timeoutTicks = 2200)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 2200)
     public static void wetting_cyan_concrete_powder_to_cyan_concrete(GameTestHelper helper) { runRecipe(helper, "wetting/cyan_concrete_powder_to_cyan_concrete"); }
 
-    @GameTest(template = "empty", timeoutTicks = 2200)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 2200)
     public static void wetting_dirt_to_mud(GameTestHelper helper) { runRecipe(helper, "wetting/dirt_to_mud"); }
 
-    @GameTest(template = "empty", timeoutTicks = 2200)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 2200)
     public static void wetting_dried_kelp_to_kelp(GameTestHelper helper) { runRecipe(helper, "wetting/dried_kelp_to_kelp"); }
 
-    @GameTest(template = "empty", timeoutTicks = 2200)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 2200)
     public static void wetting_dried_tea_leaves_to_fresh_tea_leaves(GameTestHelper helper) { runRecipe(helper, "wetting/dried_tea_leaves_to_fresh_tea_leaves"); }
 
-    @GameTest(template = "empty", timeoutTicks = 2200)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 2200)
     public static void wetting_gray_concrete_powder_to_gray_concrete(GameTestHelper helper) { runRecipe(helper, "wetting/gray_concrete_powder_to_gray_concrete"); }
 
-    @GameTest(template = "empty", timeoutTicks = 2200)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 2200)
     public static void wetting_green_concrete_powder_to_green_concrete(GameTestHelper helper) { runRecipe(helper, "wetting/green_concrete_powder_to_green_concrete"); }
 
-    @GameTest(template = "empty", timeoutTicks = 2200)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 2200)
     public static void wetting_leather_to_rotten_flesh(GameTestHelper helper) { runRecipe(helper, "wetting/leather_to_rotten_flesh"); }
 
-    @GameTest(template = "empty", timeoutTicks = 2200)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 2200)
     public static void wetting_light_blue_concrete_powder_to_light_blue_concrete(GameTestHelper helper) { runRecipe(helper, "wetting/light_blue_concrete_powder_to_light_blue_concrete"); }
 
-    @GameTest(template = "empty", timeoutTicks = 2200)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 2200)
     public static void wetting_light_gray_concrete_powder_to_light_gray_concrete(GameTestHelper helper) { runRecipe(helper, "wetting/light_gray_concrete_powder_to_light_gray_concrete"); }
 
-    @GameTest(template = "empty", timeoutTicks = 2200)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 2200)
     public static void wetting_lime_concrete_powder_to_lime_concrete(GameTestHelper helper) { runRecipe(helper, "wetting/lime_concrete_powder_to_lime_concrete"); }
 
-    @GameTest(template = "empty", timeoutTicks = 2200)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 2200)
     public static void wetting_magenta_concrete_powder_to_magenta_concrete(GameTestHelper helper) { runRecipe(helper, "wetting/magenta_concrete_powder_to_magenta_concrete"); }
 
-    @GameTest(template = "empty", timeoutTicks = 2200)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 2200)
     public static void wetting_orange_concrete_powder_to_orange_concrete(GameTestHelper helper) { runRecipe(helper, "wetting/orange_concrete_powder_to_orange_concrete"); }
 
-    @GameTest(template = "empty", timeoutTicks = 2200)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 2200)
     public static void wetting_pink_concrete_powder_to_pink_concrete(GameTestHelper helper) { runRecipe(helper, "wetting/pink_concrete_powder_to_pink_concrete"); }
 
-    @GameTest(template = "empty", timeoutTicks = 2200)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 2200)
     public static void wetting_purple_concrete_powder_to_purple_concrete(GameTestHelper helper) { runRecipe(helper, "wetting/purple_concrete_powder_to_purple_concrete"); }
 
-    @GameTest(template = "empty", timeoutTicks = 2200)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 2200)
     public static void wetting_red_concrete_powder_to_red_concrete(GameTestHelper helper) { runRecipe(helper, "wetting/red_concrete_powder_to_red_concrete"); }
 
-    @GameTest(template = "empty", timeoutTicks = 2200)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 2200)
     public static void wetting_sponge_to_wet_sponge(GameTestHelper helper) { runRecipe(helper, "wetting/sponge_to_wet_sponge"); }
 
-    @GameTest(template = "empty", timeoutTicks = 2200)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 2200)
     public static void wetting_white_concrete_powder_to_white_concrete(GameTestHelper helper) { runRecipe(helper, "wetting/white_concrete_powder_to_white_concrete"); }
 
-    @GameTest(template = "empty", timeoutTicks = 2200)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 2200)
     public static void wetting_yellow_concrete_powder_to_yellow_concrete(GameTestHelper helper) { runRecipe(helper, "wetting/yellow_concrete_powder_to_yellow_concrete"); }
 
     private static void runRecipe(GameTestHelper helper, String recipe) {
@@ -192,7 +192,7 @@ public final class TrayGameTests {
         });
     }
 
-    @GameTest(template = "empty", timeoutTicks = 2200)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 2200)
     public static void anotherPlayersSlotIsNeverIncludedInTheOwnedTake(GameTestHelper helper) {
         Rig rig = new Rig(helper, LEAVES);
         rig.tray().onPutItem(rig.level, rig.actor, new ItemStack(Items.APPLE, 3), 1);
@@ -205,7 +205,7 @@ public final class TrayGameTests {
         });
     }
 
-    @GameTest(template = "empty", timeoutTicks = 2300)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 2300)
     public static void anOpaqueRoofPausesDryingAndRemovingItResumesTheNativeRecipe(GameTestHelper helper) {
         Rig rig = new Rig(helper, LEAVES);
         TrayWork[] recovered = new TrayWork[1];
@@ -265,7 +265,7 @@ public final class TrayGameTests {
             .thenSucceed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 1300)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 1300)
     public static void removingActualDripstoneWaterPausesWettingWithoutChangingItsAcceptedInput(GameTestHelper helper) {
         Rig rig = new Rig(helper, MUD);
         TrayWork work = rig.load();
@@ -278,7 +278,7 @@ public final class TrayGameTests {
         afterProcessing(rig, ready -> helper.assertTrue(ready.step(work) instanceof Outcome.Done, "the same native wetting batch resumes after water returns"));
     }
 
-    @GameTest(template = "empty", timeoutTicks = 2200)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 2200)
     public static void cancellationAndBlockEntityReloadRecoverTheSlotWithoutAnotherInputBudget(GameTestHelper helper) {
         Rig rig = new Rig(helper, LEAVES);
         rig.load(); rig.hold.release(Ending.REVOKED);
@@ -298,7 +298,7 @@ public final class TrayGameTests {
         });
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void withdrawingAPlannedTrayReturnsTheOriginalIngredientsWithoutPuttingAny(GameTestHelper helper) {
         try (Rig rig = new Rig(helper, LEAVES)) {
             TrayWork work = rig.plan();
@@ -312,7 +312,7 @@ public final class TrayGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void aPlayerAppendingMoreLeavesInvalidatesTheFullComponentAndCountClaim(GameTestHelper helper) {
         try (Rig rig = new Rig(helper, LEAVES)) {
             TrayWork work = rig.load();
@@ -324,7 +324,7 @@ public final class TrayGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 2200)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 2200)
     public static void aNativeTakeHookThrowingAfterClearStillSettlesItsActualHandProduct(GameTestHelper helper) {
         Rig rig = new Rig(helper, LEAVES);
         TrayWork work = rig.load();

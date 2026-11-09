@@ -33,8 +33,8 @@ const IMPORTS = [
   "io.github.izakyl.folkways.core.colony.api.Colonies",
   "io.github.izakyl.folkways.core.colony.api.Claimed",
   "io.github.izakyl.folkways.core.resident.api.Body",
-  "io.github.izakyl.folkways.plugins.person.PersonBody",
-  "io.github.izakyl.folkways.plugins.person.PersonContent",
+  "io.github.izakyl.folkways.vanilla.person.PersonBody",
+  "io.github.izakyl.folkways.vanilla.person.PersonContent",
 ];
 
 test("resident hostility follows native behavior and live data-pack policy", async ({}, testInfo) => {
@@ -47,7 +47,7 @@ test("resident hostility follows native behavior and live data-pack policy", asy
     pair = await launchPair({
       server: { instance: `hostility-policy-server-${run}` },
       client: { instance: `hostility-policy-client-${run}` },
-      snapshot: { entityTypes: ["folkways:resident", "minecraft:zombie", "minecraft:skeleton", "minecraft:arrow",
+      snapshot: { entityTypes: ["folkways_vanilla:resident", "minecraft:zombie", "minecraft:skeleton", "minecraft:arrow",
         "minecraft:spider", "minecraft:silverfish", "minecraft:creeper"] },
     });
     const { server } = pair;
@@ -137,7 +137,7 @@ test("resident hostility follows native behavior and live data-pack policy", asy
       throw new Error(`could not resolve the world's data-pack directory: ${JSON.stringify(pack)}`);
     }
     const packRoot = path.join(pack.dir, packName);
-    const tagRoot = path.join(packRoot, "data", "folkways", "tags", "entity_type");
+    const tagRoot = path.join(packRoot, "data", "folkways_vanilla", "tags", "entity_type");
     mkdirSync(tagRoot, { recursive: true });
     writeFileSync(path.join(packRoot, "pack.mcmeta"), JSON.stringify({
       pack: { pack_format: pack.format, description: "Folkways hostility policy e2e" },
@@ -254,9 +254,9 @@ const READ_TAGS = defineTask<void, TagState>({
       "net.minecraft.world.entity.EntityType",
     ],
     body: `
-var probe = TagKey.create(Registries.ENTITY_TYPE, ResourceLocation.fromNamespaceAndPath("folkways", "policy_probe"));
-var residentEnemies = TagKey.create(Registries.ENTITY_TYPE, ResourceLocation.fromNamespaceAndPath("folkways", "resident_enemies"));
-var ignored = TagKey.create(Registries.ENTITY_TYPE, ResourceLocation.fromNamespaceAndPath("folkways", "ignored_resident_enemies"));
+var probe = TagKey.create(Registries.ENTITY_TYPE, ResourceLocation.fromNamespaceAndPath("folkways_vanilla", "policy_probe"));
+var residentEnemies = TagKey.create(Registries.ENTITY_TYPE, ResourceLocation.fromNamespaceAndPath("folkways_vanilla", "resident_enemies"));
+var ignored = TagKey.create(Registries.ENTITY_TYPE, ResourceLocation.fromNamespaceAndPath("folkways_vanilla", "ignored_resident_enemies"));
 return Map.of("probe", EntityType.BAT.is(probe), "silverfish", EntityType.SILVERFISH.is(residentEnemies),
   "spiderIgnored", EntityType.SPIDER.is(ignored));
 `,

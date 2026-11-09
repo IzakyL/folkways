@@ -1,11 +1,11 @@
 package io.github.izakyl.folkways.cookery;
 
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.resident.api.Body;
 import io.github.izakyl.folkways.core.testing.TestWorker;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.core.world.api.WorldSpaces;
-import io.github.izakyl.folkways.plugins.person.PersonBody;
+import io.github.izakyl.folkways.vanilla.person.PersonBody;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -27,7 +27,7 @@ import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
 @EventBusSubscriber(modid = "folkways_cookery", bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@GameTestHolder("folkways_cookery")
 @PrefixGameTestTemplate(false)
 public final class KitchenDeliveryGameTests {
 
@@ -36,7 +36,7 @@ public final class KitchenDeliveryGameTests {
         event.register(KitchenDeliveryGameTests.class);
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void rotatedStationDropsOutsideTheWorkersAreaAreDeliveredOnce(GameTestHelper helper) {
         var level = helper.getLevel();
         BlockPos storage = helper.absolutePos(new BlockPos(2, 1, 2));

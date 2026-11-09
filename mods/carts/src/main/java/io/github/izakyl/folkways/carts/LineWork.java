@@ -1,7 +1,7 @@
 package io.github.izakyl.folkways.carts;
 
 import com.jusipat.astikorcartsredux.entity.AbstractCargoCart;
-import io.github.izakyl.folkways.FolkwaysConfig;
+import io.github.izakyl.folkways.core.FolkwaysConfig;
 import io.github.izakyl.folkways.core.colony.api.Claimed;
 import io.github.izakyl.folkways.core.item.api.Containers;
 import io.github.izakyl.folkways.core.item.api.Goods;
@@ -78,7 +78,7 @@ final class LineWork {
             this.lines = lines;
             this.line = line;
             this.at = at;
-            this.spec = work(UUID.nameUUIDFromBytes(("folkways:carts/place/" + line.id()).getBytes()),
+            this.spec = work(UUID.nameUUIDFromBytes(("folkways_carts:carts/place/" + line.id()).getBytes()),
                 new WorkSite.AtBlock(at.at()), at.stances(), Workload.Once.of(reach()))
                 .needs(new Need(cartSpec(line.kind()), 1))
                 .done();

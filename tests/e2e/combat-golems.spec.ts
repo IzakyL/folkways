@@ -37,7 +37,7 @@ test("real Modular Golems retain humanoid and barehanded combat, and recover nat
     await world.command(server, "difficulty normal");
     await world.command(server, `fill ${x - 8} ${y - 1} ${z - 8} ${x + 12} ${y - 1} ${z + 8} minecraft:stone`);
     await world.command(server, `fill ${x - 8} ${y} ${z - 8} ${x + 12} ${y + 5} ${z + 8} minecraft:air`, { allowFailure: true });
-    await world.command(server, `item replace entity ${player.name} weapon.mainhand with folkways:colony_book`);
+    await world.command(server, `item replace entity ${player.name} weapon.mainhand with folkways_core:colony_book`);
     const colony = String((await runColonyTask(server, BIND_COLONY, { player: player.name })).colony_id);
     await world.command(server, `gamemode spectator ${player.name}`);
 
@@ -101,7 +101,7 @@ const IMPORTS = [
   "net.minecraft.server.MinecraftServer", "net.minecraft.world.entity.Mob", "net.minecraft.world.entity.EntityType",
   "net.minecraft.world.entity.ai.attributes.Attributes", "net.minecraft.world.item.ItemStack", "net.minecraft.world.item.Items",
   "io.github.izakyl.folkways.core.resident.api.Bodies", "io.github.izakyl.folkways.core.colony.api.Colonies",
-  "io.github.izakyl.folkways.front.engine.colony.ColonyGround", "io.github.izakyl.folkways.front.engine.colony.Endorsements",
+  "io.github.izakyl.folkways.core.front.engine.colony.ColonyGround", "io.github.izakyl.folkways.core.front.engine.colony.Endorsements",
 ];
 
 const PREPARE = defineTask<Omit<Scene, "foe">, Scene>({
@@ -154,7 +154,7 @@ return Map.ofEntries(Map.entry("className", golem.getClass().getName()), Map.ent
   Map.entry("fighting", body.doing().map(doing -> doing.what().getPath().equals("fighting")).orElse(false)),
   Map.entry("doing", body.doing().toString()), Map.entry("targetGoals", golem.targetSelector.getAvailableGoals().size()),
   Map.entry("nativeGoals", golem.goalSelector.getAvailableGoals().stream().filter(wrapped ->
-    !wrapped.getGoal().getClass().getName().equals("io.github.izakyl.folkways.plugins.person.walk.OpenDoorwayGoal")).count()),
+    !wrapped.getGoal().getClass().getName().equals("io.github.izakyl.folkways.vanilla.person.walk.OpenDoorwayGoal")).count()),
   Map.entry("hasNativeTarget", golem.getTarget() != null),
   Map.entry("swords", swords), Map.entry("swordDamage", damage), Map.entry("bound", body.colonyId().isPresent()));
 ` }),

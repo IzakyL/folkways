@@ -6,7 +6,7 @@ import { runColonyTask } from "./colony-tasks";
 export type HeldCell = { owner: string; frame?: string; local?: string; unplaced?: boolean; x: number; y: number; z: number };
 
 const COLONY_IMPORTS = [
-  "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
+  "io.github.izakyl.folkways.core.front.engine.colony.ColonyGround",
   "io.github.izakyl.folkways.core.world.api.Realm",
   "io.github.izakyl.folkways.core.world.api.WorldSpaces",
   "net.minecraft.core.registries.BuiltInRegistries",
@@ -60,7 +60,7 @@ for(var view:colony.views(server)){
     one.put("x",at.getX());one.put("y",at.getY());one.put("z",at.getZ());
     cells.add(one);
   }
-  for(var pos:view.blocks(ResourceLocation.parse("folkways:store")))
+  for(var pos:view.blocks(ResourceLocation.parse("folkways_vanilla:store")))
     if(view.level().getBlockEntity(pos) instanceof Container chest)
       for(int i=0;i<chest.getContainerSize();i++){var stack=chest.getItem(i);if(stack.is(item))stock+=stack.getCount();}
 }
@@ -75,7 +75,7 @@ const HOPS = defineTask<Record<string, any>, Record<string, any>>({
   timeoutMs: 20_000,
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
+      "io.github.izakyl.folkways.core.front.engine.colony.ColonyGround",
       "io.github.izakyl.folkways.core.shell.structure.SablePassage",
     ],
     body: `

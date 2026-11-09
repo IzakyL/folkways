@@ -23,10 +23,10 @@ const VINEYARD = defineTask<Record<string, any>, any>({
     "com.github.ysbbbbbb.kaleidoscopetavern.block.plant.GrapevineTrellisBlock",
     "com.github.ysbbbbbb.kaleidoscopetavern.block.plant.GrapeCropBlock",
     "io.github.izakyl.folkways.core.colony.api.Colonies",
-    "io.github.izakyl.folkways.front.engine.colony.ColonyFront",
-    "io.github.izakyl.folkways.front.engine.colony.ColonySettings",
-    "io.github.izakyl.folkways.plugins.farming.FarmingContent",
-    "io.github.izakyl.folkways.plugins.farming.HarvestMethods",
+    "io.github.izakyl.folkways.core.front.engine.colony.ColonyFront",
+    "io.github.izakyl.folkways.core.front.engine.colony.ColonySettings",
+    "io.github.izakyl.folkways.vanilla.farming.FarmingContent",
+    "io.github.izakyl.folkways.vanilla.farming.HarvestMethods",
     "net.minecraft.resources.ResourceLocation", "net.minecraft.core.BlockPos",
   ], body: `
 var args = Args.of(ctx);

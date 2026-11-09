@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.core.travel.internal;
 
-import io.github.izakyl.folkways.FolkwaysConfig;
+import io.github.izakyl.folkways.core.FolkwaysConfig;
 import io.github.izakyl.folkways.core.resident.api.Searches;
 import java.util.Arrays;
 import java.util.Map;

@@ -24,8 +24,8 @@ const RESIDENTS = 2;
 const MEMBER_CELLS = RESIDENTS + 1;
 
 const PERSISTED = [
-  { domain: "folkways:living", key: "hunger" },
-  { domain: "folkways:person", key: "waiting" },
+  { domain: "folkways_vanilla:living", key: "hunger" },
+  { domain: "folkways_vanilla:person", key: "waiting" },
 ] as const;
 
 const DUMP = defineTask<{ player: string; ox: number; oy: number; oz: number }, ColonyTaskValue>({
@@ -38,9 +38,9 @@ const DUMP = defineTask<{ player: string; ox: number; oy: number; oz: number }, 
       "io.github.izakyl.folkways.core.colony.internal.Contributions",
       "io.github.izakyl.folkways.core.colony.api.Claimed",
       "io.github.izakyl.folkways.core.colony.api.Claim",
-      "io.github.izakyl.folkways.front.engine.charter.CurrentColony",
-      "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
-      "io.github.izakyl.folkways.front.engine.authority.ColonyAuthority",
+      "io.github.izakyl.folkways.core.front.engine.charter.CurrentColony",
+      "io.github.izakyl.folkways.core.front.engine.colony.ColonyGround",
+      "io.github.izakyl.folkways.core.front.engine.authority.ColonyAuthority",
       "net.minecraft.core.BlockPos",
       "net.minecraft.nbt.CompoundTag",
       "net.minecraft.nbt.Tag",
@@ -112,7 +112,7 @@ for (Claim holding : colony.claims()) {
     }
     BlockPos at = ((Claimed.Block) holding.what()).cell().cell();
     members.add(at);
-    if (!holding.owner().toString().equals("folkways:store")) {
+    if (!holding.owner().toString().equals("folkways_vanilla:store")) {
         claimed.add(at);
     }
 }
@@ -176,7 +176,7 @@ for (const stage of twins()) test(stage.title("founding fast and founding throug
     const fast = await dump(server, playerName, fastAt);
     evidence.fast = fast;
 
-    await tryCommand(server, "kill @e[type=folkways:resident]");
+    await tryCommand(server, "kill @e[type=folkways_vanilla:resident]");
     await tick.sprint(server, 20);
     evidence.razed = await razeFoundingSet(server, fastAt, stage);
     await tick.sprint(server, 20);
@@ -240,7 +240,7 @@ function substantial(state: ColonyTaskValue, path: string) {
   expect(domains.length, `after ${path} founding Contributions.all() is empty - `
     + `this dump is comparing nothing${seen()}`).toBeGreaterThan(0);
   // Fear and breathing only declare urges on each body: neither keeps a presence on the colony.
-  const urgeOnly = ["folkways:fear ", "folkways:breathing "];
+  const urgeOnly = ["folkways_vanilla:fear ", "folkways_vanilla:breathing "];
   const unsettled = domains.filter((line) => !urgeOnly.some((prefix) => line.startsWith(prefix))
     && line.includes("presence=none"));
   expect(unsettled, `after ${path} founding some domains left no presence on the colony`).toEqual([]);

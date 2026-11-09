@@ -7,7 +7,7 @@ import com.github.ysbbbbbb.kaleidoscopecookery.crafting.serializer.TeapotRecipeS
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.registry.TeacupRegistry;
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.cookery.CookeryContent;
 import io.github.izakyl.folkways.cookery.KitchenBookings;
 import io.github.izakyl.folkways.cookery.testing.KitchenRecoveryWanted;
@@ -31,8 +31,8 @@ import io.github.izakyl.folkways.core.work.support.Leaves;
 import io.github.izakyl.folkways.core.world.api.Footing;
 import io.github.izakyl.folkways.core.world.api.Reach;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
-import io.github.izakyl.folkways.plugins.person.PersonBody;
-import io.github.izakyl.folkways.plugins.person.ResidentEntity;
+import io.github.izakyl.folkways.vanilla.person.PersonBody;
+import io.github.izakyl.folkways.vanilla.person.ResidentEntity;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -71,13 +71,13 @@ import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
 @EventBusSubscriber(modid = "folkways_cookery", bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@GameTestHolder("folkways_cookery")
 @PrefixGameTestTemplate(false)
 public final class TeapotGameTests {
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) { event.register(TeapotGameTests.class); }
 
-    @GameTest(template = "empty", timeoutTicks = 1000)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 1000)
     public static void hardUrgesPreserveFluidIngredientAndAllServedCups(GameTestHelper helper) {
         Rig rig = new Rig(helper, "barley_tea");
         TeapotWork work = rig.plan();
@@ -97,19 +97,19 @@ public final class TeapotGameTests {
             });
     }
 
-    @GameTest(template = "empty", timeoutTicks = 900)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 900)
     public static void nativeFlowerTea(GameTestHelper helper) { brew(helper, "flower_tea"); }
-    @GameTest(template = "empty", timeoutTicks = 900)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 900)
     public static void nativeBarleyTea(GameTestHelper helper) { brew(helper, "barley_tea"); }
-    @GameTest(template = "empty", timeoutTicks = 900)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 900)
     public static void nativeTieguanyin(GameTestHelper helper) { brew(helper, "tieguanyin"); }
-    @GameTest(template = "empty", timeoutTicks = 900)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 900)
     public static void nativeBiluochun(GameTestHelper helper) { brew(helper, "biluochun"); }
-    @GameTest(template = "empty", timeoutTicks = 900)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 900)
     public static void nativeOolong(GameTestHelper helper) { brew(helper, "oolong"); }
-    @GameTest(template = "empty", timeoutTicks = 900)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 900)
     public static void nativeSakuraFubuki(GameTestHelper helper) { brew(helper, "sakura_fubuki"); }
-    @GameTest(template = "empty", timeoutTicks = 900)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 900)
     public static void nativeButterTea(GameTestHelper helper) { brew(helper, "butter_tea"); }
 
     private static void brew(GameTestHelper helper, String recipe) {
@@ -134,7 +134,7 @@ public final class TeapotGameTests {
         });
     }
 
-    @GameTest(template = "empty", timeoutTicks = 1000)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 1000)
     public static void removingRealHeatPausesTheNativeBrewingClock(GameTestHelper helper) {
         Rig rig = new Rig(helper, "barley_tea"); TeapotWork work = rig.load();
         rig.level.setBlockAndUpdate(rig.cell.below(), Blocks.STONE.defaultBlockState());
@@ -148,7 +148,7 @@ public final class TeapotGameTests {
         afterBrewing(rig, ready -> { helper.assertTrue(ready.step(work) instanceof Outcome.Done, "the same real tea resumes on returning heat"); ready.assertServed(); });
     }
 
-    @GameTest(template = "empty", timeoutTicks = 900)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 900)
     public static void cancellationAfterFluidRecoversOnlyTheUnspentTeaBagAndCups(GameTestHelper helper) {
         Rig rig = new Rig(helper, "barley_tea"); TeapotWork old = rig.plan();
         helper.assertTrue(rig.step(old) instanceof Outcome.Done, "native filling accepts one real bucket");
@@ -159,7 +159,7 @@ public final class TeapotGameTests {
         afterBrewing(rig, ready -> { helper.assertTrue(ready.step(work) instanceof Outcome.Done, "the saved fluid and newly accepted bag brew normally"); ready.assertServed(); });
     }
 
-    @GameTest(template = "empty", timeoutTicks = 900)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 900)
     public static void blockEntityReloadKeepsTheAcceptedTeaWithoutBudgetingAnotherFluidOrBag(GameTestHelper helper) {
         Rig rig = new Rig(helper, "barley_tea"); rig.load();
         rig.reload();
@@ -175,7 +175,7 @@ public final class TeapotGameTests {
         });
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void withdrawalRejectsAnAlreadyPlannedFluidInteraction(GameTestHelper helper) {
         try (Rig rig = new Rig(helper, "barley_tea")) {
             TeapotWork work = rig.plan();
@@ -189,7 +189,7 @@ public final class TeapotGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 900)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 900)
     public static void elevenCupsCannotServeOrLoseAnyOfTheTwelveNativePortions(GameTestHelper helper) {
         Rig rig = new Rig(helper, "barley_tea"); TeapotWork work = rig.load();
         rig.pack.getItem(1).shrink(1);
@@ -201,7 +201,7 @@ public final class TeapotGameTests {
         });
     }
 
-    @GameTest(template = "empty", timeoutTicks = 900)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 900)
     public static void playerCupPositionsAreNeverOverwrittenToServeAnOwnedPot(GameTestHelper helper) {
         Rig rig = new Rig(helper, "barley_tea"); TeapotWork work = rig.load();
         for (Direction side : Direction.Plane.HORIZONTAL) { rig.level.setBlockAndUpdate(rig.cell.relative(side), ModBlocks.EMPTY_CUP.get().defaultBlockState()); }
@@ -223,9 +223,9 @@ public final class TeapotGameTests {
         });
     }
 
-    @GameTest(template = "empty", timeoutTicks = 900)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 900)
     public static void aThrowBeforeNativeTakeLeavesTheFinishedPotAndRefundsOnlyCups(GameTestHelper helper) { throwFromPot(helper, false); }
-    @GameTest(template = "empty", timeoutTicks = 900)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 900)
     public static void aThrowAfterNativeTakeRestoresExactlyOneFinishedPhysicalPot(GameTestHelper helper) { throwFromPot(helper, true); }
 
     private static void throwFromPot(GameTestHelper helper, boolean after) {
@@ -242,7 +242,7 @@ public final class TeapotGameTests {
         });
     }
 
-    @GameTest(template = "empty", timeoutTicks = 900)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 900)
     public static void aThrowOnTheLastPouredCupCannotLeaveElevenProductsAndRefundTwelveCups(GameTestHelper helper) {
         int failAt = 12;
         Rig rig = new Rig(helper, "barley_tea"); TeapotWork work = rig.load();
@@ -266,7 +266,7 @@ public final class TeapotGameTests {
         });
     }
 
-    @GameTest(template = "empty", timeoutTicks = 2900)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 2900)
     public static void freshLeavesBecomeARealCraftedTeaBagThenTwelveServedCups(GameTestHelper helper) {
         Rig rig = new Rig(helper, "tieguanyin");
         rig.pack.setItem(2, new ItemStack(ModItems.FRESH_TEA_LEAVES.get(), 8));
@@ -311,7 +311,7 @@ public final class TeapotGameTests {
             }).thenSucceed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void threeCupsCannotInvestWaterOrSeedIntoAnExplicitMysteryTeaBatch(GameTestHelper helper) {
         try (Rig rig = new Rig(helper, "mystery_tea")) {
             rig.pack.getItem(1).shrink(1); TeapotWork work = rig.plan();
@@ -325,7 +325,7 @@ public final class TeapotGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void aMatchingTeaReloadRejectsUnspentMysteryFluidWithoutInventingARecipe(GameTestHelper helper) {
         try (Rig rig = new Rig(helper, "mystery_tea")) {
             TeapotWork work = rig.plan();
@@ -341,7 +341,7 @@ public final class TeapotGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void aMatchingTeaReloadRejectsTheNextIngredientWithoutRefundingAcceptedWater(GameTestHelper helper) {
         try (Rig rig = new Rig(helper, "mystery_tea")) {
             TeapotWork work = rig.plan(); helper.assertTrue(rig.step(work) instanceof Outcome.Done, "one real bucket is accepted before reload");
@@ -356,7 +356,7 @@ public final class TeapotGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 3300)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 3300)
     public static void mysteryTeaReloadAndCancellationKeepFourCupRecoveryWithoutReinvestingTheBucketOrSeed(GameTestHelper helper) {
         Rig rig = new Rig(helper, "mystery_tea");
         helper.assertValueEqual(rig.job.time(), TeapotRecipeSerializer.DEFAULT_TIME, "mystery tea uses the unmodified native default brewing time");
@@ -375,7 +375,7 @@ public final class TeapotGameTests {
         });
     }
 
-    @GameTest(template = "empty", timeoutTicks = 3300)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 3300)
     public static void refreshFailuresAfterMysteryLoadingAndServingCannotRefundAcceptedItemsOrLoseFinishedTea(GameTestHelper helper) {
         Rig rig = new Rig(helper, "mystery_tea"); AtomicInteger refreshes = new AtomicInteger();
         rig.changed = () -> { refreshes.incrementAndGet(); throw new IllegalStateException("fixture: failed colony refresh after native settlement"); };
@@ -390,7 +390,7 @@ public final class TeapotGameTests {
         });
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void mysteryTeaIsOnlyAnExactRequestedDishAndNeverABroadDrinkFallback(GameTestHelper helper) {
         try (Rig rig = new Rig(helper, "mystery_tea")) {
             var bench = new TeapotStation().freeze(UUID.randomUUID(), rig.colony, rig.level, rig.at, rig.stances, rig.bookings, () -> {}).orElseThrow();
@@ -404,7 +404,7 @@ public final class TeapotGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 900)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 900)
     public static void thePublishedTeaStanceMustReachBothThePotAndItsOnlyActualCupPosition(GameTestHelper helper) {
         Rig rig = new Rig(helper, "barley_tea");
         var offered = edgeGeometry(rig);
@@ -422,7 +422,7 @@ public final class TeapotGameTests {
         });
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void noServingFootingMeansNoNewTeaInvestment(GameTestHelper helper) {
         try (Rig rig = new Rig(helper, "barley_tea")) {
             edgeGeometry(rig);
@@ -437,7 +437,7 @@ public final class TeapotGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 900)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 900)
     public static void changingThePlayersCupLayoutAndHandleCounterReplansFinishedTeaWithoutReinvestingIngredients(GameTestHelper helper) {
         Rig rig = new Rig(helper, "barley_tea");
         edgeGeometry(rig);
@@ -474,7 +474,7 @@ public final class TeapotGameTests {
         });
     }
 
-    @GameTest(template = "empty", timeoutTicks = 900)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 900)
     public static void aCancelledTeaRecoveryCreatesAFreshRootAndALateOldEndCannotRemoveIt(GameTestHelper helper) {
         Rig rig = new Rig(helper, "barley_tea"); rig.load();
         TeapotWork old = rig.recover();
@@ -507,7 +507,7 @@ public final class TeapotGameTests {
     private static void withMatchingSeedRecipe(Rig rig, Runnable check) {
         List<RecipeHolder<?>> saved = List.copyOf(rig.level.getRecipeManager().getRecipes());
         List<RecipeHolder<?>> changed = new ArrayList<>(saved);
-        changed.add(new RecipeHolder<>(ResourceLocation.fromNamespaceAndPath("folkways", "test/matching_seed_tea"),
+        changed.add(new RecipeHolder<>(ResourceLocation.fromNamespaceAndPath("folkways_cookery", "test/matching_seed_tea"),
             new TeapotRecipe(ResourceLocation.withDefaultNamespace("water"), Ingredient.of(Items.WHEAT_SEEDS), 1, 100,
                 TeacupRegistry.getItem(TeacupRegistry.BARLEY_TEA).getDefaultInstance())));
         try { rig.level.getRecipeManager().replaceRecipes(changed); check.run(); }

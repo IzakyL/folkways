@@ -47,6 +47,6 @@ public record Stake(ResourceLocation kind, ResourceLocation id) {
     }
 
     private static ResourceLocation kind(String path) {
-        return ResourceLocation.fromNamespaceAndPath("folkways", path);
+        return ResourceLocation.fromNamespaceAndPath("folkways_core", path);
     }
 }

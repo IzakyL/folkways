@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.core.plan.internal;
 
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.plan.api.Before;
 import io.github.izakyl.folkways.core.resident.api.Resident;
 import io.github.izakyl.folkways.core.travel.internal.Faring;
@@ -37,19 +37,19 @@ import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
-@EventBusSubscriber(modid = FolkwaysMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@EventBusSubscriber(modid = FolkwaysCoreMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
+@GameTestHolder(FolkwaysCoreMod.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class StandTravelGameTests {
 
-    private static final ResourceLocation KIND = ResourceLocation.fromNamespaceAndPath("folkways", "resident");
+    private static final ResourceLocation KIND = ResourceLocation.fromNamespaceAndPath("folkways_vanilla", "resident");
 
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) {
         event.register(StandTravelGameTests.class);
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void mixedHeightStandsReserveOnlyTheIndividuallyReachableCandidate(GameTestHelper helper) {
         WorldPos origin = WorldPos.of(helper.getLevel(), helper.absolutePos(BlockPos.ZERO));
         WorldPos rack = origin.at(origin.cell().offset(8, 0, 0));
@@ -92,7 +92,7 @@ public final class StandTravelGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void parallelWorkersReserveDifferentFreeStandsWithTheirOwnArrivalTimes(GameTestHelper helper) {
         WorldPos origin = WorldPos.of(helper.getLevel(), helper.absolutePos(BlockPos.ZERO));
         WorldPos left = origin.at(origin.cell().offset(4, 0, 0));
@@ -142,7 +142,7 @@ public final class StandTravelGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void occupiedReachableStandsStillAskForTheirPendingAlternative(GameTestHelper helper) {
         WorldPos origin = WorldPos.of(helper.getLevel(), helper.absolutePos(BlockPos.ZERO));
         WorldPos floor = origin.at(origin.cell().offset(4, 0, 0));
@@ -179,7 +179,7 @@ public final class StandTravelGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void pendingExactStandIsRequestedEvenWhenTheWholeSetHasAYes(GameTestHelper helper) {
         WorldPos origin = WorldPos.of(helper.getLevel(), helper.absolutePos(BlockPos.ZERO));
         WorldPos floor = origin.at(origin.cell().offset(4, 0, 0));
@@ -205,7 +205,7 @@ public final class StandTravelGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void heldWorkOnlyGrantsZeroTravelAtTheWorkersActualStand(GameTestHelper helper) {
         WorldPos floor = WorldPos.of(helper.getLevel(), helper.absolutePos(BlockPos.ZERO));
         WorldPos top = floor.at(floor.cell().above(2));
@@ -230,7 +230,7 @@ public final class StandTravelGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void sharedMixedStandFaresAreQueriedOnceAcrossWorkersAndTasks(GameTestHelper helper) {
         WorldPos origin = WorldPos.of(helper.getLevel(), helper.absolutePos(BlockPos.ZERO));
         WorldPos floor = origin.at(origin.cell().offset(4, 0, 0));

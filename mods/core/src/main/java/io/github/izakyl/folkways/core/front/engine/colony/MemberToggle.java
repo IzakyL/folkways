@@ -1,0 +1,137 @@
+package io.github.izakyl.folkways.core.front.engine.colony;
+
+import io.github.izakyl.folkways.core.colony.api.ClaimRelease;
+import io.github.izakyl.folkways.core.colony.api.Claimed;
+import io.github.izakyl.folkways.core.colony.api.Colonies;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.colony.api.ColonyView;
+import io.github.izakyl.folkways.core.resident.api.RefusalKind;
+import io.github.izakyl.folkways.core.front.api.Delegation;
+import io.github.izakyl.folkways.core.front.api.Facing;
+import io.github.izakyl.folkways.core.front.api.Shape;
+import io.github.izakyl.folkways.core.front.api.notice.Attempt;
+import io.github.izakyl.folkways.core.front.api.notice.Notice;
+import io.github.izakyl.folkways.core.front.api.notice.NoticeKind;
+import io.github.izakyl.folkways.core.front.engine.Enrollments;
+import java.util.Locale;
+import java.util.Optional;
+import java.util.UUID;
+import net.minecraft.core.BlockPos;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.entity.BlockEntity;
+
+public final class MemberToggle {
+
+    public enum Moved implements NoticeKind {
+        JOINED,
+        LEFT;
+
+        @Override
+        public String translationKey() {
+            return "folkways.member." + name().toLowerCase(Locale.ROOT);
+        }
+    }
+
+    public enum Refusal implements RefusalKind {
+        NOT_ENROLLABLE,
+        NO_BLOCK_ENTITY,
+        ANOTHER_COLONY;
+
+        @Override
+        public String translationKey() {
+            return "folkways.refusal.member." + name().toLowerCase(Locale.ROOT);
+        }
+    }
+
+    private MemberToggle() {
+    }
+
+    public static Attempt toggleEntity(Colony colony, Entity entity, ServerPlayer player) {
+        if (!player.getServer().isSameThread() || entity.level() != player.level()
+            || !entity.isAlive() || entity.isRemoved() || player.distanceToSqr(entity) > 64) {
+            return told(player, Attempt.refused(Refusal.NOT_ENROLLABLE));
+        }
+        var delegation = Enrollments.delegations().stream()
+            .filter(value -> value.shape() instanceof Shape.Body body && body.accepts().test(entity.getType()))
+            .findFirst();
+        var held = colony.claimOf(entity.getUUID());
+        if (held.isPresent()) {
+            colony.release(held.get().id(), ClaimRelease.LET_GO);
+            player.displayClientMessage(delegation.map(value -> ((Shape.Body) value.shape()).withdrawn())
+                .orElseGet(() -> Notice.of(Moved.LEFT).component()), true);
+            return Attempt.went();
+        }
+        if (Colonies.all(player.getServer()).stream()
+            .anyMatch(other -> other.claimOf(entity.getUUID()).isPresent())) {
+            return told(player, Attempt.refused(Refusal.ANOTHER_COLONY));
+        }
+        if (delegation.isEmpty()) {
+            return told(player, Attempt.refused(Refusal.NOT_ENROLLABLE));
+        }
+        Shape.Body shape = (Shape.Body) delegation.get().shape();
+        if (colony.hold(delegation.get().id(), Claimed.Entity.of(entity)).isEmpty()) {
+            return told(player, Attempt.refused(Refusal.ANOTHER_COLONY));
+        }
+        player.displayClientMessage(shape.admitted(), true);
+        return Attempt.went();
+    }
+
+    public static boolean enrollable(Level level, BlockPos pos) {
+        return ColonySites.accepting(level, pos).isPresent();
+    }
+
+    public static Attempt toggleAt(ServerLevel level, Colony colony, BlockPos clicked,
+                                   ServerPlayer player) {
+        Optional<Attempt> answered = pointed(level, colony, clicked, player);
+        if (answered.isPresent()) {
+            return told(player, answered.get());
+        }
+        Delegation declaring = ColonySites.accepting(level, clicked).orElse(null);
+        if (declaring == null) {
+            return told(player, Attempt.refused(Refusal.NOT_ENROLLABLE));
+        }
+        BlockPos pos = ColonySites.anchor(declaring.shape()).of(level, clicked);
+        if (!enrollable(level, pos)) {
+            return told(player, Attempt.refused(Refusal.NOT_ENROLLABLE));
+        }
+        BlockEntity blockEntity = level.getBlockEntity(pos);
+        if (declaring.shape() instanceof Shape.Block && blockEntity == null) {
+            return told(player, Attempt.refused(Refusal.NO_BLOCK_ENTITY));
+        }
+        Optional<UUID> owner = ColonyGround.ofBlock(level, pos).map(Colony::id);
+        boolean ours = owner.filter(colony.id()::equals).isPresent();
+        if (!ours && owner.isPresent()) {
+            return told(player, Attempt.refused(Refusal.ANOTHER_COLONY));
+        }
+        if (ours) {
+            ColonyGround.letGo(level, colony, pos);
+            player.displayClientMessage(Notice.of(Moved.LEFT).component(), true);
+        } else if (ColonyGround.hold(level, colony, declaring.id(), pos).isPresent()) {
+            player.displayClientMessage(Notice.of(Moved.JOINED).component(), true);
+        } else {
+            return told(player, Attempt.refused(Refusal.ANOTHER_COLONY));
+        }
+        return Attempt.went();
+    }
+
+    // A block some part of Folkways answers for itself is never a member of its own.
+    private static Optional<Attempt> pointed(ServerLevel level, Colony colony, BlockPos clicked,
+                                             ServerPlayer player) {
+        ColonyView view = ColonyViews.anyOf(colony, level);
+        for (Facing facing : Facing.all(colony)) {
+            Optional<Attempt> answered = facing.pointedAt(clicked, view, player);
+            if (answered.isPresent()) {
+                return answered;
+            }
+        }
+        return Optional.empty();
+    }
+
+    private static Attempt told(ServerPlayer player, Attempt attempt) {
+        attempt.refusal().ifPresent(why -> player.displayClientMessage(why.component(), true));
+        return attempt;
+    }
+}

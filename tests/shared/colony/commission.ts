@@ -17,11 +17,11 @@ export const COMMISSION = defineTask<Record<string, any>, Record<string, any>>({
   timeoutMs: 20_000,
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.front.engine.colony.ColonyGround",
-      "io.github.izakyl.folkways.plugins.build.Commissions",
-      "io.github.izakyl.folkways.plugins.build.draft.Hint",
-      "io.github.izakyl.folkways.plugins.build.draft.Patterns",
-      "io.github.izakyl.folkways.front.api.Schema",
+      "io.github.izakyl.folkways.core.front.engine.colony.ColonyGround",
+      "io.github.izakyl.folkways.vanilla.build.Commissions",
+      "io.github.izakyl.folkways.vanilla.build.draft.Hint",
+      "io.github.izakyl.folkways.vanilla.build.draft.Patterns",
+      "io.github.izakyl.folkways.core.front.api.Schema",
       "io.github.izakyl.folkways.core.item.api.ItemSpec",
       "net.minecraft.core.registries.Registries",
       "net.minecraft.tags.TagKey",

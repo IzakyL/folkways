@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.core.colony.api;
 
-import io.github.izakyl.folkways.base.persist.Required;
+import io.github.izakyl.folkways.core.base.persist.Required;
 import io.github.izakyl.folkways.core.resident.api.Participation;
 import io.github.izakyl.folkways.core.resident.api.Participations;
 import io.github.izakyl.folkways.core.resident.api.ResidentKinds;
@@ -14,7 +14,7 @@ import net.minecraft.resources.ResourceLocation;
 
 public final class WorkDefaults {
 
-    public static final ResourceLocation ID = ResourceLocation.fromNamespaceAndPath("folkways", "work_defaults");
+    public static final ResourceLocation ID = ResourceLocation.fromNamespaceAndPath("folkways_core", "work_defaults");
 
     private WorkDefaults() {
     }

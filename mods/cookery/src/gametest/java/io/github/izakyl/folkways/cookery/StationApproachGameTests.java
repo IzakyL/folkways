@@ -2,7 +2,7 @@ package io.github.izakyl.folkways.cookery;
 
 import com.github.ysbbbbbb.kaleidoscopecookery.blockentity.kitchen.ChoppingBoardBlockEntity;
 import com.github.ysbbbbbb.kaleidoscopecookery.init.ModBlocks;
-import io.github.izakyl.folkways.FolkwaysMod;
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.work.api.Stances;
 import io.github.izakyl.folkways.core.world.api.BlockChanges;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
@@ -22,13 +22,13 @@ import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
 @EventBusSubscriber(modid = "folkways_cookery", bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder(FolkwaysMod.MOD_ID)
+@GameTestHolder("folkways_cookery")
 @PrefixGameTestTemplate(false)
 public final class StationApproachGameTests {
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) { event.register(StationApproachGameTests.class); }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void approachReusesEmptyResultsUntilNearbyBlocksChange(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         WorldPos at = WorldPos.of(level, helper.absolutePos(new BlockPos(1, 1, 1)));
@@ -53,7 +53,7 @@ public final class StationApproachGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void nativeBoardChangesInvalidateCachedOffers(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         BlockPos cell = helper.absolutePos(new BlockPos(1, 1, 1));
