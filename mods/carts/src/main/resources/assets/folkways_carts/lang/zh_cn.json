@@ -13,6 +13,6 @@
   "folkways.settings.cart_line.cart": "车型",
   "folkways.settings.cart_line.round": "行驶方式",
   "folkways_carts.ponder.carts.header": "马车线路：车站与往返",
-  "folkways_carts.ponder.carts.text_1": "用聚落簿画一条马车线路，每个点都是一个车站。选择手推车或运输车，以及往返还是环线。聚落会制作车辆并放在第一站。",
+  "folkways_carts.ponder.carts.text_1": "用殖民书画一条马车线路，每个点都是一个车站。选择手推车或运输车，以及往返还是环线。殖民地会制作车辆并放在第一站。",
   "folkways_carts.ponder.carts.text_2": "搬运工拉着车逐站行驶，每站停留一段时间供装卸货物。运输车线路会从马牧场领取一匹已驯服的成年马，由居民牵引，这匹马不再计入牧场数量，也不会被宰杀。线路需要宽入口与转角空间。"
 }

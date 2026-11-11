@@ -41,6 +41,14 @@ versionRange = "[4.7.5,)"
 ordering = "AFTER"
 side = "CLIENT"
 
+[[dependencies.${mod_id}]]
+modId = "touhou_little_maid"
+type = "optional"
+reason = "Built-in maids and installed maid model packs become selectable resident looks."
+versionRange = "[1.5,)"
+ordering = "AFTER"
+side = "BOTH"
+
 [[mixins]]
 config = "folkways-vanilla-build.mixins.json"
 

@@ -81,6 +81,22 @@ versionRange = "[4.5,)"
 ordering = "AFTER"
 side = "CLIENT"
 
+[[dependencies.${mod_id}]]
+modId = "appleskin"
+type = "optional"
+reason = "Its saturation and exhaustion overlays are hidden with the health and food bars in the View from above."
+versionRange = "[3.0,)"
+ordering = "AFTER"
+side = "CLIENT"
+
+[[dependencies.${mod_id}]]
+modId = "ftbteams"
+type = "optional"
+reason = "A founder can hand the colony to an FTB Teams party, which then decides who keeps it."
+versionRange = "[2101.1,)"
+ordering = "AFTER"
+side = "BOTH"
+
 [[mixins]]
 config = "folkways-core.mixins.json"
 

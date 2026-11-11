@@ -122,7 +122,7 @@ public final class RailScene {
         scene.idle(100);
 
         scene.overlay().showText(80)
-            .text("Add Driver Seated to the stop's wait conditions, and the train waits there until every driver sent for has sat down.")
+            .text("Give every stop a time delay long enough to board. Residents plan their rides from the timetable, so a stop that waits for anything other than time keeps the train from being ridden.")
             .pointAt(util.vector().topOf(firstStation))
             .placeNearTarget()
             .attachKeyFrame();
@@ -150,7 +150,7 @@ public final class RailScene {
         passenger.walk(scene, util.vector().topOf(2 + RUN, 0, TRACK_Z + 1));
         passenger.walk(scene, util.vector().topOf(2 + RUN, 0, TRACK_Z + 2));
         scene.overlay().showText(80)
-            .text("Add All Residents Alighted to a stop, and the train holds there until everyone getting off at that station is off.")
+            .text("Riders get off at their station while the train waits there. When a train is not ridden, Create's train map says why.")
             .pointAt(util.vector().topOf(secondStation))
             .placeNearTarget()
             .attachKeyFrame();

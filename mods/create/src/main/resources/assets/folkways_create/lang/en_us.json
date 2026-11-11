@@ -120,8 +120,8 @@
   "folkways_create.ponder.rail.text_2": "With the colony book in your off hand, use a Train Schedule on the driver's seat of a train that has none. The train takes the schedule, and the colony takes the train on.",
   "folkways_create.ponder.rail.text_3": "An empty hand on the same seat, book still in the off hand, takes the schedule out and gives the train back.",
   "folkways_create.ponder.rail.text_4": "While the train stands at a station with its driver's seat empty, a resident with the Drive trade walks over and sits in it.",
-  "folkways_create.ponder.rail.text_5": "Add Driver Seated to the stop's wait conditions, and the train waits there until every driver sent for has sat down.",
+  "folkways_create.ponder.rail.text_5": "Give every stop a time delay long enough to board. Residents plan their rides from the timetable, so a stop that waits for anything other than time keeps the train from being ridden.",
   "folkways_create.ponder.rail.text_6": "With a driver aboard, a train that calls at two or more stations and has a free seat is a way to get about. Residents on their way somewhere ride it from one of its stations to another.",
-  "folkways_create.ponder.rail.text_7": "Add All Residents Alighted to a stop, and the train holds there until everyone getting off at that station is off.",
+  "folkways_create.ponder.rail.text_7": "Riders get off at their station while the train waits there. When a train is not ridden, Create's train map says why.",
   "folkways_create.ponder.rail.text_8": "The Rail page lists each train taken on, its stations, whether it is running or at a stop, and when it has no driver."
 }

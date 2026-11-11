@@ -67,8 +67,9 @@ npm run typecheck
 CI 会运行构建检查、按模组划分的 GameTests，以及真实客户端的建村冒烟测试，
 但不会运行全部客户端和素材录制套件。完整矩阵见 `.github/workflows/build.yml`。
 
-Carving GameTests：`./gradlew --offline -PgameTestMod=carving -PchiselsTests=true runGameTestServer`。
-`chiselsTests` 开关加载当前 Chisels & Bits 后端的测试依赖。
+运行单个模组的 GameTests：`./gradlew --offline -PgameTestMod=<mod> runGameTestServer`，`<mod>` 为 `mods/` 下的目录名；
+扩展所联动的模组会自动加载。模组内部的子联动需单独开启：Firearms 用 `-PtaczTests=true` 或 `-PwarfareTests=true`，
+Create 用 `-PfirefightingTests=true`，Cookery 用 `-PtavernTests=true`，Carving 用 `-PcreatePlacementTests=true`。
 
 ## 提交 PR
 
@@ -117,7 +118,5 @@ feat(draft): add a dock pattern
 ### 文档
 
 同步更新英文和中文版，界面名称以游戏语言文件为准，命令、路径和 Java 符号保持原文。
-文档只保留概述层面：README 和贡献指南，不再添加详细参考页面。
-
-职业图标的字符网格与调色板位于 `tools/vocation-icons/icons.json`，运行
-`python3 tools/vocation-icons/generate.py` 重新生成（可加 `--sheet path.png` 输出对照表）。
+文档只保留概述层面：README、贡献指南、模组联动说明和存档兼容规则，不再添加详细参考页面或单个模组的 README。
+`THIRD_PARTY.md` 是许可证清单，仅保留英文。

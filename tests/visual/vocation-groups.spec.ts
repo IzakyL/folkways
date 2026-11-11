@@ -1,6 +1,5 @@
 import { expect, test } from "@playwright/test";
 import { defineTask, input, javaTask, screen, tick, type MinecraftClient } from "@izakyl/blockwright-minecraft";
-import { readFileSync } from "node:fs";
 import { visibleBox, clickElement, panelElements, scrollElementIntoView, waitForElement } from "../ldlib2";
 import { foundColonyFast, openColonyPanelViaBook, waitForGroundedPlayer } from "../shared/colony/colony-founding";
 import { VisualRun } from "../shared/capture/visual-kit";
@@ -17,9 +16,13 @@ const GATHERING = "folkways_core.gathering";
 const FARMING = "folkways_vanilla:farming";
 const HERDING = "folkways_vanilla:herding";
 const GROUPS = ["gathering", "processing", "construction", "transport", "defence"];
-const SPRITES = (JSON.parse(readFileSync("tools/vocation-icons/icons.json", "utf8")) as {
-  icons: Array<{ sprite: string }>;
-}).icons.map(icon => icon.sprite);
+const SPRITES = [
+  "folkways_core:vocation_group/gathering", "folkways_vanilla:vocation/farming", "folkways_vanilla:vocation/fishing",
+  "folkways_vanilla:vocation/herding", "folkways_core:vocation_group/processing", "folkways_vanilla:vocation/crafting",
+  "folkways_core:vocation_group/construction", "folkways_vanilla:vocation/building", "folkways_core:vocation_group/transport",
+  "folkways_core:vocation/hauling", "folkways_create:vocation/dispatching", "folkways_create:vocation/conducting",
+  "folkways_core:vocation_group/defence", "folkways_vanilla:vocation/patrolling", "folkways_vanilla:vocation/damage_control",
+];
 
 // Check actual atlas entries and the paper/dark rendering paths, including the Create-owned sprites.
 const ICONS = defineTask<{ sprites: string }, Array<{ id: string; width: number; height: number; dark: string; glyph: boolean }>>({

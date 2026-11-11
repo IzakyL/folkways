@@ -13,6 +13,6 @@
   "folkways.settings.cart_line.cart": "車型",
   "folkways.settings.cart_line.round": "行駛方式",
   "folkways_carts.ponder.carts.header": "馬車路線：車站與往返",
-  "folkways_carts.ponder.carts.text_1": "用聚落簿畫一條馬車路線，每個點都是一個車站。選擇手推車或運輸車，以及往返還是環線。聚落會製作車輛並放在第一站。",
+  "folkways_carts.ponder.carts.text_1": "用殖民書畫一條馬車路線，每個點都是一個車站。選擇手推車或運輸車，以及往返還是環線。殖民地會製作車輛並放在第一站。",
   "folkways_carts.ponder.carts.text_2": "搬運工拉著車逐站行駛，每站停留一段時間供裝卸貨物。運輸車路線會從馬牧場領取一匹已馴服的成年馬，由居民牽引，這匹馬不再計入牧場數量，也不會被宰殺。路線需要寬入口與轉角空間。"
 }

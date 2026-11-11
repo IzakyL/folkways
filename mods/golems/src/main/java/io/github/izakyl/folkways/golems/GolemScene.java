@@ -93,7 +93,7 @@ public final class GolemScene {
         scene.idle(10);
         scene.overlay().showOutline(PonderPalette.GREEN, "storage", util.select().position(chest), 90);
         scene.overlay().showText(100)
-            .text("It works in the trades its body allows: a metal golem hauls and builds, a dog golem only hauls, and a humanoid golem can also craft, drive and dispatch.")
+            .text("It works in the trades its body allows: a metal golem hauls, builds and patrols, a dog golem hauls and patrols, and a humanoid golem can also craft, drive and dispatch.")
             .pointAt(util.vector().topOf(chest))
             .placeNearTarget()
             .attachKeyFrame();

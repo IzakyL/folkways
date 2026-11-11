@@ -54,7 +54,9 @@ jobs:
           - mod: create
             profiles: base firefighting
           - mod: cookery
-            profiles: cookery
+            profiles: cookery tavern
+          - mod: golems
+            profiles: golems
           - mod: firearms
             profiles: tacz warfare
           - mod: carts
@@ -98,26 +100,20 @@ jobs:
             if [[ "$profile" == cookery ]]; then
               gradle_args+=(-PcookeryTests=true)
             fi
+            if [[ "$profile" == tavern ]]; then
+              gradle_args+=(-PtavernTests=true)
+            fi
             if [[ "$profile" == warfare ]]; then
               gradle_args+=(-PwarfareTests=true)
             fi
             if [[ "$profile" == tacz ]]; then
               gradle_args+=(-PtaczTests=true)
             fi
-            if [[ "$profile" == carts ]]; then
-              gradle_args+=(-PcartsTests=true)
-            fi
             if [[ "$profile" == firefighting ]]; then
               gradle_args+=(-PfirefightingTests=true)
             fi
-            if [[ "$profile" == carving ]]; then
-              gradle_args+=(-PchiselsTests=true)
-            fi
             if [[ "$profile" == create-placement ]]; then
-              gradle_args+=(-PchiselsTests=true -PcreatePlacementTests=true)
-            fi
-            if [[ "$profile" == epicfight ]]; then
-              gradle_args+=(-PepicfightTests=true)
+              gradle_args+=(-PcreatePlacementTests=true)
             fi
             status=failure
             if timeout --signal=TERM --kill-after=60s 50m ./gradlew "${gradle_args[@]}" --console=plain runGameTestServer 2>&1 | tee "run/gametest/ci/$GAME_TEST_MOD-$profile.log"; then

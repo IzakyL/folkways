@@ -78,8 +78,11 @@ CI runs the build checks, per-mod GameTests and a focused real-client founding
 smoke test. It does not run every client or capture suite. See
 `.github/workflows/build.yml` for the exact matrix.
 
-Carving GameTests: `./gradlew --offline -PgameTestMod=carving -PchiselsTests=true runGameTestServer`.
-The `chiselsTests` switch loads the current Chisels & Bits backend fixtures.
+Run one mod's GameTests with `./gradlew --offline -PgameTestMod=<mod> runGameTestServer`, where
+`<mod>` is a directory under `mods/`; an extension's target mod is loaded automatically.
+Integrations inside a mod need their own switch: `-PtaczTests=true` or `-PwarfareTests=true`
+for Firearms, `-PfirefightingTests=true` for Create, `-PtavernTests=true` for Cookery and
+`-PcreatePlacementTests=true` for Carving.
 
 ## Pull requests
 
@@ -140,7 +143,6 @@ Keep native container and slot restrictions intact; player insertion is unaffect
 
 Update English and Chinese pages together. Use the game's locale catalogs for UI
 names and keep commands, paths and Java symbols literal. Documentation stays at the
-overview level: the READMEs and contribution guides. Do not add detailed reference pages.
-
-Regenerate the vocation sprites from the character grids and palettes in `tools/vocation-icons/icons.json` with
-`python3 tools/vocation-icons/generate.py` (optional comparison sheet: `--sheet path.png`).
+overview level: the READMEs, contribution guides, integrations page and save compatibility rules. Do not
+add detailed reference pages or per-module READMEs. `THIRD_PARTY.md` is a license
+inventory and stays in English only.

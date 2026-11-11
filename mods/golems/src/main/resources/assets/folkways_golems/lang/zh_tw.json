@@ -9,7 +9,7 @@
   "folkways_golems.ponder.golems.text_1": "把書切到點選，左鍵點選一個屬於你的金屬魔像，它就作為居民加入殖民地；再點一次則離開。",
   "folkways_golems.ponder.golems.text_2": "只有魔像的主人才能移交它，已經屬於另一個殖民地的魔像不會被帶走。",
   "folkways_golems.ponder.golems.text_3": "在殖民地裡，它不再按自己的目標行動，也不會主動挑起戰鬥，魔像的指令物品對它不起作用。離開殖民地後，它會恢復原來的行為。",
-  "folkways_golems.ponder.golems.text_4": "它能從事哪些工種取決於身體：大型金屬魔像能搬運和建造，犬形金屬魔像只能搬運，人形金屬魔像還能製作、駕駛和調度。",
+  "folkways_golems.ponder.golems.text_4": "它能從事哪些工種取決於身體：大型金屬魔像能搬運、建造和巡邏，犬形金屬魔像能搬運和巡邏，人形金屬魔像還能製作、駕駛和調度。",
   "folkways_golems.ponder.golems.text_5": "它從不吃飯也不睡覺。它的本領是造出來就有的，不會越幹越熟練。",
   "folkways_golems.ponder.golems.text_6": "生命值低於六成時，如果背包裡帶著可用於修理魔像的材料（例如鐵錠），它會用掉一個來修補自己。"
 }

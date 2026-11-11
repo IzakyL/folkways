@@ -54,7 +54,7 @@ versions. Back up your world before trying a nightly build.
 ## Mods
 
 This repository builds nine mods, one per directory under `mods/`. Each ships as
-`folkways-<directory>-*.jar`. Every extension requires Core; extensions other than Carts also require Vanilla.
+`folkways-<directory>-*.jar`. Every extension requires Core and Vanilla.
 
 | Mod                                       | Directory            | Also requires                                                                       | What it does                                                                                                                    |
 | ----------------------------------------- | -------------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
@@ -70,14 +70,6 @@ This repository builds nine mods, one per directory under `mods/`. Each ships as
 
 When updating to Carving, remove the old `folkways-chiselsandbits-*.jar` before installing
 `folkways-carving-*.jar`; keeping both causes duplicate registrations and a crash.
-Carving currently supports Chisels & Bits. Existing patterns and exported blueprints remain readable;
-server settings keep using `serverconfig/folkways_chiselsandbits-server.toml`.
-
-With the colony book in Point mode, left-click a placed cargo cart to admit it; click again to withdraw it.
-Admission includes putting existing cargo into colony stores. Withdrawal detaches the resident and leaves the cart
-and goods in place. Pullers use carting routes with wide gateways and room at corners; one-wide doors and climbs
-are refused. Players keep pulling their admitted carts until they let go.
-Carts do not board trains or elevators with residents.
 
 ## Installation
 
@@ -130,34 +122,11 @@ different blocks already occupying a recorded cell are reported as conflicts.
 
 ## Optional integrations
 
-| Mod                                                                                                                         | What it adds                                                                                                                                                                             |
-| --------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [Create](https://modrinth.com/mod/create) 6.0.7+, with Folkways × Create                                                    | Schematic building, train driving, elevator rides, track laying and orders through a stock keeper's package network. Core handles walking around contraptions even without the extension |
-| [Sable](https://modrinth.com/mod/sable)                                                                                     | Residents path onto and off sub-levels, including Create Aeronautics ships                                                                                                               |
-| [Modular Golems](https://modrinth.com/mod/modular-golems) 3.1.6+, with Folkways × Modular Golems                           | Golems join the roster and take trades alongside people                                                                                                                                  |
-| [Kaleidoscope Cookery](https://github.com/KaleidoscopeMods/KaleidoscopeCookery) 1.6.0+, with Folkways × Kaleidoscope Cookery | Flooded-rice farming, ingredient preparation, native appliances, shared tools, kitchen racks, grass-seed gathering and thirteen lessons                                                  |
-| [Kaleidoscope Tavern](https://github.com/KaleidoscopeMods/KaleidoscopeTavern) 1.2.0+, with the Cookery extension             | Grape vineyards under pergolas, pressing, fermenting and bottling wine, and dining-area bar counters residents stock and drink at; one lesson                                            |
-| [TACZ](https://modrinth.com/mod/timeless-and-classics-zero) 1.2.0+, or the earlier [1.21.1 NeoForge port](https://modrinth.com/mod/OypNE65K) 1.1.8+, with Folkways Firearms | Residents fire and reload supported guns using physical matching ammunition; weapon choices preserve the gun model rather than matching only its shared item ID |
-| [Superb Warfare](https://modrinth.com/mod/superb-warfare) 0.8.9.2+, with Folkways Firearms and Kotlin for Forge 5.12.0+ (below 6) | Residents use supported firearms and emplacements, consuming ammunition from colony stores |
-| [Create: FireFighting Additions](https://modrinth.com/mod/create-firefighting-additions) 0.2.3-beta+, with Folkways × Create and its dependencies listed above | Damage-control workers use and refill water-filled portable extinguishers, or use a hydrant cabinet supplied with a hose, nozzle and water |
-| [AstikorCarts Redux](https://modrinth.com/mod/astikorcarts-redux) 1.2.2+, with Folkways × AstikorCarts Redux | Use the colony book to admit placed cargo carts; haulers walk to free admitted carts and stow their existing goods |
-| [Epic Fight](https://modrinth.com/mod/epic-fight) 21.17.1+, with Folkways × Epic Fight                            | Residents use native melee strikes, hit reactions and everyday movement animations; Epic Fight renders their Bedrock-format GEO models.                          |
-| [GeckoLib](https://modrinth.com/mod/geckolib) 4.7.5+                                                                        | Bedrock-format resident models                                                                                                                                                           |
-| [Touhou Little Maid](https://modrinth.com/mod/touhou-little-maid) 1.5+, with GeckoLib                                       | Built-in and installed add-on models become selectable resident looks, individually or by pack                                                                                           |
-| [Shoulder Surfing Reloaded](https://modrinth.com/mod/shoulder-surfing-reloaded) 5.0.1+                                      | Colony Book aiming follows its third-person crosshair                                                                                                                                    |
-| [AppleSkin](https://modrinth.com/mod/appleskin) 3.0+ | Its saturation and exhaustion overlays are put away with the food and health bars in the View from above |
-| [JEI](https://modrinth.com/mod/jei) / [EMI](https://modrinth.com/mod/emi)                                                   | Item filters open the recipe viewer's ingredient list                                                                                                                                    |
-| [FTB Teams](https://www.curseforge.com/minecraft/mc-mods/ftb-teams-forge) 2101.1+                                           | A founder can hand the colony to their party; party members keep it and the party owner holds the founder's rights                                                                       |
-| [Just Enough Characters (JEC)](https://www.curseforge.com/minecraft/mc-mods/just-enough-characters) 4.5+                    | Pinyin, initials and mixed-input searches in item and folder pickers, Workforce and stock; install on the client only                                                                    |
-
-JEC searches follow its keyboard and fuzzy-spelling settings.
-
-Patterns can declare `detail = "bits"` to draw curves at voxel resolution.
-
-With Folkways × Chisels & Bits and Chisels & Bits 21.1.25+, select an area and save it
-as a blueprint or template. Residents use whole blocks of each material to build and reshape
-carvings, with a small rounding loss. Bundled voxel patterns include a torii, rotunda, Gothic cloister,
-flying-eave pavilion, stone arch bridge, rampart, and curved gallery.
+Folkways also works with Create and its FireFighting Additions, Sable, AstikorCarts Redux,
+Chisels & Bits, Kaleidoscope Cookery and Tavern, Modular Golems, TACZ, Superb Warfare,
+Epic Fight, GeckoLib, Touhou Little Maid, FTB Teams, JEI/EMI, Just Enough Characters,
+Shoulder Surfing Reloaded, AppleSkin and Iris. See [Integrations](INTEGRATIONS.md) for
+what each one adds, how to use it in game and the versions it needs.
 
 ## Building from source
 

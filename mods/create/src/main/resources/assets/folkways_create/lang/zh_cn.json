@@ -52,9 +52,9 @@
   "folkways.page.rail.running": "在途中",
   "folkways.page.rail.stopped": "停靠 %s",
   "folkways.page.rail.taken": "已接管",
-  "folkways.perk.conducting_quick_hands": "迅捷",
+  "folkways.perk.conducting_quick_hands": "熟练列车长",
   "folkways.perk.conducting_quick_hands.desc": "更快坐上列车驾驶台",
-  "folkways.perk.dispatch_quick_hands": "迅捷",
+  "folkways.perk.dispatch_quick_hands": "熟练调度员",
   "folkways.perk.dispatch_quick_hands.desc": "更快清空货物蛙港",
   "folkways.rail.given_back": "这列列车已不再归这个殖民地管理",
   "folkways.rail.no_book": "请在另一只手上拿着殖民书",
@@ -120,8 +120,8 @@
   "folkways_create.ponder.rail.text_2": "把殖民书拿在副手，对一列还没有时刻表的列车的驾驶座使用列车时刻表。列车收下时刻表，殖民地也就接管了这列车。",
   "folkways_create.ponder.rail.text_3": "书仍拿在副手，空手再点同一个座位，就会取回时刻表，并把列车交还。",
   "folkways_create.ponder.rail.text_4": "列车停在站台而驾驶座空着时，有驾驶工种的居民会走过去坐上驾驶座。",
-  "folkways_create.ponder.rail.text_5": "在该站的等待条件里加入“列车长已就位”，列车就会在这里等到所有派来的列车长都坐好。",
+  "folkways_create.ponder.rail.text_5": "给每一站设置足够上车的定时等待。居民按时刻表规划行程，只要某一站等待的不只是时间，这列车就不会被乘坐。",
   "folkways_create.ponder.rail.text_6": "有列车长在车上、停靠两个以上车站、并且还有空座的列车，就是一种出行方式。要去别处的居民会乘它从一站坐到另一站。",
-  "folkways_create.ponder.rail.text_7": "在某一站加入“全体居民已下车”，列车就会一直停着，直到在这一站下车的人都下了车。",
+  "folkways_create.ponder.rail.text_7": "列车停站等待时，乘客会在自己的车站下车。列车不被乘坐时，机械动力的列车地图会显示原因。",
   "folkways_create.ponder.rail.text_8": "铁路页列出每列已接管的列车、它的车站、正在途中还是停靠某站，以及是否缺少列车长。"
 }
