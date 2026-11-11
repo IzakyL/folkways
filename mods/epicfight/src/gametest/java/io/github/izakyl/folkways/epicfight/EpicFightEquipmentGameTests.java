@@ -19,7 +19,6 @@ import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.item.*;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
-import net.neoforged.fml.ModList;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.*;
 import yesman.epicfight.registry.entries.EpicFightItems;
@@ -95,7 +94,6 @@ public final class EpicFightEquipmentGameTests {
     @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 240)
     public static void nativeIronSpearCollisionSpendsOnlyActualLoanDurability(GameTestHelper helper) {
         EpicFightTestScene s = new EpicFightTestScene(helper);
-        helper.assertValueEqual(ModList.get().getModContainerById("epicfight").orElseThrow().getModInfo().getVersion().toString(), "21.17.3.1", "native collision contract is pinned");
         ItemStack earlier = new ItemStack(EpicFightItems.IRON_SPEAR.get());
         earlier.setDamageValue(3);
         earlier.set(DataComponents.CUSTOM_NAME, Component.literal("earlier spear"));

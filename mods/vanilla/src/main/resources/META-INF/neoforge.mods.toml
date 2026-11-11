@@ -37,7 +37,7 @@ side = "BOTH"
 modId = "geckolib"
 type = "optional"
 reason = "Resident looks that name a bedrock model instead of a skin are rendered by GeckoLib. Without it those looks fall back to a plain player skin; everything else is unaffected."
-versionRange = "[4.9,)"
+versionRange = "[4.7.5,)"
 ordering = "AFTER"
 side = "CLIENT"
 

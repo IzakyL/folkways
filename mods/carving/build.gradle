@@ -25,6 +25,8 @@ dependencies {
 
 // C&B 21.1.33 bundles this library as MOD without a mod descriptor, so NeoForge discards it (#1343 upstream).
 // Keep its pinned bytes and license; only the library manifest changes so the required class can be loaded.
+// The jar-in-jar entry shares upstream's identifier at 21.1.11.1, so NeoForge loads exactly one copy: this one
+// beside C&B 21.1.33 (and older), the newer upstream build beside C&B releases that bundle one.
 def saeculariaRuntime = tasks.register("saeculariaRuntime", Jar) {
     archiveFileName = "folkways-saecularia-runtime.jar"
     destinationDirectory = layout.buildDirectory.dir("runtime")

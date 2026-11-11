@@ -39,13 +39,13 @@ Folkways 是面向 **Minecraft 1.21.1 / NeoForge** 的殖民地模组。
 | ----------------------------------------- | -------------------- | ------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
 | Folkways Core                             | `mods/core`          | —                                                                                     | 殖民地引擎：自行规划工作的居民、寻路、殖民书和管理面板，以及适用于任意居民种类的直接指挥和编队；本身不提供工作 |
 | Folkways Vanilla                          | `mods/vanilla`       | Core                                                                                  | 居民在原版方块中的工种：种植、畜牧、捕鱼、制作、搬运和建造；武器、配装和巡逻 |
-| Folkways Carving                          | `mods/carving` | Chisels & Bits 21.1.33                                                     | 居民使用整块建造和改造雕刻，有少量取整损耗                   |
-| Folkways × Create | `mods/create` | 机械动力 6.0+；消防附加 0.2.5-beta-fix2 可选（其需要 Create [6.0.10,6.1)） | 列车、包裹、轨道和蓝图施工；装有消防附加时使用灭火器和消防栓水带并补液 |
-| Folkways × Modular Golems                 | `mods/golems` | 模块化傀儡 3.1.43+                                                                    | 傀儡加入居民名单，像人类居民一样承担工种                               |
-| Folkways × Kaleidoscope Cookery           | `mods/cookery`       | 森罗厨房 1.6.x；可选森罗酒馆 1.2.x                                                    | 居民用原生厨具种植、处理、烹饪和储存食物；装有酒馆时还会酿酒、供酒     |
-| Folkways Firearms | `mods/firearms` | 可选：TACZ 1.1.8-hotfix-r7；卓越前线 0.8.9.2 及 Kotlin for Forge [5.12.0,6) | 装有相应原生模组时，居民使用实体弹药操作枪械和火炮阵地 |
-| Folkways × AstikorCarts Redux | `mods/carts` | AstikorCarts Redux 1.2.4 | 搬运居民套上手推车或运输车，把仓库间的货物装在车厢里，与背包分开 |
-| Folkways × Epic Fight                     | `mods/epicfight`（jar：`folkways-epicfight`） | 必须使用 Epic Fight 21.17.3.1；Core 和 Vanilla 须来自同一次 Folkways 构建 | 居民使用 Epic Fight 原生近战、受击动作和日常移动动画，并以 GEO 模型渲染 |
+| Folkways Carving                          | `mods/carving` | Chisels & Bits 21.1.25+                                                     | 居民使用整块建造和改造雕刻，有少量取整损耗                   |
+| Folkways × Create | `mods/create` | 机械动力 6.0.7+；消防附加 0.2.3-beta+ 可选（其需要 Create [6.0.10,6.1)） | 列车、包裹、轨道和蓝图施工；装有消防附加时使用灭火器和消防栓水带并补液 |
+| Folkways × Modular Golems                 | `mods/golems` | 模块化傀儡 3.1.6+                                                                    | 傀儡加入居民名单，像人类居民一样承担工种                               |
+| Folkways × Kaleidoscope Cookery           | `mods/cookery`       | 森罗厨房 1.6.0+；可选森罗酒馆 1.2.0+                                                    | 居民用原生厨具种植、处理、烹饪和储存食物；装有酒馆时还会酿酒、供酒     |
+| Folkways Firearms | `mods/firearms` | 可选：TACZ 1.1.8+（含 1.2.0）；卓越前线 0.8.9.2+ 及 Kotlin for Forge [5.12.0,6) | 装有相应原生模组时，居民使用实体弹药操作枪械和火炮阵地 |
+| Folkways × AstikorCarts Redux | `mods/carts` | AstikorCarts Redux 1.2.2+ | 搬运居民套上手推车或运输车，把仓库间的货物装在车厢里，与背包分开 |
+| Folkways × Epic Fight                     | `mods/epicfight`（jar：`folkways-epicfight`） | Epic Fight 21.17.1+；Core 和 Vanilla 须来自同一次 Folkways 构建 | 居民使用 Epic Fight 原生近战、受击动作和日常移动动画，并以 GEO 模型渲染 |
 
 升级到 Carving 时，先删除旧的 `folkways-chiselsandbits-*.jar`，再安装 `folkways-carving-*.jar`；
 新旧同时安装会重复注册并崩溃。Carving 当前支持 Chisels & Bits；已有图样和已导出的蓝图继续可读，
@@ -71,7 +71,7 @@ Folkways 是面向 **Minecraft 1.21.1 / NeoForge** 的殖民地模组。
 
 各个 jar 的作用和依赖见[模组一览](#模组一览)。
 Firearms 仅在装有 TACZ 或卓越前线时启用相应集成，Create 仅在装有消防附加时启用消防集成。
-装有这些原生模组时，须使用精确版本：TACZ 1.1.8-hotfix-r7、卓越前线 0.8.9.2、消防附加 0.2.5-beta-fix2。
+装有这些原生模组时，版本要求为：TACZ 1.1.8+、卓越前线 0.8.9.2+、消防附加 0.2.3-beta+。
 直接指挥和编队属于 Core。
 
 Core 已内置 Ponder 和 Flywheel；Vanilla 已内置 Starlark 解释器，无需单独安装这三个组件。
@@ -97,19 +97,19 @@ Core 已内置 Ponder 和 Flywheel；Vanilla 已内置 Starlark 解释器，无�
 
 | 模组                                                                                                                                   | 集成内容                                                                                                            |
 | -------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| [Create / 机械动力](https://modrinth.com/mod/create) 6.0+，配合 Folkways × Create                                                      | 按蓝图施工、驾驶列车、乘坐电梯、铺设轨道，以及通过仓储管理器的包裹网络下单。未安装扩展时，Core 仍会处理绕行机械装置 |
+| [Create / 机械动力](https://modrinth.com/mod/create) 6.0.7+，配合 Folkways × Create                                                      | 按蓝图施工、驾驶列车、乘坐电梯、铺设轨道，以及通过仓储管理器的包裹网络下单。未安装扩展时，Core 仍会处理绕行机械装置 |
 | [Sable](https://modrinth.com/mod/sable)                                                                                                | 居民可以进出子世界结构，例如 Create Aeronautics 的飞船                                                              |
-| [Modular Golems / 模块化傀儡](https://modrinth.com/mod/modular-golems) 3.1.43+，配合 Folkways × Modular Golems                         | 傀儡加入居民名单，像人类居民一样承担工种                                                                            |
-| [Kaleidoscope Cookery / 森罗厨房](https://github.com/KaleidoscopeMods/KaleidoscopeCookery) 1.6.x，配合 Folkways × Kaleidoscope Cookery | 水田种植、食材处理、原生厨具、共享工具、厨房置物架、割草采种，以及十三节教程                                        |
-| [Kaleidoscope Tavern / 森罗酒馆](https://github.com/KaleidoscopeMods/KaleidoscopeTavern) 1.2.x，配合 Cookery 扩展                      | 搭棚种葡萄，榨汁、发酵、装瓶酿酒，居民为用餐区吧台补货并在那里喝酒；一节教程                                        |
-| [TACZ 1.21.1 NeoForge 移植版](https://modrinth.com/mod/OypNE65K) 1.1.8-hotfix-r7，配合 Folkways Firearms | 居民使用匹配的实体弹药射击、装填受支持的枪械；武器选择保留枪型，不只匹配共用物品 ID |
-| [Superb Warfare / 卓越前线](https://modrinth.com/mod/superb-warfare) 0.8.9.2，配合 Folkways Firearms 和 Kotlin for Forge 5.12.0+（低于 6） | 居民使用受支持的枪械和火炮阵地，消耗殖民地库存中的弹药 |
-| [Create: FireFighting Additions / 机械动力：消防附加](https://modrinth.com/mod/create-firefighting-additions) 0.2.5-beta-fix2，配合 Folkways × Create 及上表所列依赖 | 损害管制居民使用装水的手提灭火器并补液，或连接备有水带、喷头和水的消防栓柜 |
-| [AstikorCarts Redux](https://modrinth.com/mod/astikorcarts-redux) 1.2.4，配合 Folkways × AstikorCarts Redux | 手持聚落簿以点选模式左键接纳已放置的货车，再次点击撤回；搬运居民走向空闲的已接纳车辆，并将已有货物入库 |
-| [Epic Fight](https://modrinth.com/mod/epic-fight) 21.17.3.1，配合 Folkways × Epic Fight                                              | 居民使用 Epic Fight 原生近战攻击、受击动作和日常移动动画，并渲染 Bedrock GEO 模型                           |
-| [GeckoLib](https://modrinth.com/mod/geckolib) 4.9+                                                                                     | 使用基岩版格式的居民模型                                                                                            |
+| [Modular Golems / 模块化傀儡](https://modrinth.com/mod/modular-golems) 3.1.6+，配合 Folkways × Modular Golems                         | 傀儡加入居民名单，像人类居民一样承担工种                                                                            |
+| [Kaleidoscope Cookery / 森罗厨房](https://github.com/KaleidoscopeMods/KaleidoscopeCookery) 1.6.0+，配合 Folkways × Kaleidoscope Cookery | 水田种植、食材处理、原生厨具、共享工具、厨房置物架、割草采种，以及十三节教程                                        |
+| [Kaleidoscope Tavern / 森罗酒馆](https://github.com/KaleidoscopeMods/KaleidoscopeTavern) 1.2.0+，配合 Cookery 扩展                      | 搭棚种葡萄，榨汁、发酵、装瓶酿酒，居民为用餐区吧台补货并在那里喝酒；一节教程                                        |
+| [TACZ](https://modrinth.com/mod/timeless-and-classics-zero) 1.2.0+，或此前的 [1.21.1 NeoForge 移植版](https://modrinth.com/mod/OypNE65K) 1.1.8+，配合 Folkways Firearms | 居民使用匹配的实体弹药射击、装填受支持的枪械；武器选择保留枪型，不只匹配共用物品 ID |
+| [Superb Warfare / 卓越前线](https://modrinth.com/mod/superb-warfare) 0.8.9.2+，配合 Folkways Firearms 和 Kotlin for Forge 5.12.0+（低于 6） | 居民使用受支持的枪械和火炮阵地，消耗殖民地库存中的弹药 |
+| [Create: FireFighting Additions / 机械动力：消防附加](https://modrinth.com/mod/create-firefighting-additions) 0.2.3-beta+，配合 Folkways × Create 及上表所列依赖 | 损害管制居民使用装水的手提灭火器并补液，或连接备有水带、喷头和水的消防栓柜 |
+| [AstikorCarts Redux](https://modrinth.com/mod/astikorcarts-redux) 1.2.2+，配合 Folkways × AstikorCarts Redux | 手持聚落簿以点选模式左键接纳已放置的货车，再次点击撤回；搬运居民走向空闲的已接纳车辆，并将已有货物入库 |
+| [Epic Fight](https://modrinth.com/mod/epic-fight) 21.17.1+，配合 Folkways × Epic Fight                                              | 居民使用 Epic Fight 原生近战攻击、受击动作和日常移动动画，并渲染 Bedrock GEO 模型                           |
+| [GeckoLib](https://modrinth.com/mod/geckolib) 4.7.5+                                                                                   | 使用基岩版格式的居民模型                                                                                            |
 | [Touhou Little Maid / 车万女仆](https://modrinth.com/mod/touhou-little-maid) 1.5+，需 GeckoLib                                         | 将内置及已安装扩展包中的模型用作居民外观，可逐个或按包选择                                                          |
-| [Shoulder Surfing Reloaded](https://modrinth.com/mod/shoulder-surfing-reloaded) 5.2.0+                                                 | 殖民书沿第三人称相机的准星瞄准                                                                                      |
+| [Shoulder Surfing Reloaded](https://modrinth.com/mod/shoulder-surfing-reloaded) 5.0.1+                                                 | 殖民书沿第三人称相机的准星瞄准                                                                                      |
 | [AppleSkin](https://modrinth.com/mod/appleskin) 3.0+ | 俯瞰时，其饱和度与消耗度叠加层随饥饿条、生命条一起隐藏 |
 | [JEI](https://modrinth.com/mod/jei) / [EMI](https://modrinth.com/mod/emi)                                                              | 在容器和物品筛选中使用配方查看器的物品列表                                                                          |
 | [FTB Teams](https://www.curseforge.com/minecraft/mc-mods/ftb-teams-forge) 2101.1+                                                      | 创始人可将殖民地交给队伍；队员共同管理，队长持有创始人权限                                                          |
@@ -119,7 +119,7 @@ JEC 搜索沿用其键盘方案和模糊音设置。
 
 Pattern 可声明 `detail = "bits"`，以体素分辨率绘制曲面。
 
-安装 Folkways × Chisels & Bits 和 Chisels & Bits 21.1.33 后，可圈定区域并保存为蓝图或模板。
+安装 Folkways × Chisels & Bits 和 Chisels & Bits 21.1.25+ 后，可圈定区域并保存为蓝图或模板。
 居民使用对应材质的整块建造和改造雕刻，有少量取整损耗。自带碎块 pattern 包括鸟居、穹顶圆厅、哥特回廊、飞檐亭、石拱桥、收分城防和曲顶长廊。
 
 ## 从源码构建

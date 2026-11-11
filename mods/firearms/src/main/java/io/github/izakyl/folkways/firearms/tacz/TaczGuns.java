@@ -26,11 +26,16 @@ import net.minecraft.world.item.component.CustomData;
 
 final class TaczGuns {
 
+    // Default-pack scripts whose ammo calls are all bounded by GunScriptAmmoMixin. TACZ 1.2.0's unload scripts also
+    // hand rounds back through the resident's item handler, which returns them to the pack.
     private static final Set<String> SCRIPTS =
         Set.of(
         "xmag_reload_logic",
         "kar98_gun_logic",
         "m870_gun_logic",
+        "m870_unload_gun_logic",
+        "m1866_gun_logic",
+        "taurus943_gun_logic",
         "db_short_gun_logic",
         "hk_mk23_logic",
         "m1014_gun_logic",

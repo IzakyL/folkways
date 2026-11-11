@@ -45,7 +45,7 @@ side = "BOTH"
 modId = "create"
 type = "required"
 reason = "Everything this mod adds is Create's."
-versionRange = "[6.0.0,)"
+versionRange = "[6.0.7,)"
 ordering = "AFTER"
 side = "BOTH"
 
@@ -62,7 +62,7 @@ config = "folkways-create-build.mixins.json"
 # The addon reads Create's registered blocks during construction; keep its factories after Create.
 modId = "createfirefightingadd"
 type = "optional"
-versionRange = "[0.2.5-beta-fix2]"
+versionRange = "[0.2.3-beta,)"
 ordering = "BEFORE"
 side = "BOTH"
 

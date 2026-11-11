@@ -92,8 +92,8 @@ public final class TaczAttachmentGameTests {
         var scene = new TaczWeaponGameTests.Fixture(helper, "m1911", FireMode.SEMI, 6);
         scene.open();
         var operator = IGunOperator.fromLivingEntity(scene.body);
-        operator.getDataHolder().drawTimestamp = System.currentTimeMillis() - 10_000;
-        operator.getDataHolder().baseTimestamp = System.currentTimeMillis() - 60_000;
+        operator.getDataHolder().drawTimestamp = TaczClock.nowMillis() - 10_000;
+        operator.getDataHolder().baseTimestamp = TaczClock.nowMillis() - 60_000;
         operator.getCacheProperty().setCache(GunProperties.IGNITE, new Ignite(true, true));
         helper.assertTrue(TaczGuns.supported(scene.actual()), "the physical gun itself remains conventional");
         helper.assertFalse(scene.session.fire(scene.target), "final runtime ignition prevents firing");
@@ -107,8 +107,8 @@ public final class TaczAttachmentGameTests {
         var scene = new TaczWeaponGameTests.Fixture(helper, "m1911", FireMode.SEMI, 6);
         scene.open();
         var operator = IGunOperator.fromLivingEntity(scene.body);
-        operator.getDataHolder().drawTimestamp = System.currentTimeMillis() - 10_000;
-        operator.getDataHolder().baseTimestamp = System.currentTimeMillis() - 60_000;
+        operator.getDataHolder().drawTimestamp = TaczClock.nowMillis() - 10_000;
+        operator.getDataHolder().baseTimestamp = TaczClock.nowMillis() - 60_000;
         AtomicInteger changed = new AtomicInteger();
         Consumer<GunFireEvent> listener =
             event -> {

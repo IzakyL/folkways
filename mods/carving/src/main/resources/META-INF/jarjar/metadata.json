@@ -2,12 +2,12 @@
   "jars": [
     {
       "identifier": {
-        "group": "io.github.izakyl.folkways",
-        "artifact": "saecularia-runtime"
+        "group": "com.communi-suggestu.saecularia-caudices",
+        "artifact": "core"
       },
       "version": {
-        "range": "[21.1.11]",
-        "artifactVersion": "21.1.11"
+        "range": "[21.1.11,)",
+        "artifactVersion": "21.1.11.1"
       },
       "path": "META-INF/jarjar/folkways-saecularia-runtime.jar",
       "isObfuscated": false

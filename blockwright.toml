@@ -491,8 +491,8 @@ superbwarfare = { target = ["client", "server"] }
 kotlinforforge = { target = ["client", "server"] }
 
 [mods.tacz]
-url = "https://cdn.modrinth.com/data/OypNE65K/versions/62q6mB5Q/tacz-neoforge-1.21.1-1.1.8-hotfix-r7.jar"
-sha512 = "7700ed99a080729c3aa21f9619e018fbe9e2303cfbcaa463175ee5170553a000b692bc4cfa2e8ce0778747eed34dcc0197fb5e4344bb258cff1ba90adc842642"
+url = "https://cdn.modrinth.com/data/SzzJttH8/versions/O2Pfsh6w/tacz-neoforge-1.21.1-1.2.0.jar"
+sha512 = "8f54d0b620040cd4451329ee62fa2b2ede153220d85a8722ef9ffe6e31b9aaeff9f3a55a9bc92df29f1769ea751a50d36110139eacc809a84d5ca4186fdcc461"
 target = []
 
 
