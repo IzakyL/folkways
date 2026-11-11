@@ -1,7 +1,9 @@
 package io.github.izakyl.folkways.core.resident.api;
 
+import io.github.izakyl.folkways.core.item.api.Goods;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import java.util.Optional;
+import java.util.Set;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
@@ -29,6 +31,12 @@ public final class Doings {
     }
 
     public static Optional<String> about(ItemSpec goods) {
+        if (goods.anyOf().size() > 1) {
+            Set<Item> members = Goods.members(goods);
+            return Optional.of(!members.isEmpty()
+                && members.stream().allMatch(item -> item.builtInRegistryHolder().is(Tags.Items.FOODS))
+                ? Tags.getTagTranslationKey(Tags.Items.FOODS) : "folkways.goods.any");
+        }
         ItemSpec one = goods.anyOf().isEmpty() ? goods : goods.anyOf().iterator().next();
         return one.item()
             .map(id -> BuiltInRegistries.ITEM.get(id).getDescriptionId())
@@ -39,8 +47,11 @@ public final class Doings {
         return block == Blocks.AIR ? Optional.empty() : Optional.of(block.getDescriptionId());
     }
 
-    /** The one item that stands for the goods: the item itself, or the first member of its tag. */
+    /** An icon for the goods: an item or tag representative; alternatives wait until an item is chosen. */
     public static Optional<ResourceLocation> item(ItemSpec goods) {
+        if (goods.anyOf().size() > 1) {
+            return Optional.empty();
+        }
         ItemSpec one = goods.anyOf().isEmpty() ? goods : goods.anyOf().iterator().next();
         return one.item().or(() -> one.tag()
             .flatMap(tag -> BuiltInRegistries.ITEM.getTag(tag))

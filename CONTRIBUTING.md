@@ -17,6 +17,8 @@ and include what you did, what you expected, what happened, and reproduction ste
 List Minecraft, NeoForge and LDLib2 versions, every installed Folkways jar and
 its version, and your other mods. Attach `logs/latest.log` and the crash report
 from `crash-reports/` if the game crashed.
+For resident behaviour problems, turn on **Debug logs**, look at the resident or block
+involved and attach a screenshot of its debug card; see [Investigating residents](README.md#investigating-residents).
 
 For new capabilities, use the
 [feature request form](https://github.com/IzakyL/folkways/issues/new?template=feature_request.yml)

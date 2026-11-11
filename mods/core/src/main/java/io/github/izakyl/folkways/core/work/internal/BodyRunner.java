@@ -123,6 +123,33 @@ public final class BodyRunner {
         return busy;
     }
 
+    public int skippedCount() {
+        return skipped;
+    }
+
+    public Optional<SoftPreempt> softPreempt() {
+        return Optional.ofNullable(soft);
+    }
+
+    public record KeptWork(Node node, Placement placement) {
+    }
+
+    public List<KeptWork> suspendedWork() {
+        return suspended.stream().map(work -> new KeptWork(work.node(), work.placement())).toList();
+    }
+
+    public List<Node> suspendedNodes() {
+        return suspended.stream().map(Suspended::node).toList();
+    }
+
+    public Placement currentPlacement() {
+        return placement;
+    }
+
+    public Optional<String> executionStage() {
+        return execution == null ? Optional.empty() : execution.debugStage();
+    }
+
     public int drainSkipped() {
         int said = skipped;
         skipped = 0;
@@ -682,7 +709,7 @@ public final class BodyRunner {
             labor.personal().failed(node.id(), why);
             labor.report(new Event.Forgotten(node.id()));
             if (own.urge() != null) {
-                labor.report(new Event.Refused(own.urge(), why, level.getGameTime()));
+                labor.report(new Event.Refused(body.id(), own.urge(), why, level.getGameTime()));
             }
             return;
         }

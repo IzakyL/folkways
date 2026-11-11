@@ -15,6 +15,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.function.Predicate;
 import net.minecraft.resources.ResourceLocation;
 
@@ -22,7 +23,8 @@ final class Urges {
 
     private static final long BACKOFF = 100L;
 
-    private final Map<ResourceLocation, Long> cooling = new HashMap<>();
+    private record Cooling(UUID resident, ResourceLocation urge) { }
+    private final Map<Cooling, Long> cooling = new HashMap<>();
 
     List<Urge> offered(ColonyData colony, ColonyView view, Body body, Worker who) {
         List<Urge> offered = new ArrayList<>();
@@ -35,12 +37,12 @@ final class Urges {
         return List.copyOf(offered);
     }
 
-    Optional<Urge> keenest(List<Urge> offered, long now, Predicate<Urge> available) {
+    Optional<Urge> keenest(UUID resident, List<Urge> offered, long now, Predicate<Urge> available) {
         // One-shot controllers may never offer a refused identity again.
         cooling.values().removeIf(until -> until <= now);
         Urge best = null;
         for (Urge urge : offered) {
-            if (urge.reservation() || quiet(urge.id(), now) || !available.test(urge)) {
+            if (urge.reservation() || quiet(new Cooling(resident, urge.id()), now) || !available.test(urge)) {
                 continue;
             }
             if (best == null || urge.outranks(best)) {
@@ -50,20 +52,28 @@ final class Urges {
         return Optional.ofNullable(best);
     }
 
-    void refused(ResourceLocation urge, RefusalKind why, long now) {
+    void refused(UUID resident, ResourceLocation urge, RefusalKind why, long now) {
         Labor.LOGGER.debug("urge {} refused: {}", urge, why.translationKey());
-        cooling.put(urge, now + BACKOFF);
+        cooling.put(new Cooling(resident, urge), now + BACKOFF);
     }
 
-    private boolean quiet(ResourceLocation urge, long now) {
-        Long until = cooling.get(urge);
+    void gone(UUID resident) {
+        cooling.keySet().removeIf(key -> key.resident().equals(resident));
+    }
+
+    long remaining(UUID resident, ResourceLocation urge, long now) {
+        return Math.max(0L, cooling.getOrDefault(new Cooling(resident, urge), now) - now);
+    }
+
+    private boolean quiet(Cooling key, long now) {
+        Long until = cooling.get(key);
         if (until == null) {
             return false;
         }
         if (until > now) {
             return true;
         }
-        cooling.remove(urge);
+        cooling.remove(key);
         return false;
     }
 }

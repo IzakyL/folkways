@@ -17,6 +17,7 @@ import io.github.izakyl.folkways.core.world.api.WorldSpaces;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
 import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
+import it.unimi.dsi.fastutil.longs.LongArrayList;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -803,21 +804,19 @@ public final class Roaming {
     // "aboard" is the web's, not a cell. A platform not seen before is swept round once, so its footings join up.
     private void platform(Waypoints net, Tract tract, Stances.Cells footings, WorldPos anchor, long now) {
         boolean fresh = false;
-        long first = Long.MIN_VALUE;
+        LongArrayList cells = new LongArrayList();
         for (WorldPos cell : footings.cells()) {
             if (!cell.sameRealm(anchor) || shut(cell)) {
 
                 continue;
             }
             fresh |= !net.knows(cell.cell().asLong());
-            net.pin(cell.cell().asLong(), now);
-            if (first == Long.MIN_VALUE) {
-                first = cell.cell().asLong();
-            }
+            cells.add(cell.cell().asLong());
         }
-        // Swept from a footing, where a body stands: the anchor may be on the track.
-        if (fresh && first != Long.MIN_VALUE) {
-            platforms.add(new Fresh(tract, first));
+        // Keep the crossing's hub addressable even if the other footings' attachments are later evicted.
+        net.pinSite(cells, anchor.cell().asLong(), now);
+        if (fresh && !cells.isEmpty()) {
+            platforms.add(new Fresh(tract, cells.getLong(0)));
         }
     }
 

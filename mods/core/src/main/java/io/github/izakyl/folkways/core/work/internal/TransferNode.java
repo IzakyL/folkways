@@ -219,7 +219,14 @@ public final class TransferNode implements Node, Staged {
     public Optional<Stash> delivers() {
         return handed && to instanceof Endpoint.Store(Stash stash) ? Optional.of(stash) : Optional.empty();
     }
-    @Override public NodeSpec spec() { return spec; }
+
+    // The manifest can also be bound after planning, when a preceding transfer commits its exact stacks.
+    @Override
+    public NodeSpec spec() {
+        Optional<String> about = about(cargo).or(spec::about);
+        return about.equals(spec.about()) ? spec : spec.about(about);
+    }
+
     @Override public boolean replannable() { return true; }
 
     // Taking from, or putting into, the same store as the transfer just done is one reach.

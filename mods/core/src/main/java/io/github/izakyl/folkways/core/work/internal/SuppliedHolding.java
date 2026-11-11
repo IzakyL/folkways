@@ -10,6 +10,7 @@ import io.github.izakyl.folkways.core.work.api.PreemptReason;
 import io.github.izakyl.folkways.core.work.api.SoftPreempt;
 import io.github.izakyl.folkways.core.work.api.WorkHolding;
 import java.util.Objects;
+import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -31,6 +32,11 @@ final class SuppliedHolding implements WorkHolding {
 
     boolean travelling() {
         return holding == null && approach.travelling();
+    }
+
+    @Override
+    public Optional<String> debugStage() {
+        return holding == null ? Optional.of("approaching") : holding.debugStage();
     }
 
     @Override

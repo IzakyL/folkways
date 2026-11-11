@@ -33,7 +33,7 @@ public final class CreateCandBPlacementGameTests {
             return List.of();
         }
         return List.of(new TestFunction("defaultBatch", "createprintingkeepseverycloisterdraftvoxel",
-            "folkways_carving:empty_large", 300, 0, true,
+            "folkways_carving:empty_large", 1200, 0, true,
             CreateCandBPlacementGameTests::createPrintingKeepsEveryCloisterDraftVoxel));
     }
 

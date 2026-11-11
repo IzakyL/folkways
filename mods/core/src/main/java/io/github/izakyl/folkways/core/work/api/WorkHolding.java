@@ -1,6 +1,12 @@
 package io.github.izakyl.folkways.core.work.api;
 
+import java.util.Optional;
+
 public interface WorkHolding {
+    default Optional<String> debugStage() {
+        return Optional.empty();
+    }
+
     // Steps requiring a body or world access must check their own prerequisites and wait when unavailable.
     // A terminal or yielded step leaves body control clean for the caller.
     HoldingStep tick(HoldingContext context);

@@ -26,6 +26,13 @@ final class Watermark {
         this.restoreTo = restoreTo;
     }
 
+    record Reading(boolean engaged, int holdAt, int urgentAt, int restoreTo) {
+    }
+
+    Reading reading(UUID resident) {
+        return new Reading(engaged.contains(resident), holdAt, urgentAt, restoreTo);
+    }
+
     boolean holds(UUID who, int reserve) {
         if (reserve >= restoreTo) {
             engaged.remove(who);

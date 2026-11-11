@@ -88,6 +88,11 @@ public final class Phases {
         return entry != null && waiting(entry);
     }
 
+    public long waitTicks(UUID id, long now) {
+        Entry entry = byNode.get(id);
+        return entry == null ? 0L : Math.max(0L, entry.waitUntil - now);
+    }
+
     private static boolean waiting(Entry entry) {
         return entry.level.getGameTime() < entry.waitUntil;
     }

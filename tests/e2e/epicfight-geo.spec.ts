@@ -413,7 +413,8 @@ const SERVER_IMPORTS = ["java.util.UUID", "java.util.List", "java.util.Map", "ja
   "java.util.Optional", "java.util.Set", "java.util.LinkedHashSet",
   "net.minecraft.server.MinecraftServer", "net.minecraft.core.BlockPos", "net.minecraft.resources.ResourceLocation", "net.minecraft.resources.ResourceKey",
   "net.minecraft.world.entity.EntityType", "net.minecraft.world.entity.EquipmentSlot", "net.minecraft.world.entity.Mob",
-  "net.minecraft.world.entity.ai.attributes.Attributes", "net.minecraft.world.item.ItemStack", "net.minecraft.world.item.Items",
+  "net.minecraft.world.entity.ai.attributes.Attributes", "net.minecraft.world.effect.MobEffectInstance", "net.minecraft.world.effect.MobEffects",
+  "net.minecraft.world.item.ItemStack", "net.minecraft.world.item.Items",
   "net.minecraft.world.level.block.Blocks", "net.minecraft.core.registries.BuiltInRegistries", "io.github.izakyl.folkways.core.colony.api.Colonies",
   "io.github.izakyl.folkways.core.colony.api.Claimed", "io.github.izakyl.folkways.core.world.api.WorldPos",
   "io.github.izakyl.folkways.vanilla.person.PersonBody", "io.github.izakyl.folkways.vanilla.person.PersonContent",
@@ -447,6 +448,8 @@ var route=colony.hold(PatrolContent.BEAT,new Claimed.Line(List.of(WorldPos.of(le
 PatrolStaffing.of(colony).configure(level,route.id(),Set.of(profile.id()),1);
 var target=EntityType.ZOMBIE.create(level);target.setNoAi(true);target.setPersistenceRequired();target.moveTo(body.getX()+1.2,body.getY(),body.getZ());
 target.getAttribute(Attributes.MAX_HEALTH).setBaseValue(160);target.setHealth(160);
+// Noon sun ignites a zombie even with NoAi; a burn tick would break the full-health baseline.
+target.addEffect(new MobEffectInstance(MobEffects.FIRE_RESISTANCE,-1,0,false,false));
 if(!level.addFreshEntity(target))throw new IllegalStateException("target spawn refused");
 return Map.of("colony",colony.id().toString(),"resident",body.id().toString(),"monster",target.getUUID().toString());` }) });
 const SERVER_STATE = defineTask<Scene, ServerState>({ name: "folkways.epicfight.geo.native-state", side: "server", source: javaTask({ imports: SERVER_IMPORTS, body: `

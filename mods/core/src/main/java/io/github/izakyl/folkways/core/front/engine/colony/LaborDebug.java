@@ -1,5 +1,6 @@
 package io.github.izakyl.folkways.core.front.engine.colony;
 
+import io.github.izakyl.folkways.core.front.engine.net.DebugStatePacket;
 import io.github.izakyl.folkways.core.colony.api.Colony;
 import io.github.izakyl.folkways.core.plan.internal.Claim;
 import io.github.izakyl.folkways.core.plan.internal.Resource;
@@ -8,6 +9,7 @@ import io.github.izakyl.folkways.core.work.api.ReservedInput;
 import io.github.izakyl.folkways.core.work.internal.LaborIncident;
 import io.github.izakyl.folkways.core.front.api.ui.Pages;
 import io.github.izakyl.folkways.core.front.engine.charter.Charters;
+import java.util.Optional;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -15,6 +17,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import net.neoforged.neoforge.network.PacketDistributor;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
@@ -62,6 +65,7 @@ public final class LaborDebug {
             return;
         }
         if (!on) {
+            debugState(reader, Optional.empty());
             if (WATCHING.remove(reader.getUUID()) != null) {
                 subscriptions();
                 reader.sendSystemMessage(Component.translatable("folkways.debug.disabled"));
@@ -69,6 +73,7 @@ public final class LaborDebug {
             return;
         }
         Pages.colonyOf(reader).ifPresent(colony -> {
+            debugState(reader, Optional.of(colony.id()));
             Watch before = WATCHING.get(reader.getUUID());
             if (before == null || !before.colony.equals(colony.id())) {
                 WATCHING.put(reader.getUUID(), new Watch(colony.id()));
@@ -79,9 +84,19 @@ public final class LaborDebug {
     }
 
     private static void forget(UUID player) {
+        var server = net.neoforged.neoforge.server.ServerLifecycleHooks.getCurrentServer();
+        ServerPlayer reader = server == null ? null : server.getPlayerList().getPlayer(player);
+        if (reader != null) {
+            debugState(reader, Optional.empty());
+        }
         if (WATCHING.remove(player) != null) {
             subscriptions();
         }
+    }
+
+    private static void debugState(ServerPlayer reader, Optional<UUID> colony) {
+        PacketDistributor.sendToPlayer(reader,
+            new DebugStatePacket(colony));
     }
 
     private static void subscriptions() {
@@ -97,7 +112,11 @@ public final class LaborDebug {
         if (WATCHING.entrySet().removeIf(entry -> {
             ServerPlayer reader = server.getPlayerList().getPlayer(entry.getKey());
             Colony colony = ColonyGround.of(server, entry.getValue().colony).orElse(null);
-            if (reader == null || colony == null || !Charters.member(server, colony, reader.getUUID())) {
+            if (reader == null || colony == null || !enabled(reader)
+                    || !Charters.member(server, colony, reader.getUUID())) {
+                if (reader != null) {
+                    debugState(reader, Optional.empty());
+                }
                 return true;
             }
             Watch watch = entry.getValue();

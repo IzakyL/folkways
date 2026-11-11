@@ -59,6 +59,14 @@ public interface Facing {
         return Optional.empty();
     }
 
+    default List<Line> debugResidentLines(UUID resident, ColonyView colony) {
+        return List.of();
+    }
+
+    default List<Line> debugBlockLines(BlockPos at, ColonyView colony) {
+        return List.of();
+    }
+
     default List<Line> lookLines(UUID resident, ColonyView colony) {
         return List.of();
     }

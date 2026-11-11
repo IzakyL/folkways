@@ -108,6 +108,14 @@ final class Hunger {
         return foodLevel;
     }
 
+    float saturation() {
+        return saturationLevel;
+    }
+
+    float exhaustion() {
+        return exhaustionLevel;
+    }
+
     CompoundTag save() {
         return Writer.of()
             .integer(TAG_FOOD_LEVEL, foodLevel)

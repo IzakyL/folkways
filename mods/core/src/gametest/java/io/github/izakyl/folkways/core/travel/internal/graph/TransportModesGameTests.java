@@ -4,6 +4,7 @@ import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.colony.api.Colony;
 import io.github.izakyl.folkways.core.colony.internal.ColonyData;
 import io.github.izakyl.folkways.core.extension.api.Declaring;
+import io.github.izakyl.folkways.core.front.engine.net.DebugWaypointsPacket;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import io.github.izakyl.folkways.core.plan.internal.DirectTransport;
 import io.github.izakyl.folkways.core.plan.internal.TransportEstimate;
@@ -284,6 +285,62 @@ public final class TransportModesGameTests {
         helper.assertTrue(view.estimate(KIND, a, b, 150) instanceof TransportTravel.Yes later
             && later.rideTicks() == 60, "departure times must not reuse a reverse field priced for now");
         helper.assertTrue(asked.drain().isEmpty(), "estimating future departures requests no routes");
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
+    public static void debugReadsKeepCrossingsPastEveryCap(GameTestHelper helper) {
+        Fixture f = new Fixture(helper);
+        WorldPos a = f.at("a").at();
+        WorldPos b = f.at("b").at();
+        Sort sort = new Sort(id("walking"), new Bulk(1, 2));
+        Waypoints ways = new Waypoints();
+        int left = ways.pin(a.cell().above(3).asLong(), 0);
+        int right = ways.pin(b.cell().above(3).asLong(), 0);
+        ways.link(left, right, 10, 0);
+        Hop hop = new Hop(SERVICE, new Stances.Cells(Set.of(a)), new Stances.Cells(Set.of(b)),
+            when -> OptionalLong.of(when + 10));
+        WayGraph graph = new WayGraph(Map.of(KIND, sort), Map.of(new Tract(sort, a.realm()), ways.freeze(1)),
+            List.of(new Crossing(a, b, hop, SERVICE)), Map.of(), new Asked(), new Trodden(), List.of(), 0);
+        var centre = net.minecraft.world.phys.Vec3.atBottomCenterOf(a.cell());
+        var starved = WayGraphDebug.read(helper.getLevel(), graph, centre, WayGraphDebug.RADIUS, 0, 0);
+        helper.assertTrue(starved.truncated() && starved.points().size() == 2
+                && starved.edges().size() == 1
+                && starved.edges().getFirst().kind() == WayGraphDebug.EdgeKind.CROSSING
+                && starved.edges().getFirst().sort().equals(SERVICE),
+            "crossings are read whole even when the walking caps leave room for nothing");
+        var edgeCapped = WayGraphDebug.read(helper.getLevel(), graph, centre, WayGraphDebug.RADIUS,
+            WayGraphDebug.MAX_POINTS, 0);
+        helper.assertTrue(edgeCapped.edges().size() == 1 && edgeCapped.points().size() == 4,
+            "the edge cap trims walking links, not crossings");
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
+    public static void halfVisibleCrossingsStayWithinPacketLimits(GameTestHelper helper) {
+        BlockPos origin = helper.absolutePos(new BlockPos(0, 2, 0));
+        List<Crossing> crossings = new ArrayList<>();
+        for (int index = 0; index <= WayGraphDebug.WIRE_POINTS; index++) {
+            WorldPos near = WorldPos.of(helper.getLevel(), origin.offset(
+                index % 32 - 16, index / 1024 - 2, index / 32 % 32 - 16));
+            WorldPos far = WorldPos.of(helper.getLevel(), near.cell().offset(2 * WayGraphDebug.RADIUS, 0, 0));
+            WorldPos from = index % 2 == 0 ? near : far;
+            WorldPos to = index % 2 == 0 ? far : near;
+            Hop hop = new Hop(SERVICE, new Stances.Cells(Set.of(from)), new Stances.Cells(Set.of(to)),
+                when -> OptionalLong.of(when + 10));
+            crossings.add(new Crossing(from, to, hop, SERVICE));
+        }
+        WayGraph graph = new WayGraph(Map.of(), Map.of(), crossings, Map.of(),
+            new Asked(), new Trodden(), List.of(), 0);
+        var snapshot = WayGraphDebug.read(helper.getLevel(), graph,
+            net.minecraft.world.phys.Vec3.atBottomCenterOf(origin));
+        helper.assertTrue(snapshot.points().size() == WayGraphDebug.MAX_CROSSINGS
+            && snapshot.points().size() <= WayGraphDebug.WIRE_POINTS && snapshot.truncated(),
+            "each half-visible crossing consumes the budget and excess crossings mark truncation");
+        helper.assertTrue(snapshot.edges().isEmpty() && snapshot.points().stream()
+            .allMatch(point -> point.kind() == WayGraphDebug.PointKind.CROSSING),
+            "visible boarding and landing endpoints remain drawn without dangling edges");
+        new DebugWaypointsPacket(UUID.randomUUID(), helper.getLevel().dimension(), snapshot);
         helper.succeed();
     }
 

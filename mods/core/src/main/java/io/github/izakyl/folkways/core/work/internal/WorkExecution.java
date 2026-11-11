@@ -26,7 +26,7 @@ public record WorkExecution(Colony colony, Phases phases, Phases personal, Holdi
         record Forgotten(UUID node) implements Event { }
         record Gone(UUID resident) implements Event { }
         record Read(UUID resident) implements Event { }
-        record Refused(ResourceLocation urge, RefusalKind why, long now) implements Event { }
+        record Refused(UUID resident, ResourceLocation urge, RefusalKind why, long now) implements Event { }
         record Balked(Node node, RefusalKind why, long now) implements Event { }
     }
 

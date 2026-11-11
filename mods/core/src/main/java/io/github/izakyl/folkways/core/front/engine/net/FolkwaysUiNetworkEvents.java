@@ -1,5 +1,10 @@
 package io.github.izakyl.folkways.core.front.engine.net;
 
+import io.github.izakyl.folkways.core.front.engine.colony.LaborDebug;
+import io.github.izakyl.folkways.core.front.engine.colony.DebugFocus;
+import io.github.izakyl.folkways.core.travel.internal.ColonyWays;
+import io.github.izakyl.folkways.core.travel.internal.graph.WayGraphDebug;
+import io.github.izakyl.folkways.core.front.client.ColonyDebugState;
 import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.base.persist.Reader;
 import io.github.izakyl.folkways.core.colony.api.Colony;
@@ -89,6 +94,37 @@ public final class FolkwaysUiNetworkEvents {
             asPlayer(FolkwaysUiNetworkEvents::sweepBlocks));
         registrar.playToServer(RequestLookAtPacket.TYPE, RequestLookAtPacket.STREAM_CODEC,
             asPlayer(FolkwaysUiNetworkEvents::requestLookAt));
+
+        registrar.playToServer(RequestDebugFocusPacket.TYPE, RequestDebugFocusPacket.STREAM_CODEC,
+            asPlayer((packet, player) -> {
+                if (LaborDebug.enabled(player)) {
+                    ColonyAuthority.forColony(player, packet.colony()).ifPresent(authority ->
+                        PacketDistributor.sendToPlayer(player,
+                            DebugFocus.read(
+                                player, authority.colony(), packet.target())));
+                }
+            }));
+        registrar.playToServer(RequestDebugWaypointsPacket.TYPE, RequestDebugWaypointsPacket.STREAM_CODEC,
+            asPlayer((packet, player) -> {
+                if (LaborDebug.enabled(player)) {
+                    ColonyAuthority.forColony(player, packet.colony()).ifPresent(authority -> {
+                        var level = player.serverLevel();
+                        var graph = ColonyWays.published(authority.colony().id(), level)
+                            .map(ways -> WayGraphDebug.read(level, ways, player.position()))
+                            .orElse(WayGraphDebug.Snapshot.EMPTY);
+                        PacketDistributor.sendToPlayer(player,
+                            new DebugWaypointsPacket(authority.colony().id(), level.dimension(), graph));
+                    });
+                }
+            }));
+        registrar.playToClient(DebugWaypointsPacket.TYPE, DebugWaypointsPacket.STREAM_CODEC,
+            (packet, context) -> onClient(context, () -> ColonyDebugState.waypoints(packet)));
+        registrar.playToClient(DebugStatePacket.TYPE, DebugStatePacket.STREAM_CODEC,
+            (packet, context) -> onClient(context, () ->
+                ColonyDebugState.state(packet)));
+        registrar.playToClient(DebugFocusPacket.TYPE, DebugFocusPacket.STREAM_CODEC,
+            (packet, context) -> onClient(context, () ->
+                ColonyDebugState.focus(packet)));
 
         registrar.playToClient(LookAtSnapshotPacket.TYPE, LookAtSnapshotPacket.STREAM_CODEC,
             (packet, context) -> onClient(context, () -> ColonyLookState.handleLookAtSnapshot(packet)));

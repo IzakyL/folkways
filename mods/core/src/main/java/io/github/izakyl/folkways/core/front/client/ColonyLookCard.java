@@ -31,7 +31,8 @@ public final class ColonyLookCard {
                 case Line.Said said -> rows.add(new Row.Text((said.notice().component()).getString(), color));
                 case Line.Literal literal -> rows.add(new Row.Text(literal.text(), color));
                 case Line.Text text -> rows.add(text.after().isEmpty()
-                    ? new Row.Text(text.component().getString(), color)
+                    ? new Row.Text(text.component().getString(), text.component().getStyle().getColor() == null
+                        ? color : 0xFF000000 | text.component().getStyle().getColor().getValue())
                     : new Row.Signs(named(text, color)));
                 case Line.Blocked blocked -> rows.add(blocked(blocked));
                 case Line.Told told -> rows.add(new Row.Signs(Signs.of(told.sentence(), color)));

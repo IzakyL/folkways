@@ -96,6 +96,7 @@ public final class FolkwaysClientGameEvents {
         ShapePreview.tick();
         HeldPlacement.tick();
         ColonyLookState.tick();
+        ColonyDebugState.tick();
     }
 
     @SubscribeEvent
@@ -196,7 +197,7 @@ public final class FolkwaysClientGameEvents {
         if (minecraft.screen != null || minecraft.player == null || event.getScrollDeltaY() == 0.0D) {
             return;
         }
-        if (scroll(minecraft, event.getScrollDeltaY())) {
+        if (ColonyDebugState.scroll(event.getScrollDeltaY()) || scroll(minecraft, event.getScrollDeltaY())) {
             event.setCanceled(true);
         }
     }
@@ -239,6 +240,7 @@ public final class FolkwaysClientGameEvents {
         }
         ToolOverlay.render(event);
         ColonyHighlightState.queueCards(event);
+        ColonyDebugState.render(event);
         LookLineCards.render(event);
         if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_TRANSLUCENT_BLOCKS) {
             WorldCards.flush(Minecraft.getInstance(), event.getPoseStack(), event.getCamera().getPosition());

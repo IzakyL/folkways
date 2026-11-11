@@ -13,6 +13,7 @@
 使用[问题报告表单](https://github.com/IzakyL/folkways/issues/new?template=bug_report.yml)，说明操作步骤、预期结果与实际现象。
 列出 Minecraft、NeoForge、LDLib2、所有已安装 Folkways jar 的版本，以及其他模组清单。
 附上 `logs/latest.log`；发生崩溃时，再附上 `crash-reports/` 中对应的报告。
+居民行为异常时，可先开启**调试日志**，注视相关居民或方块，把调试卡片截图附上；用法见 [README](README.zh-CN.md#排查居民行为)。
 
 新功能请使用[功能建议表单](https://github.com/IzakyL/folkways/issues/new?template=feature_request.yml)，
 描述期望行为、使用场景，以及考虑过的替代方案。

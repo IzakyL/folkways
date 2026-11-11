@@ -67,6 +67,18 @@ public final class WayGraph implements Ways {
         this.at = at;
     }
 
+    Map<Tract, Waypoints.Net> debugNets() {
+        return nets;
+    }
+
+    Map<Sort, List<WorldPos>> debugFeet() {
+        return feet;
+    }
+
+    List<Crossing> debugCrossings() {
+        return crossings;
+    }
+
     Set<ResourceLocation> kinds() {
         return sorts.keySet();
     }

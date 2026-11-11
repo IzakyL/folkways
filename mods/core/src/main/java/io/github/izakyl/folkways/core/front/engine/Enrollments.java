@@ -30,6 +30,13 @@ public final class Enrollments {
     private Enrollments() {
     }
 
+    public static List<ResourceLocation> facingOwners() {
+        var owners = new LinkedHashSet<ResourceLocation>();
+        owners.addAll(BY_OWNER.keySet());
+        owners.addAll(FACINGS.keySet());
+        return List.copyOf(owners);
+    }
+
     public static void gather() {
         Facings.install(new Facings.Source() {
             public Optional<Facing> of(Colony colony, ResourceLocation owner) {

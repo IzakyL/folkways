@@ -59,11 +59,17 @@ public sealed interface Line {
         }
     }
 
-    record Goods(List<Stack> stacks) implements Line {
+    /** Goods in a row; a nonzero {@code tint} (RGB) says what state they are in, and colours their counts. */
+    record Goods(List<Stack> stacks, int tint) implements Line {
         public static final int MOST_STACKS = 8;
 
         public Goods {
             stacks = List.copyOf(stacks.size() > MOST_STACKS ? stacks.subList(0, MOST_STACKS) : stacks);
+            tint &= 0xFFFFFF;
+        }
+
+        public Goods(List<Stack> stacks) {
+            this(stacks, 0);
         }
     }
 
@@ -114,6 +120,10 @@ public sealed interface Line {
         return new Goods(stacks);
     }
 
+    static Line goods(List<Stack> stacks, int tint) {
+        return new Goods(stacks, tint);
+    }
+
     static void encodeAll(RegistryFriendlyByteBuf buffer, List<Line> lines, int max) {
         List<Line> capped = lines.size() > max ? lines.subList(0, max) : lines;
         buffer.writeVarInt(capped.size());
@@ -154,6 +164,7 @@ public sealed interface Line {
                         buffer.writeResourceLocation(stack.item());
                         buffer.writeVarLong(stack.count());
                     }
+                    buffer.writeInt(goods.tint());
                 }
                 case Told told -> {
                     buffer.writeVarInt(7);
@@ -180,7 +191,7 @@ public sealed interface Line {
                 case 3 -> busy(Doing.decode(buffer));
                 case 4 -> gauge(Meter.decode(buffer), buffer.readVarInt(), buffer.readVarInt());
                 case 5 -> bar(buffer.readVarInt(), buffer.readVarInt());
-                case 6 -> goods(decodeStacks(buffer));
+                case 6 -> goods(decodeStacks(buffer), buffer.readInt());
                 case 7 -> told(Sentence.decode(buffer));
                 case 8 -> new Text(ComponentSerialization.STREAM_CODEC.decode(buffer), Sentence.decode(buffer));
                 default -> throw new DecoderException("Unknown line type: " + type);

@@ -77,6 +77,16 @@ public final class ActionExecutor implements ActionHandle {
     }
 
     @Override
+    public Optional<String> debugStage() {
+        return Optional.of(stage());
+    }
+
+    public String stage() {
+        return committing ? "committing" : walking.travelling() ? "approaching"
+            : beats.size() > 1 ? "beats" : "winding_up";
+    }
+
+    @Override
     public HoldingStep tick(HoldingContext context) {
         if (result != null) {
             return result;

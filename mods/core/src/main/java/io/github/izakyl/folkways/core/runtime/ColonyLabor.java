@@ -1,5 +1,7 @@
 package io.github.izakyl.folkways.core.runtime;
 
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
+import io.github.izakyl.folkways.core.work.api.NodeSpec;
 import io.github.izakyl.folkways.core.colony.api.Colony;
 import io.github.izakyl.folkways.core.colony.api.ColonyView;
 import io.github.izakyl.folkways.core.colony.api.WorkListener;
@@ -53,6 +55,14 @@ import io.github.izakyl.folkways.core.work.internal.Kit;
 import io.github.izakyl.folkways.core.work.internal.LaborIncident;
 import io.github.izakyl.folkways.core.work.internal.Phases;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
+import io.github.izakyl.folkways.core.front.api.notice.DebugText;
+import io.github.izakyl.folkways.core.front.api.notice.Line;
+import io.github.izakyl.folkways.core.inventory.api.InventorySnapshot;
+import io.github.izakyl.folkways.core.inventory.api.Stash;
+import io.github.izakyl.folkways.core.plan.internal.Resource;
+import io.github.izakyl.folkways.core.combat.api.DefenseControl;
+import io.github.izakyl.folkways.core.rts.combat.command.ResidentCommands;
+import io.github.izakyl.folkways.core.rts.combat.control.CombatSelectionOwnership;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Deque;
@@ -64,6 +74,10 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import net.minecraft.network.chat.MutableComponent;
+import net.minecraft.network.chat.Component;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.Util;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
@@ -99,6 +113,8 @@ public final class ColonyLabor implements WorkListener {
     private final WorkExecution execution;
     private final Runners runners;
     private final Urges urges = new Urges();
+    private final Map<UUID, List<Urge>> offeredUrges = new LinkedHashMap<>();
+    final DebugHistory history = new DebugHistory();
     private final Salvage salvage = new Salvage();
     private final Kits kits = new Kits();
     private final Survey survey = new Survey();
@@ -233,6 +249,8 @@ public final class ColonyLabor implements WorkListener {
         endings.clear();
         withdrawnGone.clear();
         stalls.clear();
+        offeredUrges.clear();
+        history.clear();
         works.stalled(dimension, List.of());
     }
 
@@ -312,6 +330,7 @@ public final class ColonyLabor implements WorkListener {
         if (runner.tickChecked(level, body)) {
             take(runner, level, body);
         }
+        history.observe(body);
     }
 
     private void take(BodyRunner runner, ServerLevel level, Body body) {
@@ -452,7 +471,8 @@ public final class ColonyLabor implements WorkListener {
             if (settled || personal.of(id).terminal()) {
                 Personal request = personalRequests.get(id);
                 if (request != null) {
-                    personal.failure(id).ifPresent(why -> urgeRefused(request.urge(), why, level.getGameTime()));
+                    personal.failure(id).ifPresent(why ->
+                        urgeRefused(request.resident(), request.urge(), why, level.getGameTime()));
                 }
                 forgetPersonal(id);
             }
@@ -461,7 +481,9 @@ public final class ColonyLabor implements WorkListener {
 
     private boolean interrupt(ServerLevel level, ColonyView view, Body body, BodyRunner runner) {
         Worker who = hands(body, Placement.NOWHERE);
+        history.observe(body);
         List<Urge> offered = urges.offered(colony, view, body, who);
+        offeredUrges.put(body.id(), offered);
         runner.cancelMissingUrges(level, body, offered);
         boolean reserved = offered.stream().anyMatch(Urge::reservation);
         if (reserved) {
@@ -480,6 +502,7 @@ public final class ColonyLabor implements WorkListener {
         Optional<Urge> waiting = pending;
         Optional<Urge> keenest =
             urges.keenest(
+            body.id(),
             offered,
             level.getGameTime(),
             urge ->
@@ -499,7 +522,7 @@ public final class ColonyLabor implements WorkListener {
             doing = keenest.get().take().get();
         } catch (RuntimeException | LinkageError broken) {
             Labor.LOGGER.error("urge {} threw asking for its work", keenest.get().id(), broken);
-            urges.refused(keenest.get().id(), LaborRefusal.WORK_BROKE, level.getGameTime());
+            urges.refused(body.id(), keenest.get().id(), LaborRefusal.WORK_BROKE, level.getGameTime());
             return reserved;
         }
         personal.entered(doing, level);
@@ -509,7 +532,8 @@ public final class ColonyLabor implements WorkListener {
             personal.failed(doing.id(), LaborRefusal.WORK_BROKE);
         }
         if (!personal.ready(doing, level)) {
-            personal.failure(doing.id()).ifPresent(why -> urgeRefused(keenest.get().id(), why, level.getGameTime()));
+            personal.failure(doing.id()).ifPresent(why ->
+                urgeRefused(body.id(), keenest.get().id(), why, level.getGameTime()));
             personal.cancelled(doing.id());
             personal.forget(doing.id());
             return reserved;
@@ -689,6 +713,399 @@ public final class ColonyLabor implements WorkListener {
         };
     }
 
+    public ResidentDebug debugResident(ServerLevel level, UUID resident) {
+        List<Line> lines = new ArrayList<>();
+        requireDebugThread(level);
+        BodyRunner runner = runners.all().stream().filter(one -> one.resident().equals(resident))
+            .findFirst().orElse(null);
+        Body body = colony.claims().bodiesIn(level).stream().filter(one -> one.id().equals(resident))
+            .findFirst().orElse(null);
+        List<DebugWork> route = debugRoute(runner);
+        section(lines, "standing");
+        Component state = word(runner == null ? "idle" : runner.standing());
+        // The census usually repeats the standing; name it only when it says something else.
+        MutableComponent standing = runner == null || runner.census().equals(runner.standing())
+            ? Component.empty().append(state) : text("standing", state, runner.census());
+        if (body != null && body.mob().isPassenger()) {
+            standing.append(" · ").append(DebugText.tone(text("standing.riding"), DebugText.WAIT));
+        }
+        if (colony.claims().carriedOff().contains(resident)) {
+            standing.append(" · ").append(DebugText.tone(text("standing.carried_off"), DebugText.BAD));
+        }
+        if (runner != null) {
+            if (runner.stalledTicks() > 0) {
+                standing.append(" · ").append(DebugText.tone(text("standing.stalled", runner.stalledTicks()),
+                    DebugText.WAIT));
+            }
+            if (runner.busyTicks() > 0) {
+                standing.append(" · ").append(text("standing.busy", runner.busyTicks()));
+            }
+            if (runner.skippedCount() > 0) {
+                standing.append(" · ").append(text("standing.skipped", runner.skippedCount()));
+            }
+        }
+        lines.add(Line.text(standing));
+        if (runner != null && (runner.executing() || runner.pendingUrge().isPresent()
+                || !runner.suspendedNodes().isEmpty())) {
+            section(lines, "current");
+            runner.interruptedWork().ifPresent(node -> lines.add(workLine(level,
+                debugWork(node, runner.currentPlacement(), Optional.of(resident), 1))));
+            List<Component> execution = new ArrayList<>();
+            runner.executionStage().ifPresent(stage -> execution.add(text("execution", word(stage))));
+            runner.ownUrge().ifPresent(urge -> execution.add(text("own_urge", DebugText.work(
+                Component.literal(urge.toString())))));
+            runner.pendingUrge().ifPresent(urge -> execution.add(text("pending_urge", DebugText.work(
+                Component.literal(urge.id().toString())))));
+            if (!execution.isEmpty()) {
+                lines.add(Line.text(join(execution)));
+            }
+            runner.softPreempt().ifPresent(soft -> lines.add(debugLine("preempt", word(soft.reason().name()),
+                Math.max(0L, soft.deadlineTick() - level.getGameTime()))));
+            for (Node node : runner.suspendedNodes()) {
+                lines.add(debugLine("suspended", DebugText.work(job(node.spec())),
+                    DebugText.where(position(level, node.spec().site().where()))));
+            }
+        }
+        int current = runner != null && runner.interruptedWork().isPresent() ? 1 : 0;
+        if (route.size() > current) {
+            section(lines, "route");
+            route.stream().skip(current).limit(6).map(work -> workLine(level, work)).forEach(lines::add);
+            more(lines, route.size() - current - 6);
+            UUID head = runner == null || runner.queued().isEmpty() ? null : runner.queued().getFirst();
+            if (head != null && untaken.containsKey(head)) {
+                Untaken why = untaken.get(head);
+                if (why.after() != null) {
+                    Node before = node(why.after()).orElse(null);
+                    lines.add(debugLine("waits", before == null ? DebugText.where(why.after().toString())
+                        : DebugText.work(job(before.spec())), DebugText.where(before == null ? "-"
+                            : position(level, before.spec().site().where())),
+                        debugAssignee(why.after()).map(id -> name(level, id)).orElseGet(() -> word("nobody"))));
+                } else {
+                    MutableComponent untakenWhy = text("untaken",
+                        word(why.why().startsWith("terminal:") ? "terminal" : why.why()));
+                    long backoff = phases.waitTicks(head, level.getGameTime());
+                    if (backoff > 0) {
+                        untakenWhy.append(" · ").append(text("untaken.backoff", backoff));
+                    }
+                    lines.add(Line.text(untakenWhy));
+                }
+            }
+        }
+        List<Urge> offered = offeredUrges.getOrDefault(resident, List.of());
+        if (!offered.isEmpty()) {
+            section(lines, "urges");
+            for (Urge urge : offered) {
+                // Only the flags that are set and a running cooldown are worth reading.
+                MutableComponent detail = text("urge", DebugText.work(Component.literal(urge.id().toString())),
+                    urge.weight());
+                if (urge.urgent()) {
+                    detail.append(" · ").append(DebugText.tone(text("urge.urgent"), DebugText.WAIT));
+                }
+                if (urge.preempts()) {
+                    detail.append(" · ").append(DebugText.tone(text("urge.preempts"), DebugText.WAIT));
+                }
+                long cooldown = urges.remaining(resident, urge.id(), level.getGameTime());
+                if (cooldown > 0) {
+                    detail.append(" · ").append(text("urge.cooldown", cooldown));
+                }
+                lines.add(Line.text(detail));
+            }
+        }
+        section(lines, "carrying");
+        List<Claim> carrying = new ArrayList<>();
+        for (var entry : plannedClaims.entrySet()) {
+            for (Claim claim : entry.getValue()) {
+                boolean carried = claim.on() instanceof Resource.Cargo cargo && cargo.resident().equals(resident);
+                boolean handed = claim.on() instanceof Resource.Handed cargo
+                    && debugAssignee(cargo.by()).filter(resident::equals).isPresent();
+                if (carried || handed) {
+                    carrying.add(claim);
+                }
+            }
+        }
+        List<ItemStack> pack = body == null ? List.of() : body.pack().contents();
+        List<ItemStack> cargo = body == null ? List.of() : Kit.of(works, body).cargoIn(body);
+        lines.addAll(DebugGoods.carrying(pack, cargo, carrying));
+        var observed = works.inventory().snapshot().residents().get(resident);
+        // An observed snapshot is the normal case; only a missing or stale one is worth a line.
+        if (observed == null || observed.state() != InventorySnapshot.State.OBSERVED) {
+            lines.add(debugLine("inventory", observed == null ? word("unobserved") : word(observed.state().name())));
+        }
+        for (var hand : survey.hands()) {
+            if (hand.id().equals(resident) && body != null && !sameCargo(hand.cargo(), cargo)) {
+                lines.add(debugLine("planner_cargo"));
+                goodsLines(lines, hand.cargo());
+            }
+        }
+        lines.addAll(claimLines(level, carrying));
+        var events = history.lines(resident, level.getGameTime());
+        if (!events.isEmpty()) {
+            section(lines, "events");
+            lines.addAll(events);
+        }
+        DefenseControl control = DefenseControl.of(works);
+        var order = ResidentCommands.of(works).current(resident);
+        boolean takeover = CombatSelectionOwnership.of(works).reserved(resident);
+        if (order.isPresent() || takeover || control.reserved(resident) || control.current(resident).isPresent()) {
+            section(lines, "combat");
+            List<Component> flags = new ArrayList<>();
+            if (takeover) {
+                flags.add(DebugText.tone(text("combat.takeover"), DebugText.WAIT));
+            }
+            if (control.reserved(resident)) {
+                flags.add(DebugText.tone(text("combat.reserved"), DebugText.WAIT));
+            }
+            if (control.current(resident).isPresent()) {
+                flags.add(DebugText.tone(text("combat.directed"), DebugText.WAIT));
+            }
+            if (!flags.isEmpty()) {
+                lines.add(Line.text(join(flags)));
+            }
+            order.ifPresent(one -> {
+                MutableComponent detail = text("order", word(one.mode().name()), word(one.status().name()));
+                one.failure().ifPresent(why -> detail.append(" · ").append(text("order.failure",
+                    DebugText.tone(Component.translatable(why.translationKey()), DebugText.BAD))));
+                lines.add(Line.text(detail));
+            });
+        }
+        return new ResidentDebug(lines, route);
+    }
+
+    public SiteDebug debugSite(ServerLevel level, WorldPos at) {
+        requireDebugThread(level);
+        List<Line> lines = new ArrayList<>();
+        var store = works.inventory().snapshot().store(at);
+        Set<WorldPos> aliases = new LinkedHashSet<>();
+        aliases.add(at);
+        store.ifPresent(one -> {
+            aliases.add(one.stash().pos());
+            aliases.addAll(one.aliases());
+        });
+        List<Claim> claims = new ArrayList<>();
+        for (var entry : plannedClaims.entrySet()) {
+            for (Claim claim : entry.getValue()) {
+                Stash stash = claim.on() instanceof Resource.Lot lot ? lot.where()
+                    : claim.on() instanceof Resource.Space space ? space.where() : null;
+                if (stash != null && aliases.contains(stash.pos())) {
+                    claims.add(claim);
+                }
+            }
+        }
+        store.ifPresent(one -> lines.addAll(StoreDebug.lines(level, one, works.inventory(), claims)));
+        if (!claims.isEmpty()) {
+            section(lines, "reservations");
+            lines.addAll(claimLines(level, claims));
+        }
+        Map<UUID, DebugWork> work = new LinkedHashMap<>();
+        for (Tour tour : tours.values()) {
+            for (int index = 0; index < tour.nodes().size(); index++) {
+                int atIndex = index + 1;
+                UUID id = tour.nodes().get(index);
+                node(id).ifPresent(node -> work.put(id, debugWork(node, placementOf(id),
+                    Optional.of(tour.resident()), atIndex)));
+            }
+        }
+        for (BodyRunner runner : runners.all()) {
+            for (DebugWork one : debugRoute(runner)) {
+                work.put(one.spec().id(), one);
+            }
+            for (var kept : runner.suspendedWork()) {
+                work.put(kept.node().id(), debugWork(kept.node(), kept.placement(), Optional.of(runner.resident()), 0));
+            }
+        }
+        for (Unassigned unassigned : diagnosis.unassigned()) {
+            node(unassigned.node()).ifPresent(node -> work.putIfAbsent(node.id(),
+                debugWork(node, placementOf(node.id()), Optional.empty(), 0)));
+        }
+        List<DebugWork> here = work.values().stream().filter(one -> touches(one, aliases)).toList();
+        if (!here.isEmpty()) {
+            section(lines, "work");
+            Map<WorkGroup, List<DebugWork>> groups = new LinkedHashMap<>();
+            for (DebugWork one : here) {
+                var key = new WorkGroup(job(one.spec()), one.phase(), one.resident());
+                groups.computeIfAbsent(key, ignored -> new ArrayList<>()).add(one);
+            }
+            groups.entrySet().stream().limit(10).forEach(entry -> {
+                WorkGroup key = entry.getKey();
+                String indices = entry.getValue().stream().map(DebugWork::index).filter(index -> index > 0)
+                    .distinct().sorted().map(index -> "#" + index).collect(java.util.stream.Collectors.joining(","));
+                MutableComponent detail = text("assigned", DebugText.work(key.doing()), word(key.phase().name()),
+                    key.resident().map(id -> name(level, id)).orElseGet(() -> word("nobody")), indices);
+                if (key.resident().isEmpty()) {
+                    List<Component> reasons = entry.getValue().stream().flatMap(one -> diagnosis.unassigned().stream()
+                        .filter(unassigned -> unassigned.node().equals(one.spec().id())))
+                        .map(unassigned -> word(unassigned.why().name())).distinct().toList();
+                    if (!reasons.isEmpty()) {
+                        detail.append(" · ").append(join(reasons));
+                    }
+                }
+                lines.add(Line.text(detail));
+            });
+            more(lines, groups.size() - 10);
+        }
+        return new SiteDebug(lines, here);
+    }
+
+    private List<DebugWork> debugRoute(BodyRunner runner) {
+        if (runner == null) {
+            return List.of();
+        }
+        List<DebugWork> result = new ArrayList<>();
+        runner.interruptedWork().ifPresent(node -> result.add(debugWork(node, runner.currentPlacement(),
+            Optional.of(runner.resident()), 1)));
+        for (UUID id : runner.queued()) {
+            node(id).ifPresent(node -> result.add(debugWork(node, placementOf(id),
+                Optional.of(runner.resident()), result.size() + 1)));
+        }
+        return List.copyOf(result);
+    }
+
+    private DebugWork debugWork(Node node, Placement placement, Optional<UUID> resident, int index) {
+        return new DebugWork(node.spec(), placement, personal.knows(node.id()) ? personal.of(node.id())
+            : phases.of(node.id()), resident, index, declined.contains(node.id()));
+    }
+
+    private Optional<UUID> debugAssignee(UUID node) {
+        Optional<UUID> held = holder(node);
+        if (held.isPresent()) {
+            return held;
+        }
+        UUID worker = inputWorkers.get(node);
+        if (worker != null) {
+            return Optional.of(worker);
+        }
+        return runners.all().stream().filter(runner -> runner.queued().contains(node)
+            || runner.suspendedNodes().stream().anyMatch(one -> one.id().equals(node)))
+            .map(BodyRunner::resident).findFirst();
+    }
+
+    private record ClaimGroup(Object item, Component doing, Optional<UUID> resident) {
+    }
+
+    private record WorkGroup(Component doing, NodeState phase, Optional<UUID> resident) {
+    }
+
+    private List<Line> claimLines(ServerLevel level, List<Claim> claims) {
+        Map<ClaimGroup, List<Claim>> groups = new LinkedHashMap<>();
+        for (Claim claim : claims) {
+            Object item = switch (claim.on()) {
+                case Resource.Lot lot -> lot.spec();
+                case Resource.Space space -> space.spec();
+                case Resource.Cargo cargo -> cargo.spec();
+                case Resource.Handed handed -> handed.spec();
+                case Resource.Transport transport -> transport.resource();
+            };
+            Component doing = node(claim.owner()).map(node -> job(node.spec()))
+                .orElseGet(() -> Component.literal(claim.owner().toString()));
+            var key = new ClaimGroup(item, doing, debugAssignee(claim.owner()));
+            groups.computeIfAbsent(key, ignored -> new ArrayList<>()).add(claim);
+        }
+        List<Line> lines = new ArrayList<>();
+        groups.entrySet().stream().limit(10).forEach(entry -> {
+            ClaimGroup key = entry.getKey();
+            long amount = entry.getValue().stream().mapToLong(Claim::amount).sum();
+            long works = entry.getValue().stream().map(Claim::owner).distinct().count();
+            Component item = DebugText.item(key.item() instanceof ItemSpec spec ? goods(spec)
+                : Component.literal(key.item().toString()));
+            MutableComponent detail = text("claim", item, amount, DebugText.work(key.doing()),
+                key.resident().map(id -> name(level, id)).orElseGet(() -> word("nobody")));
+            if (works > 1) {
+                detail.append(" ").append(text("works", works));
+            }
+            lines.add(Line.text(detail));
+        });
+        more(lines, groups.size() - 10);
+        return lines;
+    }
+
+    private static boolean touches(DebugWork one, Set<WorldPos> aliases) {
+        var spec = one.spec();
+        return aliases.contains(spec.site().where())
+            || spec.focus().map(cell -> aliases.contains(spec.site().where().at(cell))).orElse(false)
+            || one.placement().from().stream().anyMatch(stash -> aliases.contains(stash.pos()))
+            || one.placement().into().stream().anyMatch(stash -> aliases.contains(stash.pos()))
+            || one.placement().draws().stream().anyMatch(draw -> draw.from()
+                .filter(stash -> aliases.contains(stash.pos())).isPresent());
+    }
+
+    private Line workLine(ServerLevel level, DebugWork work) {
+        return debugLine(work.declined() ? "node.declined" : "node", work.index(), DebugText.work(job(work.spec())),
+            DebugText.where(position(level, work.spec().site().where())), word(work.phase().name()));
+    }
+
+    static String position(ServerLevel level, WorldPos at) {
+        return at.in(level.dimension()) ? at.cell().toShortString() : at.toString();
+    }
+
+    private static MutableComponent join(List<Component> parts) {
+        return DebugText.join(parts);
+    }
+
+    public static Component job(NodeSpec spec) {
+        String key = "folkways.doing." + spec.doing().getNamespace() + "." + spec.doing().getPath();
+        return spec.about().<Component>map(about ->
+            Component.translatable(key + ".about", Component.translatable(about)))
+            .orElseGet(() -> Component.translatable(key));
+    }
+
+    private static Component name(ServerLevel level, UUID resident) {
+        var entity = level.getEntity(resident);
+        return DebugText.name(entity == null ? Component.literal(resident.toString()) : entity.getDisplayName());
+    }
+
+    private static void goodsLines(List<Line> lines, List<ItemStack> contents) {
+        List<Line.Stack> stacks = contents.stream().filter(stack -> !stack.isEmpty())
+            .map(stack -> new Line.Stack(BuiltInRegistries.ITEM.getKey(stack.getItem()), stack.getCount())).toList();
+        for (int from = 0; from < stacks.size(); from += Line.Goods.MOST_STACKS) {
+            lines.add(Line.goods(stacks.subList(from, Math.min(from + Line.Goods.MOST_STACKS, stacks.size()))));
+        }
+    }
+
+    private static boolean sameCargo(List<ItemStack> first, List<ItemStack> second) {
+        if (first.size() != second.size()) {
+            return false;
+        }
+        for (int index = 0; index < first.size(); index++) {
+            if (!ItemStack.matches(first.get(index), second.get(index))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static void requireDebugThread(ServerLevel level) {
+        if (!level.getServer().isSameThread()) {
+            throw new IllegalStateException("debug snapshots belong to the server thread");
+        }
+    }
+
+    private static Component goods(ItemSpec spec) {
+        return Doings.about(spec).<Component>map(Component::translatable)
+            .orElseGet(() -> Component.literal(spec.describe()));
+    }
+
+    private static Component word(String key) {
+        return DebugText.word(key);
+    }
+
+    private static MutableComponent text(String key, Object... args) {
+        return DebugText.text(key, args);
+    }
+
+    private static Line debugLine(String key, Object... args) {
+        return DebugText.line(key, args);
+    }
+
+    private static void section(List<Line> lines, String key) {
+        lines.add(DebugText.section(key));
+    }
+
+    private static void more(List<Line> lines, int count) {
+        if (count > 0) {
+            lines.add(debugLine("more", count));
+        }
+    }
+
     public WorkExecution execution() {
         return execution;
     }
@@ -702,7 +1119,8 @@ public final class ColonyLabor implements WorkListener {
             case Event.Forgotten(UUID node) -> forgetPersonal(node);
             case Event.Gone(UUID resident) -> gone(resident);
             case Event.Read(UUID resident) -> survey.read(resident);
-            case Event.Refused(ResourceLocation urge, RefusalKind why, long now) -> urgeRefused(urge, why, now);
+            case Event.Refused(UUID resident, ResourceLocation urge, RefusalKind why, long now) ->
+                urgeRefused(resident, urge, why, now);
             case Event.Balked(Node node, RefusalKind why, long now) -> stalls.met(node.spec(), why, now);
         }
     }
@@ -973,14 +1391,17 @@ public final class ColonyLabor implements WorkListener {
     }
 
     public void gone(UUID resident) {
+        urges.gone(resident);
+        offeredUrges.remove(resident);
+        history.gone(resident);
         survey.forget(resident);
         kits.left(resident, inbox::raise);
         inbox.raise(new Message.Left(resident));
     }
 
-    public void urgeRefused(ResourceLocation urge, RefusalKind why, long now) {
+    public void urgeRefused(UUID resident, ResourceLocation urge, RefusalKind why, long now) {
         readout.refused(why);
-        urges.refused(urge, why, now);
+        urges.refused(resident, urge, why, now);
     }
 
     public LaborCensus census(ServerLevel level) {

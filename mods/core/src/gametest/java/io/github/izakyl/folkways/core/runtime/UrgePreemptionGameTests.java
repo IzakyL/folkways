@@ -366,12 +366,60 @@ public final class UrgePreemptionGameTests {
     }
 
     @GameTest(template = "empty", templateNamespace = "folkways_core")
+    public static void refusedUrgeOnlyCoolsTheResidentWhoRefusedIt(GameTestHelper helper) throws Exception {
+        try (Harness h = new Harness(helper)) {
+            Body other = PersonBody.RESIDENT.get().create(h.level);
+            BodyRunner runner = new BodyRunner(other.id(), h.labor.execution());
+            try {
+                AtomicInteger takes = new AtomicInteger();
+                Urge urge = new Urge(id("shared_need"), 1, true, () -> {
+                    takes.incrementAndGet();
+                    NodeSpec spec = NodeSpec.of(UUID.randomUUID(), OWNER, WorkSite.at(h.level, h.at),
+                        Stances.WHEREVER, Workload.Once.of(0)).done();
+                    return new Node() {
+                        public NodeSpec spec() {
+                            return spec;
+                        }
+
+                        public Outcome commit(ServerLevel level, Worker who) {
+                            return Outcome.failed(LaborRefusal.NO_WAY_THERE);
+                        }
+                    };
+                });
+                h.offers(urge);
+                h.interrupt();
+                helper.assertValueEqual(h.runner.ownUrge().orElseThrow(), urge.id(),
+                    "the first resident takes the shared urge before refusing it");
+                long refusedAt = h.level.getGameTime();
+                h.labor.tick(h.runner, h.level, h.body);
+                helper.assertFalse(h.runner.ownBusiness(), "the failed personal work releases the first resident");
+                h.interrupt();
+                helper.assertTrue(!h.runner.ownBusiness() && takes.get() == 1,
+                    "the first resident stays cooled after refusing the urge");
+                h.interrupt(other, runner);
+                helper.assertValueEqual(runner.ownUrge().orElseThrow(), urge.id(),
+                    "the second resident in the same colony can take the same urge during the backoff");
+                h.interrupt();
+                helper.assertTrue(!h.runner.ownBusiness() && takes.get() == 2,
+                    "the second resident taking the urge does not clear the first resident's backoff");
+                helper.assertValueEqual(h.level.getGameTime(), refusedAt,
+                    "both residents are evaluated within the same backoff window");
+            } finally {
+                runner.letGo(h.level, other);
+                other.mob().discard();
+            }
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void expiredOneShotUrgeBackoffsDoNotAccumulate(GameTestHelper helper) throws Exception {
         Urges urges = new Urges();
+        UUID resident = UUID.randomUUID();
         for (int n = 0; n < 128; n++) {
-            urges.refused(id("temporary_" + n), LaborRefusal.WORK_BROKE, 0);
+            urges.refused(resident, id("temporary_" + n), LaborRefusal.WORK_BROKE, 0);
         }
-        urges.keenest(List.of(), 100, urge -> true);
+        urges.keenest(resident, List.of(), 100, urge -> true);
         var field = Urges.class.getDeclaredField("cooling");
         field.setAccessible(true);
         helper.assertTrue(((Map<?, ?>) field.get(urges)).isEmpty(),
@@ -567,6 +615,10 @@ public final class UrgePreemptionGameTests {
         }
 
         boolean interrupt() throws ReflectiveOperationException {
+            return interrupt(body, runner);
+        }
+
+        boolean interrupt(Body body, BodyRunner runner) throws ReflectiveOperationException {
             var method = ColonyLabor.class.getDeclaredMethod("interrupt", ServerLevel.class, ColonyView.class,
                 Body.class, BodyRunner.class);
             method.setAccessible(true);

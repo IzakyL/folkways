@@ -8,11 +8,13 @@ import io.github.izakyl.folkways.core.travel.api.TrafficFeedback;
 import io.github.izakyl.folkways.core.travel.api.TravelSources;
 import io.github.izakyl.folkways.core.travel.internal.graph.Roamer;
 import io.github.izakyl.folkways.core.travel.internal.graph.Roaming;
+import io.github.izakyl.folkways.core.travel.internal.graph.WayGraph;
 import io.github.izakyl.folkways.core.world.api.Closures;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
@@ -53,6 +55,15 @@ public final class ColonyWays {
 
     public static Ways of(TravelSources colony, ServerLevel level) {
         return singleThread ? new Answering(colony, level) : graph(colony, level).ways();
+    }
+
+    /** Reads only an already published graph; never creates or advances a roaming search. */
+    public static Optional<WayGraph> published(UUID colony, ServerLevel level) {
+        if (!level.getServer().isSameThread()) {
+            throw new IllegalStateException("waypoint diagnostics require the server thread");
+        }
+        Roaming roaming = GRAPHS.get(new Track(level.getServer(), level.dimension(), colony));
+        return roaming == null ? Optional.empty() : Optional.of((WayGraph) roaming.ways());
     }
 
     private record Answering(TravelSources colony, ServerLevel level) implements Ways {

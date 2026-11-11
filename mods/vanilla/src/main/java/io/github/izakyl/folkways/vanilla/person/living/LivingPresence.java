@@ -29,6 +29,7 @@ import io.github.izakyl.folkways.core.effect.Stats;
 import io.github.izakyl.folkways.core.front.api.Facing;
 import io.github.izakyl.folkways.core.front.api.Fronts;
 import io.github.izakyl.folkways.core.front.api.Placard;
+import io.github.izakyl.folkways.core.front.api.notice.DebugText;
 import io.github.izakyl.folkways.core.front.api.notice.Line;
 import io.github.izakyl.folkways.core.front.api.notice.Notice;
 import io.github.izakyl.folkways.core.front.api.notice.Sentence;
@@ -428,6 +429,73 @@ final class LivingPresence implements Facing {
         double weight = urgent ? Urge.NOW : Urge.SPARE;
         return Optional.of(new Urge(SLEEP, weight, urgent || !who.effects().has(Stats.PATIENT),
             () -> new SleepAction(this, level, where, ticksToSleepOff(who.resident().id()))));
+    }
+
+    @Override
+    public List<Line> debugResidentLines(UUID resident, ColonyView view) {
+        Hunger belly = bellies.get(resident);
+        Rest tired = wear.get(resident);
+        if (belly == null && tired == null) {
+            return List.of();
+        }
+        List<Line> lines = new ArrayList<>();
+        if (belly != null) {
+            lines.add(debugLine("hunger", belly.foodLevel(), belly.saturation(), belly.exhaustion()));
+            var reading = hunger.reading(resident);
+            lines.add(marks("hunger_mark", reading.engaged(), reading.holdAt(), reading.urgentAt(),
+                reading.restoreTo()));
+        }
+        if (tired != null) {
+            lines.add(debugLine("rest", tired.tiredness(), tired.alertness(), tired.ticksToSleepOff()));
+            var reading = tiredness.reading(resident);
+            lines.add(marks("rest_mark", reading.engaged(), reading.holdAt(), reading.urgentAt(),
+                reading.restoreTo()));
+        }
+        Optional<WorldPos> bed = bedFor(resident);
+        String sleep = directed(resident) ? "directed" : tired == null ? "vitals_unobserved"
+            : !tiredness.reading(resident).engaged() ? "not_tired" : bed.isEmpty() ? "no_bed"
+            : !bed.get().in(view.level()) ? "bed_elsewhere" : "none";
+        lines.add(debugLine("sleep", debugWord(sleep), DebugText.where(bed.map(at -> at.in(view.level().dimension())
+            ? at.cell().toShortString() : at.toString()).orElse("-"))));
+        var observed = colony.inventory().snapshot().residents().get(resident);
+        Entity entity = view.level().getEntity(resident);
+        boolean seen = observed != null && observed.state() == InventorySnapshot.State.OBSERVED;
+        boolean meal = seen && entity instanceof LivingEntity living && observed.pack().stream().anyMatch(slot -> {
+            ItemStack stack = slot.stackCopy();
+            return wouldEat(resident, stack, stack.isEmpty() ? null : stack.getFoodProperties(living));
+        });
+        String eat = belly == null ? "vitals_unobserved" : !hunger.reading(resident).engaged() ? "not_hungry"
+            : !seen ? "inventory_unobserved" : !meal ? "no_meal" : "none";
+        lines.add(debugLine("eat", debugWord(eat)));
+        if (seen && entity instanceof LivingEntity living) {
+            Optional<ItemSpec> food = LivingContent.food(colony);
+            food.ifPresent(spec -> lines.add(debugLine("ration", nourishing(observed.pack(), spec, living),
+                RESTOCK_DAYS * Hunger.FOOD_PER_DAY)));
+        }
+        if (entity instanceof net.minecraft.world.entity.Mob mob && !mob.getNavigation().isDone()) {
+            BlockPos target = mob.getNavigation().getTargetPos();
+            if (target != null) {
+                lines.add(debugLine("walking_target", DebugText.where(target.toShortString())));
+            }
+        }
+        return List.copyOf(lines);
+    }
+
+    private static Line debugLine(String key, Object... args) {
+        return DebugText.line(key, args);
+    }
+
+    // The watermarks always matter; whether they are engaged only when they are.
+    private static Line marks(String key, boolean engaged, Object hold, Object urgent, Object restore) {
+        var line = DebugText.text(key, hold, urgent, restore);
+        if (engaged) {
+            line.append(" · ").append(DebugText.word("engaged"));
+        }
+        return Line.text(line);
+    }
+
+    private static Component debugWord(String key) {
+        return DebugText.word(key);
     }
 
     private boolean directed(UUID resident) {

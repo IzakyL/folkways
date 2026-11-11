@@ -62,10 +62,10 @@ final class Ramble {
     // Leaning toward the aim, the sweep stops at the first point of another piece it comes to (or the aim, or as near
     // as it got), and the ways are laid along the trail it took there.
     private int toward(long now, int limit) {
-        int start = net.at(from);
+        int start = net.reaching(from);
         Optional<Reading> read = Look.at(level, realm, roamer, from, Set.of(BlockPos.of(aim)),
             cell -> {
-                int there = net.at(cell);
+                int there = net.reaching(cell);
                 return there >= 0 && (start < 0 || net.apart(start, there));
             }, BlockPos.of(aim), false, limit);
         if (read.isEmpty()) {
@@ -87,10 +87,12 @@ final class Ramble {
                 continue;
             }
             BlockPos cell = mine.get();
+            int standing = net.reaching(cell.asLong());
             Node came = node.cameFrom;
             if (came == null) {
-                anchor.put(node, net.admit(cell.asLong(), now));
-                since.put(node, 0.0D);
+                int id = standing >= 0 ? standing : net.admit(cell.asLong(), now);
+                anchor.put(node, id);
+                since.put(node, Math.sqrt(cell.distSqr(BlockPos.of(net.cellOf(id)))));
                 continue;
             }
             Integer held = anchor.get(came);
@@ -98,7 +100,6 @@ final class Ramble {
                 continue;
             }
             double run = since.get(came) + node.distanceTo(came);
-            int standing = net.at(cell.asLong());
             int beside = standing >= 0 ? -1 : crowding(made, madeAt, cell);
             if (standing < 0 && (run < Waypoints.SPACING || beside < 0 && made.size() >= MOST_MADE)) {
                 net.remember(cell.asLong(), held, now);

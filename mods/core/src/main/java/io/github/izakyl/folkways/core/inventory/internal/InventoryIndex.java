@@ -106,6 +106,37 @@ public final class InventoryIndex implements ColonyInventory, InventoryFeedback 
         return published;
     }
 
+    // A diagnostic read through the same physical accessor as observation, without refreshing the index.
+    public Optional<List<ItemStack>> debugContents(ServerLevel level, Stash stash) {
+        if (!level.getServer().isSameThread()) {
+            throw new IllegalStateException("live inventory diagnostics belong to the server thread");
+        }
+        StoreEntry entry = stores.get(stash);
+        if (entry == null || !entry.dimension.equals(level.dimension())) {
+            return Optional.empty();
+        }
+        BlockPos anchor = WorldSpaces.storage(level, stash.pos()).orElse(null);
+        if (anchor == null || !level.isLoaded(anchor)) {
+            return Optional.empty();
+        }
+        for (WorldPos alias : entry.aliases) {
+            BlockPos cell = WorldSpaces.storage(level, alias).orElse(null);
+            if (cell == null || !level.isLoaded(cell)) {
+                return Optional.empty();
+            }
+        }
+        Container container = entry.provider == null ? Containers.at(level, anchor).orElse(null)
+            : entry.provider.open(level, new InventoryProviders.Endpoint(entry.endpoint.inventory(), stash.pos()));
+        if (container == null) {
+            return Optional.empty();
+        }
+        List<ItemStack> contents = new ArrayList<>();
+        for (int slot = 0; slot < container.getContainerSize(); slot++) {
+            contents.add(container.getItem(slot).copy());
+        }
+        return Optional.of(List.copyOf(contents));
+    }
+
     @Override
     public void ensureObserved() {
         if (!observationMissing) {

@@ -134,6 +134,10 @@ final class Waypoints {
     }
 
     IntArrayList admitSite(LongList cells, long now) {
+        return admitSite(cells, now, null);
+    }
+
+    private IntArrayList admitSite(LongList cells, long now, Long preferred) {
         IntArrayList reps = new IntArrayList();
         LongOpenHashSet left = new LongOpenHashSet(cells);
         while (!left.isEmpty()) {
@@ -154,6 +158,9 @@ final class Waypoints {
             long rep = cluster.getLong(0);
             for (int at = 1; at < cluster.size(); at++) {
                 rep = Math.min(rep, cluster.getLong(at));
+            }
+            if (preferred != null && cluster.contains(preferred.longValue())) {
+                rep = preferred;
             }
             int id = admit(rep, now);
             reps.add(id);
@@ -311,6 +318,14 @@ final class Waypoints {
         return reps;
     }
 
+    IntArrayList pinSite(LongList cells, long preferred, long now) {
+        IntArrayList reps = admitSite(cells, now, preferred);
+        for (int at = 0; at < reps.size(); at++) {
+            pinned.set(reps.getInt(at));
+        }
+        return reps;
+    }
+
     int admit(long cell, long now) {
         int here = byCell.get(cell);
         if (here >= 0) {
@@ -456,14 +471,34 @@ final class Waypoints {
     }
 
     void remember(long cell, int waypoint, long now) {
-        if (Math.abs(BlockPos.getY(cell) - BlockPos.getY(cells.getLong(waypoint))) > LEVEL) {
+        BlockPos here = BlockPos.of(cell);
+        BlockPos to = BlockPos.of(cellOf(waypoint));
+        if (Math.abs(here.getY() - to.getY()) > LEVEL || crossesShut(here, to)) {
             return;
         }
         unsnappable.remove(cell);
         int previous = reaching(cell);
-        if (previous >= 0 && previous != waypoint) {
-            int junction = admit(cell, now);
-            connect(junction, waypoint, now);
+        if (previous == waypoint) {
+            return;
+        }
+        if (previous >= 0) {
+            BlockPos from = BlockPos.of(cellOf(previous));
+            if (crossesShut(from, here)) {
+                return;
+            }
+            if (Math.abs(from.getY() - to.getY()) > LEVEL || crossesShut(from, to)) {
+                int junction = admit(cell, now);
+                connect(junction, waypoint, now);
+                return;
+            }
+            // Keep the old coverage; an overlap witnesses a join without needing another point.
+            int ticks = Math.max(1, Net.ticks(from, to));
+            if (linkFrom(previous, waypoint) == null) {
+                linkAtMost(previous, waypoint, ticks, now);
+            }
+            if (linkFrom(waypoint, previous) == null) {
+                linkAtMost(waypoint, previous, ticks, now);
+            }
             return;
         }
         if (byCell.get(cell) >= 0) {
@@ -1144,9 +1179,11 @@ final class Waypoints {
         head[count] = live;
         int[] to = new int[live];
         int[] cost = new int[live];
+        List<DebugLink> debug = new ArrayList<>();
         int at = 0;
         for (int id = 0; id < count; id++) {
             for (Link link : out.get(id)) {
+                debug.add(new DebugLink(id, link.to, link.strikes, link.liveAt));
                 if (link.live(now)) {
                     to[at] = link.to;
                     cost[at] = link.ticks;
@@ -1171,7 +1208,7 @@ final class Waypoints {
             wakesAt = Math.min(wakesAt, entry.getLongValue());
         }
         return new Net(frozenByCell, frozenAttached, frozenCells, head, to, cost,
-            parts(count, head, to), pieces(mutual), mutual, refused);
+            parts(count, head, to), pieces(mutual), mutual, refused, List.copyOf(debug));
     }
 
     private Pieces pieces(int[] mutual) {
@@ -1244,8 +1281,12 @@ final class Waypoints {
         }
     }
 
+    // Frozen alongside the routing arrays, including links temporarily excluded from routing.
+    record DebugLink(int from, int to, int strikes, long liveAt) {
+    }
+
     record Net(Long2IntMap byCell, Long2IntMap attached, long[] cells, int[] head, int[] to,
-               int[] cost, int[] part, Pieces pieces, int[] mutual, LongSet unsnappable) {
+               int[] cost, int[] part, Pieces pieces, int[] mutual, LongSet unsnappable, List<DebugLink> debug) {
 
         int near(long cell) {
             int here = reaching(cell);

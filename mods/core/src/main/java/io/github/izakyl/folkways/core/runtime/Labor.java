@@ -51,7 +51,7 @@ public final class Labor {
         running = this;
     }
 
-    static Optional<ColonyLabor> site(UUID colony, ResourceKey<Level> dimension) {
+    public static Optional<ColonyLabor> site(UUID colony, ResourceKey<Level> dimension) {
         Labor labor = running;
         return labor == null ? Optional.empty() : Optional.ofNullable(labor.sites.get(new Site(colony, dimension)));
     }

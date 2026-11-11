@@ -120,6 +120,26 @@ Repairs are off by default: right-click the area, use **Reset baseline** and ena
 **Restore missing blocks**. Containers, crops, fluids and machines are excluded;
 different blocks already occupying a recorded cell are reported as conflicts.
 
+### Investigating residents
+
+Turn on **Debug logs** on the **Settings** page to have work interruptions and failures reported in chat as they happen,
+with planning status every 10 seconds. While it is on, look at a resident or a registered block within 32 blocks
+to show a debug card at the right edge of the screen; hold Alt and scroll to page through it.
+
+- **Residents**: standing and work stage, the work queued next on their route and where it is, why the next work
+  has not started, urges and their cooldowns, what they carry and reserve, and recent events. Numbered lines in the
+  world lead to the places they will go next.
+- **Registered blocks**: the store's record state, differences between the colony's record and the real contents,
+  reservations on it, and the work planned there with the residents assigned. Lines lead to each assigned resident.
+
+Nearby registered stores are outlined by how current the colony's record of them is: green read, yellow due for
+update, grey not yet read, blue unloaded, red unsupported. A red corner mark means the record and the real contents
+differ. Only you see this, and disconnecting turns it off.
+The nearby waypoint graph refreshes every second: ivory boxes are waypoints, hot pink boxes residents' feet,
+and indigo boxes/lines crossing endpoints/passages; ice white lines are walking, deep teal other locomotion,
+electric lime dashed lines probation, and raspberry lines failed links (dashed during probation, solid when retryable).
+Small arrows show direction; the view covers 48 blocks and reports truncation above 2000 points or 4000 edges.
+
 ## Optional integrations
 
 Folkways also works with Create and its FireFighting Additions, Sable, AstikorCarts Redux,

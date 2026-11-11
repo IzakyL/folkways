@@ -84,7 +84,7 @@ public final class TravelRetryGameTests {
     }
 
     @GameTest(template = "empty", templateNamespace = "folkways_core")
-    public static void crossingPathsJoinAtTheirSharedCell(GameTestHelper helper) {
+    public static void crossingPathsJoinWithoutPromotingTheirSharedCell(GameTestHelper helper) {
         Waypoints net = new Waypoints();
         BlockPos crossing = new BlockPos(6, 1, 0);
         int west = net.pin(new BlockPos(0, 1, 0).asLong(), 0);
@@ -99,13 +99,15 @@ public final class TravelRetryGameTests {
         helper.assertTrue(!net.joins(west, north, 0),
             "nearby paths need a witnessed intersection before they can join");
         net.remember(crossing.asLong(), south, 1);
+        helper.assertTrue(net.size() == 4 && net.at(crossing.asLong()) < 0
+            && net.reaching(crossing.asLong()) == east, "the shared cell keeps its original attachment");
         helper.assertTrue(net.joins(west, north, 1) && net.joins(north, west, 1),
             "overlapping path attachments must connect both routes");
 
         int third = net.pin(new BlockPos(9, 1, 3).asLong(), 2);
         net.remember(crossing.asLong(), third, 2);
         helper.assertTrue(net.joins(third, west, 2) && net.joins(north, third, 2),
-            "a path crossing an existing waypoint must also join it");
+            "a third path sharing the covered cell must also join its original holder");
         helper.succeed();
     }
 

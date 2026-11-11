@@ -9,6 +9,7 @@ import io.github.izakyl.folkways.core.work.api.Placement;
 import io.github.izakyl.folkways.core.work.api.PreemptReason;
 import io.github.izakyl.folkways.core.work.api.SoftPreempt;
 import io.github.izakyl.folkways.core.work.api.WorkHolding;
+import java.util.Optional;
 
 /** Standard node execution uses the same action executor as private holding steps. */
 public final class StandardHolding implements WorkHolding {
@@ -19,6 +20,11 @@ public final class StandardHolding implements WorkHolding {
     public StandardHolding(Node node, Placement placement, boolean joining,
             HoldingContext context) {
         action = new ActionExecutor(context, node, placement, joining);
+    }
+
+    @Override
+    public Optional<String> debugStage() {
+        return Optional.of(action.stage());
     }
 
     private void reportEffort(Body body) {

@@ -44,6 +44,11 @@ public record NodeSpec(
         }
     }
 
+    public NodeSpec about(Optional<String> about) {
+        return new NodeSpec(id, owner, site, stances, needs, gives, leaves, tools, workload, effort, pace,
+            vocation, gesture, focus, estimate, doing, about, subject);
+    }
+
     /**
      * The items the work goes through: what it needs and what it gives, or, for work that moves no goods, the
      * item it is done to, uncounted.

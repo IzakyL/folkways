@@ -297,6 +297,7 @@ final class OverheadScreen extends Screen {
             graphics.fill(left - 3, top, left + textWidth + 3, top + STATUS_HEIGHT, BED);
             graphics.drawString(font, status, left, top + 2, STATUS, true);
         });
+        ColonyDebugState.panel(graphics, minecraft);
         for (var renderable : renderables) {
             renderable.render(graphics, mouseX, mouseY, partialTick);
         }
@@ -414,6 +415,9 @@ final class OverheadScreen extends Screen {
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+        if (ColonyDebugState.scroll(mouseX, mouseY, scrollY)) {
+            return true;
+        }
         if (!FolkwaysClientGameEvents.scroll(minecraft, scrollY)) {
             Overhead.dolly(scrollY);
         }
