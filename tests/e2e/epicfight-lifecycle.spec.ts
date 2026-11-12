@@ -11,7 +11,7 @@ import { mustCommand } from "../shared/ui/world-ui";
 
 type Scene = Vec & { colony: string; resident: string; monster: string; token: string; expected: string; duty: string; profile: string };
 type Gear = { name: string; item: string; count: number; damage: number; minimumDamage: number; place: string; matches: boolean; wearMatches: boolean };
-type Reading = { pid: number; tick: number; patch: boolean; held: boolean; session: boolean; nativeSession: boolean;
+type Reading = { pid: number; tick: number; patch: boolean; held: boolean; controller: boolean; drawn: boolean; nativeController: boolean;
   firing: boolean; attack: boolean; using: boolean; sprinting: boolean; handEmpty: boolean;
   order: string; profile: string; dutyCount: number; targetHealth: number; targetMax: number; attacker: boolean;
   gear: Gear[]; expectedCount: number; health: number; x: number; z: number };
@@ -34,23 +34,24 @@ test("Epic Fight saves a real borrowed weapon, fully exits and reloads the same 
     await mustCommand(pair.server, `gamemode spectator ${player.name}`);
     await mustCommand(pair.server, `tp ${player.name} ${origin.x + 2.5} ${origin.y + 1} ${origin.z + .5} 0 10`);
     scene = await pair.server.run(SETUP, { ...origin, token: run });
-    const active = await observe(pair, scene, evidence, "actual native session has borrowed and struck with the profile spear", row =>
-      row.nativeSession && row.firing && row.attack && row.attacker && row.targetHealth < row.targetMax, 300, false);
+    const active = await observe(pair, scene, evidence, "actual native controller has borrowed and struck with the profile spear", row =>
+      row.nativeController && row.firing && row.attack && row.attacker && row.targetHealth < row.targetMax, 300, false);
     expect(active.gear.find(item => item.name === `${run}/mainhand`)?.place).toBe("mainhand");
     const beforePid = active.pid;
 
     // Freeze between ticks: remove the threat and run Minecraft's actual full-save command in one server task.
     // This does not serialize/restore the resident by hand or evict an in-memory colony cache.
     const saved = await pair.server.run(SAVE, scene);
-    evidence.push({ step: "Minecraft save-all flush while the real weapon loan was active", value: saved });
-    expect(saved.sessionBeforeSave).toBe(true);
+    evidence.push({ step: "Minecraft save-all flush keeps the real weapon loan active", value: saved });
+    expect(saved.drawnBeforeSave).toBe(true);
     expect(saved.result).toBeGreaterThan(0);
-    expect(saved.sessionAfterSave).toBe(false);
+    // Saving never interrupts combat: the live loan is written from the native hand and returned to the pack on load.
+    expect(saved.drawnAfterSave).toBe(true);
     scene.expected = saved.expected;
     const onDiskBoundary = await pair.server.run(READ, scene);
     evidence.push({ step: "physical gear immediately after the real save boundary", value: onDiskBoundary });
     physical(onDiskBoundary, scene);
-    expect(onDiskBoundary.gear.find(item => item.name === `${run}/mainhand`)?.place).toMatch(/^pack:/);
+    expect(onDiskBoundary.gear.find(item => item.name === `${run}/mainhand`)?.place).toBe("mainhand");
     const stopped = await world.stop(pair.server, { timeoutMs: 60_000 });
     evidence.push({ step: "graceful server stop waited for actual JVM exit", value: stopped });
     expect(stopped.shutDown && stopped.exited).toBe(true);
@@ -73,7 +74,7 @@ test("Epic Fight saves a real borrowed weapon, fully exits and reloads the same 
       const row = await pair.server.run(READ, scene);
       evidence.push({ step: `reloaded resident has no old native action at tick ${elapsed}`, value: row });
       physical(row, scene);
-      expect(row.session || row.attack || row.using).toBe(false);
+      expect(row.controller || row.attack || row.using).toBe(false);
       expect(row.handEmpty).toBe(true);
       expect(row.order).toBe("NONE");
       await tick.sprint(pair.server, 1); await frames(pair.client, 2);
@@ -85,12 +86,12 @@ test("Epic Fight saves a real borrowed weapon, fully exits and reloads the same 
     // A fresh hostile must let the persisted profile and staffing borrow the restored item and land a new native hit.
     scene.monster = await pair.server.run(NEW_THREAT, scene);
     const resumed = await observe(pair, scene, evidence, "a fresh threat after restart lands a real native hit", row =>
-      row.nativeSession && row.attack && row.attacker && row.targetHealth < row.targetMax, 300, false);
+      row.nativeController && row.attack && row.attacker && row.targetHealth < row.targetMax, 300, false);
     expect(resumed.gear.find(item => item.name === `${run}/mainhand`)!.damage)
       .toBeGreaterThan(loaded.gear.find(item => item.name === `${run}/mainhand`)!.damage);
     await pair.server.run(RELEASE, scene);
     const released = await observe(pair, scene, evidence, "staffing withdrawal after reload closes the new action and returns its unique real weapon", row =>
-      !row.session && !row.using && row.order === "NONE", 100, false);
+      !row.controller && !row.using && row.order === "NONE", 100, false);
     expect(released.handEmpty).toBe(true);
     expect(released.gear.find(item => item.name === `${run}/mainhand`)!.place).toMatch(/^pack:/);
     verified = true;
@@ -117,7 +118,7 @@ function physical(row: Reading, scene: Scene, exact = true) {
     const slot = item.name.slice(scene.token.length + 1);
     expect(item.count).toBe(slot === "ammo" ? 16 : 1);
     expect(item.damage, "physical wear cannot roll back during borrowing or reload").toBeGreaterThanOrEqual(item.minimumDamage);
-    if (slot === "ammo" || slot === "supplyshield" || slot === "mainhand" && !row.session) expect(item.place).toMatch(/^pack:/);
+    if (slot === "ammo" || slot === "supplyshield" || slot === "mainhand" && !row.drawn) expect(item.place).toMatch(/^pack:/);
     else expect(item.place).toBe(slot);
     if (scene.expected) expect(item.matches || !exact && slot === "mainhand" && item.wearMatches,
       `all components/counts except legitimate new weapon wear for ${item.name} at ${item.place}`).toBe(true);
@@ -159,7 +160,7 @@ const IMPORTS = ["java.util.Set", "java.util.Optional", "io.github.izakyl.folkwa
   "io.github.izakyl.folkways.core.world.api.WorldPos",
   "io.github.izakyl.folkways.vanilla.person.PersonBody", "io.github.izakyl.folkways.vanilla.person.PersonContent",
   "io.github.izakyl.folkways.vanilla.person.ResidentEntity",
-  "io.github.izakyl.folkways.epicfight.ResidentEpicFightPatch", "io.github.izakyl.folkways.epicfight.EpicFightWeaponSession",
+  "io.github.izakyl.folkways.epicfight.ResidentEpicFightPatch", "io.github.izakyl.folkways.epicfight.EpicFightWeaponAttack",
   "yesman.epicfight.api.animation.types.AttackAnimation"];
 const SETUP = defineTask<Vec & { token: string }, Scene>({ name: "folkways.epicfight.lifecycle.real-fixture", side: "server", source: javaTask({ imports: IMPORTS, body: `
 var a=Args.of(ctx);var level=((MinecraftServer)ctx.server()).overworld();var colony=Colonies.mint(level.getServer());
@@ -176,28 +177,28 @@ for(int n=1;n<slots.size();n++)profiles.add(profile.id(),LoadoutProfile.Entry.ar
 profiles.add(profile.id(),LoadoutProfile.Entry.supply(ItemSpec.of(Items.SHIELD),1,1));profiles.add(profile.id(),LoadoutProfile.Entry.supply(ItemSpec.of(Items.ARROW),16,16));profiles.add(profile.id(),LoadoutProfile.Entry.supply(ItemSpec.of(Items.BREAD),16,8));profiles.assign(List.of(body.id()),Optional.of(profile.id()));
 var route=colony.hold(PatrolContent.BEAT,new Claimed.Line(List.of(WorldPos.of(level,body.blockPosition()),WorldPos.of(level,body.blockPosition().offset(5,0,0))))).orElseThrow();PatrolStaffing.of(colony).configure(level,route.id(),Set.of(profile.id()),1);
 var out=new LinkedHashMap<String,Object>();out.put("colony",colony.id().toString());out.put("resident",body.id().toString());out.put("monster",target.getUUID().toString());out.put("token",a.string("token"));var initial=new CompoundTag();var all=new ArrayList<ItemStack>(body.pack().contents());for(var slot:EquipmentSlot.values())all.add(body.getItemBySlot(slot));for(var stack:all){var name=stack.get(DataComponents.CUSTOM_NAME);if(name!=null&&name.getString().startsWith(a.string("token")+"/"))initial.put(name.getString(),stack.save(level.registryAccess()));}out.put("expected",initial.toString());out.put("profile",profile.id().toString());out.put("duty",route.id().toString());for(var key:List.of("x","y","z"))out.put(key,a.integer(key));return out;` }) });
-const SAVE = defineTask<Scene, { sessionBeforeSave: boolean; sessionAfterSave: boolean; result: number; expected: string }>({
+const SAVE = defineTask<Scene, { drawnBeforeSave: boolean; drawnAfterSave: boolean; result: number; expected: string }>({
   name: "folkways.epicfight.lifecycle.real-minecraft-save", side: "server", source: javaTask({ imports: IMPORTS, body: `
 var a=Args.of(ctx);var server=(MinecraftServer)ctx.server();var level=server.overworld();var body=(ResidentEntity)level.getEntity(UUID.fromString(a.string("resident")));
-boolean before=body.hasWeaponSession();if(!before)throw new IllegalStateException("must save an actual borrowed weapon");
+boolean before=body.weaponDrawn();if(!before)throw new IllegalStateException("must save an actual drawn weapon");
 var expected=new CompoundTag();var stacks=new ArrayList<ItemStack>(body.pack().contents());for(var slot:EquipmentSlot.values())stacks.add(body.getItemBySlot(slot));
 for(var stack:stacks){var name=stack.get(DataComponents.CUSTOM_NAME);if(name!=null&&name.getString().startsWith(a.string("token")+"/"))expected.put(name.getString(),stack.save(level.registryAccess()));}
 if(expected.getAllKeys().size()!=7)throw new IllegalStateException("exact physical gear snapshot required");
 var target=level.getEntity(UUID.fromString(a.string("monster")));if(target!=null)target.discard();
 var result=new java.util.concurrent.atomic.AtomicInteger(-1);var source=server.createCommandSourceStack().withCallback((success,value)->result.set(success?value:-1));
 server.getCommands().performPrefixedCommand(source,"save-all flush");
-return Map.of("sessionBeforeSave",before,"sessionAfterSave",body.hasWeaponSession(),"result",result.get(),"expected",expected.toString());` }) });
+return Map.of("drawnBeforeSave",before,"drawnAfterSave",body.weaponDrawn(),"result",result.get(),"expected",expected.toString());` }) });
 const READ = defineTask<Scene, Reading>({ name: "folkways.epicfight.lifecycle.read-actual-gear", side: "server", source: javaTask({ imports: IMPORTS, body: `
 var a=Args.of(ctx);var level=((MinecraftServer)ctx.server()).overworld();var body=(ResidentEntity)level.getEntity(UUID.fromString(a.string("resident")));if(body==null)throw new IllegalStateException("saved resident UUID is not loaded");
 var colony=Colonies.of(level.getServer(),UUID.fromString(a.string("colony"))).orElseThrow();var expected=a.string("expected").isEmpty()?new CompoundTag():TagParser.parseTag(a.string("expected"));
 var stacks=new ArrayList<ItemStack>();var places=new ArrayList<String>();for(int n=0;n<body.pack().getContainerSize();n++){stacks.add(body.pack().getItem(n));places.add("pack:"+n);}
-for(var slot:List.of(EquipmentSlot.MAINHAND,EquipmentSlot.OFFHAND,EquipmentSlot.HEAD,EquipmentSlot.CHEST,EquipmentSlot.LEGS,EquipmentSlot.FEET)){if(slot!=EquipmentSlot.MAINHAND||body.hasWeaponSession()){stacks.add(body.getItemBySlot(slot));places.add(slot.getName());}}
+for(var slot:List.of(EquipmentSlot.MAINHAND,EquipmentSlot.OFFHAND,EquipmentSlot.HEAD,EquipmentSlot.CHEST,EquipmentSlot.LEGS,EquipmentSlot.FEET)){if(slot!=EquipmentSlot.MAINHAND||body.weaponDrawn()){stacks.add(body.getItemBySlot(slot));places.add(slot.getName());}}
 for(var drop:level.getEntitiesOfClass(ItemEntity.class,body.getBoundingBox().inflate(48))){stacks.add(drop.getItem());places.add("drop:"+drop.getUUID());}
 var gear=new ArrayList<Map<String,Object>>();for(int n=0;n<stacks.size();n++){var stack=stacks.get(n);var name=stack.get(DataComponents.CUSTOM_NAME);if(name==null||!name.getString().startsWith(a.string("token")+"/"))continue;
 var original=ItemStack.parseOptional(level.registryAccess(),expected.getCompound(name.getString()));var normalized=stack.copy();if(!original.isEmpty())normalized.setDamageValue(original.getDamageValue());gear.add(Map.of("name",name.getString(),"item",net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem()).toString(),"count",stack.getCount(),"damage",stack.getDamageValue(),"minimumDamage",original.getDamageValue(),"place",places.get(n),"matches",ItemStack.matches(stack,original),"wearMatches",ItemStack.matches(normalized,original)));}
-var patch=ResidentEpicFightPatch.of(body);var field=ResidentEntity.class.getDeclaredField("weaponSession");field.setAccessible(true);var session=field.get(body);var target=(Mob)level.getEntity(UUID.fromString(a.string("monster")));
+var patch=ResidentEpicFightPatch.of(body);var field=ResidentEntity.class.getDeclaredField("weaponAttack");field.setAccessible(true);var controller=field.get(body);var target=(Mob)level.getEntity(UUID.fromString(a.string("monster")));
 var order=DefenseControl.of(colony).current(body.id()).orElse(null);var assigned=LoadoutProfiles.of(colony).assigned(body.id()).orElseThrow();
-var out=new LinkedHashMap<String,Object>();out.put("pid",ProcessHandle.current().pid());out.put("tick",level.getGameTime());out.put("patch",patch!=null);out.put("held",body.colonyId().filter(colony.id()::equals).isPresent()&&colony.claimOf(body.id()).isPresent());out.put("session",session!=null);out.put("nativeSession",session instanceof EpicFightWeaponSession);out.put("firing",session instanceof EpicFightWeaponSession nativeSession&&nativeSession.state().name().equals("FIRING"));
+var out=new LinkedHashMap<String,Object>();out.put("pid",ProcessHandle.current().pid());out.put("tick",level.getGameTime());out.put("patch",patch!=null);out.put("held",body.colonyId().filter(colony.id()::equals).isPresent()&&colony.claimOf(body.id()).isPresent());out.put("controller",controller!=null);out.put("drawn",body.weaponDrawn());out.put("nativeController",controller instanceof EpicFightWeaponAttack);out.put("firing",body.weaponDrawn()&&patch!=null&&patch.getTarget()!=null&&patch.getAnimator().getPlayerFor(null).getRealAnimation().get() instanceof AttackAnimation);
 out.put("attack",patch!=null&&patch.getAnimator().getPlayerFor(null).getRealAnimation().get() instanceof AttackAnimation);out.put("using",body.isUsingItem());out.put("sprinting",body.isSprinting());out.put("handEmpty",body.getMainHandItem().isEmpty());out.put("order",order==null?"NONE":order.getClass().getName());
 out.put("profile",assigned.id().toString());out.put("dutyCount",PatrolStaffing.of(colony).count(UUID.fromString(a.string("duty"))));out.put("targetHealth",target==null?-1:target.getHealth());out.put("targetMax",target==null?-1:target.getMaxHealth());out.put("attacker",target!=null&&target.getLastDamageSource()!=null&&target.getLastDamageSource().getEntity()==body);out.put("gear",gear);out.put("expectedCount",expected.getAllKeys().size());out.put("health",body.getHealth());out.put("x",body.getX());out.put("z",body.getZ());return out;` }) });
 const NEW_THREAT = defineTask<Scene, string>({ name: "folkways.epicfight.lifecycle.fresh-autonomous-threat", side: "server", source: javaTask({ imports: IMPORTS, body: `

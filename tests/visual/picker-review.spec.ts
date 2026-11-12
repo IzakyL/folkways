@@ -335,46 +335,30 @@ test("every picker dialog on camera", async ({}, testInfo) => {
 
     const loadouts = async () => {
       await panel();
-      await clickTab(client, "folkways.loadouts.title");
+      await clickTab(client, "folkways.equipment.title");
       await settle(5);
-      const profile = (await shown()).find(element => element.id === "folkways.loadouts.profile.0");
+      const profile = (await shown()).find(element => element.id === "folkways.equipment.profile.0");
       if (profile) await click(profile.id!);
-    };
-    const adding = async (option?: string) => {
-      await click("folkways.loadouts.add");
-      await expectPicker("loadouts add");
-      if (option) {
-        await click(`folkways.loadouts.${option}`);
-        await expectPicker(`loadouts ${option}`);
-      }
     };
     await scene("loadouts-add", async () => {
       await loadouts();
-      await adding();
-      await shot("loadouts-add", "LoadoutPage: the Add menu (migrated in the rebase), one immediate pick");
+      await click("folkways.equipment.add");
+      await expectPicker("equipment carried add");
+      await shot("loadouts-add", "EquipmentPage: + Add opens the item picker for a carried entry");
     });
     await scene("loadouts-weapon", async () => {
       await loadouts();
-      await adding("weapon");
-      await shot("loadouts-add-weapon", "LoadoutPage: Add weapon opens the item picker for rules");
-    });
-    await scene("loadouts-weapon-variants", async () => {
-      await loadouts();
-      await adding("weapon_variants");
-      await shot("loadouts-add-weapon-variants", "LoadoutPage: weapon variants, many ticked from what the colony knows");
-    });
-    await scene("loadouts-observation", async () => {
-      await loadouts();
-      await adding("observation_gear");
-      await shot("loadouts-add-observation", "LoadoutPage: observation gear, many ticked");
+      await click("folkways.equipment.slot.folkways_core.mainhand");
+      await expectPicker("equipment weapon hand");
+      await shot("loadouts-add-weapon", "EquipmentPage: an empty weapon hand opens its picker");
     });
     await scene("loadouts-assignment", async () => {
       await loadouts();
-      await click("folkways.loadouts.assign_residents");
-      await waitForElement(client, { id: "folkways.loadouts.resident.0" }, { timeoutMs: 8_000 });
-      await click("folkways.loadouts.resident.0");
-      await expectPicker("loadouts assignment");
-      await shot("loadouts-assignment", "LoadoutPage: a resident's loadout (migrated in the rebase), one immediate pick");
+      await click("folkways.equipment.assign_residents");
+      await waitForElement(client, { id: "folkways.equipment.resident.0" }, { timeoutMs: 8_000 });
+      await click("folkways.equipment.resident.0");
+      await expectPicker("equipment assignment");
+      await shot("loadouts-assignment", "EquipmentPage: a resident's profile, one immediate pick");
     });
 
     await scene("compost-page", async () => {
@@ -500,8 +484,9 @@ test("every picker dialog on camera", async ({}, testInfo) => {
     });
     await scene("narrow-loadouts-add", async () => {
       await loadouts();
-      await adding();
-      await shot("narrow-loadouts-add", "Narrow: LoadoutPage Add menu");
+      await click("folkways.equipment.add");
+      await expectPicker("narrow equipment carried add");
+      await shot("narrow-loadouts-add", "Narrow: EquipmentPage carried item picker");
     });
     await scene("narrow-staffing", async () => {
       await panel();

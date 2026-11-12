@@ -23,12 +23,24 @@ interface Laying extends Refinement.Laying {
 
     Set<Stash> stores();
 
+    default boolean direct(Stash where) {
+        return true;
+    }
+
     default int preference(Stash where, ItemSpec goods) {
         return 0;
     }
 
     // Where one may stand to reach into the store.
     Set<Stand> around(Stash where);
+
+    default Set<Stand> putting(Stash where) {
+        return around(where);
+    }
+
+    default Set<Stand> placing(UUID node, Stash where) {
+        return reaching(node, where);
+    }
 
     // Whether no one could get to any of `around` the store.
     boolean cutOff(Stash where, Set<Stand> around);

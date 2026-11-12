@@ -1,0 +1,293 @@
+{
+  "replace": false,
+  "values": [
+    {
+      "id": "fxntstorage:acacia_simple_storage_box",
+      "required": false
+    },
+    {
+      "id": "fxntstorage:andesite_backpack",
+      "required": false
+    },
+    {
+      "id": "fxntstorage:andesite_storage_box",
+      "required": false
+    },
+    {
+      "id": "fxntstorage:backpack",
+      "required": false
+    },
+    {
+      "id": "fxntstorage:bamboo_simple_storage_box",
+      "required": false
+    },
+    {
+      "id": "fxntstorage:birch_simple_storage_box",
+      "required": false
+    },
+    {
+      "id": "fxntstorage:brass_backpack",
+      "required": false
+    },
+    {
+      "id": "fxntstorage:brass_storage_box",
+      "required": false
+    },
+    {
+      "id": "fxntstorage:cardboard_storage_box",
+      "required": false
+    },
+    {
+      "id": "fxntstorage:cherry_simple_storage_box",
+      "required": false
+    },
+    {
+      "id": "fxntstorage:copper_backpack",
+      "required": false
+    },
+    {
+      "id": "fxntstorage:copper_storage_box",
+      "required": false
+    },
+    {
+      "id": "fxntstorage:crimson_simple_storage_box",
+      "required": false
+    },
+    {
+      "id": "fxntstorage:dark_oak_simple_storage_box",
+      "required": false
+    },
+    {
+      "id": "fxntstorage:hardened_backpack",
+      "required": false
+    },
+    {
+      "id": "fxntstorage:hardened_storage_box",
+      "required": false
+    },
+    {
+      "id": "fxntstorage:jungle_simple_storage_box",
+      "required": false
+    },
+    {
+      "id": "fxntstorage:mangrove_simple_storage_box",
+      "required": false
+    },
+    {
+      "id": "fxntstorage:oak_simple_storage_box",
+      "required": false
+    },
+    {
+      "id": "fxntstorage:pale_oak_simple_storage_box",
+      "required": false
+    },
+    {
+      "id": "fxntstorage:passer_block",
+      "required": false
+    },
+    {
+      "id": "fxntstorage:poplar_simple_storage_box",
+      "required": false
+    },
+    {
+      "id": "fxntstorage:reserve_storage_box",
+      "required": false
+    },
+    {
+      "id": "fxntstorage:smart_passer_block",
+      "required": false
+    },
+    {
+      "id": "fxntstorage:spruce_simple_storage_box",
+      "required": false
+    },
+    {
+      "id": "fxntstorage:storage_box",
+      "required": false
+    },
+    {
+      "id": "fxntstorage:storage_controller",
+      "required": false
+    },
+    {
+      "id": "fxntstorage:storage_interface",
+      "required": false
+    },
+    {
+      "id": "fxntstorage:storage_interface_filtered",
+      "required": false
+    },
+    {
+      "id": "fxntstorage:warped_simple_storage_box",
+      "required": false
+    },
+    {
+      "id": "fxntstorage:weathered_storage_box",
+      "required": false
+    },
+    {
+      "id": "toms_storage:basic_inventory_hopper",
+      "required": false
+    },
+    {
+      "id": "toms_storage:crafting_terminal",
+      "required": false
+    },
+    {
+      "id": "toms_storage:filing_cabinet",
+      "required": false
+    },
+    {
+      "id": "toms_storage:inventory_cable_connector",
+      "required": false
+    },
+    {
+      "id": "toms_storage:inventory_cable_connector_framed",
+      "required": false
+    },
+    {
+      "id": "toms_storage:inventory_connector",
+      "required": false
+    },
+    {
+      "id": "toms_storage:inventory_interface",
+      "required": false
+    },
+    {
+      "id": "toms_storage:inventory_proxy",
+      "required": false
+    },
+    {
+      "id": "toms_storage:level_emitter",
+      "required": false
+    },
+    {
+      "id": "toms_storage:open_crate",
+      "required": false
+    },
+    {
+      "id": "toms_storage:storage_terminal",
+      "required": false
+    },
+    {
+      "id": "colossalchests:chest_wall_copper",
+      "required": false
+    },
+    {
+      "id": "colossalchests:chest_wall_diamond",
+      "required": false
+    },
+    {
+      "id": "colossalchests:chest_wall_gold",
+      "required": false
+    },
+    {
+      "id": "colossalchests:chest_wall_iron",
+      "required": false
+    },
+    {
+      "id": "colossalchests:chest_wall_netherite",
+      "required": false
+    },
+    {
+      "id": "colossalchests:chest_wall_obsidian",
+      "required": false
+    },
+    {
+      "id": "colossalchests:chest_wall_silver",
+      "required": false
+    },
+    {
+      "id": "colossalchests:chest_wall_wood",
+      "required": false
+    },
+    {
+      "id": "colossalchests:colossal_chest_copper",
+      "required": false
+    },
+    {
+      "id": "colossalchests:colossal_chest_diamond",
+      "required": false
+    },
+    {
+      "id": "colossalchests:colossal_chest_gold",
+      "required": false
+    },
+    {
+      "id": "colossalchests:colossal_chest_iron",
+      "required": false
+    },
+    {
+      "id": "colossalchests:colossal_chest_netherite",
+      "required": false
+    },
+    {
+      "id": "colossalchests:colossal_chest_obsidian",
+      "required": false
+    },
+    {
+      "id": "colossalchests:colossal_chest_silver",
+      "required": false
+    },
+    {
+      "id": "colossalchests:colossal_chest_wood",
+      "required": false
+    },
+    {
+      "id": "colossalchests:interface_copper",
+      "required": false
+    },
+    {
+      "id": "colossalchests:interface_diamond",
+      "required": false
+    },
+    {
+      "id": "colossalchests:interface_gold",
+      "required": false
+    },
+    {
+      "id": "colossalchests:interface_iron",
+      "required": false
+    },
+    {
+      "id": "colossalchests:interface_netherite",
+      "required": false
+    },
+    {
+      "id": "colossalchests:interface_obsidian",
+      "required": false
+    },
+    {
+      "id": "colossalchests:interface_silver",
+      "required": false
+    },
+    {
+      "id": "colossalchests:interface_wood",
+      "required": false
+    },
+    {
+      "id": "colossalchests:uncolossal_chest",
+      "required": false
+    },
+    {
+      "id": "mekanism:qio_dashboard",
+      "required": false
+    },
+    {
+      "id": "mekanism:qio_drive_array",
+      "required": false
+    },
+    {
+      "id": "mekanism:qio_exporter",
+      "required": false
+    },
+    {
+      "id": "mekanism:qio_importer",
+      "required": false
+    },
+    {
+      "id": "mekanism:qio_redstone_adapter",
+      "required": false
+    }
+  ]
+}

@@ -9,8 +9,6 @@ import io.github.izakyl.folkways.core.vocation.api.Vocation;
 import io.github.izakyl.folkways.core.vocation.api.Vocations;
 import io.github.izakyl.folkways.core.work.api.Need;
 import io.github.izakyl.folkways.core.work.api.WorkSite;
-import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -22,13 +20,11 @@ import java.util.Optional;
 final class PackSizing implements Sizing {
 
     private final Crew crew;
-    private final List<Integer> rooms;
     private final Map<Optional<Vocation>, Integer> roomiest = new HashMap<>();
     private final Map<Optional<Vocation>, Long> takers = new HashMap<>();
 
     PackSizing(Crew crew) {
         this.crew = crew;
-        this.rooms = roomsOf(crew);
     }
 
     @Override
@@ -45,8 +41,10 @@ final class PackSizing implements Sizing {
 
     // The most of `concrete` one carry takes.
     long perTrip(ItemSpec concrete) {
-        int room = rooms.isEmpty() ? Pack.BASE_PLANNABLE_CELLS : rooms.getFirst();
-        return (long) Math.max(1, Goods.stackSize(concrete)) * room;
+        return crew.hands().stream().filter(hand -> hand.takes(Vocations.of(Vocations.HAULING)))
+            // A temporarily full crew must still grow fetch work so scheduling can request cargo recovery.
+            .mapToLong(hand -> hand.capacity(concrete)).filter(capacity -> capacity > 0).max()
+            .orElse((long) Math.max(1, Goods.stackSize(concrete)) * Pack.BASE_PLANNABLE_CELLS);
     }
 
     private long shareOf(Optional<Vocation> by, long runs) {
@@ -88,7 +86,13 @@ final class PackSizing implements Sizing {
         long high = limit;
         while (low < high) {
             long runs = low + (high - low + 1) / 2;
-            if (fits(carried, runs, room)) {
+            boolean nativeFit = crew.hands().stream().filter(hand -> hand.takes(by))
+                .filter(hand -> !(at instanceof WorkSite.AtEntity entity) || entity.entity().equals(hand.id()))
+                .anyMatch(hand -> hand.space() != null && hand.load(carried.stream().collect(
+                    java.util.stream.Collectors.toMap(Need::spec, need -> need.count() * runs, Long::sum)))
+                    != Integer.MAX_VALUE);
+            if (nativeFit || crew.hands().stream().noneMatch(hand -> hand.space() != null) && fits(carried, runs,
+                room)) {
                 low = runs;
             } else {
                 high = runs - 1;
@@ -109,15 +113,4 @@ final class PackSizing implements Sizing {
         return true;
     }
 
-    private static List<Integer> roomsOf(Crew crew) {
-        Optional<Vocation> hauling = Vocations.of(Vocations.HAULING);
-        List<Integer> free = new ArrayList<>(crew.hands().size());
-        for (Crew.Hand hand : crew.hands()) {
-            if (hand.packCells() > 0 && hand.takes(hauling)) {
-                free.add(hand.packCells());
-            }
-        }
-        free.sort(Comparator.reverseOrder());
-        return List.copyOf(free);
-    }
 }

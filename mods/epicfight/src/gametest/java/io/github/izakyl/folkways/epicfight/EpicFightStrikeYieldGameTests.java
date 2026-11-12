@@ -1,13 +1,17 @@
 package io.github.izakyl.folkways.epicfight;
 
 import io.github.izakyl.folkways.core.FolkwaysCoreMod;
-import io.github.izakyl.folkways.core.work.api.*;
-import net.minecraft.gametest.framework.*;
+import io.github.izakyl.folkways.core.work.api.Ending;
+import io.github.izakyl.folkways.core.work.api.Node;
+import io.github.izakyl.folkways.core.work.api.Workload;
+import net.minecraft.gametest.framework.GameTest;
+import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.world.item.Items;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
-import net.neoforged.neoforge.gametest.*;
+import net.neoforged.neoforge.gametest.GameTestHolder;
+import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
 @EventBusSubscriber(modid = FolkwaysEpicFightMod.ID, bus = EventBusSubscriber.Bus.MOD)
 @GameTestHolder("folkways_epicfight")
@@ -29,7 +33,7 @@ public final class EpicFightStrikeYieldGameTests {
                 helper.assertFalse(workload.holds(s.level, s.worker), "dead target ends upstream workload");
                 node.released(s.level, s.worker, Ending.DONE);
                 node.released(s.level, s.worker, Ending.DONE);
-                helper.assertFalse(s.resident.hasWeaponSession(), "release removes the real hand owner");
+                helper.assertFalse(s.resident.weaponDrawn(), "release removes the real hand owner");
                 helper.assertValueEqual(s.resident.pack().count(Items.IRON_SWORD), 1, "repeated release returns exactly one sword");
             }).thenSucceed();
     }

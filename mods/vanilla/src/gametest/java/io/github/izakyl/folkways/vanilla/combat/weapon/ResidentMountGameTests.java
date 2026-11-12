@@ -1,6 +1,8 @@
 package io.github.izakyl.folkways.vanilla.combat.weapon;
 
-import io.github.izakyl.folkways.core.combat.api.WeaponSession;
+import io.github.izakyl.folkways.core.testing.TestWorker;
+import io.github.izakyl.folkways.core.equipment.api.EquipmentProfiles;
+import io.github.izakyl.folkways.core.combat.api.WeaponAttack;
 import io.github.izakyl.folkways.core.colony.api.Claimed;
 import io.github.izakyl.folkways.core.colony.api.Colonies;
 import io.github.izakyl.folkways.core.colony.api.Colony;
@@ -42,6 +44,7 @@ import java.util.Set;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.nbt.Tag;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.gametest.framework.GameTestInfo;
@@ -69,11 +72,9 @@ import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
-import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
 @EventBusSubscriber(modid = FolkwaysVanillaMod.ID, bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder("folkways_vanilla")
 @PrefixGameTestTemplate(false)
 public final class ResidentMountGameTests {
     private static final TicketType<UUID> TICKING =
@@ -81,7 +82,7 @@ public final class ResidentMountGameTests {
 
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) {
-        event.register(ResidentMountGameTests.class);
+        io.github.izakyl.folkways.core.testing.SelectedTests.register(event, ResidentMountGameTests.class);
     }
 
     @GameTest(template = "empty_large", templateNamespace = "folkways_core")
@@ -104,9 +105,16 @@ public final class ResidentMountGameTests {
         ResidentMounts restored = new ResidentMounts(scene.colony);
         helper.assertTrue(restored.horse(helper.getLevel(), scene.body.id()).orElseThrow() == horse,
             "the saved ownership ledger restores the same horse");
-        var profiles = new LoadoutProfiles(scene.colony, id -> { });
-        helper.assertTrue(profiles.assigned(scene.body.id()).orElseThrow().entries().equals(profile.entries()),
-            "mount and horse armor entries survive profile serialization");
+        var profiles = LoadoutProfiles.of(scene.colony);
+        helper.assertTrue(profiles.assigned(scene.body.id()).orElseThrow().entries().stream()
+            .map(LoadoutProfile.Entry::kind).toList()
+            .containsAll(profile.entries().stream().map(LoadoutProfile.Entry::kind).toList()),
+            "mount and horse armor entries read back as their combat kinds");
+        var saved = scene.colony.kept(EquipmentProfiles.ID).getList("profiles", Tag.TAG_COMPOUND).getCompound(0)
+            .getList("entries", Tag.TAG_COMPOUND).stream().map(row -> ((CompoundTag) row).getString("slot")).toList();
+        helper.assertTrue(scene.colony.kept(EquipmentProfiles.ID).getList("profiles", Tag.TAG_COMPOUND)
+            .getCompound(0).getBoolean("riding") && saved.contains(MountGear.HORSE_ARMOR.toString()),
+            "mount and horse armor are saved in their profile slots");
         Locomotions.override(scene.body, null);
         restored.reconcile(helper.getLevel(), scene.body, profiles.assigned(scene.body.id()));
         helper.assertTrue(scene.body.locomotion().id().getPath().equals("riding"),
@@ -388,7 +396,7 @@ public final class ResidentMountGameTests {
     }
 
     @GameTest(template = "empty_large", templateNamespace = "folkways_core", timeoutTicks = 100)
-    public static void mountedMeleeHitsWithNativeWeaponSession(GameTestHelper helper) {
+    public static void mountedMeleeHitsWithNativeWeaponAttack(GameTestHelper helper) {
         Scene scene = new Scene(helper);
         Horse horse = scene.horse();
         scene.profile(List.of(LoadoutProfile.Entry.mount(),
@@ -403,15 +411,16 @@ public final class ResidentMountGameTests {
         helper.getLevel().addFreshEntity(target);
         scene.entities.add(target);
         helper.assertTrue(ResidentMounts.board(scene.body), "resident boards for the mounted weapon test");
-        WeaponSession session = Weapons.select(WeaponSessionGameTests.worker(scene.body), target, null);
+        WeaponAttack attack = Weapons.select(TestWorker.of(scene.body), target, null);
         helper.assertTrue(scene.body.getVehicle() == horse, "weapon selection retains the existing mount");
-        helper.assertTrue(session.fire(target), "the sword starts its native attack while riding");
-        helper.onEachTick(session::tick);
+        helper.assertTrue(attack.fire(target), "the sword starts its native attack while riding");
+        helper.onEachTick(attack::tick);
         helper.startSequence().thenWaitUntil(() -> helper.assertTrue(target.getHealth() < target.getMaxHealth(),
             "mounted melee damages the hostile target"))
             .thenExecute(() -> {
                 helper.assertTrue(scene.body.getVehicle() == horse, "the attack stays in the saddle");
-                session.close();
+                attack.stop();
+                scene.body.holsterWeapon();
             }).thenSucceed();
     }
 
@@ -478,15 +487,16 @@ public final class ResidentMountGameTests {
         helper.getLevel().addFreshEntity(target);
         scene.entities.add(target);
         helper.assertTrue(ResidentMounts.board(scene.body), "resident boards for the mounted weapon test");
-        WeaponSession session = Weapons.select(WeaponSessionGameTests.worker(scene.body), target, null);
-        helper.assertTrue(session.fire(target), "the mounted weapon begins its native draw or reload");
-        helper.onEachTick(session::tick);
+        WeaponAttack attack = Weapons.select(TestWorker.of(scene.body), target, null);
+        helper.assertTrue(attack.fire(target), "the mounted weapon begins its native draw or reload");
+        helper.onEachTick(attack::tick);
         helper.startSequence().thenWaitUntil(() -> helper.assertTrue(target.getHealth() < target.getMaxHealth(),
             "a native projectile from the saddle hits the target"))
             .thenExecute(() -> {
                 helper.assertTrue(scene.body.getVehicle() == horse, "ranged fire keeps the resident mounted");
                 helper.assertTrue(scene.body.pack().count(Items.ARROW) == 2, "one physical arrow is consumed");
-                session.close();
+                attack.stop();
+                scene.body.holsterWeapon();
             }).thenSucceed();
     }
 
@@ -541,11 +551,12 @@ public final class ResidentMountGameTests {
         scene.body.pack().insert(new ItemStack(Items.SADDLE));
         scene.body.pack().insert(new ItemStack(Items.IRON_SWORD));
         scene.refresh();
-        Worker worker = WeaponSessionGameTests.worker(scene.body);
+        Worker worker = TestWorker.of(scene.body);
         double onFoot = Weapons.range(worker);
-        WeaponSession session = Weapons.select(worker, null, null);
+        WeaponAttack attack = Weapons.select(worker, null, null);
         helper.assertFalse(scene.body.isPassenger(), "melee selection does not board a nearby horse");
-        session.close();
+        attack.stop();
+        scene.body.holsterWeapon();
         Weapons.selectRanged(worker, null, null);
         helper.assertFalse(scene.body.isPassenger(), "ranged selection does not board a nearby horse");
         helper.assertTrue(ResidentMounts.board(scene.body), "test rider boards the assigned horse");
@@ -707,15 +718,15 @@ public final class ResidentMountGameTests {
         helper.assertTrue(ResidentMounts.board(scene.body), "test rider boards before starting work");
         Zombie target = target(scene, horse.position().add(distance, 0, 0));
         Node node = new Node() {
-            private WeaponSession session;
+            private WeaponAttack attack;
             private final NodeSpec spec = NodeSpec.of(UUID.randomUUID(), PersonContent.ID,
                 WorkSite.on(target), Stances.WHEREVER, (Workload.Continuous) (level, who) -> {
                     helper.assertTrue(who.body().getVehicle() == horse, "the runner starts combat in the saddle");
-                    session = Weapons.select(who, target, session);
-                    if (session.state() == WeaponSession.State.READY) {
-                        session.fire(target);
+                    attack = Weapons.select(who, target, attack);
+                    if (attack.state() == WeaponAttack.State.READY) {
+                        attack.fire(target);
                     }
-                    session.tick();
+                    attack.tick();
                     return target.getHealth() == target.getMaxHealth();
                 }).done();
 
@@ -750,13 +761,13 @@ public final class ResidentMountGameTests {
         helper.assertTrue(ResidentMounts.board(scene.body), "test rider boards");
         horse.setNoAi(true);
         Zombie target = target(scene, horse.position().add(5.6, 0, 0));
-        Worker worker = WeaponSessionGameTests.worker(scene.body);
-        WeaponSession session = Weapons.select(worker, target, null);
-        helper.assertTrue(session.fire(target), "the mounted sword reaches beyond its on-foot range");
-        helper.onEachTick(session::tick);
+        Worker worker = TestWorker.of(scene.body);
+        WeaponAttack attack = Weapons.select(worker, target, null);
+        helper.assertTrue(attack.fire(target), "the mounted sword reaches beyond its on-foot range");
+        helper.onEachTick(attack::tick);
         helper.startSequence().thenWaitUntil(() -> helper.assertTrue(target.getHealth() < target.getMaxHealth(),
             "the extended reach lands a real hit"))
-            .thenExecute(session::close).thenSucceed();
+            .thenExecute(() -> { attack.stop(); scene.body.holsterWeapon(); }).thenSucceed();
     }
 
     @GameTest(template = "empty_large", templateNamespace = "folkways_core", timeoutTicks = 100)
@@ -770,20 +781,20 @@ public final class ResidentMountGameTests {
         scene.refresh();
         helper.assertTrue(ResidentMounts.board(scene.body), "test rider boards");
         horse.setNoAi(true);
-        Worker worker = WeaponSessionGameTests.worker(scene.body);
-        WeaponSession session = Weapons.select(worker, null, null);
+        Worker worker = TestWorker.of(scene.body);
+        WeaponAttack attack = Weapons.select(worker, null, null);
         Zombie still = target(scene, horse.position().add(2, 0, 0));
         Zombie charging = target(scene, horse.position().add(2, 0, 1));
         double[] damage = {0, 0};
         double[] impulse = {0, 0};
         int[] ticks = {0};
-        helper.assertTrue(session.fire(still), "stationary swing starts");
+        helper.assertTrue(attack.fire(still), "stationary swing starts");
         helper.onEachTick(() -> {
             ticks[0]++;
             // Vertical movement alone must give no charge; horizontal movement starts only at the second impact.
             horse.setDeltaMovement(0, .02, 0);
             if (ticks[0] == 20) {
-                helper.assertTrue(session.fire(charging), "second swing starts while stationary");
+                helper.assertTrue(attack.fire(charging), "second swing starts while stationary");
             }
             if (ticks[0] == 29) {
                 horse.move(MoverType.SELF, new Vec3(MountedMelee.FULL_CHARGE_SPEED, 0, 0));
@@ -791,7 +802,7 @@ public final class ResidentMountGameTests {
             Zombie victim = ticks[0] < 20 ? still : charging;
             float before = victim.getHealth();
             Vec3 velocity = victim.getDeltaMovement();
-            session.tick();
+            attack.tick();
             if (victim.getHealth() < before) {
                 int index = ticks[0] < 20 ? 0 : 1;
                 damage[index] = before - victim.getHealth();
@@ -807,7 +818,8 @@ public final class ResidentMountGameTests {
                 helper.assertFalse(scene.body.getAttribute(Attributes.ATTACK_DAMAGE).hasModifier(
                     ResourceLocation.fromNamespaceAndPath("folkways_vanilla", "mounted_charge")),
                     "the charge bonus is removed after the strike");
-                session.close();
+                attack.stop();
+                scene.body.holsterWeapon();
             }).thenSucceed();
     }
 
@@ -906,7 +918,7 @@ public final class ResidentMountGameTests {
             if (labor != null) {
                 labor.close();
             }
-            body.stopWeaponSession();
+            body.stopCombat();
             supplies.mounts().reconcile(helper.getLevel(), body, Optional.empty());
             entities.forEach(Entity::discard);
             helper.getLevel().getChunkSource().removeRegionTicket(TICKING, ticking, 2, body.id());

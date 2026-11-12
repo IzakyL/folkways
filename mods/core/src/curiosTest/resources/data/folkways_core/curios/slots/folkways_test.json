@@ -1,0 +1,8 @@
+{
+  "size": 3,
+  "operation": "SET",
+  "validators": [
+    "curios:tag"
+  ],
+  "icon": "curios:slot/empty_ring_slot"
+}

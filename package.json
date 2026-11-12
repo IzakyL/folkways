@@ -29,7 +29,9 @@
     "promo:mounted:carts": "npm run promo:take -- carts.take.ts",
     "promo:mounted:film": "python3 tests/promo/film/mounted.py",
     "promo:debug": "npm run promo:take -- debug-overlay.take.ts",
-    "promo:debug:film": "python3 tests/promo/film/debug.py"
+    "promo:debug:film": "python3 tests/promo/film/debug.py",
+    "promo:storage": "npm run promo:take -- storage.take.ts",
+    "promo:storage:film": "python3 tests/promo/film/storage.py"
   },
   "devDependencies": {
     "@izakyl/blockwright-cinema": "0.1.0-alpha.1",

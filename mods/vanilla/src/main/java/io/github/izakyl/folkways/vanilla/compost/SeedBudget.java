@@ -1,5 +1,9 @@
 package io.github.izakyl.folkways.vanilla.compost;
 
+import io.github.izakyl.folkways.core.inventory.api.port.PortReader.Entry;
+import io.github.izakyl.folkways.core.inventory.api.SlotSnapshot;
+import io.github.izakyl.folkways.core.inventory.api.StoreReadings;
+import java.util.AbstractList;
 import io.github.izakyl.folkways.core.item.api.Goods;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
@@ -35,11 +39,42 @@ public final class SeedBudget {
     }
 
     // Views of the same physical container (including the two halves of a double chest) share one identity.
-    public record Stock(String identity, Location at, List<ItemStack> stacks) {
+    public record Stock(String identity, Location at, List<ItemStack> stacks, List<Entry> entries) {
+        public Stock(String identity, Location at, List<ItemStack> stacks) {
+            this(identity, at, stacks, stacks.stream().filter(stack -> !stack.isEmpty())
+                .map(stack -> new Entry(stack, stack.getCount())).toList());
+        }
+
+        public static Stock reading(String identity, Location at, List<Entry> entries) {
+            return new Stock(identity, at, new EntryStacks(entries), entries);
+        }
+
         public Stock {
             Objects.requireNonNull(identity);
             Objects.requireNonNull(at);
-            stacks = stacks.stream().map(ItemStack::copy).toList();
+            if (!(stacks instanceof EntryStacks)) {
+                stacks = stacks.stream().map(ItemStack::copy).toList();
+            }
+            entries = List.copyOf(entries);
+        }
+    }
+
+    private static final class EntryStacks extends AbstractList<ItemStack> {
+
+        private final List<SlotSnapshot> slots;
+
+        EntryStacks(List<Entry> entries) {
+            slots = StoreReadings.synthetic(entries);
+        }
+
+        @Override
+        public int size() {
+            return slots.size();
+        }
+
+        @Override
+        public ItemStack get(int index) {
+            return slots.get(index).stackCopy();
         }
     }
 
@@ -187,8 +222,8 @@ public final class SeedBudget {
         Map<String, Stock> distinct = new LinkedHashMap<>();
         snapshot.stock().forEach(stock -> distinct.putIfAbsent(stock.identity(), stock));
         List<Unit> units = new ArrayList<>();
-        distinct.values().forEach(stock -> stock.stacks().stream().filter(stack -> !stack.isEmpty())
-            .forEach(stack -> units.add(new Unit(stock.at(), stack))));
+        distinct.values().forEach(stock -> stock.entries()
+            .forEach(entry -> units.add(new Unit(stock.at(), entry.prototype(), entry.count()))));
         Map<ItemSpec, Long> physical = new LinkedHashMap<>();
         units.forEach(unit -> physical.merge(Goods.specOf(unit.stack), unit.free, Long::sum));
         record ClaimKey(UUID node, Location at, ItemSpec goods) { }
@@ -307,10 +342,10 @@ public final class SeedBudget {
         final ItemStack stack;
         long free;
 
-        Unit(Location at, ItemStack stack) {
+        Unit(Location at, ItemStack stack, long count) {
             this.at = at;
             this.stack = stack;
-            free = stack.getCount();
+            free = count;
         }
     }
 }

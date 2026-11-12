@@ -10,7 +10,7 @@ import { layFloor } from "../shared/combat/overhead";
 type Scene = { colony: string; resident: string; stockX: number; stockY: number; stockZ: number; homeX: number; homeZ: number };
 type Reading = {
   x: number; z: number; health: number; stockBows: number; stockArrows: number;
-  carriedBows: number; arrows: number; bowDamage: number; session: boolean;
+  carriedBows: number; arrows: number; bowDamage: number; drawn: boolean;
   order: string; mode: string; status: string; supply: string; reason: string;
   sourceDistance: number; targetHealth: number; hitByResident: boolean; bowAllowed: boolean;
   stockSwords: number; carriedSwords: number; swordDamage: number; reservedAtSource: number;
@@ -74,7 +74,7 @@ test("guards walk to real registered storage for their kit: a melee guard collec
     expect(fought.mode).toBe("GUARD");
     expect(fought.order).toBe(meleeOrder);
     await server.run(RETREAT, scene);
-    const stopped = await meleeWait("retreat closes the actual melee hand", value => value.mode === "RETREAT" && !value.session, 80);
+    const stopped = await meleeWait("retreat closes the actual melee hand", value => value.mode === "RETREAT" && !value.drawn, 80);
     expect(stopped.carriedSwords).toBe(1);
     for (let elapsed = 0; elapsed < 40; elapsed += 4) {
       await tick.sprint(server, 4);
@@ -186,19 +186,19 @@ for (int slot = 0; slot < store.getContainerSize(); slot++) {
  var item = store.getItem(slot); if (item.is(Items.BOW)) stockBows += item.getCount(); if (item.is(Items.ARROW)) stockArrows += item.getCount();
  if (item.is(Items.IRON_SWORD)) stockSwords += item.getCount();
 }
-boolean session = body.hasWeaponSession(); var hand = body.getMainHandItem();
-int bows = body.pack().count(Items.BOW) + (session && hand.is(Items.BOW) ? hand.getCount() : 0);
-int damage = session && hand.is(Items.BOW) ? hand.getDamageValue()
+boolean drawn = body.weaponDrawn(); var hand = body.getMainHandItem();
+int bows = body.pack().count(Items.BOW) + (drawn && hand.is(Items.BOW) ? hand.getCount() : 0);
+int damage = drawn && hand.is(Items.BOW) ? hand.getDamageValue()
  : body.pack().contents().stream().filter(item -> item.is(Items.BOW)).mapToInt(item -> item.getDamageValue()).findFirst().orElse(0);
-int swords = body.pack().count(Items.IRON_SWORD) + (session && hand.is(Items.IRON_SWORD) ? hand.getCount() : 0);
-int swordDamage = session && hand.is(Items.IRON_SWORD) ? hand.getDamageValue()
+int swords = body.pack().count(Items.IRON_SWORD) + (drawn && hand.is(Items.IRON_SWORD) ? hand.getCount() : 0);
+int swordDamage = drawn && hand.is(Items.IRON_SWORD) ? hand.getDamageValue()
  : body.pack().contents().stream().filter(item -> item.is(Items.IRON_SWORD)).mapToInt(item -> item.getDamageValue()).findFirst().orElse(0);
 var order = ResidentCommands.of(colony).current(body.id()); var state = PatrolSupplies.of(colony).status(body.id());
 var target = level.getEntitiesOfClass(net.minecraft.world.entity.monster.Zombie.class, body.getBoundingBox().inflate(32))
  .stream().findFirst().orElse(null);
 return Map.ofEntries(Map.entry("x", body.getX()), Map.entry("z", body.getZ()), Map.entry("health", body.getHealth()),
  Map.entry("stockBows", stockBows), Map.entry("stockArrows", stockArrows), Map.entry("carriedBows", bows),
- Map.entry("arrows", body.pack().count(Items.ARROW)), Map.entry("bowDamage", damage), Map.entry("session", session),
+ Map.entry("arrows", body.pack().count(Items.ARROW)), Map.entry("bowDamage", damage), Map.entry("drawn", drawn),
  Map.entry("order", order.map(value -> value.id().toString()).orElse("NONE")), Map.entry("mode", order.map(value -> value.mode().name()).orElse("NONE")),
  Map.entry("status", order.map(value -> value.status().name()).orElse("NONE")), Map.entry("supply", state.state().name()), Map.entry("reason", state.reason()),
  Map.entry("sourceDistance", body.position().distanceTo(Vec3.atCenterOf(stockAt))), Map.entry("targetHealth", target == null ? 100 : target.getHealth()),

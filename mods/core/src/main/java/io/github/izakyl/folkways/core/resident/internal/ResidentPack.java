@@ -1,7 +1,9 @@
 package io.github.izakyl.folkways.core.resident.internal;
 
 import io.github.izakyl.folkways.core.base.persist.Required;
-import io.github.izakyl.folkways.core.item.api.Containers;
+import io.github.izakyl.folkways.core.resident.api.Body;
+import io.github.izakyl.folkways.core.resident.api.KitProvider;
+import io.github.izakyl.folkways.core.resident.api.KitProviders;
 import io.github.izakyl.folkways.core.resident.api.Pack;
 import java.util.ArrayList;
 import java.util.List;
@@ -17,208 +19,329 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 
+/** Eighteen native cells followed by the actual inventories of every effective storage item. */
 public final class ResidentPack implements Pack {
-    // Every cell is for whatever is carried: the tools a resident has and the food it keeps by it take the cells
-    // they lie in, and the rest is for goods.
-    public static final int DEFAULT_SIZE = 18;
-
-    // The cells a pack is taken to have for goods before anyone's is looked into.
+    public static final int DEFAULT_SIZE = Pack.DEFAULT_SIZE;
     public static final int BASE_PLANNABLE_CELLS = DEFAULT_SIZE;
-    private static final String TAG_ITEMS = "Items";
-    private static final String TAG_SLOT = "Slot";
-    private static final String TAG_STACK = "Stack";
-
-    private final int baseSize;
     private SimpleContainer container;
+    private final int baseSize;
+    private final List<ItemStack> recovered = new ArrayList<>();
+    private Body owner;
     private Runnable changed = () -> { };
-
-    public void onChanged(Runnable listener) {
-        changed = Objects.requireNonNull(listener);
-    }
 
     public ResidentPack() {
         this(DEFAULT_SIZE);
     }
 
     public ResidentPack(int size) {
-        this.baseSize = size;
-        this.container = new SimpleContainer(size);
-    }
-
-    public void applyCapacityMultiplier(double multiplier) {
-        ensureSize((int) Math.round(baseSize * Math.max(1.0, multiplier)));
-    }
-
-    private void ensureSize(int newSize) {
-        if (newSize <= container.getContainerSize()) {
-            return;
-        }
-        SimpleContainer bigger = new SimpleContainer(newSize);
-        for (int i = 0; i < container.getContainerSize(); i++) {
-            ItemStack stack = container.getItem(i);
-            if (!stack.isEmpty()) {
-                bigger.setItem(i, stack);
-            }
-        }
-        this.container = bigger;
-        changed.run();
-    }
-
-    // The cells left for goods by the tools carried.
-    public int plannableCells(Predicate<Item> tool) {
-        Objects.requireNonNull(tool);
-        int tools = 0;
-        for (ItemStack stack : contents()) {
-            if (tool.test(stack.getItem())) {
-                tools++;
-            }
-        }
-        return Math.max(0, getContainerSize() - tools);
-    }
-
-    // The cells still free for goods.
-    public int plannableRoom(Predicate<Item> tool) {
-        Objects.requireNonNull(tool);
-        int carrying = 0;
-        for (ItemStack stack : contents()) {
-            if (!tool.test(stack.getItem())) {
-                carrying++;
-            }
-        }
-        return Math.max(0, plannableCells(tool) - carrying);
-    }
-
-    public int countMatching(Predicate<ItemStack> predicate) {
-        Objects.requireNonNull(predicate);
-        int count = 0;
-        for (int i = 0; i < container.getContainerSize(); i++) {
-            ItemStack stack = container.getItem(i);
-            if (!stack.isEmpty() && predicate.test(stack)) {
-                count += stack.getCount();
-            }
-        }
-        return count;
-    }
-
-    public int count(Item item) {
-        Objects.requireNonNull(item);
-        return countMatching(stack -> stack.is(item));
-    }
-
-    public ItemStack insert(ItemStack stack) {
-        Objects.requireNonNull(stack);
-        return Containers.insert(this, stack);
-    }
-
-    public List<ItemStack> contents() {
-        List<ItemStack> contents = new ArrayList<>();
-        for (int i = 0; i < container.getContainerSize(); i++) {
-            ItemStack stack = container.getItem(i);
-            if (!stack.isEmpty()) {
-                contents.add(stack.copy());
-            }
-        }
-        return List.copyOf(contents);
+        baseSize = size;
+        container = new SimpleContainer(size);
     }
 
     @Override
-    public int getContainerSize() {
+    public void onChanged(Runnable listener) {
+        changed = Objects.requireNonNull(listener);
+    }
+
+    @Override
+    public void bind(Body body) {
+        owner = body;
+        if (!recovered.isEmpty() && body.mob().isAddedToLevel()) {
+            List<ItemStack> pending = List.copyOf(recovered);
+            recovered.clear();
+            for (ItemStack stack : pending) {
+                ItemStack rest = insert(stack);
+                if (!rest.isEmpty()) {
+                    body.mob().spawnAtLocation(rest);
+                }
+            }
+        }
+    }
+
+    @Override
+    public void applyCapacityMultiplier(double multiplier) {
+        int size = (int) Math.max(baseSize, Math.round(baseSize * multiplier));
+        if (size == container.getContainerSize()) {
+            return;
+        }
+        SimpleContainer previous = container;
+        container = new SimpleContainer(size);
+        for (int slot = 0; slot < previous.getContainerSize(); slot++) {
+            ItemStack stack = previous.getItem(slot);
+            if (slot < size) {
+                container.setItem(slot, stack);
+            } else {
+                recover(stack);
+            }
+        }
+        changed.run();
+    }
+
+    private List<KitProvider.Inventory> extensions() {
+        return owner == null ? List.of() : KitProviders.inventories(owner);
+    }
+
+    private record Cell(KitProvider.Inventory inventory, int index) {
+    }
+
+    private Cell cell(int slot) {
+        int index = slot - container.getContainerSize();
+        for (var inventory : extensions()) {
+            if (index < inventory.getSlots()) {
+                return new Cell(inventory, index);
+            }
+            index -= inventory.getSlots();
+        }
+        throw new IndexOutOfBoundsException("pack slot " + slot);
+    }
+
+    @Override
+    public int ownCells() {
         return container.getContainerSize();
     }
 
     @Override
+    public int slotLimit(int slot, ItemStack stack) {
+        if (slot < container.getContainerSize()) {
+            return container.getMaxStackSize(stack);
+        }
+        Cell cell = cell(slot);
+        return cell.inventory().isItemValid(cell.index(), stack) ? cell.inventory().limit(cell.index(), stack) : 0;
+    }
+
+    @Override
+    public ItemStack insertSlot(int slot, ItemStack stack, boolean simulate) {
+        if (slot >= container.getContainerSize()) {
+            Cell cell = cell(slot);
+            ItemStack rest = cell.inventory().insertItem(cell.index(), stack, simulate);
+            if (!simulate && rest.getCount() != stack.getCount()) {
+                changed.run();
+            }
+            return rest;
+        }
+        ItemStack there = container.getItem(slot);
+        if (!there.isEmpty() && !ItemStack.isSameItemSameComponents(there, stack)) {
+            return stack;
+        }
+        int moved = Math.min(stack.getCount(), Math.max(0, slotLimit(slot, stack) - there.getCount()));
+        if (moved > 0 && !simulate) {
+            container.setItem(slot, stack.copyWithCount(there.getCount() + moved));
+            changed.run();
+        }
+        return stack.copyWithCount(stack.getCount() - moved);
+    }
+
+    @Override
+    public ItemStack insert(ItemStack stack) {
+        ItemStack rest = stack.copy();
+        for (int pass = 0; pass < 2; pass++) {
+            for (int slot = 0; slot < getContainerSize() && !rest.isEmpty(); slot++) {
+                if (getItem(slot).isEmpty() == (pass == 1)) {
+                    rest = insertSlot(slot, rest, false);
+                }
+            }
+        }
+        return rest;
+    }
+
+    @Override
+    public int plannableCells(Predicate<Item> tool) {
+        int cells = 0;
+        for (int slot = 0; slot < getContainerSize(); slot++) {
+            ItemStack stack = getItem(slot);
+            if (stack.isEmpty() || !tool.test(stack.getItem())) {
+                cells++;
+            }
+        }
+        return cells;
+    }
+
+    @Override
+    public int plannableRoom(Predicate<Item> tool) {
+        int cells = 0;
+        for (int slot = 0; slot < getContainerSize(); slot++) {
+            if (getItem(slot).isEmpty()) {
+                cells++;
+            }
+        }
+        return cells;
+    }
+
+    @Override
+    public int countMatching(Predicate<ItemStack> predicate) {
+        return contents().stream().filter(predicate).mapToInt(ItemStack::getCount).sum();
+    }
+
+    @Override
+    public int count(Item item) {
+        return countMatching(stack -> stack.is(item));
+    }
+
+    @Override
+    public List<ItemStack> contents() {
+        List<ItemStack> result = new ArrayList<>();
+        for (int slot = 0; slot < getContainerSize(); slot++) {
+            ItemStack stack = getItem(slot);
+            if (!stack.isEmpty()) {
+                result.add(stack.copy());
+            }
+        }
+        return List.copyOf(result);
+    }
+
+    @Override
+    public int getContainerSize() {
+        return container.getContainerSize() + extensions().stream().mapToInt(KitProvider.Inventory::getSlots).sum();
+    }
+
+    @Override
     public boolean isEmpty() {
-        return container.isEmpty();
+        return contents().isEmpty();
     }
 
     @Override
     public ItemStack getItem(int slot) {
-        return container.getItem(slot);
+        if (slot < container.getContainerSize()) {
+            return container.getItem(slot);
+        }
+        Cell cell = cell(slot);
+        return cell.inventory().getStackInSlot(cell.index());
     }
 
     @Override
     public ItemStack removeItem(int slot, int amount) {
-        ItemStack taken = container.removeItem(slot, amount);
+        ItemStack result;
+        if (slot < container.getContainerSize()) {
+            result = container.removeItem(slot, amount);
+        } else {
+            Cell cell = cell(slot);
+            result = cell.inventory().extractItem(cell.index(), amount, false);
+        }
         changed.run();
-        return taken;
+        return result;
     }
 
     @Override
     public ItemStack removeItemNoUpdate(int slot) {
-        ItemStack taken = container.removeItemNoUpdate(slot);
-        changed.run();
-        return taken;
+        if (slot < container.getContainerSize()) {
+            // Transfer the whole stack without splitting or copying its component state.
+            ItemStack taken = container.removeItemNoUpdate(slot);
+            changed.run();
+            return taken;
+        }
+        return removeItem(slot, getItem(slot).getCount());
     }
 
     @Override
     public void setItem(int slot, ItemStack stack) {
-        container.setItem(slot, stack);
+        if (slot < container.getContainerSize()) {
+            container.setItem(slot, stack);
+        } else {
+            Cell cell = cell(slot);
+            cell.inventory().setStackInSlot(cell.index(), stack);
+        }
         changed.run();
     }
 
     @Override
+    public boolean canPlaceItem(int slot, ItemStack stack) {
+        return slotLimit(slot, stack) > 0;
+    }
+
+    @Override
     public int getMaxStackSize() {
-        return container.getMaxStackSize();
+        return Integer.MAX_VALUE;
     }
 
     @Override
     public void setChanged() {
         container.setChanged();
+        // Callers may mutate a live stack (ammunition, food, tools). Notify the native owner so it persists it.
+        for (var inventory : extensions()) {
+            for (int slot = 0; slot < inventory.getSlots(); slot++) {
+                if (!inventory.getStackInSlot(slot).isEmpty()) {
+                    inventory.setStackInSlot(slot, inventory.getStackInSlot(slot));
+                }
+            }
+        }
         changed.run();
     }
 
     @Override
     public boolean stillValid(Player player) {
-        return container.stillValid(player);
+        return true;
     }
 
     @Override
     public void clearContent() {
+        // Clear extensions before removing base-cell backpacks that make those extensions reachable.
+        for (var inventory : extensions()) {
+            for (int slot = 0; slot < inventory.getSlots(); slot++) {
+                inventory.setStackInSlot(slot, ItemStack.EMPTY);
+            }
+        }
         container.clearContent();
         changed.run();
     }
 
+    @Override
+    public void recover(ItemStack stack) {
+        if (!stack.isEmpty()) {
+            recovered.add(stack.copy());
+        }
+    }
+
+    @Override
     public CompoundTag save(HolderLookup.Provider provider) {
         CompoundTag tag = new CompoundTag();
         ListTag items = new ListTag();
-        for (int i = 0; i < container.getContainerSize(); i++) {
-            ItemStack stack = container.getItem(i);
+        // Worn storage saves its own contents. Serializing the flattened inventory would duplicate them.
+        for (int slot = 0; slot < container.getContainerSize(); slot++) {
+            ItemStack stack = container.getItem(slot);
             if (!stack.isEmpty()) {
-                CompoundTag itemTag = new CompoundTag();
-                itemTag.putByte(TAG_SLOT, (byte)i);
-                itemTag.put(TAG_STACK, stack.saveOptional(provider));
-                items.add(itemTag);
+                CompoundTag row = new CompoundTag();
+                row.putInt("Slot", slot);
+                row.put("Stack", stack.save(provider));
+                items.add(row);
             }
         }
-        tag.put(TAG_ITEMS, items);
+        tag.put("Items", items);
+        if (!recovered.isEmpty()) {
+            ListTag pending = new ListTag();
+            recovered.forEach(stack -> pending.add(stack.save(provider)));
+            tag.put("Recovered", pending);
+        }
         return tag;
     }
 
+    @Override
     public void load(CompoundTag tag, HolderLookup.Provider provider) {
         container.clearContent();
-        ListTag items = Required.list(tag, TAG_ITEMS, Tag.TAG_COMPOUND);
-        int maxSlot = -1;
-        for (int i = 0; i < items.size(); i++) {
-            maxSlot = Math.max(maxSlot, Required.byteValue(items.getCompound(i), TAG_SLOT) & 255);
-        }
-        ensureSize(maxSlot + 1);
-        for (int i = 0; i < items.size(); i++) {
-            CompoundTag itemTag = items.getCompound(i);
-            int slot = Required.byteValue(itemTag, TAG_SLOT) & 255;
-            ItemStack stack = ItemStack.parseOptional(provider, Required.compound(itemTag, TAG_STACK));
-            if (!stack.isEmpty()) {
+        recovered.clear();
+        for (Tag item : Required.list(tag, "Items", Tag.TAG_COMPOUND)) {
+            CompoundTag row = (CompoundTag) item;
+            int slot = row.contains("Slot", Tag.TAG_BYTE) ? row.getByte("Slot") & 255 : Required.integer(row, "Slot");
+            ItemStack stack = ItemStack.parseOptional(provider, Required.compound(row, "Stack"));
+            if (slot >= 0 && slot < container.getContainerSize()) {
                 container.setItem(slot, stack);
+            } else {
+                recover(stack);
             }
+        }
+        for (Tag item : tag.getList("Recovered", Tag.TAG_COMPOUND)) {
+            recover(ItemStack.parseOptional(provider, (CompoundTag) item));
         }
         changed.run();
     }
 
-    public void dropContents(LivingEntity owner) {
+    @Override
+    public void dropContents(LivingEntity entity) {
+        // External inventories stay inside their worn items when those items drop.
         for (ItemStack stack : container.removeAllItems()) {
-            if (!stack.isEmpty()) {
-                owner.spawnAtLocation(stack);
-            }
+            entity.spawnAtLocation(stack);
         }
+        recovered.forEach(entity::spawnAtLocation);
+        recovered.clear();
         changed.run();
     }
 }

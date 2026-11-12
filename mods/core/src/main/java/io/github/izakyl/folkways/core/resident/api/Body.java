@@ -36,8 +36,11 @@ public interface Body {
     }
 
     default Pack pack() {
-        return state().pack();
+        Pack pack = state().pack();
+        pack.bind(this);
+        return pack;
     }
+
 
     default Licences licences() {
         return Bodies.licences(this);

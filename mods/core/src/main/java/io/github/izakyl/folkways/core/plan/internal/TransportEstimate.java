@@ -168,7 +168,7 @@ public final class TransportEstimate {
         return complete ? new Unreachable() : new Pending();
     }
 
-    // A line loads and unloads through its own nodes; one that would keep goods in a store is not taken.
+    // A trunk hands goods over through its own nodes. Only a request may end with goods kept in a store.
     private static boolean handsOver(TransportLink link) {
         return link.from().handover().form() == TransportEndpoint.Form.PACK
             && link.to().handover().form() == TransportEndpoint.Form.PACK;

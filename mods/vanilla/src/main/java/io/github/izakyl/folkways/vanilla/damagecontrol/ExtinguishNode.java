@@ -24,8 +24,13 @@ import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.TicketType;
+import net.minecraft.world.level.ChunkPos;
 
 final class ExtinguishNode implements Node {
+    private static final TicketType<UUID> RESPONSE = TicketType.create("folkways_fire_response",
+        UUID::compareTo);
+
     private final NodeSpec spec;
     private final WorldPos target;
     private final UUID worker;
@@ -42,6 +47,8 @@ final class ExtinguishNode implements Node {
     private int interaction;
     private long settleUntil = Long.MIN_VALUE;
     private boolean closed;
+    private ServerLevel heldLevel;
+    private ChunkPos heldChunk;
 
     ExtinguishNode(WorldPos target, UUID worker, SuppressionMethod.Plan plan, Incidents incidents,
         BooleanSupplier enabled, Consumer<ExtinguishNode> stopped, Consumer<ServerLevel> changed) {
@@ -65,6 +72,21 @@ final class ExtinguishNode implements Node {
     @Override
     public NodeSpec spec() {
         return spec;
+    }
+
+    @Override
+    public Optional<RefusalKind> planned(ServerLevel level) {
+        if (!continues(level)) {
+            return Optional.of(DamageControlRefusal.NOT_LOADED);
+        }
+        if (heldLevel == null) {
+            // Long-range suppression can outlive the ticket that loaded the observed fire. Retain only
+            // this accepted response's target, without loading chunks during speculative discovery.
+            heldLevel = level;
+            heldChunk = new ChunkPos(target.block(level));
+            level.getChunkSource().addRegionTicket(RESPONSE, heldChunk, 0, id());
+        }
+        return Optional.empty();
     }
 
     WorldPos target() {
@@ -220,6 +242,11 @@ final class ExtinguishNode implements Node {
     }
 
     private void close() {
+        if (heldLevel != null) {
+            heldLevel.getChunkSource().removeRegionTicket(RESPONSE, heldChunk, 0, id());
+            heldLevel = null;
+            heldChunk = null;
+        }
         if (walking != null && operator != null && operator.body().level() instanceof ServerLevel level) {
             walking.release(level, operator.body());
             walking = null;

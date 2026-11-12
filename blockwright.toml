@@ -720,3 +720,195 @@ iris = { target = ["client"] }
 folkways_vanilla = { target = ["server", "client"] }
 folkways_carts = { target = ["server", "client"] }
 astikorcartsredux = { target = ["server", "client"] }
+
+[mods.ae2]
+url = "https://cdn.modrinth.com/data/XxWD5pD3/versions/DxZ2waV0/appliedenergistics2-19.2.19.jar"
+sha512 = "36385eb9c41e1b1eb4632cac297f9b5560f9d56c061622e99ea2e1fb74f6ff3b9ad09d9e332547d30a3c7559fd4444ee9536a6e1ae12af57c8a8826932a09b29"
+target = []
+
+[mods.guideme]
+url = "https://cdn.modrinth.com/data/Ck4E7v7R/versions/QeYKsstN/guideme-21.1.22.jar"
+sha512 = "2a7b29143c1bef18375f221c337c6e744d04b79bc3cc10cadac46b7d6bb217ad78c51a3c33cd802b221cc7b38ff04a3f7064bd63d292e53bf9f3e09047eeda24"
+target = []
+
+[profile.ae2.mods]
+ae2 = { target = ["server", "client"] }
+guideme = { target = ["server", "client"] }
+# Optional bulk storage integrations; each GameTest profile loads only its native fixtures.
+[mods.sophisticatedcore]
+url = "https://cdn.modrinth.com/data/nmoqTijg/versions/9DxpMDZv/sophisticatedcore-1.21.1-1.5.33.2470.jar"
+sha512 = "dbfc9ebd137be55aea5469d4842f96af0ba6662649280c23385606ddba41700de701d490d0c85066906f881926fc6a6f4c8b2945ae462ce0d1a7e3cf62d5b500"
+target = []
+
+[mods.sophisticatedstorage]
+url = "https://cdn.modrinth.com/data/hMlaZH8f/versions/ikf1wOWI/sophisticatedstorage-1.21.1-1.6.17.2224.jar"
+sha512 = "d028df46b981682c25aad8ab517f1e17bfcfdca0a0c17dbcbfe76fedadd3d1bf054b3e93cdca23d9c4a9f8cd9190a79b78b888ef8c0edfd6cfdd08c04f431b62"
+target = []
+
+[mods.sophisticatedbackpacks]
+url = "https://cdn.modrinth.com/data/TyCTlI4b/versions/tJnK2DE1/sophisticatedbackpacks-1.21.1-3.26.21.2249.jar"
+sha512 = "1373f5cdf9093e9613c82d429b6670538bf0fa1a397f5cc1e5e807fca0debd77139de67764c111bc369eea4cc1a395bbd790ec337413353fd1c987b7d9376249"
+target = []
+
+[mods.storagedrawers]
+url = "https://cdn.modrinth.com/data/guitPqEi/versions/px0CCB06/StorageDrawers-neoforge-1.21.1-13.11.4.jar"
+sha512 = "df97b8b5053a902264a236a71e7585b78d9d48a0bce585033aa8b169896d775f6fda462cfc77431af79cc596ab356eb9642e0c69a205a46b02d4d6f7ab3e74e9"
+target = []
+
+[mods.functionalstorage]
+url = "https://cdn.modrinth.com/data/cO40ZIg3/versions/FWnouoF2/functionalstorage-1.21.1-1.5.7.jar"
+sha512 = "703292eb514d09ed34fb4cc889fc424a9816be145a931c29069a24ed6d21f5d9b46f4d8b3b1e224dabbdb95ecafe0fad32ad034debccf6545d89dd17cda634ce"
+target = []
+
+[mods.titanium]
+url = "https://cdn.modrinth.com/data/1Ro7m06l/versions/ZrffET42/titanium-1.21-4.0.52.jar"
+sha512 = "8fbdc6840c7f670f952018563f2e24b0666de392df2e2753bbd17548f9ea77f3291ee5047c32342a4e7dd017ad5ccc7e66999fbb2cd3693ddc888de5825cb2e2"
+target = []
+
+[profile.storage_sophisticated.mods]
+sophisticatedstorage = { target = ["client", "server"] }
+sophisticatedcore = { target = ["client", "server"] }
+
+[profile.storage_backpacks.mods]
+sophisticatedbackpacks = { target = ["client", "server"] }
+sophisticatedcore = { target = ["client", "server"] }
+
+[profile.storage_drawers.mods]
+storagedrawers = { target = ["client", "server"] }
+
+[profile.storage_functional.mods]
+functionalstorage = { target = ["client", "server"] }
+titanium = { target = ["client", "server"] }
+
+# RS2 bundles its API and supporting libraries; 2.0.9 has no external required mod dependencies.
+[mods.refinedstorage]
+url = "https://cdn.modrinth.com/data/KDvYkUg3/versions/lHHiI26k/refinedstorage-neoforge-2.0.9.jar"
+sha512 = "b98a938b8af859f1952bfb35fb6db712835a7dead88fa15258ac0f4f06b26b08ebfa49fd9a35b2c81f7a745b3cd4370ced98c242d0fe7473ba019d92da8f6c57"
+target = []
+
+[profile.rs2.mods]
+refinedstorage = { target = ["server", "client"] }
+
+[mods.fxntstorage]
+url = "https://cdn.modrinth.com/data/h6BAXuvn/versions/cfugvAt6/fxntstorage-1.3.8%2Bmc-1.21.1-neoforge.jar"
+sha512 = "74df8f00ff1d8b27bbed8a4dd6865c1add05fb23fa845961c9749d5ed8839f529c035244d31e11d02805f851c51dbd238b8c4086f149f95190930c1f247b9d50"
+target = []
+
+[mods.toms_storage]
+url = "https://cdn.modrinth.com/data/XZNI4Cpy/versions/WQAMoIMC/toms_storage-1.21-2.4.2.jar"
+sha512 = "53db61b4486616b3a78dfff83b58f9424dd9bf525ea3db4e444ff0403fb70aa9ab7fc097dff2f49665e480bce936b32be76b3051a5aff217898b2b94d846d30b"
+target = []
+
+[mods.colossalchests]
+url = "https://cdn.modrinth.com/data/V8HM9qmm/versions/v8I5T3hr/colossalchests-1.21.1-neoforge-1.9.1.jar"
+sha512 = "3b86e6c2717a705708cf3c9c703e3557ceefc264c77f01231726d6df497aab55bc55f525f8082dab90f3e2dd11fe47a2b8c85a993074c9ae4ebc752c14c776fe"
+target = []
+
+[mods.cyclopscore]
+url = "https://cdn.modrinth.com/data/Z9DM0LJ4/versions/axSK9vET/cyclopscore-1.21.1-neoforge-1.30.1.jar"
+sha512 = "8ea7ac02f7b0d74461a2e509cd3b06e307f0679fdf4f90445f3094d7d6cc7f349103967d03708288a4d56f4442b8b1ce1f2d6425a326e3a1ba4061114b3917f0"
+target = []
+
+[mods.mekanism]
+url = "https://cdn.modrinth.com/data/Ce6I4WUE/versions/5KzzycBT/Mekanism-1.21.1-10.7.19.85.jar"
+sha512 = "66745825330a98f3e4a5ea3a44aff8b00870f715c144edc38dd2f61b4240589600b58ae89efac3b54dbb5aa430b1059dac1a28fd71cac5cc9002bbeb5ba3f22b"
+target = []
+
+[profile.storage_createStorage.mods]
+fxntstorage = { target = ["client", "server"] }
+create = { target = ["client", "server"] }
+
+[profile.storage_toms.mods]
+toms_storage = { target = ["client", "server"] }
+
+[profile.storage_colossal.mods]
+colossalchests = { target = ["client", "server"] }
+cyclopscore = { target = ["client", "server"] }
+
+[profile.storage_qio.mods]
+mekanism = { target = ["client", "server"] }
+
+[mods.curios]
+url = "https://cdn.modrinth.com/data/vvuO3ImH/versions/BOIl0oEz/curios-neoforge-9.3.1%2B1.21.1.jar"
+sha512 = "343594f34da4e2102fbb3050e3cce323b14d247519818a0a4a3c222067d0cd2988465f46b9b876b9bb478eb8a7cd65bf7bb86ec488f6ffb214adced0ab3d47d4"
+target = []
+
+[mods.accessories]
+url = "https://cdn.modrinth.com/data/jtmvUHXj/versions/dy9BbDEy/accessories-neoforge-1.1.0-beta.54%2B1.21.1.jar"
+sha512 = "2ebf453d11892fc8b12520af3b154a49acd9b93fc10c9c9777dcb6afe3b93ad17b0ce019b35ba7935a2ecb306b7094f97fecf056bbcb4dbeeb8477a76cd93f2d"
+target = []
+
+[mods.owo]
+url = "https://cdn.modrinth.com/data/ccKDOlHs/versions/wbdHEItB/owo-lib-neoforge-0.12.15.6-beta.1%2B1.21.jar"
+sha512 = "fc843ef350c4af6748d9fd6ecd3c28f96262cf46d46a8329029f49ea4f9eb87238113a8a415e8bba2c4f346c718bf450194f6f5823dfbf1ae7312529a81c3e5c"
+target = []
+
+[mods.cclayer]
+url = "https://cdn.modrinth.com/data/izkDUlrJ/versions/YNkFAIw4/accessories_cclayer-9.3.1-beta.28%2B1.21.1-neoforge.jar"
+sha512 = "d453f33b52b23295fd2819aad8c5ebd04421ef80521444054d65ab59462b96b4edc2be9b5973798846872ce73ff1b12514875706b0aafb9f09d94c524be569b8"
+target = []
+
+[profile.curios.mods]
+curios = { target = ["client", "server"] }
+
+[profile.accessories.mods]
+accessories = { target = ["client", "server"] }
+owo = { target = ["client", "server"] }
+
+# Worn-gear fixtures with item renderers in Curios and Accessories slots; installed only by the gear profiles.
+[mods.artifacts]
+url = "https://cdn.modrinth.com/data/P0Mu4wcQ/versions/lMfuK0o7/artifacts-neoforge-13.2.5.jar"
+sha512 = "9079bc8a22c237881b22b38027bbab2a8a2e685a1f49c1e1e0e5796f3e0a5509a130d73753c7b2980f12e4f00845f8e8c967ee969f1eadcd52139c2780afe09d"
+target = []
+
+# Residents' worn gear as other players see it: armor, backpacks, Curios slots and the maid models' bones.
+[profile.gear_curios.mods]
+curios = { target = ["client", "server"] }
+artifacts = { target = ["client", "server"] }
+sophisticatedbackpacks = { target = ["client", "server"] }
+sophisticatedcore = { target = ["client", "server"] }
+touhou_little_maid = { target = ["server", "client"] }
+
+[profile.gear_accessories.mods]
+accessories = { target = ["client", "server"] }
+owo = { target = ["client", "server"] }
+artifacts = { target = ["client", "server"] }
+sophisticatedbackpacks = { target = ["client", "server"] }
+sophisticatedcore = { target = ["client", "server"] }
+
+# The storage promo: stores from several storage mods side by side, an ME network and a Refined Storage network
+# beside the colony, and Sophisticated Backpacks worn through Curios. Records stay audible: the last shot is a
+# resident's backpack jukebox. The game is in Chinese, as the film's viewers read it.
+[profile.promo-storage.neoforge]
+jvm_args = ["-Xmx5G"]
+
+[profile.promo-storage.neoforge.server]
+world = "vanilla"
+properties = { "level-seed" = "folkways-promo", "view-distance" = "10", "spawn-monsters" = "false", "level-type" = "minecraft:flat", "generator-settings" = '{"biome":"minecraft:plains","features":false,"lakes":false,"layers":[{"block":"minecraft:bedrock","height":1},{"block":"minecraft:dirt","height":3},{"block":"minecraft:grass_block","height":1}],"structure_overrides":[]}' }
+
+[profile.promo-storage.neoforge.client]
+game_args = ["--width", "1920", "--height", "1080"]
+options = { lang = "zh_cn", guiScale = "2", overrideWidth = "1920", overrideHeight = "1080", maxFps = "260", renderDistance = "10", graphicsMode = "1", entityShadows = "true", entityDistanceScaling = "4.0", biomeBlendRadius = "3", ao = "true", tutorialStep = "none", pauseOnLostFocus = "false", bobView = "false", fovEffectScale = "0.0", soundCategory_music = "0.0", soundCategory_record = "1.0", soundCategory_ambient = "0.0" }
+
+[profile.promo-storage.neoforge.client.display]
+device = "gpu"
+width = 1920
+height = 1080
+
+[profile.promo-storage.mods]
+sodium = { target = ["client"] }
+iris = { target = ["client"] }
+sophisticatedcore = { target = ["client", "server"] }
+sophisticatedstorage = { target = ["client", "server"] }
+sophisticatedbackpacks = { target = ["client", "server"] }
+storagedrawers = { target = ["client", "server"] }
+colossalchests = { target = ["client", "server"] }
+cyclopscore = { target = ["client", "server"] }
+fxntstorage = { target = ["client", "server"] }
+ae2 = { target = ["server", "client"] }
+guideme = { target = ["server", "client"] }
+refinedstorage = { target = ["server", "client"] }
+curios = { target = ["client", "server"] }
+# The terminal and the panel are filmed: the recipe viewers' item lists would crowd the screen beside them.
+emi = { target = [] }
+jei = { target = [] }

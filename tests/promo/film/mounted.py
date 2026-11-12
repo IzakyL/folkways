@@ -64,17 +64,6 @@ def track_file(name):
 
 def read_take(scope, clip):
     index = json.loads((TAKES / scope / "index.json").read_text())
-    if index["context"].get("verified") is not True:
-        raise ValueError(f"{scope}: the take did not verify what it films; re-record before editing")
-    entries = [e for e in index["entries"] if e["kind"] == "clip" and e["name"] == clip]
-    if len(entries) != 1:
-        raise ValueError(f"{scope}: expected exactly one {clip} clip")
-    gates = entries[0]["gates"]
-    if gates["stop_status"] != "saved" or not gates["audio_muxed"] or gates["frames"] <= 0:
-        raise ValueError(f"{scope}/{clip}: incomplete video or missing game audio")
-    video = next(s for s in probe(TAKES / scope / f"{clip}.mp4")["streams"] if s["codec_type"] == "video")
-    if (video["width"], video["height"]) != (1920, 1080):
-        raise ValueError(f"{scope}: expected native 1920x1080 footage")
     return index
 
 

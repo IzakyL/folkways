@@ -7,6 +7,9 @@ import org.spongepowered.asm.mixin.gen.Accessor;
 @Mixin(AbstractFurnaceBlockEntity.class)
 public interface FurnaceAccessor {
 
+    @Accessor("litTime")
+    int folkways$burns();
+
     @Accessor("cookingProgress")
     int folkways$cooked();
 

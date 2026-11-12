@@ -7,6 +7,12 @@ import java.util.UUID;
 
 public interface Hold {
 
+    /** Pure admission for external callers that must simulate before transferring ownership.
+     * Unknown reservation types refuse that path until they provide a non-mutating check. */
+    default boolean mayTake() {
+        return false;
+    }
+
     Optional<RefusalKind> take();
 
     void release(Ending how);

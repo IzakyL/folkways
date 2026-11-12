@@ -1,5 +1,9 @@
 package io.github.izakyl.folkways.core.inventory.api;
 
+import io.github.izakyl.folkways.core.inventory.api.port.PortReader.Entry;
+import io.github.izakyl.folkways.core.inventory.api.port.Room;
+import io.github.izakyl.folkways.core.inventory.api.port.StorePort.Operation;
+import io.github.izakyl.folkways.core.inventory.api.port.Usability;
 import io.github.izakyl.folkways.core.world.api.Stand;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
 import java.util.List;
@@ -35,17 +39,43 @@ public record InventorySnapshot(UUID colony, Version version, Map<Stash, Store> 
     public record Version(UUID epoch, long contents, long policy, long topology, long approaches, long coverage) {
     }
 
-    public record Approach(long revision, State state, Set<Stand> stands) {
+    public record Approach(long revision, State state, Set<Stand> stands, Set<Stand> taking, Set<Stand> putting) {
+
+        public Approach(long revision, State state, Set<Stand> stands) {
+            this(revision, state, stands, stands, stands);
+        }
 
         public Approach {
             stands = Set.copyOf(stands);
+            taking = Set.copyOf(taking);
+            putting = Set.copyOf(putting);
         }
     }
 
     public record Store(Stash stash, Set<WorldPos> aliases, ResourceKey<Level> dimension, long incarnation,
                         Version version, State state, boolean labor, List<StoreRule> rules,
                         List<SlotSnapshot> slots, Set<Item> refused, Approach approach,
-                        Optional<ResourceLocation> block) {
+                        Optional<ResourceLocation> block, List<Entry> entries, Room room, Usability usability,
+                        Map<WorldPos, Set<Operation>> operations, boolean container, boolean storage) {
+
+        // Labor supplies ordinary lots; storage also includes registered ports answered by a Workshop.
+        public Store(Stash stash, Set<WorldPos> aliases, ResourceKey<Level> dimension, long incarnation,
+                     Version version, State state, boolean labor, List<StoreRule> rules,
+                     List<SlotSnapshot> slots, Set<Item> refused, Approach approach, Optional<ResourceLocation> block,
+                     List<Entry> entries, Room room, Usability usability,
+                     Map<WorldPos, Set<Operation>> operations, boolean container) {
+            this(stash, aliases, dimension, incarnation, version, state, labor, rules, slots, refused, approach,
+                block, entries, room, usability, operations, container, labor);
+        }
+
+        public Store(Stash stash, Set<WorldPos> aliases, ResourceKey<Level> dimension, long incarnation,
+                     Version version, State state, boolean labor, List<StoreRule> rules,
+                     List<SlotSnapshot> slots, Set<Item> refused, Approach approach, Optional<ResourceLocation> block) {
+            this(stash, aliases, dimension, incarnation, version, state, labor, rules, slots, refused, approach,
+                block, StoreReadings.entries(slots), StoreReadings.room(slots), Usability.USABLE,
+                aliases.stream().collect(java.util.stream.Collectors.toMap(at -> at,
+                    at -> Set.of(Operation.TAKE, Operation.PUT))), true, labor);
+        }
 
         public Store(Stash stash, Set<WorldPos> aliases, ResourceKey<Level> dimension, long incarnation,
                      Version version, State state, boolean labor, List<StoreRule> rules,
@@ -58,7 +88,13 @@ public record InventorySnapshot(UUID colony, Version version, Map<Stash, Store> 
             Objects.requireNonNull(block, "block");
             aliases = Set.copyOf(aliases);
             rules = List.copyOf(rules);
-            slots = List.copyOf(slots);
+            // Synthetic lists can represent billions of stacks; retain their immutable lazy view.
+            slots = StoreReadings.immutableSlots(slots);
+            entries = List.copyOf(entries);
+            Objects.requireNonNull(room, "room");
+            Objects.requireNonNull(usability, "usability");
+            operations = operations.entrySet().stream().collect(java.util.stream.Collectors.toUnmodifiableMap(
+                Map.Entry::getKey, entry -> Set.copyOf(entry.getValue())));
             refused = Set.copyOf(refused);
         }
     }

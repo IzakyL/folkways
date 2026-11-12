@@ -1,6 +1,13 @@
 package io.github.izakyl.folkways.vanilla.wares;
 
 import io.github.izakyl.folkways.core.item.api.Goods;
+import io.github.izakyl.folkways.core.base.persist.Reader;
+import io.github.izakyl.folkways.core.plan.api.Before;
+import io.github.izakyl.folkways.core.work.api.Node;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.Tag;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import io.github.izakyl.folkways.core.plan.api.Grown;
 import io.github.izakyl.folkways.core.plan.api.Intent;
@@ -152,11 +159,86 @@ final class CookHost implements StationHost {
                 UUID taker = UUID.randomUUID();
                 Smelt smelt = Smelt.of(taker, at, block, stances, firing.takes(), load, firing.makes(),
                     firing.perRun() * load, firing.cookTicks(), spokenFor.ahead(at),
-                    stoking.flatMap(fuel -> fuel.toCook(cooking, shared)), () -> spokenFor.out(at, taker));
+                    stoking.flatMap(fuel -> fuel.toCook(cooking, shared)),
+                    () -> Math.max(cooking, spokenFor.ahead(at)), () -> spokenFor.out(at, taker));
                 answers.add(Refinement.Change.of(Grown.of(smelt))
                     .holding(new Spoken(taker, firing.makes(), load, cooking, most)));
             }
             return List.copyOf(answers);
+        }
+
+        @Override
+        public Optional<CompoundTag> saveWork(Grown work, List<Hold> holds, HolderLookup.Provider registries) {
+            if (holds.size() != 1 || !(holds.getFirst() instanceof Spoken booking)
+                || work.nodes().stream().anyMatch(node -> !(node instanceof LoadNode)
+                    && !(node instanceof FuelNode) && !(node instanceof TakeCookedNode))) {
+                return Optional.empty();
+            }
+            CompoundTag data = new CompoundTag();
+            data.putLong("load", booking.load);
+            data.putLong("ticks", booking.ticks);
+            data.putLong("most", booking.most);
+            data.put("makes", booking.makes.save(registries));
+            data.putUUID("taker", booking.taker);
+            ListTag nodes = new ListTag();
+            for (Node node : work.nodes()) {
+                CompoundTag step = new CompoundTag();
+                step.putUUID("id", node.id());
+                step.putString("kind", node instanceof LoadNode ? "load" : node instanceof FuelNode ? "fuel" : "take");
+                if (node instanceof TakeCookedNode) {
+                    var output = node.spec().gives().getFirst();
+                    step.put("goods", output.spec().save(registries));
+                    step.putLong("count", output.count());
+                } else {
+                    var need = node.spec().needs().getFirst();
+                    step.put("goods", need.spec().save(registries));
+                    step.putLong("count", need.count());
+                }
+                if (node instanceof LoadNode loading) {
+                    step.putInt("cookTicks", loading.cookTicks);
+                }
+                nodes.add(step);
+            }
+            data.put("nodes", nodes);
+            ListTag links = new ListTag();
+            for (Before link : work.links()) {
+                CompoundTag edge = new CompoundTag();
+                edge.putUUID("from", link.from());
+                edge.putUUID("to", link.to());
+                links.add(edge);
+            }
+            data.put("links", links);
+            return Optional.of(data);
+        }
+
+        @Override
+        public Optional<Refinement.Change> resumeWork(CompoundTag data, HolderLookup.Provider registries) {
+            UUID taker = data.getUUID("taker");
+            ItemSpec makes = ItemSpec.load(Reader.of(data.getCompound("makes")), registries).orElseThrow();
+            var hold = new Spoken(taker, makes, data.getLong("load"), data.getLong("ticks"), data.getLong("most"));
+            List<Node> nodes = new ArrayList<>();
+            for (var raw : data.getList("nodes", Tag.TAG_COMPOUND)) {
+                CompoundTag step = (CompoundTag) raw;
+                UUID id = step.getUUID("id");
+                ItemSpec goods = ItemSpec.load(Reader.of(step.getCompound("goods")), registries).orElseThrow();
+                long count = step.getLong("count");
+                Node node = switch (step.getString("kind")) {
+                    case "load" -> new LoadNode(id, at, block, stances, goods, Math.toIntExact(count),
+                        step.getInt("cookTicks"));
+                    case "fuel" -> new FuelNode(id, at, block, stances, goods, count,
+                        () -> Math.max(data.getLong("ticks"), spokenFor.ahead(at)), () -> { });
+                    case "take" -> new TakeCookedNode(id, at, block, stances, goods, count,
+                        () -> spokenFor.out(at, taker));
+                    default -> throw new IllegalArgumentException("unknown saved furnace step");
+                };
+                nodes.add(node);
+            }
+            List<Before> links = new ArrayList<>();
+            for (var raw : data.getList("links", Tag.TAG_COMPOUND)) {
+                CompoundTag edge = (CompoundTag) raw;
+                links.add(new Before(edge.getUUID("from"), edge.getUUID("to")));
+            }
+            return Optional.of(Refinement.Change.of(new Grown(nodes, links)).holding(hold));
         }
 
         // The cooker spoken for one load, in its turn: the load goes in once every batch booked before it is out.
@@ -176,6 +258,11 @@ final class CookHost implements StationHost {
                 this.load = load;
                 this.ticks = ticks;
                 this.most = most;
+            }
+
+            @Override
+            public boolean mayTake() {
+                return !held && load <= most;
             }
 
             @Override

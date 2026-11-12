@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.vanilla.combat.weapon;
 
-import io.github.izakyl.folkways.core.combat.api.WeaponSession;
+import io.github.izakyl.folkways.core.combat.api.WeaponAttack;
 import io.github.izakyl.folkways.core.work.api.Worker;
 import java.util.Optional;
 import net.minecraft.world.item.ItemStack;
@@ -15,7 +15,7 @@ public interface WeaponAdapter {
         return range();
     }
 
-    default Optional<WeaponSession> open(Worker worker, ItemStack weapon) {
+    default Optional<WeaponAttack> open(Worker worker, ItemStack weapon) {
         return open(worker);
     }
 
@@ -29,5 +29,5 @@ public interface WeaponAdapter {
     }
 
 
-    Optional<WeaponSession> open(Worker worker);
+    Optional<WeaponAttack> open(Worker worker);
 }

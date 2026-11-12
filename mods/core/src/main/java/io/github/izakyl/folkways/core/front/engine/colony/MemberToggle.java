@@ -1,6 +1,8 @@
 package io.github.izakyl.folkways.core.front.engine.colony;
 
 import io.github.izakyl.folkways.core.colony.api.ClaimRelease;
+import io.github.izakyl.folkways.core.inventory.internal.ProxyStores;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.core.colony.api.Claimed;
 import io.github.izakyl.folkways.core.colony.api.Colonies;
 import io.github.izakyl.folkways.core.colony.api.Colony;
@@ -38,7 +40,8 @@ public final class MemberToggle {
     public enum Refusal implements RefusalKind {
         NOT_ENROLLABLE,
         NO_BLOCK_ENTITY,
-        ANOTHER_COLONY;
+        ANOTHER_COLONY,
+        PROXY_MEMBER;
 
         @Override
         public String translationKey() {
@@ -98,13 +101,21 @@ public final class MemberToggle {
             return told(player, Attempt.refused(Refusal.NOT_ENROLLABLE));
         }
         BlockEntity blockEntity = level.getBlockEntity(pos);
-        if (declaring.shape() instanceof Shape.Block && blockEntity == null) {
+        if (declaring.shape() instanceof Shape.Block && blockEntity == null
+            && !io.github.izakyl.folkways.core.inventory.api.port.StorePorts.ledger(level, pos)) {
             return told(player, Attempt.refused(Refusal.NO_BLOCK_ENTITY));
         }
         Optional<UUID> owner = ColonyGround.ofBlock(level, pos).map(Colony::id);
         boolean ours = owner.filter(colony.id()::equals).isPresent();
         if (!ours && owner.isPresent()) {
             return told(player, Attempt.refused(Refusal.ANOTHER_COLONY));
+        }
+        if (!ours) {
+            var refusal = ProxyStores.refusal(level.getServer(), colony, declaring.id(), WorldPos.of(level, pos));
+            if (refusal.isPresent()) {
+                player.displayClientMessage(refusal.get(), true);
+                return Attempt.refused(Refusal.PROXY_MEMBER);
+            }
         }
         if (ours) {
             ColonyGround.letGo(level, colony, pos);

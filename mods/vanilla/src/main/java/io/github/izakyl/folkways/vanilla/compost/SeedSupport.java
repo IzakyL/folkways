@@ -65,11 +65,13 @@ public final class SeedSupport {
                 var store = inventory.store(offered);
                 if (store.isEmpty()) { complete = false; continue; }
                 var observed = store.get();
+                if (!observed.usability().usable()) {
+                    continue;
+                }
                 if (observed.state() != InventorySnapshot.State.OBSERVED) { complete = false; }
                 WorldPos at = observed.stash().pos();
-                stores.putIfAbsent(at, new SeedBudget.Stock("store/" + at, SeedBudget.Location.store(at),
-                    observed.slots().stream().filter(slot -> slot.accessibleSlot().isPresent())
-                        .map(SlotSnapshot::stackCopy).toList()));
+                stores.putIfAbsent(at, SeedBudget.Stock.reading("store/" + at, SeedBudget.Location.store(at),
+                    observed.entries()));
             }
         }
         for (var resident : colony.residents()) {

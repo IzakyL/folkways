@@ -20,6 +20,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
@@ -46,6 +47,10 @@ public final class ItemPicker {
     private String query = "";
 
     private ItemPicker(boolean many, boolean blocks, List<ItemFilter> held) {
+        this(many, item -> !blocks || item instanceof BlockItem, held);
+    }
+
+    private ItemPicker(boolean many, Predicate<Item> shown, List<ItemFilter> held) {
         this.many = many;
         picked.addAll(held);
         picker = new Picker(TOKEN, many, (word, key) -> {
@@ -99,7 +104,7 @@ public final class ItemPicker {
         }
         List<Picker.Leaf> options = new ArrayList<>();
         for (Item item : BuiltInRegistries.ITEM) {
-            if (item == Items.AIR || blocks && !(item instanceof BlockItem)) {
+            if (item == Items.AIR || !shown.test(item)) {
                 continue;
             }
             ResourceLocation id = BuiltInRegistries.ITEM.getKey(item);
@@ -176,6 +181,12 @@ public final class ItemPicker {
     public static Dialog many(UIElement host, Component title, List<ItemFilter> current, boolean blocks,
             boolean confirmUnchanged, Consumer<List<ItemFilter>> confirmed) {
         return new ItemPicker(true, blocks, current).open(host, title, confirmUnchanged, confirmed);
+    }
+
+    /** Offers only the items {@code shown} lets through, as when a parent entry names what it can hold. */
+    public static Dialog many(UIElement host, Component title, List<ItemFilter> current, Predicate<Item> shown,
+            boolean confirmUnchanged, Consumer<List<ItemFilter>> confirmed) {
+        return new ItemPicker(true, shown, current).open(host, title, confirmUnchanged, confirmed);
     }
 
     private Dialog open(UIElement host, Component title, boolean confirmUnchanged,

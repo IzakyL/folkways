@@ -59,7 +59,7 @@ final class TaczAmmoInventory implements IItemHandler {
     }
 
     private boolean active() {
-        return !body.level().isClientSide() && body.isAlive() && body.hasWeaponSession();
+        return !body.level().isClientSide() && body.isAlive() && body.weaponDrawn();
     }
 
     @Override

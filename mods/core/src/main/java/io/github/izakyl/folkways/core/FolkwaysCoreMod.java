@@ -1,46 +1,66 @@
 package io.github.izakyl.folkways.core;
 
-import io.github.izakyl.folkways.core.rts.RtsIntegration;
 import io.github.izakyl.folkways.core.base.FolkwaysMixinPlugin;
 import io.github.izakyl.folkways.core.base.Ledger;
+import io.github.izakyl.folkways.core.base.persist.upgrade.Upgrades;
 import io.github.izakyl.folkways.core.colony.api.Cadence;
 import io.github.izakyl.folkways.core.colony.internal.ColonyLookup;
 import io.github.izakyl.folkways.core.colony.internal.ColonyRegistry;
 import io.github.izakyl.folkways.core.colony.internal.ColonyRuntime;
 import io.github.izakyl.folkways.core.colony.internal.Contributions;
-import io.github.izakyl.folkways.core.extension.api.Declaring;
-import io.github.izakyl.folkways.core.extension.api.Relating;
-import io.github.izakyl.folkways.core.item.api.Goods;
-import io.github.izakyl.folkways.core.item.api.ItemQuery;
-import io.github.izakyl.folkways.core.resident.api.Participations;
-import io.github.izakyl.folkways.core.resident.api.ResidentKinds;
-import io.github.izakyl.folkways.core.resident.api.Stake;
-import io.github.izakyl.folkways.core.runtime.Labor;
-import io.github.izakyl.folkways.core.shell.MobFitting;
-import io.github.izakyl.folkways.core.shell.neoforge.FolkwaysAttachments;
-import io.github.izakyl.folkways.core.shell.structure.CreateObstacles;
-import io.github.izakyl.folkways.core.shell.structure.SablePassage;
-import io.github.izakyl.folkways.core.shell.structure.SableSpaces;
-import io.github.izakyl.folkways.core.travel.api.Passages;
-import io.github.izakyl.folkways.core.travel.internal.PathfindingLoad;
-import io.github.izakyl.folkways.core.travel.internal.TickBudget;
-import io.github.izakyl.folkways.core.vocation.api.VocationGroup;
-import io.github.izakyl.folkways.core.vocation.api.Vocations;
-import io.github.izakyl.folkways.core.work.internal.HaulWork;
-import io.github.izakyl.folkways.core.world.api.Structures;
-import io.github.izakyl.folkways.core.world.api.WorldSpaces;
-import io.github.izakyl.folkways.core.world.internal.LocalGrounds;
+import io.github.izakyl.folkways.core.colony.internal.WorkDecoratorRegistry;
 import io.github.izakyl.folkways.core.effect.perk.GlobalPerks;
 import io.github.izakyl.folkways.core.effect.perk.PerkPool;
+import io.github.izakyl.folkways.core.equipment.internal.EquipmentIntegration;
+import io.github.izakyl.folkways.core.extension.api.Declaring;
+import io.github.izakyl.folkways.core.extension.api.Relating;
 import io.github.izakyl.folkways.core.front.engine.Enrollments;
 import io.github.izakyl.folkways.core.front.engine.Front;
 import io.github.izakyl.folkways.core.front.engine.colony.ColonyFront;
 import io.github.izakyl.folkways.core.front.engine.net.ColonyOverviews;
 import io.github.izakyl.folkways.core.front.ui.UiRegistrations;
+import io.github.izakyl.folkways.core.inventory.internal.PortHooks;
+import io.github.izakyl.folkways.core.item.api.Goods;
+import io.github.izakyl.folkways.core.item.api.ItemQuery;
 import io.github.izakyl.folkways.core.library.LibraryCommand;
 import io.github.izakyl.folkways.core.library.LooseFolder;
 import io.github.izakyl.folkways.core.library.Shelves;
+import io.github.izakyl.folkways.core.plan.internal.Refinements;
+import io.github.izakyl.folkways.core.resident.api.Participations;
+import io.github.izakyl.folkways.core.resident.api.ResidentKinds;
+import io.github.izakyl.folkways.core.resident.api.Stake;
+import io.github.izakyl.folkways.core.resident.internal.EquipmentCoordinator;
+import io.github.izakyl.folkways.core.resident.internal.PackKeepRegistry;
+import io.github.izakyl.folkways.core.resident.internal.TaskToolLoans;
+import io.github.izakyl.folkways.core.rts.RtsIntegration;
+import io.github.izakyl.folkways.core.runtime.Labor;
+import io.github.izakyl.folkways.core.shell.MobFitting;
+import io.github.izakyl.folkways.core.shell.ae2.Ae2Integration;
+import io.github.izakyl.folkways.core.shell.colossalchests.ChestsIntegration;
+import io.github.izakyl.folkways.core.shell.mekanism.QioIntegration;
+import io.github.izakyl.folkways.core.shell.neoforge.FolkwaysAttachments;
+import io.github.izakyl.folkways.core.shell.rs2.Rs2Integration;
+import io.github.izakyl.folkways.core.shell.crafting.NetworkPanel;
+import io.github.izakyl.folkways.core.shell.storage.drawers.DrawersIntegration;
+import io.github.izakyl.folkways.core.shell.storage.functional.FunctionalIntegration;
+import io.github.izakyl.folkways.core.shell.storage.sophisticated.BackpacksIntegration;
+import io.github.izakyl.folkways.core.shell.structure.CreateObstacles;
+import io.github.izakyl.folkways.core.shell.structure.SablePassage;
+import io.github.izakyl.folkways.core.shell.structure.SableSpaces;
+import io.github.izakyl.folkways.core.shell.toms.TomsIntegration;
+import io.github.izakyl.folkways.core.travel.api.Passages;
+import io.github.izakyl.folkways.core.travel.internal.PathfindingLoad;
+import io.github.izakyl.folkways.core.travel.internal.TickBudget;
 import io.github.izakyl.folkways.core.upgrade.CoreUpgrades;
+import io.github.izakyl.folkways.core.vocation.api.VocationGroup;
+import io.github.izakyl.folkways.core.vocation.api.VocationSpec;
+import io.github.izakyl.folkways.core.vocation.api.Vocations;
+import io.github.izakyl.folkways.core.vocation.internal.VocationRegistry;
+import io.github.izakyl.folkways.core.work.internal.HaulWork;
+import io.github.izakyl.folkways.core.work.internal.KitRuleRegistry;
+import io.github.izakyl.folkways.core.world.api.Structures;
+import io.github.izakyl.folkways.core.world.api.WorldSpaces;
+import io.github.izakyl.folkways.core.world.internal.LocalGrounds;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -75,20 +95,26 @@ public final class FolkwaysCoreMod {
 
     public FolkwaysCoreMod(IEventBus modBus, ModContainer container) {
         CoreUpgrades.register();
+        PortHooks.install();
         container.registerConfig(ModConfig.Type.SERVER, FolkwaysConfig.SPEC);
         container.registerConfig(ModConfig.Type.CLIENT, FolkwaysClientConfig.SPEC);
-        io.github.izakyl.folkways.core.vocation.internal.VocationRegistry.install();
-        io.github.izakyl.folkways.core.work.internal.KitRuleRegistry.install();
-        io.github.izakyl.folkways.core.colony.internal.WorkDecoratorRegistry.install();
-        io.github.izakyl.folkways.core.resident.internal.EquipmentCoordinator.install();
-        io.github.izakyl.folkways.core.resident.internal.PackKeepRegistry.install();
-        io.github.izakyl.folkways.core.resident.internal.TaskToolLoans.install();
+        VocationRegistry.install();
+        KitRuleRegistry.install();
+        WorkDecoratorRegistry.install();
+        EquipmentCoordinator.install();
+        PackKeepRegistry.install();
+        TaskToolLoans.install();
         fitTheShell(modBus);
         FolkwaysAttachments.register(modBus);
         Front.install(modBus);
         RtsIntegration.install(modBus);
+        EquipmentIntegration.install(modBus);
         modBus.addListener(Declaring.class, event ->
             event.vocation(HaulWork.SPEC.ordered(0).grouped(VocationGroup.TRANSPORT)));
+        modBus.addListener(Declaring.class, event -> event.vocation(
+            VocationSpec.of(
+                Vocations.NETWORK_SERVICE)
+                .grouped(VocationGroup.TRANSPORT).ordered(10).allowedByDefault(false)));
         modBus.addListener(FMLCommonSetupEvent.class, FolkwaysCoreMod::openDeclarations);
         modBus.addListener(FolkwaysCoreMod::reportDegradedMixins);
         modBus.addListener(LooseFolder::addPackFinder);
@@ -112,9 +138,52 @@ public final class FolkwaysCoreMod {
     }
 
     private static void fitTheShell(IEventBus modBus) {
+        if (ModList.get().isLoaded("accessories")) {
+            io.github.izakyl.folkways.core.shell.accessories.AccessoriesIntegration.install();
+        }
+        if (ModList.get().isLoaded("curios") && !ModList.get().isLoaded("cclayer")
+            && !ModList.get().isLoaded("accessories_compat_layer")) {
+            io.github.izakyl.folkways.core.shell.curios.CuriosIntegration.install();
+        }
+        if (ModList.get().isLoaded("fxntstorage")) {
+            io.github.izakyl.folkways.core.shell.fxntstorage.StorageIntegration.install();
+        }
+        if (ModList.get().isLoaded("toms_storage")) {
+            TomsIntegration.install();
+        }
+        if (ModList.get().isLoaded("colossalchests")) {
+            ChestsIntegration.install();
+        }
+        if (ModList.get().isLoaded("mekanism")) {
+            QioIntegration.install();
+        }
+        if (ModList.get().isLoaded("refinedstorage")) {
+            Rs2Integration.install(modBus);
+        }
+        if (ModList.get().isLoaded("ae2")) {
+            Ae2Integration.install(modBus);
+        }
+        if (ModList.get().isLoaded("refinedstorage") || ModList.get().isLoaded("ae2")) {
+            NetworkPanel.install(modBus);
+        }
+        if (ModList.get().isLoaded("sophisticatedstorage")) {
+            io.github.izakyl.folkways.core.shell.storage.sophisticated.StorageIntegration.install();
+        }
+        if (ModList.get().isLoaded("sophisticatedbackpacks")) {
+            BackpacksIntegration.install();
+        }
+        if (ModList.get().isLoaded("storagedrawers")) {
+            DrawersIntegration.install();
+        }
+        if (ModList.get().isLoaded("functionalstorage")) {
+            FunctionalIntegration.install();
+        }
         if (ModList.get().isLoaded("sable")) {
             WorldSpaces.install(new SableSpaces());
             modBus.addListener(Declaring.class, event -> event.passage(new SablePassage()));
+        }
+        if (net.neoforged.fml.loading.FMLEnvironment.dist.isClient()) {
+            io.github.izakyl.folkways.core.shell.WornGear.install();
         }
         ColonyLookup.install();
         PathfindingLoad.install();
@@ -127,7 +196,7 @@ public final class FolkwaysCoreMod {
 
     private static void openDeclarations(FMLCommonSetupEvent event) {
         event.enqueueWork(() -> {
-            io.github.izakyl.folkways.core.base.persist.upgrade.Upgrades.freeze();
+            Upgrades.freeze();
             declareEverything();
         });
     }
@@ -136,7 +205,7 @@ public final class FolkwaysCoreMod {
         GlobalPerks.install(FolkwaysConfig::asceticAppetite);
         Ledger.open();
         try {
-            ModLoader.postEventWrapContainerInModOrder(new Declaring(io.github.izakyl.folkways.core.plan.internal.Refinements::register,
+            ModLoader.postEventWrapContainerInModOrder(new Declaring(Refinements::register,
                 Contributions::urges, Contributions::colony));
         } finally {
             Ledger.close();
@@ -178,7 +247,7 @@ public final class FolkwaysCoreMod {
 
     private void forgetServer(MinecraftServer server) {
         labor.shutdown();
-        io.github.izakyl.folkways.core.resident.internal.TaskToolLoans.INSTANCE.clear();
+        TaskToolLoans.INSTANCE.clear();
         ColonyRuntime.closeAll(server);
         PathfindingLoad.forgetServer();
         TickBudget.forgetServer();

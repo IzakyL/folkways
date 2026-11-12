@@ -86,8 +86,9 @@ public final class CompostSettings {
         if (!snapshot.coverage().complete()) {
             colony.inventory().ensureObserved();
         }
-        snapshot.stores().values().forEach(store -> inspect(store.slots().stream()
-            .filter(slot -> slot.accessibleSlot().isPresent()).toList(), catalogue, found));
+        snapshot.stores().values().stream().filter(store -> store.usability().usable())
+            .flatMap(store -> store.entries().stream()).map(entry -> entry.prototype().getItem())
+            .filter(catalogue::contains).forEach(found::add);
         snapshot.residents().values().forEach(resident -> inspect(resident.pack(), catalogue, found));
         for (var level : server.getAllLevels()) {
             for (var sowing : CropSeeds.sowing(colony, level)) {

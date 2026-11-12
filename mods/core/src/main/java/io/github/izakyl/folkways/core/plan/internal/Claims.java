@@ -37,6 +37,12 @@ public final class Claims {
         return held;
     }
 
+    public Map<Resource, Long> totals() {
+        Map<Resource, Long> totals = new LinkedHashMap<>();
+        byResource.forEach((resource, held) -> totals.put(resource, held.stream().mapToLong(Claim::amount).sum()));
+        return totals;
+    }
+
     public List<Claim> on(Resource on) {
         return List.copyOf(byResource.getOrDefault(on, List.of()));
     }

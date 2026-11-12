@@ -67,3 +67,22 @@ configurations {
 dependencies {
     warfareTestImplementation sourceSets.main.output
 }
+
+// Focused native combat fixtures compile into a separate output, so stale broad-suite classes cannot register.
+def vanillaGameTestClasses = providers.gradleProperty("vanillaGameTestClasses").getOrElse("")
+if (vanillaGameTestClasses) {
+    sourceSets.gametest.java.setIncludes(vanillaGameTestClasses.split(",").collect { "**/${it.trim()}.java" })
+    def focused = layout.buildDirectory.dir("classes/java/focusedGametest/${vanillaGameTestClasses.hashCode()}")
+    tasks.named("compileGametestJava", JavaCompile) {
+        destinationDirectory = focused
+        doFirst {
+            def selected = source.files.collect { it.name }.sort()
+            def expected = vanillaGameTestClasses.split(",").collect { "${it.trim()}.java" }.sort()
+            if (selected != expected) {
+                throw new GradleException("Focused Vanilla source filter differs: ${selected}")
+            }
+            logger.lifecycle("Focused Vanilla GameTests: ${selected.join(', ')}")
+        }
+    }
+    sourceSets.gametest.output.classesDirs.setFrom(focused)
+}

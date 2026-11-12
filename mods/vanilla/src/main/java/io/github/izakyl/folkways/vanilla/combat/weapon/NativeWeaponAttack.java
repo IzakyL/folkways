@@ -1,0 +1,328 @@
+package io.github.izakyl.folkways.vanilla.combat.weapon;
+
+import io.github.izakyl.folkways.core.combat.api.Loadouts;
+import io.github.izakyl.folkways.core.combat.api.WeaponAttack;
+import io.github.izakyl.folkways.core.colony.api.Colonies;
+import io.github.izakyl.folkways.core.resident.api.Bodies;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.vanilla.combat.FireSafety;
+import io.github.izakyl.folkways.vanilla.combat.Threats;
+import io.github.izakyl.folkways.vanilla.person.ResidentEntity;
+import io.github.izakyl.folkways.vanilla.person.mixin.ProjectileWeaponInvoker;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.function.BooleanSupplier;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.util.Mth;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.Mob;
+import net.minecraft.world.item.BowItem;
+import net.minecraft.world.item.CrossbowItem;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.phys.Vec3;
+
+final class NativeWeaponAttack implements WeaponAttack {
+    enum Kind {
+        MELEE,
+        BOW,
+        CROSSBOW
+    }
+
+    private final Mob body;
+    private final ResidentEntity resident;
+    private final Optional<UUID> colony;
+    private final WeaponAdapter adapter;
+    private final Kind kind;
+    private final boolean barehanded;
+    private BooleanSupplier lease = () -> true;
+    private State state = State.READY;
+    private LivingEntity target;
+    private int elapsed;
+    private long lastTick = Long.MIN_VALUE;
+    private LivingEntity explicitTarget;
+    private BooleanSupplier explicitPermission;
+    private LivingEntity observedTarget;
+    private BooleanSupplier observedPermission;
+
+    NativeWeaponAttack(Worker worker, WeaponAdapter adapter, Kind kind) {
+        this(worker, adapter, kind, false);
+    }
+
+    private NativeWeaponAttack(Worker worker, WeaponAdapter adapter, Kind kind, boolean barehanded) {
+        body = worker.body();
+        resident = body instanceof ResidentEntity person ? person : null;
+        colony = resident == null ? Optional.empty() : resident.colonyId();
+        this.adapter = adapter;
+        this.kind = kind;
+        this.barehanded = barehanded;
+    }
+
+    static WeaponAttack barehanded(Worker worker) {
+        NativeWeaponAttack attack = new NativeWeaponAttack(worker, Weapons.MELEE, Kind.MELEE, true);
+        if (attack.resident != null) {
+            if (attack.resident.weaponDrawn() || attack.resident.hasActiveAttack()) {
+                return null;
+            }
+            attack.resident.clearHandPresentation();
+            attack.resident.beginAttack(attack);
+        }
+        return attack;
+    }
+
+    @Override
+    public void leasedBy(BooleanSupplier lease) {
+        this.lease = java.util.Objects.requireNonNull(lease);
+    }
+
+    @Override
+    public State state() {
+        return state;
+    }
+
+    @Override
+    public boolean explicitTarget(LivingEntity foe, BooleanSupplier authorized) {
+        if (state != State.READY
+            || explicitTarget != null
+            || !(foe instanceof Mob)
+            || !valid()
+            || authorized == null
+            || !authorized.getAsBoolean()) {
+            return false;
+        }
+        explicitTarget = foe;
+        explicitPermission = authorized;
+        return true;
+    }
+
+    @Override
+    public boolean spottedTarget(LivingEntity foe, Vec3 observed, BooleanSupplier authorized) {
+        if (state != State.READY || authorized == null || !authorized.getAsBoolean()) {
+            return false;
+        }
+        observedTarget = foe;
+        observedPermission = authorized;
+        return true;
+    }
+
+    @Override
+    public boolean fire(LivingEntity foe) {
+        if (state != State.READY || !valid() || !permitted(foe)) {
+            return false;
+        }
+        target = foe;
+        elapsed = 0;
+        if (kind == Kind.CROSSBOW && !CrossbowItem.isCharged(weapon())) {
+            if (!beginReload()) {
+                target = null;
+                return false;
+            }
+        } else {
+            if (kind == Kind.BOW && body.getProjectile(weapon()).isEmpty()) {
+                target = null;
+                return false;
+            }
+            state = State.FIRING;
+            if (kind == Kind.BOW) {
+                body.startUsingItem(InteractionHand.MAIN_HAND);
+            }
+        }
+        return true;
+    }
+
+    @Override
+    public boolean reload() {
+        if (state != State.READY || kind != Kind.CROSSBOW || !valid() || CrossbowItem.isCharged(weapon())) {
+            return false;
+        }
+        target = null;
+        return beginReload();
+    }
+
+    private boolean beginReload() {
+        if (body.getProjectile(weapon()).isEmpty()) {
+            return false;
+        }
+        elapsed = 0;
+        state = State.RELOADING;
+        body.startUsingItem(InteractionHand.MAIN_HAND);
+        return true;
+    }
+
+    @Override
+    public void tick() {
+        if (state == State.STOPPED) {
+            return;
+        }
+        if (!valid()) {
+            stop();
+            return;
+        }
+        if (lastTick == body.level().getGameTime()) {
+            return;
+        }
+        lastTick = body.level().getGameTime();
+        if (target != null && !permitted(target)) {
+            stop();
+            return;
+        }
+        if (state != State.FIRING && state != State.RELOADING) {
+            return;
+        }
+        if (target != null) {
+            body.getLookControl().setLookAt(target);
+        }
+        elapsed++;
+        if (state == State.RELOADING) {
+            int charge = CrossbowItem.getChargeDuration(weapon(), body);
+            if (elapsed < charge) {
+                return;
+            }
+            // Native release consumes the real projectile and writes CHARGED_PROJECTILES, including
+            // enchantments.
+            ItemStack actual = weapon();
+            actual.releaseUsing(body.level(), body, actual.getUseDuration(body) - elapsed);
+            body.stopUsingItem();
+            if (state == State.STOPPED) {
+                return;
+            }
+            elapsed = 0;
+            state = CrossbowItem.isCharged(actual) && target != null ? State.FIRING : State.READY;
+            if (state == State.READY) {
+                target = null;
+            }
+            return;
+        }
+        int duration =
+            switch (kind) {
+                case MELEE -> 10;
+                case BOW -> BowItem.MAX_DRAW_DURATION;
+                case CROSSBOW -> 1;
+            };
+        if (elapsed < duration || target == null) {
+            return;
+        }
+        // The permission check is repeated immediately before the native action.
+        if (permitted(target) && body.level() instanceof ServerLevel level) {
+            ItemStack actual = weapon();
+            switch (kind) {
+                case MELEE -> {
+                    body.swing(InteractionHand.MAIN_HAND);
+                    if (MountedMelee.hit(body, target)
+                        && !actual.isEmpty()
+                        && actual.getItem().hurtEnemy(actual, target, body)) {
+                        actual.getItem().postHurtEnemy(actual, target, body);
+                    }
+                }
+                case BOW -> {
+                    aim(target);
+                    List<ItemStack> projectiles =
+                        ProjectileWeaponInvoker.folkways$draw(actual, body.getProjectile(actual), body);
+                    if (!projectiles.isEmpty()) {
+                        ((ProjectileWeaponInvoker) actual.getItem())
+                            .folkways$shoot(
+                            level,
+                            body,
+                            InteractionHand.MAIN_HAND,
+                            actual,
+                            projectiles,
+                            BowItem.getPowerForTime(elapsed) * 3,
+                            1,
+                            elapsed >= BowItem.MAX_DRAW_DURATION,
+                            target);
+                    }
+                }
+                case CROSSBOW ->
+                ((CrossbowItem) actual.getItem())
+                    .performShooting(
+                    level,
+                    body,
+                    InteractionHand.MAIN_HAND,
+                    actual,
+                    CrossbowItem.MOB_ARROW_POWER,
+                    1,
+                    target);
+            }
+        }
+        finish();
+    }
+
+    private void finish() {
+        observedTarget = null;
+        observedPermission = null;
+        target = null;
+        elapsed = 0;
+        body.stopUsingItem();
+        // Native durability breakage can close the attack during shoot(). Keep terminal states
+        // terminal.
+        if (state != State.STOPPED) {
+            state = State.READY;
+        }
+    }
+
+    private void aim(LivingEntity foe) {
+        double x = foe.getX() - body.getX();
+        double z = foe.getZ() - body.getZ();
+        double horizontal = Math.sqrt(x * x + z * z);
+        double y = foe.getY(1.0 / 3) - body.getEyeY() + horizontal * 0.2;
+        body.setYRot((float) (Mth.atan2(z, x) * Mth.RAD_TO_DEG) - 90);
+        body.setXRot((float) -(Mth.atan2(y, horizontal) * Mth.RAD_TO_DEG));
+        body.setYHeadRot(body.getYRot());
+    }
+
+    private boolean permitted(LivingEntity foe) {
+        return lease.getAsBoolean() && foe instanceof Mob mob
+            && foe.level() == body.level()
+            && foe.isAlive()
+            && !foe.isRemoved()
+            && (explicitTarget == null
+            ? Threats.hostile(mob, body)
+            : explicitTarget == foe
+            && !mob.isAlliedTo(body)
+            && !body.isAlliedTo(mob)
+            && Bodies.of(mob).isEmpty()
+            && explicitPermission.getAsBoolean())
+            && (observedTarget == null || observedTarget == foe && observedPermission.getAsBoolean())
+            && body.hasLineOfSight(foe)
+            && (kind == Kind.MELEE || FireSafety.clear(body, foe))
+            && body.distanceTo(foe) <= Loadouts.using(weapon())
+            .map(provider -> provider.range(weapon())).orElseGet(adapter::range)
+            + (kind == Kind.MELEE ? foe.getBbWidth() + MountedMelee.reach(body) : 0);
+    }
+
+    private boolean valid() {
+        return body.level() instanceof ServerLevel level
+            && level.getServer().isSameThread()
+            && body.isAlive()
+            && !body.isRemoved()
+            && (resident == null || resident.colonyId().equals(colony))
+            && colony.filter(id -> Colonies.razed(level.getServer(), id)).isEmpty()
+            && (resident == null ? barehanded : resident.isActiveAttack(this)
+                && (barehanded ? body.getMainHandItem().isEmpty() : adapter.accepts(weapon())));
+    }
+
+    private ItemStack weapon() {
+        return resident != null && resident.isActiveAttack(this) ? body.getMainHandItem() : ItemStack.EMPTY;
+    }
+
+    @Override
+    public void stop() {
+        if (state == State.STOPPED) {
+            return;
+        }
+        state = State.STOPPED;
+        explicitTarget = null;
+        explicitPermission = null;
+        observedTarget = null;
+        observedPermission = null;
+        target = null;
+        elapsed = 0;
+        // stopUsingItem clears use state; releaseUsingItem would discharge a fully drawn bow.
+        body.stopUsingItem();
+        if (resident != null) {
+            resident.endAttack(this);
+        }
+    }
+
+}

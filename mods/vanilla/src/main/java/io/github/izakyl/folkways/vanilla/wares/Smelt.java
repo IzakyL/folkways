@@ -16,6 +16,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.LongSupplier;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.Block;
 
@@ -24,7 +25,12 @@ import net.minecraft.world.level.block.Block;
 // and carried within the schedule, and not left to a chore that turns up once the input sits there cold. Its own
 // spec sums that work up, for the plan's costs before it is refined.
 record Smelt(NodeSpec spec, WorldPos at, Block block, Stances stances, ItemSpec takes, int load, ItemSpec makes,
-             long yield, int cookTicks, Optional<Need> fuel, Runnable out) implements Intent {
+             long yield, int cookTicks, Optional<Need> fuel, LongSupplier cooking, Runnable out) implements Intent {
+
+    @Override
+    public List<Need> recipeInputs() {
+        return List.of(new Need(takes, load));
+    }
 
     static final Refinement SMELTING = new Refinement() {
         @Override
@@ -40,7 +46,7 @@ record Smelt(NodeSpec spec, WorldPos at, Block block, Stances stances, ItemSpec 
 
     // `waiting` is how long the cooker is spoken for by the batches booked before this load.
     static Smelt of(UUID id, WorldPos at, Block block, Stances stances, ItemSpec takes, int load, ItemSpec makes, long yield,
-                    int cookTicks, long waiting, Optional<Need> fuel, Runnable out) {
+                    int cookTicks, long waiting, Optional<Need> fuel, LongSupplier cooking, Runnable out) {
         List<Need> needs = new ArrayList<>();
         needs.add(new Need(takes, load));
         fuel.ifPresent(needs::add);
@@ -52,7 +58,7 @@ record Smelt(NodeSpec spec, WorldPos at, Block block, Stances stances, ItemSpec 
             .estimate((int) Math.min(Integer.MAX_VALUE,
                 Stations.LABOR_TICKS * (fuel.isPresent() ? 3 : 2) + (long) cookTicks * load + waiting))
             .done();
-        return new Smelt(spec, at, block, stances, takes, load, makes, yield, cookTicks, fuel, out);
+        return new Smelt(spec, at, block, stances, takes, load, makes, yield, cookTicks, fuel, cooking, out);
     }
 
     // What is cooked is taken out under the smelt's own id, the last step of its work, and the cooker told so.
@@ -62,7 +68,8 @@ record Smelt(NodeSpec spec, WorldPos at, Block block, Stances stances, ItemSpec 
         List<Node> nodes = new ArrayList<>(List.of(loading));
         List<Before> links = new ArrayList<>(List.of(new Before(loading.id(), taking.id())));
         fuel.ifPresent(need -> {
-            Node stoking = new FuelNode(UUID.randomUUID(), at, block, stances, need.spec(), need.count(), () -> { });
+            Node stoking = new FuelNode(UUID.randomUUID(), at, block, stances, need.spec(), need.count(), cooking,
+                () -> { });
             nodes.add(stoking);
             links.add(new Before(stoking.id(), taking.id()));
         });

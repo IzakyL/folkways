@@ -148,18 +148,13 @@ jobs:
           - label: founding
             artifact: founding
             spec: tests/e2e/founding-equivalence.spec.ts
-          - label: Epic Fight acceptance
-            artifact: epicfight-acceptance
-            spec: tests/e2e/epicfight-acceptance.spec.ts
-          - label: Epic Fight GEO reload
-            artifact: epicfight-geo
-            spec: tests/e2e/epicfight-geo.spec.ts
-          - label: Epic Fight save lifecycle
-            artifact: epicfight-lifecycle
-            spec: tests/e2e/epicfight-lifecycle.spec.ts
-          - label: Epic Fight multiplayer
-            artifact: epicfight-multiplayer
-            spec: tests/e2e/epicfight-multiplayer.spec.ts
+          - label: Epic Fight
+            artifact: epicfight
+            spec: >-
+              tests/e2e/epicfight-acceptance.spec.ts
+              tests/e2e/epicfight-geo.spec.ts
+              tests/e2e/epicfight-lifecycle.spec.ts
+              tests/e2e/epicfight-multiplayer.spec.ts
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-java@v5

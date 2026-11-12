@@ -27,6 +27,9 @@ import net.neoforged.neoforge.client.ClientHooks;
 import net.neoforged.neoforge.client.extensions.common.IClientItemExtensions;
 import software.bernie.geckolib.cache.object.BakedGeoModel;
 import software.bernie.geckolib.cache.object.GeoBone;
+import software.bernie.geckolib.cache.object.GeoCube;
+import software.bernie.geckolib.cache.object.GeoQuad;
+import software.bernie.geckolib.cache.object.GeoVertex;
 import software.bernie.geckolib.renderer.layer.GeoRenderLayer;
 
 // A replaced-entity animatable is not a LivingEntity, so GeckoLib's ItemArmorGeoLayer cannot read its
@@ -83,12 +86,21 @@ final class ResidentGeoArmorLayer extends GeoRenderLayer<ResidentGeoBackend.Crew
             original.crouching = resident.isCrouching();
             pose.pushPose();
             try {
-                // The layer is already inside this bone's animated transform. Move to its pivot and
-                // change from Gecko's upward Y axis to the humanoid model's downward Y axis once.
-                pose.translate(bone.getPivotX() / 16.0F, bone.getPivotY() / 16.0F, bone.getPivotZ() / 16.0F);
+                // The layer is already inside this bone's animated transform. Move to the humanoid part's
+                // pivot and change from Gecko's upward Y axis to the humanoid model's downward Y axis once.
+                // Bedrock bodies pivot at the waist, where a humanoid body hangs from the neck: use the top
+                // centre of the torso's main cube there.
+                GeoCube main = mainCube(bone);
+                if (part == Part.BODY && main != null) {
+                    float[] box = bounds(main);
+                    pose.translate((box[0] + box[1]) / 2, box[3], (box[4] + box[5]) / 2);
+                } else {
+                    pose.translate(bone.getPivotX() / 16.0F, bone.getPivotY() / 16.0F, bone.getPivotZ() / 16.0F);
+                }
                 pose.scale(-1.0F, -1.0F, 1.0F);
-                if (!bone.getCubes().isEmpty()) {
-                    Vec3 size = bone.getCubes().getFirst().size();
+                if (main != null) {
+                    // The bone's main cube: YSM torsos list small trims before the body itself.
+                    Vec3 size = main.size();
                     pose.scale(ratio(size.x, part.width), ratio(size.y, part.height), ratio(size.z, part.depth));
                 }
                 draw(pose, buffers, resident, stack, armor, slot, original, partialTick, light);
@@ -134,6 +146,31 @@ final class ResidentGeoArmorLayer extends GeoRenderLayer<ResidentGeoBackend.Crew
         }
     }
 
+    // The largest of a bone's own cubes; its children are limbs and ornaments.
+    static GeoCube mainCube(GeoBone bone) {
+        return bone.getCubes().stream()
+            .max(java.util.Comparator.comparingDouble(cube -> cube.size().x * cube.size().y * cube.size().z))
+            .orElse(null);
+    }
+
+    // {minX, maxX, minY, maxY, minZ, maxZ} of a cube, in blocks.
+    static float[] bounds(GeoCube cube) {
+        float[] box = {Float.MAX_VALUE, -Float.MAX_VALUE, Float.MAX_VALUE, -Float.MAX_VALUE, Float.MAX_VALUE,
+            -Float.MAX_VALUE};
+        for (GeoQuad quad : cube.quads()) {
+            if (quad == null) {
+                continue;
+            }
+            for (GeoVertex vertex : quad.vertices()) {
+                var at = vertex.position();
+                box[0] = Math.min(box[0], at.x); box[1] = Math.max(box[1], at.x);
+                box[2] = Math.min(box[2], at.y); box[3] = Math.max(box[3], at.y);
+                box[4] = Math.min(box[4], at.z); box[5] = Math.max(box[5], at.z);
+            }
+        }
+        return box;
+    }
+
     private static float ratio(double size, float standard) {
         return size > 0.0 && Double.isFinite(size) ? (float) (size / standard) : 1.0F;
     }
@@ -174,7 +211,7 @@ final class ResidentGeoArmorLayer extends GeoRenderLayer<ResidentGeoBackend.Crew
         static Part of(String name) {
             return switch (name.toLowerCase(Locale.ROOT).replace("_", "")) {
                 case "head" -> HEAD;
-                case "body", "upperbody" -> BODY;
+                case "body", "upperbody", "upbody" -> BODY;
                 case "leftarm" -> LEFT_ARM;
                 case "rightarm" -> RIGHT_ARM;
                 case "leftleg" -> LEFT_LEG;

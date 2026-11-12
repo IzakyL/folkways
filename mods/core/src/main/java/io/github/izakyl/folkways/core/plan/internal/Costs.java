@@ -10,6 +10,7 @@ import io.github.izakyl.folkways.core.work.api.Amount;
 import io.github.izakyl.folkways.core.work.api.Need;
 import io.github.izakyl.folkways.core.work.api.Node;
 import io.github.izakyl.folkways.core.work.api.WorkSite;
+import io.github.izakyl.folkways.core.work.api.Stances;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -73,6 +74,13 @@ final class Costs {
         for (Workshop workshop : workshops) {
             try {
                 for (Refinement.Change change : workshop.options(asked, alone)) {
+                    if (workshop.bearer().isPresent() && change.replacement().nodes().stream().anyMatch(node ->
+                        !node.worker().equals(workshop.bearer())
+                            || !(node.spec().site() instanceof WorkSite.AtEntity entity)
+                            || !entity.entity().equals(workshop.bearer().get())
+                            || !(node.spec().stances() instanceof Stances.Wherever))) {
+                        throw new IllegalArgumentException("carried workshop must offer work for its bearer alone");
+                    }
                     found.add(new Offer(workshop, change));
                 }
             } catch (RuntimeException | LinkageError broken) {

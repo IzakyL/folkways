@@ -28,7 +28,7 @@ public final class ResidentEpicFightPatch extends HumanoidMobPatch<ResidentEntit
     private static final double RUNNING_PACE = 1.15;
     private static final float RUNNING_STRIDE = 0.85F;
     private static volatile Predicate<ResidentEntity> rendererEligibility = resident -> true;
-    private EpicFightWeaponSession strike;
+    private EpicFightWeaponAttack strike;
 
     public ResidentEpicFightPatch(ResidentEntity original) {
         super(original, Factions.VILLAGER);
@@ -152,9 +152,9 @@ public final class ResidentEpicFightPatch extends HumanoidMobPatch<ResidentEntit
         return !original.level().isClientSide() || rendererEligibility.test(original);
     }
 
-    boolean beginStrike(EpicFightWeaponSession session) {
+    boolean beginStrike(EpicFightWeaponAttack attack) {
         if (strike != null || blocksLabor()) { return false; }
-        strike = session;
+        strike = attack;
         CombatBehaviors<HumanoidMobPatch<?>> behaviors = getHoldingItemWeaponMotionBuilder().build(this);
         CombatBehaviors.Behavior<HumanoidMobPatch<?>> selected = behaviors.selectRandomBehaviorSeries();
         if (selected != null) {
@@ -167,11 +167,11 @@ public final class ResidentEpicFightPatch extends HumanoidMobPatch<ResidentEntit
         return true;
     }
 
-    boolean ownsStrike(EpicFightWeaponSession session) { return strike == session; }
+    boolean ownsStrike(EpicFightWeaponAttack attack) { return strike == attack; }
 
-    void endStrike(EpicFightWeaponSession session, boolean cancelAnimation) {
-        if (strike != session) { return; }
-        boolean playing = session.playing() || actionOwnsPose();
+    void endStrike(EpicFightWeaponAttack attack, boolean cancelAnimation) {
+        if (strike != attack) { return; }
+        boolean playing = attack.playing() || actionOwnsPose();
         strike = null;
         if (cancelAnimation && playing && original.isAlive()) {
             // Replacing the base action clears a pending link as well as its attack. StopPlaying alone does not.
@@ -193,7 +193,7 @@ public final class ResidentEpicFightPatch extends HumanoidMobPatch<ResidentEntit
 
     @Override
     public AttackResult attack(EpicFightDamageSource source, Entity target, InteractionHand hand) {
-        EpicFightWeaponSession active = strike;
+        EpicFightWeaponAttack active = strike;
         if (hand != InteractionHand.MAIN_HAND || !(target instanceof LivingEntity living)
                 || active == null || !active.admitHit(source, living)) {
             return AttackResult.missed(0);

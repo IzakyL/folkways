@@ -31,7 +31,8 @@ public record WorkPriorities(Map<ResourceLocation, Rule> overrides) {
     }
 
     public static Rule defaults(ResourceLocation trade) {
-        return Vocations.of(trade).map(vocation -> new Rule(true, vocation.defaultPriority())).orElse(DEFAULT);
+        return Vocations.of(trade)
+            .map(vocation -> new Rule(vocation.defaultAllowed(), vocation.defaultPriority())).orElse(DEFAULT);
     }
 
     public WorkPriorities with(ResourceLocation trade, Rule rule) {

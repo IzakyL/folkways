@@ -153,7 +153,7 @@ public final class MeleeReachGameTests {
                     "damage comes from this guard's native melee attacks");
                 int count =
                     guard.pack().count(Items.IRON_SWORD)
-                    + (guard.hasWeaponSession() && guard.getMainHandItem().is(Items.IRON_SWORD)
+                    + (guard.weaponDrawn() && guard.getMainHandItem().is(Items.IRON_SWORD)
                     ? guard.getMainHandItem().getCount()
                     : 0);
                 int wear =
@@ -161,7 +161,7 @@ public final class MeleeReachGameTests {
                     .filter(stack -> stack.is(Items.IRON_SWORD))
                     .mapToInt(ItemStack::getDamageValue)
                     .sum()
-                    + (guard.hasWeaponSession() && guard.getMainHandItem().is(Items.IRON_SWORD)
+                    + (guard.weaponDrawn() && guard.getMainHandItem().is(Items.IRON_SWORD)
                     ? guard.getMainHandItem().getDamageValue()
                     : 0);
                 helper.assertValueEqual(count, 1, "normal runner ownership retains the"

@@ -10,6 +10,7 @@ import io.github.izakyl.folkways.core.world.api.WorldPos;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
 import net.minecraft.world.item.ItemStack;
@@ -27,9 +28,14 @@ final class LoadNode extends CraftNode {
 
     private final ItemSpec input;
     private final int load;
+    final int cookTicks;
 
     LoadNode(WorldPos at, Block block, Stances stances, ItemSpec input, int load, int cookTicks) {
-        super(specOf(at, stances, Workload.Once.of(Stations.LABOR_TICKS, WaresContent::haste))
+        this(UUID.randomUUID(), at, block, stances, input, load, cookTicks);
+    }
+
+    LoadNode(UUID id, WorldPos at, Block block, Stances stances, ItemSpec input, int load, int cookTicks) {
+        super(specOf(id, at, stances, Workload.Once.of(Stations.LABOR_TICKS, WaresContent::haste))
                 .needs(new Need(input, load))
                 .doing(WaresContent.LOADING, input)
                 .estimate(Stations.LABOR_TICKS + cookTicks * load)
@@ -37,6 +43,7 @@ final class LoadNode extends CraftNode {
             at, block);
         this.input = input;
         this.load = load;
+        this.cookTicks = cookTicks;
     }
 
     @Override

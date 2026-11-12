@@ -44,7 +44,7 @@ versions. Back up your world before trying a nightly build.
 - **Set tables and build homes.** Dining areas serve table meals, beds grade their
   rooms, and mood moves work speed between 75% and 115%. Idle residents stroll,
   chat and pet animals; cats, wolves and parrots move in as the colony grows.
-- **Equip and defend.** Assign loadout profiles with weapons, armor and supplies,
+- **Equip and defend.** Assign equipment profiles with weapons, armor, supplies and backpacks,
   then staff patrol routes and sentry posts, or command people and golems directly;
   Firearms integrations for TACZ and Superb Warfare add supported firearms.
 - **Protect and restore buildings.** Mark damage-control areas for residents to
@@ -59,7 +59,7 @@ This repository builds nine mods, one per directory under `mods/`. Each ships as
 | Mod                                       | Directory            | Also requires                                                                       | What it does                                                                                                                    |
 | ----------------------------------------- | -------------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
 | Folkways Core                             | `mods/core`          | —                                                                                   | The colony engine: residents who plan their own work, their pathfinding, the Colony Book and panel, and direct commands and squads for any resident kind. Adds no work on its own |
-| Folkways Vanilla                          | `mods/vanilla`       | Core                                                                                | Residents and their trades among vanilla blocks: farming, herding, fishing, crafting, hauling and building; weapons, loadouts and patrols |
+| Folkways Vanilla                          | `mods/vanilla`       | Core                                                                                | Residents and their trades among vanilla blocks: farming, herding, fishing, crafting, hauling and building; weapons, equipment profiles and patrols |
 | Folkways Carving                          | `mods/carving` | Chisels & Bits 21.1.25+                                             | Residents build and reshape carvings using whole blocks, with a small rounding loss                                                 |
 | Folkways × Create | `mods/create` | Create 6.0.7+; FireFighting Additions 0.2.3-beta+ optional (requires Create [6.0.10,6.1)) | Trains, parcels, track and schematics; with the addon, residents fight fires with extinguishers and hydrant hoses and refill extinguishers |
 | Folkways × Modular Golems                 | `mods/golems` | Modular Golems 3.1.6+                                                              | Golems join the roster and take trades like people                                                                              |
@@ -109,10 +109,11 @@ Vanilla. They do not need separate installation.
 
 The panel's **Lessons** tab contains Ponder tutorials for the rest of the mod.
 
-For combat, open **Loadout profiles**, create a profile and assign human residents.
+For combat, open **Equipment profiles**, create a profile, fill its slots and assign human residents.
 Keep the selected weapons, armor and matching ammunition in registered stores
 that allow taking items. Enable the **Patrol** trade and staff patrol routes
-or sentry posts for autonomous defense, or select residents and command them directly.
+or sentry posts for autonomous defense. For direct control, hold the Colony Book, press **V**
+and select **RTS** to group and command residents.
 
 For damage control, hold the Colony Book, press **V** and choose **Damage Control**.
 Mark two corners, protect the area and allow residents to work in **Damage control**.
@@ -145,7 +146,10 @@ Small arrows show direction; the view covers 48 blocks and reports truncation ab
 Folkways also works with Create and its FireFighting Additions, Sable, AstikorCarts Redux,
 Chisels & Bits, Kaleidoscope Cookery and Tavern, Modular Golems, TACZ, Superb Warfare,
 Epic Fight, GeckoLib, Touhou Little Maid, FTB Teams, JEI/EMI, Just Enough Characters,
-Shoulder Surfing Reloaded, AppleSkin and Iris. See [Integrations](INTEGRATIONS.md) for
+Shoulder Surfing Reloaded, AppleSkin, Iris,
+Curios 9.3.1+, Accessories 1.1.0-beta.54+, Sophisticated Storage, Sophisticated Backpacks, Storage Drawers, Functional Storage,
+Create: Storage, Tom’s Simple Storage, Colossal Chests, Mekanism QIO, Applied Energistics 2
+(AE2) and Refined Storage 2. See [Integrations](INTEGRATIONS.md) for
 what each one adds, how to use it in game and the versions it needs.
 
 ## Building from source

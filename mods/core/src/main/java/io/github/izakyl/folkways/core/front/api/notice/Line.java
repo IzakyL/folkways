@@ -76,6 +76,26 @@ public sealed interface Line {
     record Stack(ResourceLocation item, long count) {
     }
 
+    /**
+     * What a store holds, most plentiful first: at most {@link #MOST_SHOWN} goods, how many more kinds go unshown,
+     * and how many of its slots are taken out of how many, when the store keeps slots ({@code total} 0 when not).
+     * No goods and no more kinds reads as empty.
+     */
+    record Contents(List<Stack> stacks, int more, int used, int total) implements Line {
+        public static final int MOST_SHOWN = 8;
+
+        public Contents {
+            stacks = List.copyOf(stacks.size() > MOST_SHOWN ? stacks.subList(0, MOST_SHOWN) : stacks);
+            more = Math.max(0, more);
+            total = Math.max(0, total);
+            used = Math.clamp(used, 0, total);
+        }
+
+        public boolean empty() {
+            return stacks.isEmpty() && more == 0;
+        }
+    }
+
     static Line of(NoticeKind kind, Notice.Arg... args) {
         return new Said(Notice.of(kind, args));
     }
@@ -124,6 +144,10 @@ public sealed interface Line {
         return new Goods(stacks, tint);
     }
 
+    static Line contents(List<Stack> stacks, int more, int used, int total) {
+        return new Contents(stacks, more, used, total);
+    }
+
     static void encodeAll(RegistryFriendlyByteBuf buffer, List<Line> lines, int max) {
         List<Line> capped = lines.size() > max ? lines.subList(0, max) : lines;
         buffer.writeVarInt(capped.size());
@@ -159,11 +183,7 @@ public sealed interface Line {
                 }
                 case Goods goods -> {
                     buffer.writeVarInt(6);
-                    buffer.writeVarInt(goods.stacks().size());
-                    for (Stack stack : goods.stacks()) {
-                        buffer.writeResourceLocation(stack.item());
-                        buffer.writeVarLong(stack.count());
-                    }
+                    writeStacks(buffer, goods.stacks());
                     buffer.writeInt(goods.tint());
                 }
                 case Told told -> {
@@ -174,6 +194,13 @@ public sealed interface Line {
                     buffer.writeVarInt(8);
                     ComponentSerialization.STREAM_CODEC.encode(buffer, text.component());
                     text.after().encode(buffer);
+                }
+                case Contents contents -> {
+                    buffer.writeVarInt(9);
+                    writeStacks(buffer, contents.stacks());
+                    buffer.writeVarInt(contents.more());
+                    buffer.writeVarInt(contents.used());
+                    buffer.writeVarInt(contents.total());
                 }
             }
         }
@@ -191,9 +218,11 @@ public sealed interface Line {
                 case 3 -> busy(Doing.decode(buffer));
                 case 4 -> gauge(Meter.decode(buffer), buffer.readVarInt(), buffer.readVarInt());
                 case 5 -> bar(buffer.readVarInt(), buffer.readVarInt());
-                case 6 -> goods(decodeStacks(buffer), buffer.readInt());
+                case 6 -> goods(decodeStacks(buffer, Goods.MOST_STACKS), buffer.readInt());
                 case 7 -> told(Sentence.decode(buffer));
                 case 8 -> new Text(ComponentSerialization.STREAM_CODEC.decode(buffer), Sentence.decode(buffer));
+                case 9 -> contents(decodeStacks(buffer, Contents.MOST_SHOWN), buffer.readVarInt(), buffer.readVarInt(),
+                    buffer.readVarInt());
                 default -> throw new DecoderException("Unknown line type: " + type);
             };
             if (i < max) {
@@ -203,9 +232,17 @@ public sealed interface Line {
         return List.copyOf(lines);
     }
 
-    private static List<Stack> decodeStacks(RegistryFriendlyByteBuf buffer) {
+    private static void writeStacks(RegistryFriendlyByteBuf buffer, List<Stack> stacks) {
+        buffer.writeVarInt(stacks.size());
+        for (Stack stack : stacks) {
+            buffer.writeResourceLocation(stack.item());
+            buffer.writeVarLong(stack.count());
+        }
+    }
+
+    private static List<Stack> decodeStacks(RegistryFriendlyByteBuf buffer, int most) {
         int count = buffer.readVarInt();
-        if (count < 0 || count > Goods.MOST_STACKS) {
+        if (count < 0 || count > most) {
             throw new DecoderException("too many goods in a line: " + count);
         }
         List<Stack> stacks = new ArrayList<>(count);

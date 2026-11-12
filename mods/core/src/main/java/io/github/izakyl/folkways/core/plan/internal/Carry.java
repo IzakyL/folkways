@@ -78,7 +78,7 @@ public final class Carry {
             throw new IllegalArgumentException("only carried goods are put away: " + from);
         }
         TransferNode put = TransferNode.at(Endpoint.pack(hand), Endpoint.store(into),
-            new Manifest(stacks, List.of()), plan.around(into)).orElseThrow();
+            new Manifest(stacks, List.of()), plan.putting(into)).orElseThrow();
         Laying.Mark mark = plan.mark();
         plan.add(put);
         long moved = 0;
@@ -104,7 +104,7 @@ public final class Carry {
     // pack of whoever does it. `made` goods are not there yet: their maker puts them there first.
     private static long fromStash(Laying plan, Stash where, Edge edge, ItemSpec concrete, long count, boolean made) {
         UUID consumer = edge.consumer();
-        if (!edge.carried()) {
+        if (!edge.carried() && plan.direct(where)) {
             Set<Stand> athand = plan.reaching(consumer, where);
             if (!athand.isEmpty()) {
                 plan.book(new Resource.Lot(where, concrete), consumer, count);
@@ -173,7 +173,7 @@ public final class Carry {
             TransferNode take = TransferNode.at(Endpoint.store(out), Endpoint.pack(), goods,
                 plan.around(out)).orElseThrow();
             TransferNode put = TransferNode.at(Endpoint.pack(), Endpoint.store(into), goods,
-                plan.around(into)).orElseThrow();
+                plan.putting(into)).orElseThrow();
             plan.add(take);
             plan.add(put);
             plan.book(new Resource.Lot(out, concrete), take.id(), load);
@@ -217,7 +217,10 @@ public final class Carry {
             plan.rollback(mark);
         }
         for (Stash out : plan.closure(maker)) {
-            Set<Stand> at = plan.reaching(maker, out);
+            if (!plan.direct(out)) {
+                continue;
+            }
+            Set<Stand> at = plan.placing(maker, out);
             if (at.isEmpty() || plan.roomFor(out, concrete) < yield || !plan.feeds(out, consumer, concrete)
                     || !leaves(plan, out, edge, concrete, count)) {
                 continue;
@@ -286,7 +289,7 @@ public final class Carry {
             .thenComparingLong(one -> edge.carried() || plan.reaching(consumer, one).isEmpty() ? 1 : 0)
             .thenComparingLong(one -> 2 * Transfer.walk(one.pos(), made) + Transfer.walk(one.pos(), near)));
         for (Stash into : stores) {
-            Set<Stand> unloading = plan.around(into);
+            Set<Stand> unloading = plan.putting(into);
             if (unloading.isEmpty() || plan.cutOff(into, unloading) || plan.roomFor(into, concrete) < yield
                     || !plan.feeds(into, consumer, concrete) || !leaves(plan, into, edge, concrete, count)) {
                 continue;
@@ -368,7 +371,7 @@ public final class Carry {
         List<Stash> ordered = new ArrayList<>(ins);
         ordered.sort(Comparator.comparingInt(in -> -plan.preference(in, concrete)));
         for (Stash in : ordered) {
-            if (!in.equals(out) && plan.roomFor(in, concrete) >= count
+            if (plan.direct(in) && !in.equals(out) && plan.roomFor(in, concrete) >= count
                 && (eater == null || plan.feeds(in, eater, concrete) && !plan.reaching(eater, in).isEmpty())
                 && passable(plan, out, in)) {
                 return in;
@@ -379,7 +382,7 @@ public final class Carry {
 
     private static boolean passable(Laying plan, Stash out, Stash into) {
         Set<Stand> loading = plan.around(out);
-        Set<Stand> unloading = plan.around(into);
+        Set<Stand> unloading = plan.putting(into);
         if (loading.isEmpty() || unloading.isEmpty()) {
             plan.because(Why.NO_ROOM);
             return false;

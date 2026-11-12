@@ -1,7 +1,7 @@
 package io.github.izakyl.folkways.vanilla.combat;
 
 import io.github.izakyl.folkways.core.combat.api.Combatant;
-import io.github.izakyl.folkways.core.combat.api.WeaponSession;
+import io.github.izakyl.folkways.core.combat.api.WeaponAttack;
 import io.github.izakyl.folkways.core.resident.api.Body;
 import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.vanilla.combat.weapon.ResidentMounts;
@@ -21,7 +21,7 @@ public final class VanillaCombatant implements Combatant {
 
     @Override
     public boolean engaged(Body body) {
-        return body.mob() instanceof ResidentEntity person && person.hasWeaponSession();
+        return body.mob() instanceof ResidentEntity person && person.weaponDrawn();
     }
 
     @Override
@@ -33,7 +33,7 @@ public final class VanillaCombatant implements Combatant {
     @Override
     public void stand(Body body) {
         if (body.mob() instanceof ResidentEntity person) {
-            person.stopWeaponSession();
+            person.stopCombat();
         }
     }
 
@@ -53,7 +53,7 @@ public final class VanillaCombatant implements Combatant {
     }
 
     @Override
-    public WeaponSession select(Worker who, LivingEntity target, WeaponSession current) {
+    public WeaponAttack select(Worker who, LivingEntity target, WeaponAttack current) {
         return Weapons.select(who, target, current);
     }
 

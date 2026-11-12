@@ -47,7 +47,7 @@ final class Fitness {
                 return Optional.of(Unfit.NO_TOOL);
             }
         }
-        if (work.cells() > hand.packCapacity()) {
+        if (hand.space() == null && work.cells() > hand.packCapacity()) {
             return Optional.of(Unfit.NO_ROOM);
         }
         return Optional.empty();
@@ -65,7 +65,7 @@ final class Fitness {
     // Whether someone fit for the work has the room for it in their pack already, not only once it empties.
     static boolean anyoneNow(Crew crew, Work work) {
         for (Crew.Hand hand : crew.hands()) {
-            if (of(hand, work).isEmpty() && work.cells() <= hand.packCells()) {
+            if (of(hand, work).isEmpty() && (hand.space() != null || work.cells() <= hand.packCells())) {
                 return true;
             }
         }

@@ -1,0 +1,16 @@
+# 仓储宣传片的字幕。改完在仓库根目录运行：python3 tests/promo/film/storage.py
+# 镜头顺序：纳入仓库 → 仓库卡片 → AE2 居民下单 → RS2 居民下单 → 玩家终端下单 → 殖民地熔炼 → 装备方案 → 取装备 → 背包放歌。
+# captions = 这一段显示的文字，一项一行；tag = 金色小标签；删掉某段 = 那一段不出字。
+
+[scenes.enroll]
+captions = ["已支持：各种模组的容器"]
+
+
+[scenes.ae2-order]
+captions = ["居民现在可以使用AE2/RS网络下单"]
+
+[scenes.terminal]
+captions = ["网络也可以使用居民的制作能力"]
+
+[scenes.profile]
+captions = ["可以为居民配置背包和各种升级"]

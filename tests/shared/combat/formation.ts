@@ -58,7 +58,6 @@ for (int n = 0; n < 4; n++) {
   if (melee.isPresent()) profiles.assign(List.of(resident.id()), melee);
   bodies.add(resident);
 }
-var group = UnitGroups.of(colony).create(bodies);
 var route = new ArrayList<Deployment>();
 for (var raw : args.list("route")) {
   var stop = (Map<?, ?>)raw;
@@ -68,7 +67,7 @@ for (var raw : args.list("route")) {
     WorldPos.of(level, new BlockPos(((Number)to.get(0)).intValue(), ((Number)to.get(1)).intValue(), ((Number)to.get(2)).intValue())),
     new Vec3(((Number)stop.get("facing")).intValue(), 0, 0), new Deployment.Formation(2)));
 }
-group.patrol(route);
+var group = UnitGroups.of(colony).commandSelection(bodies, route, true);
 return Map.of("colony", colony.id().toString(), "group", group.id().toString(), "enemy", "");
 ` }),
 });
@@ -106,7 +105,7 @@ for (var body : bodies) {
   row.put("standing", standing);
   positions.add(row);
   int count = body.pack().count(Items.IRON_SWORD) + body.pack().count(Items.IRON_AXE);
-  if (body.mob() instanceof ResidentEntity resident && resident.hasWeaponSession()) {
+  if (body.mob() instanceof ResidentEntity resident && resident.weaponDrawn()) {
     var actual = resident.getMainHandItem();
     if (actual.is(Items.IRON_SWORD) || actual.is(Items.IRON_AXE)) count += actual.getCount();
   }

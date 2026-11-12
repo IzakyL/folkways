@@ -232,7 +232,7 @@ for (var entity : level.getAllEntities()) {
         continue;
     }
     LoadoutProfiles.of(colony).assign(List.of(body.id()), Optional.empty());
-    body.stopWeaponSession();
+    body.stopCombat();
 }
 return true;
 ` }) });

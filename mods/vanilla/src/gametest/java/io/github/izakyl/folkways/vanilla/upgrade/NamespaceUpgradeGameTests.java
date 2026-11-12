@@ -1,6 +1,9 @@
 package io.github.izakyl.folkways.vanilla.upgrade;
 
+import io.github.izakyl.folkways.core.base.persist.upgrade.DataVersion;
 import io.github.izakyl.folkways.core.base.persist.upgrade.RawUpgrades;
+import io.github.izakyl.folkways.core.base.persist.upgrade.Surface;
+import io.github.izakyl.folkways.core.base.persist.upgrade.Upgrades;
 import io.github.izakyl.folkways.vanilla.supply.SupplyBox;
 import java.util.List;
 import net.minecraft.core.BlockPos;
@@ -48,8 +51,24 @@ public final class NamespaceUpgradeGameTests {
         helper.assertTrue(box.generated().get("folkways_core:colony_book") == 5, "generated counts preserved");
         CompoundTag saved = box.saveWithFullMetadata(registries);
         helper.assertFalse(saved.toString().contains("folkways:"), "only current ids are saved");
-        helper.assertTrue(saved.getCompound("NeoForgeData").getInt(RawUpgrades.VERSION) == 3,
+        helper.assertTrue(saved.getCompound("NeoForgeData").getInt(RawUpgrades.VERSION) == DataVersion.CURRENT,
             "block entity advances through its existing migration chain");
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
+    public static void v2PatrolLoadoutsUpgradeThroughNamespacesAndEquipment(GameTestHelper helper) throws Exception {
+        CompoundTag raw = TagParser.parseTag("""
+            {colonies:[{keeps:{"folkways:patrol_loadouts":{profiles:[],assignments:[]},
+              "folkways:patrol_staffing":{targets:[]}}}]}
+            """);
+        Upgrades.upgrade(Surface.COLONY_REGISTRY, raw, 2);
+        var keeps = raw.getList("colonies", 10).getCompound(0).getCompound("keeps");
+        helper.assertFalse(keeps.contains("folkways:patrol_loadouts")
+            || keeps.contains("folkways_vanilla:patrol_loadouts"), "both old loadout keys are replaced");
+        helper.assertValueEqual(keeps.getCompound("folkways_core:equipment"),
+            TagParser.parseTag("{profiles:[],assignments:[]}"), "namespace and equipment migrations compose");
+        helper.assertTrue(keeps.contains("folkways_vanilla:patrol_staffing"), "staffing keeps its namespaced bag");
         helper.succeed();
     }
 }

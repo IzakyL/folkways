@@ -6,9 +6,30 @@
   "compatibilityLevel": "JAVA_21",
   "mixins": [
     "SableAssemblyMixin",
-    "LevelMixin"
+    "DrawerControllerAccessor",
+    "DrawerSlotAccessor",
+    "TomsInventoryAccessor",
+    "LevelMixin",
+    "Ae2TerminalMenuMixin",
+    "Ae2CraftingInsertMixin",
+    "Ae2CommissionMixin",
+    "Rs2CraftingInsertMixin",
+    "Rs2CommissionMixin",
+    "Rs2MenuOpenerMixin",
+    "Rs2GridDataMixin",
+    "Rs2RepositoryAccessor",
+    "Rs2TerminalMenuMixin",
+    "Rs2TaskSnapshotMixin",
+    "CuriosResidentSlotsMixin",
+    "AccessoriesResidentSlotsMixin",
+    "AccessoriesHolderAccessor",
+    "BackpackInventoryProviderAccessor"
   ],
   "injectors": {
     "defaultRequire": 0
-  }
+  },
+  "client": [
+    "Ae2TerminalScreenMixin",
+    "Rs2TerminalScreenMixin"
+  ]
 }

@@ -1,5 +1,7 @@
 package io.github.izakyl.folkways.vanilla.wares;
 
+import io.github.izakyl.folkways.core.inventory.api.StoreWorkstations;
+
 import io.github.izakyl.folkways.core.item.api.Containers;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import io.github.izakyl.folkways.core.work.api.Amount;
@@ -7,11 +9,15 @@ import io.github.izakyl.folkways.core.work.api.Need;
 import io.github.izakyl.folkways.core.work.api.Outcome;
 import io.github.izakyl.folkways.core.work.api.Stances;
 import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.work.api.WorkSite;
+import java.util.UUID;
+import io.github.izakyl.folkways.core.work.api.WorkNoise;
 import io.github.izakyl.folkways.core.work.api.Workload;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Predicate;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.item.ItemStack;
@@ -21,10 +27,26 @@ final class PackCraftNode extends CraftNode {
 
     private final int runs;
     private final Assembly assembly;
+    private final StoreWorkstations.Capability capability;
+    private final Predicate<ServerLevel> available;
 
     PackCraftNode(WorldPos at, Block block, Stances stances, List<Ingredients.Demand> demands,
                   ItemSpec produces, long perRun, int runs, Assembly assembly) {
-        super(specOf(at, stances,
+        this(at, block, StoreWorkstations.vanilla(block), stances, level -> true, demands,
+            produces, perRun, runs, assembly);
+    }
+
+    PackCraftNode(WorldPos at, Block block, StoreWorkstations.Capability capability, Stances stances,
+                  Predicate<ServerLevel> available, List<Ingredients.Demand> demands,
+                  ItemSpec produces, long perRun, int runs, Assembly assembly) {
+        this(new WorkSite.AtBlock(at), block, capability, stances, available, demands,
+            produces, perRun, runs, assembly);
+    }
+
+    PackCraftNode(WorkSite site, Block block, StoreWorkstations.Capability capability, Stances stances,
+                  Predicate<ServerLevel> available, List<Ingredients.Demand> demands,
+                  ItemSpec produces, long perRun, int runs, Assembly assembly) {
+        super(specOf(site, stances,
                 Workload.Once.of(runs * Stations.LABOR_TICKS,
                     who -> WaresContent.haste(who)
                         * Math.ceil(runs / who.effects().value(WaresContent.BATCH)) / runs))
@@ -33,9 +55,26 @@ final class PackCraftNode extends CraftNode {
                 .leaves(assembly.remainders().stream().map(amount -> new Amount(amount.spec(), amount.count() * runs)).toList())
                 .doing(WaresContent.CRAFTING, produces)
                 .done(),
-            at, block);
+            site.where(), block);
         this.runs = runs;
         this.assembly = assembly;
+        this.capability = capability;
+        this.available = available;
+    }
+
+    @Override
+    boolean standing(ServerLevel level) {
+        return (spec().site() instanceof WorkSite.AtEntity || super.standing(level)) && available.test(level);
+    }
+
+    @Override
+    public Optional<UUID> worker() {
+        return spec().site() instanceof WorkSite.AtEntity entity ? Optional.of(entity.entity()) : Optional.empty();
+    }
+
+    @Override
+    List<WorkNoise> worked() {
+        return StationNoise.of(capability.station(), cell());
     }
 
     private static List<Need> needsFor(List<Ingredients.Demand> demands, int runs) {

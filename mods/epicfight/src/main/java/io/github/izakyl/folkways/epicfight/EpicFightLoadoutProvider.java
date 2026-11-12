@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.epicfight;
 
-import io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutProvider;
+import io.github.izakyl.folkways.core.combat.api.LoadoutProvider;
 import net.minecraft.world.item.ItemStack;
 
 /** Recognizes native melee weapons in upstream profiles; profiles own quantity and selection. */

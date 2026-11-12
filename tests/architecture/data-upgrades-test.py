@@ -25,7 +25,7 @@ class UpgradeBoundaryTests(unittest.TestCase):
         self.git("init", "-q")
         self.git("config", "user.email", "fixture@example.invalid")
         self.git("config", "user.name", "Architecture fixture")
-        self.source("base/persist/upgrade/DataVersion.java", "public final class DataVersion { public static final int CURRENT = 3; }")
+        self.source("base/persist/upgrade/DataVersion.java", "public final class DataVersion { public static final int BASELINE = 1; public static final int CURRENT = 3; }")
 
     def git(self, *args):
         return subprocess.check_output(["git", *args], cwd=self.root, text=True)
@@ -120,7 +120,7 @@ public final class ComponentCodecs {}
         (old / "upgrade").mkdir(parents=True)
         (old / "base/persist/upgrade/DataVersion.java").write_text(
             "package io.github.izakyl.folkways.base.persist.upgrade;\n"
-            "public final class DataVersion { public static final int CURRENT = 3; }\n")
+            "public final class DataVersion { public static final int BASELINE = 1; public static final int CURRENT = 3; }\n")
         (old / "upgrade/V3_Rename.java").write_text("""package io.github.izakyl.folkways.upgrade;
 import io.github.izakyl.folkways.base.persist.upgrade.Step;
 public final class V3_Rename implements Step {

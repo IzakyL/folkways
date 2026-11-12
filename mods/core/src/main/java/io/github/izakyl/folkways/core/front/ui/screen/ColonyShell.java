@@ -75,8 +75,6 @@ public final class ColonyShell
     private static final int MARK_WIDTH = 2;
     private static final int MARK_ON = 0xFF9A3324;
 
-    private static final int WINDOW_WIDTH = 300;
-    private static final int WINDOW_HEIGHT = 230;
     // Compact site lists and grouped forms each get enough room; smaller screens keep scrolling.
     private static final int SITE_WIDTH = 400;
     private static final int SITE_HEIGHT = 320;
@@ -150,9 +148,9 @@ public final class ColonyShell
             .setOnServerClick(event -> toggleMember(player));
         Tokens.name(toggle, "folkways.member.toggle");
         window.body().addChildren(panel, Rows.actions(toggle));
-        Windows windows = (id, title, body) -> {
+        Windows windows = (id, title, body, width, height) -> {
             Window opened = desk.add(Window.of(id, title,
-                0, 0, WINDOW_WIDTH, WINDOW_HEIGHT, 220, 140));
+                0, 0, width, height, Math.min(220, width), Math.min(140, height)));
             opened.body().addChildren(body);
             return opened;
         };
@@ -325,9 +323,9 @@ public final class ColonyShell
         NavFold fold = new NavFold(nav, pane);
         menu.setOnClick(event -> fold.toggle());
 
-        Windows windows = (id, title, body) -> {
+        Windows windows = (id, title, body, width, height) -> {
             Window window = desk.add(Window.of(id, title,
-                0f, 0f, WINDOW_WIDTH, WINDOW_HEIGHT, 220, 140));
+                0f, 0f, width, height, Math.min(220, width), Math.min(140, height)));
             window.body().addChildren(body);
             return window;
         };

@@ -1,12 +1,12 @@
 package io.github.izakyl.folkways.core.vocation.internal;
 
 import io.github.izakyl.folkways.core.base.Ledger;
+import io.github.izakyl.folkways.core.effect.perk.Perk;
+import io.github.izakyl.folkways.core.effect.perk.PerkPool;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import io.github.izakyl.folkways.core.vocation.api.Vocation;
 import io.github.izakyl.folkways.core.vocation.api.VocationSpec;
 import io.github.izakyl.folkways.core.vocation.api.Vocations;
-import io.github.izakyl.folkways.core.effect.perk.Perk;
-import io.github.izakyl.folkways.core.effect.perk.PerkPool;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -27,7 +27,7 @@ public final class VocationRegistry implements Vocations.Access {
 
     public Vocation register(VocationSpec spec) {
         Vocation vocation = trades.claim(new Vocation(spec.id(), spec.perks(), spec.kit(),
-            spec.order(), spec.defaultPriority(), spec.group()));
+            spec.order(), spec.defaultPriority(), spec.group(), spec.defaultAllowed()));
         for (Perk perk : spec.perks()) {
             PerkPool.register(spec.id(), perk);
         }

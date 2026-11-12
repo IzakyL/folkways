@@ -20,7 +20,7 @@ import io.github.izakyl.folkways.vanilla.combat.WeaponStations;
 import io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutProfile;
 import io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutProfiles;
 import io.github.izakyl.folkways.vanilla.combat.weapon.PatrolSupplies;
-import io.github.izakyl.folkways.core.combat.api.WeaponSession;
+import io.github.izakyl.folkways.core.combat.api.WeaponAttack;
 import io.github.izakyl.folkways.vanilla.combat.weapon.Weapons;
 import io.github.izakyl.folkways.vanilla.pasture.PastureContent;
 import io.github.izakyl.folkways.vanilla.person.PersonBody;
@@ -37,6 +37,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.ItemTags;
@@ -450,7 +451,13 @@ public final class ResidentCommandGameTests {
             Urge.Priority.ORDINARY,
             "an actual engagement permits combat to borrow the same runner");
         body.pack().insert(new ItemStack(Items.IRON_SWORD));
-        WeaponSession session = Weapons.open(commandWorker(body)).orElseThrow();
+        WeaponAttack attack = Weapons.open(commandWorker(body)).orElseThrow();
+        // Exercise the autosave boundary regardless of when this test's batch reaches server tick 6000.
+        CompoundTag saved = body.mob().saveWithoutId(new CompoundTag());
+        Body loaded = PersonBody.RESIDENT.get().create(f.level);
+        loaded.mob().load(saved);
+        helper.assertValueEqual(loaded.pack().count(Items.IRON_SWORD), 1, "loading returns the saved real weapon once");
+        helper.assertTrue(loaded.mob().getMainHandItem().isEmpty(), "loading leaves no unowned hand duplicate");
         helper.runAfterDelay(
             21,
             () -> {
@@ -460,13 +467,13 @@ public final class ResidentCommandGameTests {
                         f.commands.priority(guard),
                         Urge.Priority.ORDINARY,
                         "the actual hand loan prevents lease expiry from repeatedly cancelling a longer native attack");
-                    session.close();
+                    attack.stop(); Weapons.holster(commandWorker(body));
                     helper.assertValueEqual(
                         f.commands.priority(guard),
                         Urge.Priority.CONTROL,
                         "the patrol reclaims control as soon as both combat lease and actual loan are over");
                 } finally {
-                    session.close();
+                    attack.stop(); Weapons.holster(commandWorker(body));
                 }
                 helper.succeed();
             });

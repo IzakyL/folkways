@@ -31,11 +31,10 @@ type CameraReading = {
 
 const SETTINGS_PAGE = "folkways.tab.settings";
 const GLOBAL_SETTING = "folkways.settings.global_tactical_controls";
-const COMBAT_PAGE = "folkways_core:combat";
-const COMBAT_SUMMARY = "folkways.combat.summary";
+const COMBAT_TOOL = "folkways_core:combat";
 const PERSONAL_TOGGLE = /Use tactical camera controls for all overhead tools|全局战斗视角操作逻辑/i;
 
-test("the native config screen and shortcut set the camera account toggle, and the combat tool opens its page and routes middle drags to tactical controls", async ({}, testInfo) => {
+test("the native config screen and shortcut set the camera account toggle, and the RTS tool routes middle drags to tactical controls", async ({}, testInfo) => {
   test.setTimeout(BUDGET.quick);
   const run = newRunId();
   let pair: E2EPair | undefined;
@@ -191,30 +190,19 @@ test("the native config screen and shortcut set the camera account toggle, and t
     await pickRtsTool(client);
     await frames(client, 3);
     const selected = await camera(client);
-    expect(selected.tool).toBe(COMBAT_PAGE);
+    expect(selected.tool).toBe(COMBAT_TOOL);
     expect(selected.global).toBe(false);
     expect(selected.tactical, "the combat tool requests tactical camera controls independently of the personal setting").toBe(true);
 
-    // The page-opening packet still has to prove possession of this colony book and name a registered page.
-    // These two invalid requests are sent through the actual client network path; they must leave the overhead screen intact.
-    for (const request of [{ colony: colonyId, page: "folkways_vanilla:missing_page" },
-      { colony: "00000000-0000-0000-0000-000000000001", page: COMBAT_PAGE }]) {
+    // The removed combat page and forged colony requests must leave the RTS overhead screen intact.
+    for (const request of [{ colony: colonyId, page: COMBAT_TOOL },
+      { colony: "00000000-0000-0000-0000-000000000001", page: COMBAT_TOOL }]) {
       await client.run(ATTEMPT_OPEN_PAGE, request);
       await tick.sprint(server, 2);
       await frames(client, 4);
       expect((await screen.current(client))?.className, `${JSON.stringify(request)} must be refused`).toContain("OverheadScreen");
-      expect((await camera(client)).tool).toBe(COMBAT_PAGE);
+      expect((await camera(client)).tool).toBe(COMBAT_TOOL);
     }
-
-    // The RTS tool's explicit page button opens its registered commands page.
-    await screen.clickWidget(client, { label: "Squads and commands" });
-    await waitForCombatPanel(client);
-    await screen.dismiss(client);
-    await frames(client, 5);
-    const returned = await camera(client);
-    expect(returned.active, "closing the combat page returns to the same overhead camera").toBe(true);
-    expect(returned.tool).toBe(COMBAT_PAGE);
-    expect(distance3(returned, selected)).toBeLessThan(0.08);
 
     const beforePan = await camera(client);
     const pan = await dragMiddle(client, middle, false);
@@ -376,16 +364,6 @@ async function dragMiddle(client: MinecraftClient, center: { x: number; y: numbe
     button: "middle",
     ...(alt ? { modifiers: ["alt"] as const } : {}),
   });
-}
-
-async function waitForCombatPanel(client: MinecraftClient) {
-  for (let attempt = 0; attempt < 60; attempt++) {
-    try {
-      if ((await panelElements(client)).some(element => element.id === COMBAT_SUMMARY)) return;
-    } catch { /* The tool may still be opening its page. */ }
-    await frames(client, 2);
-  }
-  throw new Error("The RTS tool's page button did not open the combat page");
 }
 
 async function residentIds(server: MinecraftServer, colony: string): Promise<string[]> {

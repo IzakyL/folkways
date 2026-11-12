@@ -19,7 +19,7 @@ import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutProfile;
 import io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutProfiles;
 import io.github.izakyl.folkways.vanilla.combat.weapon.PatrolSupplies;
-import io.github.izakyl.folkways.core.combat.api.WeaponSession;
+import io.github.izakyl.folkways.core.combat.api.WeaponAttack;
 import io.github.izakyl.folkways.vanilla.combat.weapon.Weapons;
 import io.github.izakyl.folkways.vanilla.person.PersonBody;
 import io.github.izakyl.folkways.vanilla.person.PersonContent;
@@ -73,7 +73,7 @@ public final class TaczWeaponGameTests {
     @BeforeBatch(batch = "tacz_native")
     public static void beforeNativeTimers(ServerLevel level) {
         // Accelerated ticks can autosave repeatedly during one native reload, cancelling the tested
-        // session.
+        // attack.
         previousNoSave = level.noSave;
         level.noSave = true;
     }
@@ -152,11 +152,11 @@ public final class TaczWeaponGameTests {
         scene.open();
         helper.startSequence()
             .thenWaitUntil(
-            () -> helper.assertTrue(scene.session.reload(), "draw completes and native reload starts"))
+            () -> helper.assertTrue(scene.attack.reload(), "draw completes and native reload starts"))
             .thenWaitUntil(
             () ->
                 helper.assertTrue(
-                    scene.session.state() == WeaponSession.State.READY
+                    !IGunOperator.fromLivingEntity(scene.body).getDataHolder().reloadStateType.isReloading()
                     && TaczGuns.loaded(scene.actual()) == 5,
                     "native entity tick finishes finite reload"))
             .thenExecute(
@@ -169,11 +169,10 @@ public final class TaczWeaponGameTests {
                     "wrong caliber survives");
                 helper.assertValueEqual(scene.shots.get(), 0, "reload never shoots");
                 CompoundTag saved = scene.body.saveWithoutId(new CompoundTag());
-                helper.assertValueEqual(
-                    scene.session.state(),
-                    WeaponSession.State.CLOSED,
-                    "saving closes native reload before pack serialization");
+                helper.assertTrue(scene.body.weaponDrawn() && TaczGuns.loaded(scene.body.getMainHandItem()) == 5,
+                    "saving preserves the live attack and its loaded gun");
                 scene.body.load(saved);
+                helper.assertFalse(scene.attack.fire(scene.target), "loading ends the old live attack");
                 helper.assertValueEqual(
                     scene.total("45acp"), 5, "saved actual gun retains all loaded rounds");
                 helper.assertValueEqual(
@@ -193,7 +192,7 @@ public final class TaczWeaponGameTests {
         Fixture scene = new Fixture(helper, "m1911", FireMode.SEMI, 3);
         scene.open();
         helper.assertTrue(
-            scene.session.continuousEngagement() && scene.session.fire(scene.target),
+            scene.attack.continuousEngagement() && scene.attack.fire(scene.target),
             "one draw owns a continuing engagement");
         helper.startSequence()
             .thenWaitUntil(
@@ -206,11 +205,10 @@ public final class TaczWeaponGameTests {
                     scene.target.getHealth() < scene.target.getMaxHealth(),
                     "real TACZ bullet damage reaches target");
                 helper.assertValueEqual(scene.total("45acp"), 0, "no rounds are manufactured");
-                helper.assertValueEqual(
-                    scene.session.state(),
-                    WeaponSession.State.STOPPING,
+                helper.assertFalse(scene.attack.fire(scene.target),
                     "empty gun ends engagement");
-                scene.session.close();
+                scene.attack.stop();
+                scene.body.holsterWeapon();
                 helper.assertTrue(
                     Weapons.open(worker(scene.body)).isEmpty(),
                     "empty gun without ammo is unusable");
@@ -225,7 +223,7 @@ public final class TaczWeaponGameTests {
     public static void automaticGunKeepsOneHandLoanAndHonorsNativeCooldown(GameTestHelper helper) {
         Fixture scene = new Fixture(helper, "ak47", FireMode.AUTO, 6);
         scene.open();
-        scene.session.fire(scene.target);
+        scene.attack.fire(scene.target);
         helper.startSequence()
             .thenWaitUntil(
             () ->
@@ -235,7 +233,7 @@ public final class TaczWeaponGameTests {
             .thenExecute(
             () -> {
                 helper.assertTrue(
-                    scene.body.ownsWeaponHand(scene.session),
+                    scene.body.isActiveAttack(scene.attack),
                     "same loan spans multiple discharges");
                 helper.assertValueEqual(
                     scene.total("762x39") + scene.shots.get(),
@@ -243,13 +241,14 @@ public final class TaczWeaponGameTests {
                     "finite automatic rounds are conserved");
                 long shotTimestamp =
                     IGunOperator.fromLivingEntity(scene.body).getDataHolder().shootTimestamp;
-                scene.session.close();
+                scene.attack.stop();
+                scene.body.holsterWeapon();
                 scene.open();
                 helper.assertValueEqual(
                     IGunOperator.fromLivingEntity(scene.body).getDataHolder().shootTimestamp,
                     shotTimestamp,
                     "reopening does not reset native cooldown");
-                helper.assertTrue(scene.body.hasWeaponSession(), "one new loan exists");
+                helper.assertTrue(scene.body.weaponDrawn(), "one new loan exists");
             })
             .thenSucceed();
     }
@@ -258,7 +257,7 @@ public final class TaczWeaponGameTests {
     public static void boltActionUsesNativeBoltAndDoesNotCreateAmmo(GameTestHelper helper) {
         Fixture scene = new Fixture(helper, "kar98", FireMode.SEMI, 3);
         scene.open();
-        scene.session.fire(scene.target);
+        scene.attack.fire(scene.target);
         helper.startSequence()
             .thenWaitUntil(
             () -> helper.assertTrue(scene.shots.get() >= 2, "native bolt feeds the next round"))
@@ -275,7 +274,7 @@ public final class TaczWeaponGameTests {
     public static void burstFinishesWithoutRedrawingBetweenItsRounds(GameTestHelper helper) {
         Fixture scene = new Fixture(helper, "m16a4", FireMode.BURST, 3);
         scene.open();
-        scene.session.fire(scene.target);
+        scene.attack.fire(scene.target);
         helper.startSequence()
             .thenWaitUntil(
             () ->
@@ -293,15 +292,16 @@ public final class TaczWeaponGameTests {
         Fixture scene = new Fixture(helper, "m16a4", FireMode.BURST, 6);
         scene.firstShot =
             () -> {
-                WeaponSession old = scene.session;
-                old.close();
+                WeaponAttack old = scene.attack;
+                old.stop();
+                scene.body.holsterWeapon();
                 scene.open();
-                scene.session.fire(scene.target);
-                helper.assertValueEqual(old.state(), WeaponSession.State.CLOSED, "old generation closed");
+                scene.attack.fire(scene.target);
+                helper.assertFalse(old.fire(scene.target), "old generation closed");
                 scene.advance = false;
             };
         scene.open();
-        scene.session.fire(scene.target);
+        scene.attack.fire(scene.target);
         helper.startSequence()
             .thenWaitUntil(
             () -> helper.assertTrue(scene.shots.get() > 0, "first native discharge occurs"))
@@ -351,7 +351,7 @@ public final class TaczWeaponGameTests {
                 }
             };
         scene.open();
-        scene.session.fire(scene.target);
+        scene.attack.fire(scene.target);
         helper.startSequence()
             .thenWaitUntil(
             () -> helper.assertTrue(scene.shots.get() == 1, "first real burst round fires"))
@@ -372,12 +372,13 @@ public final class TaczWeaponGameTests {
         scene.body.pack().insert(ammo("45acp", 5));
         scene.open();
         helper.startSequence()
-            .thenWaitUntil(() -> helper.assertTrue(scene.session.reload(), "native reload starts"))
+            .thenWaitUntil(() -> helper.assertTrue(scene.attack.reload(), "native reload starts"))
             .thenExecute(() -> scene.waitMillis(250))
             .thenWaitUntil(scene::waited)
             .thenExecute(
             () -> {
-                scene.session.close();
+                scene.attack.stop();
+                scene.body.holsterWeapon();
                 helper.assertValueEqual(
                     scene.total("45acp"), 5, "interrupted reload preserves all actual rounds");
                 helper.assertTrue(
@@ -410,7 +411,7 @@ public final class TaczWeaponGameTests {
         scene.other = ally;
         ally.joinColony(scene.colony.id());
         scene.open();
-        helper.assertFalse(scene.session.fire(scene.target), "ally intersects the firing corridor");
+        helper.assertFalse(scene.attack.fire(scene.target), "ally intersects the firing corridor");
         helper.assertValueEqual(scene.total("45acp"), 3, "holding fire spends nothing");
         helper.succeed();
     }
@@ -429,7 +430,7 @@ public final class TaczWeaponGameTests {
                 scene.other = ally;
             };
         scene.open();
-        scene.session.fire(scene.target);
+        scene.attack.fire(scene.target);
         helper.startSequence()
             .thenWaitUntil(
             () -> helper.assertTrue(scene.shots.get() > 0, "first shot fires before the ally enters"))
@@ -447,7 +448,7 @@ public final class TaczWeaponGameTests {
         Fixture scene = new Fixture(helper, "m1911", FireMode.SEMI, 2);
         scene.firstShot = () -> scene.body.leaveColony();
         scene.open();
-        scene.session.fire(scene.target);
+        scene.attack.fire(scene.target);
         helper.startSequence()
             .thenWaitUntil(() -> helper.assertTrue(scene.bullet != null, "native bullet exists"))
             .thenExecute(
@@ -505,9 +506,9 @@ public final class TaczWeaponGameTests {
     @GameTest(batch = "tacz_native", template = "empty_large", templateNamespace = "folkways_core", timeoutTicks = 100_000)
     public static void colonyRoundsCannotBreakGlassOutsideWorkNodes(GameTestHelper helper) {
         Fixture scene = new Fixture(helper, "m1911", FireMode.SEMI, 2);
-        scene.firstShot = () -> scene.session.stop();
+        scene.firstShot = () -> scene.attack.stop();
         scene.open();
-        scene.session.fire(scene.target);
+        scene.attack.fire(scene.target);
         helper.startSequence()
             .thenWaitUntil(() -> helper.assertTrue(scene.bullet != null, "native projectile exists"))
             .thenExecute(
@@ -578,7 +579,7 @@ public final class TaczWeaponGameTests {
         final Colony colony;
         final AtomicInteger shots = new AtomicInteger();
         final Consumer<EntityJoinLevelEvent> listener;
-        WeaponSession session;
+        WeaponAttack attack;
         Runnable firstShot;
         EntityKineticBullet bullet;
         Entity other;
@@ -637,21 +638,21 @@ public final class TaczWeaponGameTests {
                             "native timer deadline: shots="
                             + shots
                             + ", state="
-                            + (session == null ? "none" : session.state())
+                            + (attack == null ? "none" : attack.state())
                             + ", health="
                             + body.getHealth()
                             + ", total="
                             + TaczGuns.loaded(actual()));
                     }
-                    if (advance && session != null) {
-                        session.tick();
+                    if (advance && attack != null) {
+                        attack.tick();
                     }
                 });
             Cleanup.on(helper, this::close);
         }
 
         void open() {
-            session = Weapons.open(worker(body)).orElseThrow();
+            attack = Weapons.open(worker(body)).orElseThrow();
         }
 
         // TACZ times its guns by the wall clock, so a test waits in milliseconds rather than ticks.
@@ -664,7 +665,7 @@ public final class TaczWeaponGameTests {
         }
 
         ItemStack actual() {
-            return body.hasWeaponSession()
+            return body.weaponDrawn()
                 ? body.getMainHandItem()
                 : body.pack().contents().stream()
                 .filter(stack -> stack.is(ModItems.MODERN_KINETIC_GUN.get()))
@@ -682,8 +683,9 @@ public final class TaczWeaponGameTests {
             }
             closed = true;
             NeoForge.EVENT_BUS.unregister(listener);
-            if (session != null) {
-                session.close();
+            if (attack != null) {
+                attack.stop();
+                body.holsterWeapon();
             }
             ((ServerLevel) body.level())
                 .getChunkSource()

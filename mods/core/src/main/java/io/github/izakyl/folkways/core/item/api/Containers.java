@@ -26,6 +26,8 @@ public final class Containers {
 
     private static volatile List<ItemStack> samples;
     private static volatile List<Adapter<?>> adapters = List.of();
+    private static BiFunction<Level, BlockPos, BlockPos> anchors = Containers::chestAnchor;
+    private static java.util.function.BiPredicate<Level, BlockPos> stores = (level, pos) -> at(level, pos).isPresent();
 
     private record Adapter<T extends BlockEntity>(Class<T> type,
             BiFunction<Level, T, Optional<Container>> read) {
@@ -92,10 +94,21 @@ public final class Containers {
     }
 
     public static boolean gone(Level level, BlockPos pos) {
-        return Loaded.around(level, pos, 1) && at(level, pos).isEmpty();
+        return Loaded.around(level, pos, 1) && !stores.test(level, pos);
+    }
+
+    // Core installs physical store grouping without coupling the item helpers to colony inventory.
+    public static void installPorts(BiFunction<Level, BlockPos, BlockPos> anchor,
+                                    java.util.function.BiPredicate<Level, BlockPos> present) {
+        anchors = Objects.requireNonNull(anchor);
+        stores = Objects.requireNonNull(present);
     }
 
     public static BlockPos anchor(Level level, BlockPos clicked) {
+        return anchors.apply(level, clicked);
+    }
+
+    public static BlockPos chestAnchor(Level level, BlockPos clicked) {
         BlockState state = level.getBlockState(clicked);
         if (!(state.getBlock() instanceof ChestBlock)
             || state.getValue(ChestBlock.TYPE) == ChestType.SINGLE) {
@@ -132,6 +145,9 @@ public final class Containers {
     }
 
     public static ItemStack insert(Container into, ItemStack stack) {
+        if (into instanceof Inserting inserting) {
+            return inserting.insert(stack);
+        }
         ItemStack left = stack.copy();
         int cap = capacity(into, stack);
         for (int slot = 0; slot < into.getContainerSize() && !left.isEmpty(); slot++) {

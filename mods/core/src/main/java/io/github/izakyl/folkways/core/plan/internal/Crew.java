@@ -3,6 +3,10 @@ package io.github.izakyl.folkways.core.plan.internal;
 import io.github.izakyl.folkways.core.colony.api.KitRules;
 import io.github.izakyl.folkways.core.resident.api.Licence;
 import io.github.izakyl.folkways.core.resident.api.Resident;
+import io.github.izakyl.folkways.core.plan.api.PackSpace;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
+import io.github.izakyl.folkways.core.item.api.Goods;
+import java.util.Map;
 import io.github.izakyl.folkways.core.vocation.api.Keenness;
 import io.github.izakyl.folkways.core.vocation.api.Vocation;
 import io.github.izakyl.folkways.core.work.api.ToolPolicy;
@@ -20,12 +24,30 @@ public record Crew(List<Hand> hands) {
 
     public record Hand(Resident who, WorldPos at, int packCells, int packCapacity, double pace,
                        List<Licence> licences, List<ItemStack> tools, Optional<UUID> holding,
-                       List<ItemStack> cargo, ToolPolicy toolRules) {
+                       List<ItemStack> cargo, ToolPolicy toolRules, PackSpace space) {
 
         public Hand {
             licences = List.copyOf(licences);
             tools = tools.stream().map(ItemStack::copy).toList();
             cargo = cargo.stream().map(ItemStack::copy).toList();
+        }
+
+        public Hand(Resident who, WorldPos at, int packCells, int packCapacity, double pace,
+                    List<Licence> licences, List<ItemStack> tools, Optional<UUID> holding,
+                    List<ItemStack> cargo, ToolPolicy toolRules) {
+            this(who, at, packCells, packCapacity, pace, licences, tools, holding, cargo, toolRules, null);
+        }
+
+        public long capacity(ItemSpec goods) {
+            return space == null ? (long) packCells * Math.max(1, Goods.stackSize(goods)) : space.capacity(goods);
+        }
+
+        public int load(Map<ItemSpec, Long> goods) {
+            return space == null ? PackLoad.cells(goods) : space.load(goods);
+        }
+
+        public int delta(Map<ItemSpec, Long> goods) {
+            return space == null ? PackLoad.cells(goods) : space.delta(goods);
         }
 
         public Hand(Resident who, WorldPos at, int packCells, int packCapacity, double pace,

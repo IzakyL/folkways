@@ -230,8 +230,8 @@ public final class SquadExecutionGameTests {
     public static void partialCrossGroupAttackTransfersOnlyTheExplicitSelection(GameTestHelper helper) {
         Fixture f = new Fixture(helper);
         List<Body> people = f.people(4);
-        UnitGroup first = f.groups.create(people.subList(0, 2));
-        UnitGroup second = f.groups.create(people.subList(2, 4));
+        UnitGroup first = f.groups.stopSelection(people.subList(0, 2));
+        UnitGroup second = f.groups.stopSelection(people.subList(2, 4));
         first.hold(f.line(8));
         second.hold(f.line(10));
         var untouched =

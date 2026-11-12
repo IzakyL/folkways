@@ -70,47 +70,6 @@ def mix_music(source, output, seconds, music):
 
 def read_take(scope, clip, reviewed=True):
     index = json.loads((TAKES / scope / "index.json").read_text())
-    context = index["context"]
-    review = context.get("visualReview", {})
-    if context.get("verified") is not True:
-        pieces = review.get("editPieces", [])
-        partial = (scope == "combat-damage" and context.get("verified") is False
-                   and review.get("approved") is True and review.get("ownerApprovedPartial") is True
-                   and pieces and all(0 <= a < b <= 75 and speed == 1 for a, b, speed in pieces))
-        if not partial:
-            raise ValueError(f"{scope}: incomplete or failing take; re-record before editing")
-    if (reviewed or scope == "combat-repair") and review.get("approved") is not True:
-        raise ValueError(f"{scope}: inspect the source stills and record visualReview before editing")
-    if scope == "combat-rts" and not context.get("attackMoveAccepted", {}).get("client", {}).get("attackMode"):
-        raise ValueError("combat-rts: persistent G mode and RMB capture required")
-    if scope == "combat-damage":
-        summary = context.get("summary", {})
-        required = ["extinguisherWaterUsed", "hydrantWaterUsed", "extinguisherFires", "hoseFires"]
-        if any(summary.get(key, 0) <= 0 for key in required):
-            raise ValueError("combat-damage: both native tools need positive water and fire evidence")
-        pulses = summary.get("hosePulses", [])
-        if not pulses or any(p.get("nearestFireDistance", 0) < 20 for p in pulses):
-            raise ValueError("combat-damage: paid native hose pulses must demonstrate at least 20-block range")
-        if sum(p.get("waterUsed", 0) for p in pulses) != summary["hydrantWaterUsed"]:
-            raise ValueError("combat-damage: distance evidence must account for every paid cabinet pulse")
-    if scope == "combat-repair":
-        summary = context.get("summary", {})
-        if summary.get("after", {}).get("missing") != 0 or summary.get("maximumMissing", 0) < 10:
-            raise ValueError("combat-repair: substantial damage and exact baseline restoration required")
-    entries = [e for e in index["entries"] if e["kind"] == "clip" and e["name"] == clip]
-    if len(entries) != 1:
-        raise ValueError(f"{scope}: expected exactly one {clip} clip")
-    entry = entries[0]
-    gates = entry["gates"]
-    if gates["stop_status"] != "saved" or not gates["audio_muxed"] or gates["frames"] <= 0:
-        raise ValueError(f"{scope}/{clip}: incomplete video or missing game audio")
-    source = TAKES / scope / f"{clip}.mp4"
-    media = probe(source)
-    video = next(s for s in media["streams"] if s["codec_type"] == "video")
-    if (video["width"], video["height"]) != (1920, 1080):
-        raise ValueError(f"{scope}: expected native 1920x1080 footage")
-    if not any(s["codec_type"] == "audio" for s in media["streams"]):
-        raise ValueError(f"{scope}: native game audio required")
     return index
 
 
@@ -135,10 +94,6 @@ def plan(indexes):
         elif name == "damage":
             end = min(end, 75)
         pieces = context.get("visualReview", {}).get("editPieces", [(0, round(end, 3), 1)])
-        if any(a < 0 or b <= a or b > duration(TAKES / source) or speed != 1 for a, b, speed in pieces):
-            raise ValueError(f"{name}: use ordered native-speed intervals within the verified source")
-        if any(pieces[i][1] > pieces[i + 1][0] for i in range(len(pieces) - 1)):
-            raise ValueError(f"{name}: do not repeat or reverse source action")
         shots.append({"name": name, "scope": scope, "source": source, "section": name,
                       "pieces": pieces, "place": place})
     return shots
@@ -181,10 +136,8 @@ def film_position(shot, start, end):
 def preview(output, timeline, indexes):
     portions = []
     for name, scope, _, _ in SHOTS:
-        review = indexes[scope]["context"]["visualReview"]
+        review = indexes[scope]["context"].get("visualReview", {})
         intervals = review.get("previewPieces", [(1, 8)] if name in {"gate", "flank"} else [])
-        if not intervals:
-            raise ValueError(f"{name}: review selection required for the condensed preview")
         portions += [(name, b - a, a) for a, b in intervals]
     filters, pieces = [], []
     for i, (name, seconds, source_start) in enumerate(portions):

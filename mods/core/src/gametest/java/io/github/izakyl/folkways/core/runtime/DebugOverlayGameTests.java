@@ -2,11 +2,21 @@ package io.github.izakyl.folkways.core.runtime;
 
 import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.colony.internal.ColonyData;
+import io.github.izakyl.folkways.core.front.api.notice.DebugText;
 import io.github.izakyl.folkways.core.front.api.notice.Line;
 import io.github.izakyl.folkways.core.front.engine.net.DebugFocusPacket;
 import io.github.izakyl.folkways.core.front.engine.net.DebugTarget;
 import io.github.izakyl.folkways.core.inventory.api.InventorySnapshot;
 import io.github.izakyl.folkways.core.inventory.api.Stash;
+import io.github.izakyl.folkways.core.inventory.api.StoreRule;
+import io.github.izakyl.folkways.core.inventory.api.port.PortIdentity;
+import io.github.izakyl.folkways.core.inventory.api.port.PortReader;
+import io.github.izakyl.folkways.core.inventory.api.port.Pull;
+import io.github.izakyl.folkways.core.inventory.api.port.Room;
+import io.github.izakyl.folkways.core.inventory.api.port.StorePort;
+import io.github.izakyl.folkways.core.inventory.api.port.StorePorts;
+import io.github.izakyl.folkways.core.inventory.api.port.TransferResult;
+import io.github.izakyl.folkways.core.inventory.api.port.Usability;
 import io.github.izakyl.folkways.core.inventory.internal.InventoryObservations;
 import io.github.izakyl.folkways.core.item.api.Containers;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
@@ -44,6 +54,7 @@ import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.contents.TranslatableContents;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -60,8 +71,66 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 @GameTestHolder(FolkwaysCoreMod.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class DebugOverlayGameTests {
+    private static final Map<WorldPos, BulkStore> BULK = new LinkedHashMap<>();
+
+    private static final class BulkStore implements StorePort {
+        private final WorldPos at;
+        private long count = 3_000_000_000L;
+        private boolean complete = true;
+
+        private BulkStore(WorldPos at) {
+            this.at = at;
+        }
+
+        @Override
+        public PortIdentity identity() {
+            return PortIdentity.block(at);
+        }
+
+        @Override
+        public Usability usability() {
+            return Usability.USABLE;
+        }
+
+        @Override
+        public Set<Operation> operations() {
+            return Set.of(Operation.TAKE, Operation.PUT);
+        }
+
+        @Override
+        public PortReader reader(ServerLevel level, List<StoreRule> rules) {
+            var reading = new PortReader.PortReading(
+                List.of(new PortReader.Entry(new ItemStack(Items.IRON_INGOT), count)),
+                Optional.empty(), Room.NONE, Set.of(), false);
+            return new PortReader() {
+                @Override
+                public boolean step(int budget) {
+                    return complete;
+                }
+
+                @Override
+                public PortReading result() {
+                    return reading;
+                }
+            };
+        }
+
+        @Override
+        public TransferResult take(ServerLevel level, List<Pull> requested, List<StoreRule> rules, boolean simulate) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public TransferResult put(ServerLevel level, List<ItemStack> goods, List<StoreRule> rules,
+                                  boolean directed, boolean simulate) {
+            throw new UnsupportedOperationException();
+        }
+    }
+
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) {
+        StorePorts.register(ResourceLocation.fromNamespaceAndPath("folkways_core", "debug_bulk_test"),
+            StorePorts.SPECIFIC, (level, pos) -> Optional.ofNullable(BULK.get(WorldPos.of(level, pos))));
         event.register(DebugOverlayGameTests.class);
     }
 
@@ -146,6 +215,64 @@ public final class DebugOverlayGameTests {
             helper.assertTrue(json(h, card.lines()).contains("folkways.debug.overlay.difference")
                     && h.colony.inventory().snapshot() == snapshot,
                 "the card shows the difference without publishing a refreshed snapshot");
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
+    public static void facilityReadNamesTransitWithoutDrawingCachedStock(GameTestHelper helper) {
+        try (var h = new HoldingGameTests.Harness(helper)) {
+            observeStore(h);
+            var node = h.node(Workload.Once.of(100), new AtomicInteger(), false);
+            var stash = Stash.at(WorldPos.of(h.level, h.at));
+            var iron = ItemSpec.of(Items.IRON_INGOT);
+            apply(h, node, Placement.NOWHERE,
+                Map.of(node.id(), List.of(new Claim(new Resource.Transit(stash, iron), node.id(), 11))));
+            var debug = h.labor.debugSite(h.level, stash.pos());
+            String json = json(h, debug.lines());
+            helper.assertTrue(json.contains("item.minecraft.iron_ingot")
+                    && entries(debug.lines(), "claim").size() == 1
+                    && arg(entries(debug.lines(), "claim").getFirst(), 1).equals("11"),
+                "future stock reservations name the item and quantity at their store");
+            helper.assertTrue(debug.lines().stream().noneMatch(line -> line instanceof Line.Goods goods
+                    && goods.tint() == DebugText.PLANNED),
+                "transit claims do not draw the cached physical stock");
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
+    public static void bulkStoreReadPreservesLongCountsWithoutRefreshingSnapshot(GameTestHelper helper) {
+        try (var h = new HoldingGameTests.Harness(helper)) {
+            var at = WorldPos.of(h.level, h.at);
+            var bulk = new BulkStore(at);
+            BULK.put(at, bulk);
+            try {
+                observeStore(h);
+                var snapshot = h.colony.inventory().snapshot();
+                var store = snapshot.store(at).orElseThrow();
+                helper.assertTrue(StoreDebug.read(h.level, store, h.colony.inventory()).available()
+                        && StoreDebug.read(h.level, store, h.colony.inventory()).differences().isEmpty(),
+                    "live comparison reads the native port's aggregate entries");
+                var lines = StoreDebug.lines(h.level, store, h.colony.inventory(), List.of(
+                    new Claim(new Resource.Lot(store.stash(), ItemSpec.of(Items.IRON_INGOT)),
+                        UUID.randomUUID(), 2_999_999_999L)));
+                helper.assertTrue(lines.stream().anyMatch(line -> line instanceof Line.Goods goods
+                        && goods.tint() == DebugText.PLANNED && goods.stacks().getFirst().count() == 2_999_999_999L),
+                    "bulk claims render long counts without expanding synthetic slots");
+                bulk.count += 5;
+                var read = StoreDebug.read(h.level, store, h.colony.inventory());
+                helper.assertTrue(read.differences().size() == 1
+                        && read.differences().getFirst().cached() == 3_000_000_000L
+                        && read.differences().getFirst().live() == 3_000_000_005L
+                        && h.colony.inventory().snapshot() == snapshot,
+                    "live bulk differences retain long counts without publishing an observation");
+                bulk.complete = false;
+                helper.assertTrue(!StoreDebug.read(h.level, store, h.colony.inventory()).available(),
+                    "an incomplete bounded read is unavailable rather than a partial difference");
+            } finally {
+                BULK.remove(at);
+            }
         }
         helper.succeed();
     }

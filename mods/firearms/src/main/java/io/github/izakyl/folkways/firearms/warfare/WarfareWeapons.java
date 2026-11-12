@@ -3,11 +3,11 @@ package io.github.izakyl.folkways.firearms.warfare;
 import com.atsuishio.superbwarfare.data.gun.GunData;
 import com.atsuishio.superbwarfare.data.gun.GunProp;
 import io.github.izakyl.folkways.core.colony.api.Colonies;
+import io.github.izakyl.folkways.core.combat.api.Loadouts;
 import io.github.izakyl.folkways.core.extension.api.Declaring;
 import io.github.izakyl.folkways.core.item.api.Goods;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
-import io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutProvider;
-import io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutRegistry;
+import io.github.izakyl.folkways.core.combat.api.LoadoutProvider;
 import io.github.izakyl.folkways.vanilla.combat.weapon.Weapons;
 import io.github.izakyl.folkways.vanilla.person.ResidentEntity;
 import java.util.List;
@@ -75,7 +75,7 @@ public final class WarfareWeapons {
         for (WarfareWeapon weapon : ALL) {
             Weapons.register(weapon.id(), weapon);
         }
-        LoadoutRegistry.register(LOADOUT, new Firearm());
+        Loadouts.register(LOADOUT, new Firearm());
     }
 
     static void ticked(EntityTickEvent.Post event) {
@@ -89,7 +89,7 @@ public final class WarfareWeapons {
         if (changed) {
             body.pack().setChanged();
         }
-        if (body.hasWeaponSession() && tick(body, body.getMainHandItem())
+        if (body.weaponDrawn() && tick(body, body.getMainHandItem())
             && body.level() instanceof ServerLevel level) {
             body.colonyId().flatMap(id -> Colonies.of(level.getServer(), id))
                 .ifPresent(colony -> colony.inventoryFeedback().changedResident(body.id()));

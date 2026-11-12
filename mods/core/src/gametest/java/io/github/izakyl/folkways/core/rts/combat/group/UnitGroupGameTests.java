@@ -161,7 +161,7 @@ public final class UnitGroupGameTests {
     public static void rejectedLaterClickPreservesMembershipAndOwnedHandles(GameTestHelper helper) {
         Scene scene = new Scene(helper);
         List<Body> people = scene.people(4);
-        UnitGroup original = scene.groups.create(people);
+        UnitGroup original = scene.groups.stopSelection(people);
         original.hold(scene.line(12));
         var handles = people.stream().map(body -> scene.commands.current(body.id()).orElseThrow()).toList();
         helper.setBlock(new BlockPos(18, 1, 10), Blocks.STONE);
@@ -190,7 +190,7 @@ public final class UnitGroupGameTests {
                 }
             }
         }
-        UnitGroup group = scene.groups.create(people);
+        UnitGroup group = scene.groups.stopSelection(people);
         group.move(scene.line(18));
         helper.startSequence()
             .thenWaitUntil(
@@ -229,7 +229,7 @@ public final class UnitGroupGameTests {
             helper.setBlock(new BlockPos(12, y, 10), Blocks.AIR);
         }
         helper.setBlock(new BlockPos(12, 2, 10), Blocks.STONE);
-        UnitGroup group = scene.groups.create(people);
+        UnitGroup group = scene.groups.stopSelection(people);
         group.move(scene.line(18));
         helper.assertTrue(
             group.phase() == UnitGroup.Phase.COLUMN, "the initially safe adjusted column is tried sequentially");
@@ -263,7 +263,7 @@ public final class UnitGroupGameTests {
     public static void fourResidentsPhysicallyPatrolThreeStopsAndLoopUntilReleased(GameTestHelper helper) {
         Scene scene = new Scene(helper);
         List<Body> people = scene.people(4);
-        UnitGroup group = scene.groups.create(people);
+        UnitGroup group = scene.groups.stopSelection(people);
         List<Deployment> route = List.of(scene.line(8), scene.line(18), scene.line(4));
         group.patrol(route);
         var sequence = helper.startSequence();
@@ -316,7 +316,7 @@ public final class UnitGroupGameTests {
         Scene scene = new Scene(helper);
         List<Body> people = scene.people(2);
         people.forEach(body -> body.pack().insert(new ItemStack(Items.IRON_SWORD)));
-        UnitGroup group = scene.groups.create(people);
+        UnitGroup group = scene.groups.stopSelection(people);
         group.guard(scene.line(8));
         AtomicReference<Zombie> foe = new AtomicReference<>();
         helper.startSequence()
@@ -399,7 +399,7 @@ public final class UnitGroupGameTests {
     public static void anIndividualRetreatDetachesFromAPatrolAndKeepsItsOwnControl(GameTestHelper helper) {
         Scene scene = new Scene(helper);
         List<Body> people = scene.people(2);
-        UnitGroup group = scene.groups.create(people);
+        UnitGroup group = scene.groups.stopSelection(people);
         group.patrol(List.of(scene.line(8), scene.line(18)));
         Body individual = people.getFirst();
         AtomicReference<ResidentCommands.Order> retreat = new AtomicReference<>();
@@ -433,7 +433,7 @@ public final class UnitGroupGameTests {
     public static void aPatrolKeepsMovingAfterDeathAndRejoinsAnUnloadedMember(GameTestHelper helper) {
         Scene scene = new Scene(helper);
         List<Body> people = scene.people(3);
-        UnitGroup group = scene.groups.create(people);
+        UnitGroup group = scene.groups.stopSelection(people);
         group.patrol(List.of(scene.line(8), scene.line(18)));
         Body away = people.getFirst();
         Body dying = people.get(1);
@@ -494,7 +494,7 @@ public final class UnitGroupGameTests {
     public static void unloadingAndReloadingWithinOneTickPreservesPatrolMembership(GameTestHelper helper) {
         Scene scene = new Scene(helper);
         List<Body> people = scene.people(2);
-        UnitGroup group = scene.groups.create(people);
+        UnitGroup group = scene.groups.stopSelection(people);
         group.patrol(List.of(scene.line(8), scene.line(18)));
         Body previous = people.getFirst();
         AtomicReference<Body> returned = new AtomicReference<>();
@@ -551,8 +551,8 @@ public final class UnitGroupGameTests {
     public static void actualMembershipIsExclusiveAndPersistsWithoutRestoringOrders(GameTestHelper helper) {
         Scene scene = new Scene(helper);
         List<Body> people = scene.people(4);
-        UnitGroup first = scene.groups.create(people);
-        UnitGroup second = scene.groups.create(List.of(people.getFirst()));
+        UnitGroup first = scene.groups.stopSelection(people);
+        UnitGroup second = scene.groups.stopSelection(List.of(people.getFirst()));
         helper.assertValueEqual(first.members().size(), 3, "transfer removes previous actual membership");
         helper.assertTrue(
             scene.groups.ofResident(people.getFirst().id()).orElseThrow() == second,
@@ -579,7 +579,7 @@ public final class UnitGroupGameTests {
     public static void invalidDeploymentDoesNotPartiallyReplaceAFormation(GameTestHelper helper) {
         Scene scene = new Scene(helper);
         List<Body> people = scene.people(4);
-        UnitGroup group = scene.groups.create(people);
+        UnitGroup group = scene.groups.stopSelection(people);
         group.hold(scene.line(12));
         Map<UUID, WorldPos> original = group.destinations();
         helper.setBlock(new BlockPos(18, 1, 7), Blocks.STONE);
@@ -631,8 +631,8 @@ public final class UnitGroupGameTests {
     public static void selectionAcrossTwoGroupsTransfersOnlyTheSelectedMembers(GameTestHelper helper) {
         Scene scene = new Scene(helper);
         List<Body> people = scene.people(4);
-        UnitGroup first = scene.groups.create(people.subList(0, 2));
-        UnitGroup second = scene.groups.create(people.subList(2, 4));
+        UnitGroup first = scene.groups.stopSelection(people.subList(0, 2));
+        UnitGroup second = scene.groups.stopSelection(people.subList(2, 4));
         first.hold(scene.line(8));
         second.hold(scene.line(10));
         ResidentCommands.Order firstRemaining = scene.commands.current(people.get(1).id()).orElseThrow();
@@ -665,7 +665,7 @@ public final class UnitGroupGameTests {
     public static void rejectedSelectionRoutePreservesAllOriginalMembershipAndCommands(GameTestHelper helper) {
         Scene scene = new Scene(helper);
         List<Body> people = scene.people(4);
-        UnitGroup original = scene.groups.create(people);
+        UnitGroup original = scene.groups.stopSelection(people);
         original.hold(scene.line(12));
         var handles = people.stream().map(body -> scene.commands.current(body.id()).orElseThrow()).toList();
         helper.setBlock(new BlockPos(18, 1, 7), Blocks.STONE);
@@ -700,7 +700,7 @@ public final class UnitGroupGameTests {
                 helper.setBlock(new BlockPos(20, y, z), Blocks.STONE);
             }
         }
-        UnitGroup group = scene.groups.create(people);
+        UnitGroup group = scene.groups.stopSelection(people);
         Deployment intent = scene.line(18);
         group.move(intent);
         helper.startSequence()

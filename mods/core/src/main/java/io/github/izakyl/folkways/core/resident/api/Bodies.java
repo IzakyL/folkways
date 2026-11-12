@@ -70,6 +70,7 @@ public final class Bodies {
     // Sets the body's attributes and pack to what its effects make them.
     public static void carry(Body body) {
         Effects effects = body.effects();
+        body.pack().bind(body);
         body.pack().applyCapacityMultiplier(effects.value(Stats.PACK_ROOM));
         modify(body, Attributes.BLOCK_INTERACTION_RANGE, REACH_MODIFIER, effects.value(Stats.REACH),
             AttributeModifier.Operation.ADD_VALUE);

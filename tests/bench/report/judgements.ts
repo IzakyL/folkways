@@ -239,6 +239,11 @@ export const NEVER_HERE = new Set([
   "MISSING_VOXELIZER",
   // The bench installs no cart lines.
   "NO_CART", "NO_HORSE", "NOT_HITCHED", "NOT_AT_STATION", "NOT_ABOARD", "NOWHERE_TO_PLACE",
+  // This fixture installs no AE2 or RS2 network and uses only safe stores with unrestricted admission.
+  "NO_DEVICE", "NO_STOCK", "CPU_BUSY", "TASK_BUSY", "CALCULATION_FAILED", "MISSING_INPUTS", "SUBMISSION_FAILED", "CANCELED",
+  "NOT_ALLOWED", "UNUSABLE", "NOT_A_DEVICE", "LIMIT",
+  // Only a player toggling a member behind a store proxy reaches this.
+  "PROXY_MEMBER",
 ]);
 
 export const PASSING = new Set([

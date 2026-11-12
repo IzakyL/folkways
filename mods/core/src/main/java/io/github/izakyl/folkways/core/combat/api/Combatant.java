@@ -30,12 +30,12 @@ public interface Combatant {
         return !mob.isPassenger();
     }
 
-    /** Whether the body still holds a weapon loan of its own, outside any order's attack node. */
+    /** Whether the body still holds a drawn weapon of its own, outside any order's attack node. */
     default boolean engaged(Body body) {
         return false;
     }
 
-    /** A new order takes the body: leave weapon seats and end its own weapon loan. */
+    /** A new order takes the body: leave weapon seats and end its own drawn weapon. */
     default void disengage(Body body) {
     }
 
@@ -56,7 +56,7 @@ public interface Combatant {
     }
 
     /** The weapon to use against this target; reuse {@code current} while it still fits. Null means none. */
-    default WeaponSession select(Worker who, LivingEntity target, WeaponSession current) {
+    default WeaponAttack select(Worker who, LivingEntity target, WeaponAttack current) {
         return current;
     }
 

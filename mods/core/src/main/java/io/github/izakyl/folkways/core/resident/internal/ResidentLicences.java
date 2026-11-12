@@ -2,8 +2,8 @@ package io.github.izakyl.folkways.core.resident.internal;
 
 import io.github.izakyl.folkways.core.base.persist.Required;
 import io.github.izakyl.folkways.core.resident.api.Licence;
-import io.github.izakyl.folkways.core.resident.api.Licences.Trade;
 import io.github.izakyl.folkways.core.resident.api.Licences;
+import io.github.izakyl.folkways.core.resident.api.Licences.Trade;
 import io.github.izakyl.folkways.core.resident.api.Participation;
 import io.github.izakyl.folkways.core.resident.api.Participations;
 import io.github.izakyl.folkways.core.resident.api.Stake;
@@ -31,6 +31,7 @@ public final class ResidentLicences implements Licences {
 
     private final ResourceLocation body;
     private final Set<Vocation> withheld = new LinkedHashSet<>();
+    private final Set<Vocation> enabled = new LinkedHashSet<>();
     private final Map<Vocation, Keenness> keenness = new LinkedHashMap<>();
     private volatile long revision = REVISIONS.incrementAndGet();
 
@@ -52,7 +53,8 @@ public final class ResidentLicences implements Licences {
 
     public boolean allows(Trade trade) {
         return stands(trade.vocation().id()) == Participation.ALWAYS
-            || !withheld.contains(trade.vocation());
+            || !withheld.contains(trade.vocation())
+                && (trade.vocation().defaultAllowed() || enabled.contains(trade.vocation()));
     }
 
     private Participation stands(ResourceLocation vocation) {
@@ -62,8 +64,12 @@ public final class ResidentLicences implements Licences {
     public void allow(Trade trade, boolean allowed) {
         if (allowed) {
             withheld.remove(trade.vocation());
+            if (!trade.vocation().defaultAllowed()) {
+                enabled.add(trade.vocation());
+            }
         } else {
             withheld.add(trade.vocation());
+            enabled.remove(trade.vocation());
         }
         touched();
     }
@@ -91,6 +97,9 @@ public final class ResidentLicences implements Licences {
         ListTag off = new ListTag();
         withheld.forEach(vocation -> off.add(StringTag.valueOf(vocation.id().toString())));
         tag.put(TAG_WITHHELD, off);
+        ListTag on = new ListTag();
+        enabled.forEach(vocation -> on.add(StringTag.valueOf(vocation.id().toString())));
+        tag.put("enabled", on);
         CompoundTag buckets = new CompoundTag();
         keenness.forEach((vocation, how) -> buckets.putInt(vocation.id().toString(), how.number()));
         tag.put(TAG_KEENNESS, buckets);
@@ -100,10 +109,15 @@ public final class ResidentLicences implements Licences {
     @Override
     public void deserializeNBT(HolderLookup.Provider provider, CompoundTag tag) {
         withheld.clear();
+        enabled.clear();
         keenness.clear();
         ListTag off = Required.list(tag, TAG_WITHHELD, StringTag.TAG_STRING);
         for (int i = 0; i < off.size(); i++) {
             declared(off.getString(i)).ifPresent(withheld::add);
+        }
+        ListTag on = tag.getList("enabled", StringTag.TAG_STRING);
+        for (int i = 0; i < on.size(); i++) {
+            declared(on.getString(i)).ifPresent(enabled::add);
         }
         CompoundTag buckets = Required.compound(tag, TAG_KEENNESS);
         for (String key : buckets.getAllKeys()) {

@@ -791,7 +791,8 @@ public final class DispatchPresence implements Facing {
 
     private List<ItemStack> observed(WorldPos at) {
         var store = observation(at);
-        return store == null ? List.of() : store.slots().stream().map(SlotSnapshot::stackCopy)
+        return store == null || !store.usability().usable() ? List.of()
+            : store.slots().stream().map(SlotSnapshot::stackCopy)
             .filter(stack -> !stack.isEmpty()).toList();
     }
 

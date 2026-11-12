@@ -23,6 +23,7 @@ final class LookCardLayout {
     private static final int ITEM_GAP = 1;
     private static final int GOODS_GAP = 5;
     private static final int GOODS_ROW = ITEM_SIZE + 2;
+    static final int GRID_COLUMNS = 4;
     static final int PROGRESS_TRACK = 0xFF3B3B3B;
     static final int PROGRESS_FILL = 0xFFDDDDDD;
 
@@ -64,6 +65,7 @@ final class LookCardLayout {
             leftWidth = Math.max(leftWidth, switch (row) {
                 case Row.Text text -> font.width(text.text());
                 case Row.Goods goods -> goodsWidth(font, goods);
+                case Row.Grid grid -> gridWidth(font, grid);
                 case Row.Signs signs -> Signs.lay(font, signs.signs()).width();
                 case Row.Bar bar -> 0;
                 case Row.Gauge gauge -> throw new IllegalStateException("gauges go on the right");
@@ -94,6 +96,10 @@ final class LookCardLayout {
                     goods(pieces, font, goods, y);
                     y += GOODS_ROW;
                 }
+                case Row.Grid grid -> {
+                    grid(pieces, font, grid, y);
+                    y += pitch(grid);
+                }
                 case Row.Signs signs -> {
                     signs(pieces, font, signs, y);
                     y += GOODS_ROW;
@@ -119,6 +125,7 @@ final class LookCardLayout {
             case Row.Text text -> LINE_HEIGHT;
             case Row.Bar bar -> PROGRESS_ROW;
             case Row.Goods goods -> GOODS_ROW;
+            case Row.Grid grid -> gridRows(grid) * GOODS_ROW;
             case Row.Signs signs -> GOODS_ROW;
             case Row.Gauge gauge -> GAUGE_PITCH;
         };
@@ -129,6 +136,7 @@ final class LookCardLayout {
             case Row.Text text -> TEXT_INK;
             case Row.Bar bar -> PROGRESS_HEIGHT;
             case Row.Goods goods -> ITEM_SIZE;
+            case Row.Grid grid -> (gridRows(grid) - 1) * GOODS_ROW + ITEM_SIZE;
             case Row.Signs signs -> Signs.HEIGHT;
             case Row.Gauge gauge -> GaugeIcons.ICON;
         };
@@ -140,6 +148,35 @@ final class LookCardLayout {
             width += ITEM_SIZE + ITEM_GAP + font.width(count) + GOODS_GAP;
         }
         return Math.max(0, width - GOODS_GAP);
+    }
+
+    private static int gridRows(Row.Grid grid) {
+        return Math.max(1, (grid.stacks().size() + GRID_COLUMNS - 1) / GRID_COLUMNS);
+    }
+
+    private static int gridCell(Font font, Row.Grid grid) {
+        int widest = 0;
+        for (String count : grid.counts()) {
+            widest = Math.max(widest, font.width(count));
+        }
+        return ITEM_SIZE + ITEM_GAP + widest;
+    }
+
+    private static int gridWidth(Font font, Row.Grid grid) {
+        int columns = Math.min(GRID_COLUMNS, grid.stacks().size());
+        return columns == 0 ? 0 : columns * (gridCell(font, grid) + GOODS_GAP) - GOODS_GAP;
+    }
+
+    /** Goods in rows of {@link #GRID_COLUMNS}, every column as wide as the widest count so the icons line up. */
+    private static void grid(List<Piece> pieces, Font font, Row.Grid grid, int y) {
+        int cell = gridCell(font, grid) + GOODS_GAP;
+        for (int at = 0; at < grid.stacks().size(); at++) {
+            int x = at % GRID_COLUMNS * cell;
+            int top = y + at / GRID_COLUMNS * GOODS_ROW;
+            pieces.add(new Piece.Item(x, top, ITEM_SIZE, grid.stacks().get(at)));
+            pieces.add(new Piece.Text(x + ITEM_SIZE + ITEM_GAP, top + (ITEM_SIZE - TEXT_INK) / 2,
+                grid.counts().get(at), ColonyLookCard.TITLE_COLOR));
+        }
     }
 
     /** Each stack's icon with its count beside it, the count's ink centred on the icon. */

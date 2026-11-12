@@ -15,7 +15,7 @@ import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.vanilla.combat.FireSafety;
 import io.github.izakyl.folkways.vanilla.combat.SpottedTargets;
 import io.github.izakyl.folkways.vanilla.combat.WeaponStations;
-import io.github.izakyl.folkways.core.combat.api.WeaponSession;
+import io.github.izakyl.folkways.core.combat.api.WeaponAttack;
 import io.github.izakyl.folkways.vanilla.combat.weapon.Weapons;
 import java.util.List;
 import java.util.Optional;
@@ -37,7 +37,7 @@ final class SentryNode implements Node {
     private final Optional<WorldPos> stationAnchor;
     private final ResourceKey<Level> dimension;
     private final NodeSpec spec;
-    private WeaponSession weapon;
+    private WeaponAttack weapon;
     private WeaponStations.Lease station;
     private boolean closed;
     private String status = "returning";
@@ -132,7 +132,8 @@ final class SentryNode implements Node {
         if (station == null) {
             for (WeaponStations.Station candidate : posts.stations(level, posts.zone(level, zone).orElseThrow())) {
                 if (weapon != null) {
-                    weapon.close();
+                    weapon.stop();
+                    Weapons.holster(worker);
                     weapon = null;
                 }
                 station = WeaponStations.acquire(candidate, worker).orElse(null);
@@ -204,7 +205,7 @@ final class SentryNode implements Node {
             status = "blocked";
             return true;
         }
-        if (weapon.state() == WeaponSession.State.READY) {
+        if (weapon.state() == WeaponAttack.State.READY) {
             SpottedTargets.Spot observation = firingSpot;
             Mob shotTarget = target;
             weaponTarget = shotTarget.getUUID();
@@ -256,7 +257,8 @@ final class SentryNode implements Node {
 
     private void stopWeapon() {
         if (weapon != null) {
-            weapon.close();
+            weapon.stop();
+            Weapons.holster(operator);
             weapon = null;
         }
         weaponTarget = null;

@@ -34,7 +34,6 @@ import io.github.izakyl.folkways.core.rts.combat.group.Deployment;
 import io.github.izakyl.folkways.core.rts.combat.group.UnitGroup;
 import io.github.izakyl.folkways.core.rts.combat.group.UnitGroups;
 import io.github.izakyl.folkways.core.rts.combat.net.SelectionOrders;
-import io.github.izakyl.folkways.core.rts.combat.ui.CombatDesk;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -209,7 +208,7 @@ public final class CombatSelectionOwnershipGameTests {
     }
 
     @GameTest(template = "empty_large", templateNamespace = "folkways_core")
-    public static void actualCommandEntryTracksOwnershipAndTheBookPageCannotBypassAnotherKeeper(GameTestHelper helper) {
+    public static void actualCommandEntryTracksOwnershipAndRejectsAnotherKeeper(GameTestHelper helper) {
         Fixture f = new Fixture(helper);
         Body a = f.resident(2), b = f.resident(4);
         List<UUID> members = List.of(a.id(), b.id());
@@ -220,10 +219,6 @@ public final class CombatSelectionOwnershipGameTests {
         helper.assertTrue(
             SelectionOrders.submit(f.first, f.colony.id(), members, List.of(f.at(12)), -1, false),
             "the authorized selected squad accepts an actual move through the network service");
-        UnitGroup group = UnitGroups.of(f.colony).ofResident(a.id()).orElseThrow();
-        helper.assertFalse(
-            CombatDesk.of(f.colony).act(f.second, "group", group.id().toString()),
-            "another keeper cannot use the book page to release a leased RTS squad");
         helper.assertFalse(
             SelectionOrders.submit(f.second, f.colony.id(), members, List.of(f.at(14)), -1, false),
             "another keeper cannot forge the first keeper's selection in a move packet");

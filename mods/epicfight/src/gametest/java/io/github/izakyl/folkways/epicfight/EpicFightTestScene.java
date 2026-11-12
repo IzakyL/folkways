@@ -1,19 +1,30 @@
 package io.github.izakyl.folkways.epicfight;
 
-import io.github.izakyl.folkways.core.combat.api.WeaponSession;
+import io.github.izakyl.folkways.core.combat.api.WeaponAttack;
 import io.github.izakyl.folkways.core.colony.api.Colonies;
 import io.github.izakyl.folkways.core.colony.api.Colony;
 import io.github.izakyl.folkways.core.colony.api.Claimed;
 import io.github.izakyl.folkways.core.resident.api.Resident;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
-import io.github.izakyl.folkways.core.work.api.*;
+import io.github.izakyl.folkways.core.work.api.Node;
+import io.github.izakyl.folkways.core.work.api.Placement;
+import io.github.izakyl.folkways.core.work.api.ToolNeed;
+import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.core.effect.Effects;
-import io.github.izakyl.folkways.vanilla.combat.weapon.*;
-import io.github.izakyl.folkways.vanilla.person.*;
-import java.util.*;
+import io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutProfile;
+import io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutProfiles;
+import io.github.izakyl.folkways.vanilla.person.PersonBody;
+import io.github.izakyl.folkways.vanilla.person.PersonContent;
+import io.github.izakyl.folkways.vanilla.person.ResidentEntity;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
 import java.util.function.Consumer;
 import net.minecraft.core.BlockPos;
-import net.minecraft.gametest.framework.*;
+import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.gametest.framework.GameTestInfo;
+import net.minecraft.gametest.framework.GameTestListener;
+import net.minecraft.gametest.framework.GameTestRunner;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
 import net.minecraft.world.entity.EntityType;
@@ -22,7 +33,9 @@ import net.minecraft.world.entity.monster.Zombie;
 import net.minecraft.world.entity.animal.Cow;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
-import net.minecraft.world.item.*;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.entity.living.LivingDamageEvent;
@@ -41,8 +54,11 @@ final class EpicFightTestScene implements AutoCloseable, GameTestListener {
 
     EpicFightTestScene(GameTestHelper helper) {
         level = helper.getLevel();
-        for (int x = 0; x < 7; x++) for (int z = 0; z < 4; z++)
-            helper.setBlock(new BlockPos(x, 0, z), Blocks.STONE);
+        for (int x = 0; x < 7; x++) {
+            for (int z = 0; z < 4; z++) {
+                helper.setBlock(new BlockPos(x, 0, z), Blocks.STONE);
+            }
+        }
         colony = Colonies.mint(level.getServer());
         resident = PersonBody.RESIDENT.get().create(level);
         resident.setNoAi(true);
@@ -90,7 +106,7 @@ final class EpicFightTestScene implements AutoCloseable, GameTestListener {
         };
     }
 
-    WeaponSession open() { return EpicFightWeaponAdapter.INSTANCE.open(worker, resident.pack().getItem(0)).orElseThrow(); }
+    WeaponAttack open() { return EpicFightWeaponAdapter.INSTANCE.open(worker, resident.pack().getItem(0)).orElseThrow(); }
     void damageListener(Consumer<LivingDamageEvent.Post> listener) {
         listeners.add(listener);
         NeoForge.EVENT_BUS.addListener(listener);
@@ -100,10 +116,10 @@ final class EpicFightTestScene implements AutoCloseable, GameTestListener {
     public void testFailed(GameTestInfo info, GameTestRunner runner) { close(); }
     public void testAddedForRerun(GameTestInfo original, GameTestInfo rerun, GameTestRunner runner) { }
     public void close() {
-        if (closed) return;
+        if (closed) { return; }
         closed = true;
-        for (Object listener : listeners) NeoForge.EVENT_BUS.unregister(listener);
-        resident.stopWeaponSession();
+        for (Object listener : listeners) { NeoForge.EVENT_BUS.unregister(listener); }
+        resident.stopCombat();
         resident.discard(); zombie.discard(); cow.discard(); colony.raze();
     }
 }

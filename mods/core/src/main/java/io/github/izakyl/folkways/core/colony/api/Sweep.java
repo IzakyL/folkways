@@ -1,8 +1,11 @@
 package io.github.izakyl.folkways.core.colony.api;
 
 import io.github.izakyl.folkways.core.plan.api.Grown;
+import io.github.izakyl.folkways.core.work.api.Ending;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import net.minecraft.resources.ResourceLocation;
@@ -17,7 +20,14 @@ public final class Sweep {
     private boolean swept;
 
     public Sweep(Colony colony, ResourceLocation owner, int period) {
-        this.asking = new Asking(colony, owner, this::nudge);
+        this(colony, owner, period, (node, how) -> { });
+    }
+
+    public Sweep(Colony colony, ResourceLocation owner, int period, BiConsumer<UUID, Ending> ended) {
+        this.asking = new Asking(colony, owner, (node, how) -> {
+            ended.accept(node, how);
+            nudge();
+        });
         this.cron = Cadence.claim(colony, period);
     }
 

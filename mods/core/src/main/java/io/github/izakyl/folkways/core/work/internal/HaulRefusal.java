@@ -10,7 +10,9 @@ public enum HaulRefusal implements RefusalKind {
     NOTHING_CARRIED,
     NO_ROOM,
     PACK_FULL,
-    NOTHING_FREE;
+    NOTHING_FREE,
+    NOT_ALLOWED,
+    UNUSABLE;
 
     @Override
     public String translationKey() {
@@ -28,6 +30,6 @@ public enum HaulRefusal implements RefusalKind {
 
     @Override
     public boolean lasting() {
-        return this == NOT_A_CONTAINER || this == NO_ROOM;
+        return this == NOT_A_CONTAINER || this == NO_ROOM || this == UNUSABLE;
     }
 }

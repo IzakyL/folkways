@@ -84,13 +84,13 @@ final class FireStock {
             }
         }
         for (InventorySnapshot.Store store : snapshot.stores().values()) {
+            if (!store.usability().usable()) {
+                continue;
+            }
             boolean extinguisher = false;
             boolean water = false;
-            for (SlotSnapshot slot : store.slots()) {
-                if (slot.accessibleSlot().isEmpty()) {
-                    continue;
-                }
-                ItemStack stack = slot.stackCopy();
+            for (var entry : store.entries()) {
+                ItemStack stack = entry.prototype();
                 extinguisher |= stack.is(CreateFireFightingAdd.FIRE_EXTINGUISHER_ITEM.get());
                 var fluid = stack.getCapability(Capabilities.FluidHandler.ITEM);
                 if (fluid != null && !fluid.drain(new FluidStack(Fluids.WATER, 1000), FluidAction.SIMULATE)

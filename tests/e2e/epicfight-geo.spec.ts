@@ -18,7 +18,7 @@ const TEXTURE = "folkways_vanilla:textures/entity/resident_models/steve/tartaric
 const GEOMETRY_FILE = "assets/folkways_vanilla/geo/resident_models/steve.geo.json";
 type Scene = { colony: string; resident: string; monster: string };
 type ServerState = { patch: boolean; nativeTarget: boolean; attackAnimation: boolean; hitByResident: boolean;
-  targetHealth: number; targetMaxHealth: number; look: string; armor: string[]; session: boolean };
+  targetHealth: number; targetMaxHealth: number; look: string; armor: string[]; drawn: boolean };
 type Draw = { present: boolean; patch: boolean; overlay: boolean; screen: string; look: string; geometry: string; expectedTexture: string;
   mode: string; resource: boolean; textureResource: boolean; armor: string[]; sequence: number; gameTick: number;
   mesh: string; texture: string; sourceRenderer: string; entryScale: number; meshIdentity: number };
@@ -420,7 +420,7 @@ const SERVER_IMPORTS = ["java.util.UUID", "java.util.List", "java.util.Map", "ja
   "io.github.izakyl.folkways.vanilla.person.PersonBody", "io.github.izakyl.folkways.vanilla.person.PersonContent",
   "io.github.izakyl.folkways.vanilla.person.ResidentEntity", "io.github.izakyl.folkways.vanilla.person.look.ResidentLooks",
   "io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutProfiles", "io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutProfile",
-  "io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutRegistry",
+  "io.github.izakyl.folkways.core.combat.api.Loadouts",
   "io.github.izakyl.folkways.vanilla.patrol.PatrolContent", "io.github.izakyl.folkways.vanilla.patrol.PatrolStaffing",
   "io.github.izakyl.folkways.core.item.api.ItemSpec", "io.github.izakyl.folkways.epicfight.ResidentEpicFightPatch",
   "yesman.epicfight.api.animation.types.AttackAnimation"];
@@ -436,9 +436,9 @@ if(!level.addFreshEntity(body))throw new IllegalStateException("resident spawn r
 colony.hold(PersonContent.ID,Claimed.Entity.of(body)).orElseThrow();body.joinColony(colony.id());
 ItemStack weapon=new ItemStack(Items.IRON_SWORD);body.pack().insert(weapon);
 var profiles=LoadoutProfiles.of(colony);var profile=profiles.create("Epic Fight GEO sentry");
-profiles.add(profile.id(),LoadoutProfile.Entry.weapon(LoadoutRegistry.using(weapon).orElseThrow().profileWeapon(weapon)));
+profiles.add(profile.id(),LoadoutProfile.Entry.weapon(Loadouts.using(weapon).orElseThrow().profileWeapon(weapon)));
 ItemStack spear=new ItemStack(BuiltInRegistries.ITEM.get(ResourceLocation.parse("epicfight:iron_spear")));body.pack().insert(spear);
-profiles.add(profile.id(),LoadoutProfile.Entry.weapon(LoadoutRegistry.using(spear).orElseThrow().profileWeapon(spear)));
+profiles.add(profile.id(),LoadoutProfile.Entry.weapon(Loadouts.using(spear).orElseThrow().profileWeapon(spear)));
 for(var pair:List.of(Map.entry(EquipmentSlot.HEAD,Items.IRON_HELMET),Map.entry(EquipmentSlot.CHEST,Items.IRON_CHESTPLATE),Map.entry(EquipmentSlot.LEGS,Items.IRON_LEGGINGS),Map.entry(EquipmentSlot.FEET,Items.IRON_BOOTS))){
  var stack=new ItemStack(pair.getValue());body.pack().insert(stack);profiles.add(profile.id(),LoadoutProfile.Entry.armor(pair.getKey(),ItemSpec.of(pair.getValue())));
 }
@@ -463,7 +463,7 @@ out.put("targetHealth",target.getHealth());out.put("targetMaxHealth",target.getM
 out.put("look",body.lookId().orElseThrow().location().toString());
 out.put("armor",List.of(EquipmentSlot.HEAD,EquipmentSlot.CHEST,EquipmentSlot.LEGS,EquipmentSlot.FEET).stream()
  .map(slot->net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(body.getItemBySlot(slot).getItem()).toString()).toList());
-out.put("session",body.hasWeaponSession());return out;` }) });
+out.put("drawn",body.weaponDrawn());return out;` }) });
 const CLEANUP = defineTask<Scene, boolean>({ name: "folkways.epicfight.geo.cleanup", side: "server", source: javaTask({ imports: SERVER_IMPORTS, body: `
 var a=Args.of(ctx);var level=((MinecraftServer)ctx.server()).overworld();var body=level.getEntity(UUID.fromString(a.string("resident")));
 if(body instanceof ResidentEntity resident){resident.discard();}

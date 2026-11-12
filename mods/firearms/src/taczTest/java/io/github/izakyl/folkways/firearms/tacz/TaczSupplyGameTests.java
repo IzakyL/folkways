@@ -144,25 +144,25 @@ public final class TaczSupplyGameTests {
             .thenSucceed();
     }
 
-    @GameTest(batch = "tacz_native", template = "empty_large", templateNamespace = "folkways_core")
+    @GameTest(batch = "tacz_native", template = "empty_large", templateNamespace = "folkways_core", timeoutTicks = 700)
     public static void profileThresholdIsStrictAndIncludesTheChamber(GameTestHelper helper) {
         Scene scene = new Scene(helper);
         ResidentEntity body = scene.person(2);
-        body.setNoAi(true);
         body.pack().insert(TaczWeaponGameTests.gun("m1911", FireMode.SEMI, 9));
         scene.profile(body, 27, 9);
         scene.store.setItem(0, TaczWeaponGameTests.ammo("45acp", 40));
-        var view = scene.colony.view(helper.getLevel());
-        scene.supplies.resupply(TaczWeaponGameTests.worker(body), Optional.empty(), Long.MIN_VALUE, 0);
-        helper.assertTrue(scene.supplies.goals(view).isEmpty(), "threshold equality does not collect");
-        ItemStack carried = body.pack().getItem(0);
-        ((IGun) carried.getItem()).setCurrentAmmoCount(carried, 7);
-        body.pack().setChanged();
-        scene.supplies.resupply(TaczWeaponGameTests.worker(body), Optional.empty(), Long.MIN_VALUE, 0);
-        helper.assertValueEqual(scene.supplies.goals(view).size(), 1,
-            "eight total rounds are below the player threshold");
-        helper.assertValueEqual(scene.stockRounds(), 40, "asking for a delivery does not teleport stock");
-        helper.succeed();
+        scene.run();
+        helper.startSequence().thenIdle(40).thenExecute(() -> {
+            helper.assertValueEqual(scene.stockRounds(), 40, "threshold equality does not collect");
+            helper.assertValueEqual(scene.rounds(body), 9, "the chamber counts toward the refill line");
+            ItemStack carried = body.pack().getItem(0);
+            ((IGun) carried.getItem()).setCurrentAmmoCount(carried, 7);
+            body.pack().setChanged();
+        }).thenWaitUntil(() -> helper.assertValueEqual(scene.rounds(body), 27,
+            "below the line, ordinary personal supply refills a non-patrolling resident"))
+            .thenExecute(() -> helper.assertValueEqual(scene.stockRounds(), 21,
+                "only nineteen loose rounds are fetched for eight rounds already in the gun"))
+            .thenSucceed();
     }
 
     @GameTest(batch = "tacz_native", template = "empty_large", templateNamespace = "folkways_core", timeoutTicks = 300)
@@ -231,7 +231,7 @@ public final class TaczSupplyGameTests {
             staffing.configure(helper.getLevel(), zone, Set.of(replacementProfile), 1);
             helper.assertFalse(queued.getAsBoolean(), "changing allowed profiles revokes queued discharge");
             scene.posts.tick(helper.getLevel().getServer());
-            helper.assertFalse(body.hasWeaponSession(), "the old operator releases its native gun session");
+            helper.assertFalse(body.weaponDrawn(), "the old operator releases its native gun session");
             helper.assertValueEqual(
                 body.pack().count(ModItems.MODERN_KINETIC_GUN.get()), 1, "the actual gun returns once");
             helper.assertValueEqual(scene.rounds(body), rounds, "revoked callbacks consume no ammunition");

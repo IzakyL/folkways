@@ -23,7 +23,8 @@ import net.minecraft.world.item.ItemStack;
 /** A stock preview, never a reservation. Loaded members consume preview units once in roster order. */
 public record ProfileShortages(
     int assigned, int incomplete, int unloaded, Map<UUID, Integer> missing, Map<UUID, Integer> unavailableStock,
-    boolean complete, int missingHorses, int unavailableHorses) {
+    boolean complete, int missingHorses, int unavailableHorses, Set<UUID> incompleteMembers,
+    Set<UUID> unloadedMembers) {
     public static ProfileShortages read(Colony colony, LoadoutProfile profile, MinecraftServer server) {
         PatrolSupplies supplies = PatrolSupplies.of(colony);
         Map<UUID, Integer> missing = new LinkedHashMap<>();
@@ -34,7 +35,7 @@ public record ProfileShortages(
             colony.inventory().ensureObserved();
         }
         boolean complete = !snapshot.coverage().membershipPending();
-        int incomplete = 0, unloaded = 0;
+        Set<UUID> incomplete = new LinkedHashSet<>(), unloaded = new LinkedHashSet<>();
         int missingHorses = 0, unavailableHorses = 0;
         Set<UUID> previewHorses = new LinkedHashSet<>();
         List<UUID> members = supplies.profiles().residents(profile.id());
@@ -49,7 +50,7 @@ public record ProfileShortages(
             if (body == null) {
                 colony.inventory().ensureObservedResident(member);
                 complete = false;
-                unloaded++;
+                unloaded.add(member);
                 continue;
             }
             InventorySnapshot.Resident resident = snapshot.residents().get(member);
@@ -86,7 +87,7 @@ public record ProfileShortages(
                             && !entry.matches(horse.getItemBySlot(EquipmentSlot.BODY)))
                         .isPresent());
             if (needsHorse || blocked || deficits.values().stream().anyMatch(count -> count > 0)) {
-                incomplete++;
+                incomplete.add(member);
             }
             ServerLevel level = (ServerLevel) body.level();
             if (supplies.unresolvedReservations(level, snapshot)) {
@@ -125,7 +126,8 @@ public record ProfileShortages(
                 unavailable.merge(entry.id(), left, Integer::sum);
             }
         }
-        return new ProfileShortages(members.size(), incomplete, unloaded, Map.copyOf(missing),
-            Map.copyOf(unavailable), complete, missingHorses, unavailableHorses);
+        return new ProfileShortages(members.size(), incomplete.size(), unloaded.size(), Map.copyOf(missing),
+            Map.copyOf(unavailable), complete, missingHorses, unavailableHorses, Set.copyOf(incomplete),
+            Set.copyOf(unloaded));
     }
 }

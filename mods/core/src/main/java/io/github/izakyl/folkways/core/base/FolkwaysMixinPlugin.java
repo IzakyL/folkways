@@ -72,9 +72,16 @@ public abstract class FolkwaysMixinPlugin implements IMixinConfigPlugin {
         }
     }
 
+    protected boolean enabled(String mixin) {
+        return true;
+    }
+
     @Override
     public final boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
         String mixin = simpleName(mixinClassName);
+        if (!enabled(mixin)) {
+            return false;
+        }
         String needed = modOnly().get(mixin);
         if (needed != null) {
             return LoadingModList.get().getModFileById(needed) != null;

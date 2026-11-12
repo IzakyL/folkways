@@ -4,7 +4,7 @@ import com.tacz.guns.api.TimelessAPI;
 import com.tacz.guns.api.item.IGun;
 import io.github.izakyl.folkways.core.item.api.Goods;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
-import io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutProvider;
+import io.github.izakyl.folkways.core.combat.api.LoadoutProvider;
 import java.util.List;
 import java.util.Optional;
 import net.minecraft.resources.ResourceLocation;

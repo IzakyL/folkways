@@ -75,7 +75,8 @@ public final class TaczReloadGameTests {
         helper.assertTrue(
             helper.getLevel().getEntitiesOfClass(ItemEntity.class, scene.body.getBoundingBox().inflate(4)).isEmpty(),
             "no round is dropped on the ground");
-        scene.session.close();
+        scene.attack.stop();
+        scene.body.holsterWeapon();
         helper.succeed();
     }
 
@@ -92,7 +93,7 @@ public final class TaczReloadGameTests {
         var data = IGunOperator.fromLivingEntity(scene.body).getDataHolder();
         data.drawTimestamp = TaczClock.nowMillis() - 10_000;
         data.baseTimestamp = TaczClock.nowMillis() - 60_000;
-        helper.assertTrue(scene.session.reload(), "native reload starts with finite physical"
+        helper.assertTrue(scene.attack.reload(), "native reload starts with finite physical"
             + " stock");
         AbstractGunItem actual = (AbstractGunItem) scene.actual().getItem();
         // Invoke the pinned gun's original Lua with a sparse clock; no game ticks run between these
@@ -114,7 +115,8 @@ public final class TaczReloadGameTests {
                 0,
                 "lag creates no magazine shells");
         }
-        scene.session.close();
+        scene.attack.stop();
+        scene.body.holsterWeapon();
         helper.assertValueEqual(
             scene.total(ammo), rounds, "cancelling reload cannot duplicate the credited"
             + " rounds");

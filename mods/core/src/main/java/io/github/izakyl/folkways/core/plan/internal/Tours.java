@@ -260,8 +260,8 @@ final class Tours {
             if ((mustBe == null || mustBe.equals(seat.hand.id())) && seat.hand.holding().isEmpty()
                     && !seat.hand.cargo().isEmpty() && !endless(seat, seat.route.size()) && !keeping(seat, id)
                     && fitness.refusal(seat.hand, seat.slot, this.seats.size(), id) == null
-                    && PackLoad.cells(pickedUp(carried)) <= seat.hand.packCapacity()
-                    && seat.base + PackLoad.cells(seat.with(carried)) > seat.hand.packCapacity()) {
+                    && seat.hand.load(pickedUp(carried)) <= seat.hand.packCapacity()
+                    && (long) seat.base + seat.hand.delta(seat.with(carried)) > seat.hand.packCapacity()) {
                 stow.add(seat.hand.id());
             }
         }
@@ -549,7 +549,7 @@ final class Tours {
                 held.merge(amount.spec(), amount.count(), Long::sum);
             }
             held.values().removeIf(count -> count == 0);
-            if (base + PackLoad.cells(held) > seat.hand.packCapacity()) {
+            if ((long) base + seat.hand.delta(held) > seat.hand.packCapacity()) {
                 cutting.addAll(seat.route.subList(at, seat.route.size()));
                 return;
             }
@@ -939,7 +939,7 @@ final class Tours {
             }
             order.add(weave.vertex(seat.route.get(step)).plan().carrying());
         }
-        return PackLoad.fits(seat.hand.packCapacity() - seat.hand.packCells(), seat.hand.packCapacity(), order);
+        return PackLoad.fits(seat.hand, order);
     }
 
     // `join` is where on the seat's route the work could go beside work done from one of the same cells, -1 for
@@ -981,10 +981,10 @@ final class Tours {
                 continue;
             }
             Map<ItemSpec, Long> held = seat.with(carried);
-            int load = seat.base + PackLoad.cells(held);
+            long load = (long) seat.base + seat.hand.delta(held);
             if (load > seat.hand.packCapacity()) {
                 // Too full now only waits for the pack to empty; too big for the pack at all never fits.
-                worst = worse(worst, PackLoad.cells(pickedUp(carried)) > seat.hand.packCapacity()
+                worst = worse(worst, seat.hand.load(pickedUp(carried)) > seat.hand.packCapacity()
                     ? Unassigned.Reason.PACK_FULL : Unassigned.Reason.PACK_BUSY);
                 continue;
             }
@@ -1459,7 +1459,7 @@ final class Tours {
             return false;
         }
         Map<ItemSpec, Long> held = seat.with(node.plan().carrying());
-        if (seat.base + PackLoad.cells(held) > seat.hand.packCapacity()) {
+        if ((long) seat.base + seat.hand.delta(held) > seat.hand.packCapacity()) {
             return false;
         }
         Fit fit = fit(seat, node, held);

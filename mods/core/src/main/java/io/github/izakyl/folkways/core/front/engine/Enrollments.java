@@ -83,6 +83,12 @@ public final class Enrollments {
             if (delegation.shape() instanceof io.github.izakyl.folkways.core.front.api.Shape.Point point) {
                 io.github.izakyl.folkways.core.colony.internal.PointSites.register(delegation.id(), point.accepts()::test);
             }
+            if (delegation.shape() instanceof io.github.izakyl.folkways.core.front.api.Shape.Block block
+                && block.fallback()) {
+                io.github.izakyl.folkways.core.colony.internal.PointSites.register(delegation.id(),
+                    (level, pos) -> block.accepts().test(level, pos)
+                        && io.github.izakyl.folkways.core.inventory.api.port.StorePorts.ledger(level, pos));
+            }
             if (DELEGATIONS.putIfAbsent(delegation.id(), delegation) != null) {
                 throw new IllegalStateException(delegation.id() + " is already declared");
             }

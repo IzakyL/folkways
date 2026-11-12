@@ -1,30 +1,47 @@
 package io.github.izakyl.folkways.vanilla.combat.weapon;
 
-import io.github.izakyl.folkways.core.combat.api.WeaponSession;
-import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.colony.api.ClaimRelease;
 import io.github.izakyl.folkways.core.colony.api.Claimed;
 import io.github.izakyl.folkways.core.colony.api.Colonies;
 import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.combat.api.WeaponAttack;
+import io.github.izakyl.folkways.core.equipment.api.EquipmentProfile;
+import io.github.izakyl.folkways.core.equipment.api.GearSlots;
+import io.github.izakyl.folkways.core.front.api.Fronts;
+import io.github.izakyl.folkways.core.front.engine.colony.ColonyFront;
+import io.github.izakyl.folkways.core.front.engine.colony.ColonySettings;
 import io.github.izakyl.folkways.core.inventory.internal.InventoryObservations;
 import io.github.izakyl.folkways.core.item.api.Containers;
 import io.github.izakyl.folkways.core.item.api.Goods;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
+import io.github.izakyl.folkways.core.plan.api.Grown;
 import io.github.izakyl.folkways.core.resident.api.Body;
+import io.github.izakyl.folkways.core.rts.combat.command.ResidentCommands;
 import io.github.izakyl.folkways.core.runtime.LaborFixture;
 import io.github.izakyl.folkways.core.testing.Cleanup;
 import io.github.izakyl.folkways.core.testing.TestWorker;
+import io.github.izakyl.folkways.core.work.api.Node;
+import io.github.izakyl.folkways.core.work.api.NodeSpec;
+import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.work.api.ToolNeed;
+import io.github.izakyl.folkways.core.work.api.ToolUse;
+import io.github.izakyl.folkways.core.work.api.WorkSite;
 import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.work.api.Workload;
 import io.github.izakyl.folkways.core.world.api.Reach;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
+import io.github.izakyl.folkways.vanilla.FolkwaysVanillaMod;
 import io.github.izakyl.folkways.vanilla.person.PersonBody;
 import io.github.izakyl.folkways.vanilla.person.PersonContent;
 import io.github.izakyl.folkways.vanilla.person.ResidentEntity;
-import io.github.izakyl.folkways.vanilla.FolkwaysVanillaMod;
-import io.github.izakyl.folkways.core.rts.combat.command.ResidentCommands;
+import io.github.izakyl.folkways.vanilla.person.living.LivingContent;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.IntStream;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.gametest.framework.GameTest;
@@ -49,16 +66,14 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.common.Tags;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
-import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
 @EventBusSubscriber(modid = FolkwaysVanillaMod.ID, bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder("folkways_vanilla")
 @PrefixGameTestTemplate(false)
 public final class PatrolSupplyGameTests {
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) {
-        event.register(PatrolSupplyGameTests.class);
+        io.github.izakyl.folkways.core.testing.SelectedTests.register(event, PatrolSupplyGameTests.class);
     }
 
     @GameTest(template = "empty_large", templateNamespace = "folkways_core", timeoutTicks = 650)
@@ -142,7 +157,7 @@ public final class PatrolSupplyGameTests {
                     Reach.standingAt(scene.body.position(), scene.anchor.block(scene.level))
                     && !scene.supplies.underway(scene.body.id()),
                     "an unavailable supply does not take the guard away");
-                helper.assertTrue(!scene.body.hasWeaponSession(), "stockout creates no"
+                helper.assertTrue(!scene.body.weaponDrawn(), "stockout creates no"
                     + " native weapon"
                     + " loan");
                 scene.store.setItem(0, new ItemStack(Items.ARROW, 8));
@@ -208,9 +223,8 @@ public final class PatrolSupplyGameTests {
                     scene.countInStore(Items.ARROW),
                     16,
                     "the cancelled order never removes ammunition");
-                helper.assertTrue(
-                    scene.supplyState() == PatrolSupplies.State.CANCELLED,
-                    "supply cancellation remains observable");
+                helper.assertTrue(scene.supplies.profiles().assigned(scene.body.id()).isPresent(),
+                    "the newer order preserves the personal profile for later collection");
             })
             .thenSucceed();
     }
@@ -393,11 +407,12 @@ public final class PatrolSupplyGameTests {
         scene.store.setItem(0, new ItemStack(Items.ARROW, 20));
         scene.guard();
         var order = scene.commands.current(scene.body.id()).orElseThrow();
-        var session = Weapons.open(worker(scene.body)).orElseThrow();
+        var attack = Weapons.open(worker(scene.body)).orElseThrow();
         InventoryObservations.publish(scene.colony, scene.level);
         var view = scene.colony.view(scene.level);
         scene.supplies.resupply(worker(scene.body), Optional.of(order), Long.MIN_VALUE, Long.MIN_VALUE);
-        helper.assertFalse(scene.supplies.goals(view).isEmpty(), "the guard order asks for the missing arrows"
+        helper.assertTrue(scene.supplies.status(scene.body.id()).state() == PatrolSupplies.State.FETCHING,
+            "the profile asks for the missing arrows"
             + scene.debug());
         var profile = scene.supplies.profiles().assigned(scene.body.id()).orElseThrow();
         scene.supplies
@@ -406,8 +421,8 @@ public final class PatrolSupplyGameTests {
         helper.assertTrue(scene.supplies.goals(view).isEmpty()
                 && scene.supplyState() == PatrolSupplies.State.CANCELLED,
             "a profile edit withdraws the delivery asked under the old revision");
-        helper.assertValueEqual(
-            session.state(), WeaponSession.State.CLOSED, "profile changes return the actual hand immediately");
+        helper.assertTrue(scene.body.getMainHandItem().isEmpty() && scene.body.pack().count(Items.BOW) == 1,
+            "profile changes return the actual hand immediately");
         helper.assertTrue(
             scene.commands.current(scene.body.id()).orElseThrow() == order,
             "equipment editing never replaces route intent");
@@ -419,6 +434,103 @@ public final class PatrolSupplyGameTests {
             scene.commands.current(scene.body.id()).orElseThrow() == order,
             "deletion preserves the same guard order");
         helper.succeed();
+    }
+
+    @GameTest(template = "empty_large", templateNamespace = "folkways_core", timeoutTicks = 1200)
+    public static void profileSuppliesWorkersAcrossPatrolChangesAndReturnsOnUnassignment(GameTestHelper helper) {
+        Scene scene = new Scene(helper);
+        // Isolate profile supplies from the household's independent pocket-ration allowance.
+        ((ColonyFront) Fronts.of(scene.colony)).setSetting(LivingContent.ID, LivingContent.FOOD.key(),
+            new ColonySettings.Value.Items(List.of()));
+        var profiles = scene.supplies.profiles().ledger();
+        var profile = profiles.create("Worker equipment");
+        profiles.put(profile.id(), GearSlots.HEAD,
+            ItemSpec.of(Items.IRON_HELMET));
+        profiles.add(profile.id(), EquipmentProfile.Entry.carried(ItemSpec.of(Items.IRON_SWORD), 1, 1));
+        profiles.add(profile.id(), EquipmentProfile.Entry.carried(ItemSpec.of(Items.SHIELD), 1, 1));
+        profiles.add(profile.id(), EquipmentProfile.Entry
+            .carried(ItemSpec.of(Items.BREAD), 4, 2));
+        scene.store.setItem(0, new ItemStack(Items.IRON_HELMET));
+        scene.store.setItem(4, new ItemStack(Items.IRON_HELMET));
+        scene.store.setItem(1, new ItemStack(Items.IRON_SWORD));
+        scene.store.setItem(5, new ItemStack(Items.IRON_SWORD));
+        scene.store.setItem(2, new ItemStack(Items.SHIELD));
+        scene.store.setItem(6, new ItemStack(Items.SHIELD));
+        scene.store.setItem(3, new ItemStack(Items.BREAD, 12));
+        profiles.assign(List.of(scene.body.id()), Optional.of(profile.id()));
+        var finished = new AtomicBoolean();
+        helper.startSequence().thenWaitUntil(() -> helper.assertTrue(
+            scene.body.getItemBySlot(EquipmentSlot.HEAD).is(Items.IRON_HELMET)
+                && scene.body.pack().count(Items.SHIELD) == 1
+                && scene.body.pack().count(Items.IRON_SWORD) == 1 && scene.body.pack().count(Items.BREAD) == 4,
+            "a resident without patrol duty fetches and wears its profile: " + scene.debug()))
+            .thenExecute(() -> {
+                helper.assertValueEqual(scene.countInStore(Items.IRON_SWORD), 1, "initial supply takes one weapon");
+                scene.body.pack().insert(new ItemStack(Items.IRON_PICKAXE));
+                var owner = Scene.STORE_OWNER;
+                var spec = NodeSpec.of(UUID.randomUUID(), owner,
+                    WorkSite.on(scene.body),
+                    Stances.WHEREVER,
+                    Workload.Once.of(10))
+                    .tools(ToolUse.of(
+                        new ToolNeed.SuitableFor(Blocks.STONE.defaultBlockState())))
+                    .done();
+                var work = new Node() {
+                    public NodeSpec spec() {
+                        return spec;
+                    }
+
+                    public Optional<UUID> worker() {
+                        return Optional.of(scene.body.id());
+                    }
+
+                    public Outcome commit(ServerLevel level, Worker who) {
+                        helper.assertTrue(scene.body.getMainHandItem().is(Items.IRON_PICKAXE),
+                            "work borrows the main hand for its tool");
+                        helper.assertTrue(scene.body.pack().count(Items.IRON_SWORD) == 1,
+                            "the weapon remains physical stock in the pack during work");
+                        finished.set(true);
+                        return Outcome.done();
+                    }
+                };
+                scene.colony.submit(owner, scene.level.dimension(),
+                    Grown.of(work), (id, ending) -> { });
+            }).thenWaitUntil(() -> helper.assertTrue(finished.get(), "tool work completes: " + scene.debug()))
+            .thenExecute(() -> scene.body.pack().insert(
+                Containers.extract(scene.store, stack -> stack.is(Items.IRON_HELMET), 1)))
+            .thenWaitUntil(() -> helper.assertTrue(scene.countInStore(Items.IRON_HELMET) == 1
+                && scene.body.pack().count(Items.IRON_HELMET) == 0,
+                "the worn helmet satisfies its slot, so a spare returns through ordinary hauling"))
+            .thenExecute(() -> scene.body.pack().removeItem(
+                IntStream.range(0, scene.body.pack().getContainerSize())
+                    .filter(slot -> scene.body.pack().getItem(slot).is(Items.BREAD)).findFirst().orElseThrow(), 2))
+            .thenIdle(40)
+            .thenExecute(() -> {
+                helper.assertValueEqual(scene.countInStore(Items.BREAD), 8, "at the refill line no bread is taken");
+                Containers.extract(scene.body.pack(), stack -> stack.is(Items.BREAD), 1);
+            }).thenWaitUntil(() -> helper.assertTrue(scene.body.pack().count(Items.BREAD) == 4,
+                "below the line the personal request refills to target"))
+            .thenExecute(() -> {
+                helper.assertValueEqual(scene.countInStore(Items.IRON_SWORD), 1, "work keeps one weapon");
+                scene.guard();
+            }).thenIdle(40)
+            .thenExecute(() -> scene.commands.release(scene.body.id())).thenIdle(40)
+            .thenExecute(() -> {
+                helper.assertValueEqual(scene.countInStore(Items.IRON_SWORD), 1, "patrol changes take no spare weapon");
+                helper.assertValueEqual(scene.countInStore(Items.IRON_HELMET), 1, "patrol changes take no spare armor");
+                helper.assertValueEqual(scene.countInStore(Items.BREAD), 5, "patrol changes take no spare supplies");
+                profiles.assign(List.of(scene.body.id()), Optional.empty());
+            }).thenWaitUntil(() -> helper.assertTrue(
+                scene.body.getItemBySlot(EquipmentSlot.HEAD).isEmpty() && scene.body.getOffhandItem().isEmpty()
+                    && scene.countInStore(Items.IRON_HELMET) == 2 && scene.countInStore(Items.SHIELD) == 2
+                    && scene.countInStore(Items.IRON_SWORD) == 2 && scene.countInStore(Items.BREAD) == 9,
+                "unassignment unwears armor and ordinary hauling returns every surplus: " + scene.debug()
+                    + " helmet=" + scene.countInStore(Items.IRON_HELMET) + " shield=" + scene.countInStore(Items.SHIELD)
+                    + " sword=" + scene.countInStore(Items.IRON_SWORD) + " bread=" + scene.countInStore(Items.BREAD)
+                    + " worn=" + scene.body.getItemBySlot(EquipmentSlot.HEAD) + "/" + scene.body.getOffhandItem()
+                    + " pack=" + scene.body.pack().contents() + " diagnosis=" + scene.simulation.diagnosis()
+                    + " route=" + scene.simulation.route(scene.body)))
+            .thenSucceed();
     }
 
     private static Worker worker(ResidentEntity body) {
@@ -556,7 +668,7 @@ public final class PatrolSupplyGameTests {
         }
 
         ItemStack actualWeapon() {
-            return body.hasWeaponSession()
+            return body.weaponDrawn()
                 ? body.getMainHandItem()
                 : body.pack().contents().stream()
                 .filter(stack -> stack.is(Items.BOW))
@@ -566,7 +678,7 @@ public final class PatrolSupplyGameTests {
 
         int weaponCount() {
             return body.pack().count(Items.BOW)
-                + (body.hasWeaponSession() && body.getMainHandItem().is(Items.BOW)
+                + (body.weaponDrawn() && body.getMainHandItem().is(Items.BOW)
                 ? body.getMainHandItem().getCount()
                 : 0);
         }

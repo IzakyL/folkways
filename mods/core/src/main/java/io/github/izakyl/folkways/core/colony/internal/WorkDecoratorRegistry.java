@@ -1,5 +1,6 @@
 package io.github.izakyl.folkways.core.colony.internal;
 
+import java.util.Optional;
 import io.github.izakyl.folkways.core.base.Ledger;
 import io.github.izakyl.folkways.core.colony.api.Colony;
 import io.github.izakyl.folkways.core.colony.api.WorkDecorators;
@@ -55,7 +56,11 @@ public final class WorkDecoratorRegistry {
 
         public WorkSite site() { return original.site(); }
 
+        public Optional<UUID> bearer() { return original.bearer(); }
+
         public boolean alike() { return original.alike(); }
+
+        public boolean withholdsStore() { return original.withholdsStore(); }
 
         public List<Refinement.Change> options(Intent intent, Grown graph) {
             return original.options(intent, graph).stream().map(change -> new Refinement.Change(

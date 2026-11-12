@@ -47,6 +47,15 @@ public final class ResidentGeoBackend extends GeoReplacedEntityRenderer<Resident
         super(context, new Rig(), Crew.INSTANCE);
         addRenderLayer(new ResidentGeoArmorLayer(this, context));
         addRenderLayer(new ResidentGeoHeldItemLayer(this, context));
+        gear = new ResidentGeoGearLayer(this, context);
+        addRenderLayer(gear);
+    }
+
+    private final ResidentGeoGearLayer gear;
+
+    // The humanoid pose a worn-gear renderer follows while this backend draws the resident.
+    static net.minecraft.client.model.HumanoidModel<ResidentEntity> gearModel(EntityRenderer<ResidentEntity> backend) {
+        return ((ResidentGeoBackend) backend).gear.model();
     }
 
     public static EntityRenderer<ResidentEntity> create(EntityRendererProvider.Context context) {

@@ -4,6 +4,8 @@ import io.github.izakyl.folkways.core.colony.api.Closing;
 import io.github.izakyl.folkways.core.colony.api.Colony;
 import io.github.izakyl.folkways.core.colony.api.ColonyView;
 import io.github.izakyl.folkways.core.colony.api.Equipment;
+import io.github.izakyl.folkways.core.combat.api.Loadouts;
+import io.github.izakyl.folkways.core.equipment.api.EquipmentProfiles;
 import io.github.izakyl.folkways.core.inventory.api.InventorySnapshot;
 import io.github.izakyl.folkways.core.inventory.api.SlotSnapshot;
 import io.github.izakyl.folkways.core.item.api.Containers;
@@ -14,6 +16,7 @@ import io.github.izakyl.folkways.core.plan.api.Grown;
 import io.github.izakyl.folkways.core.resident.api.Body;
 import io.github.izakyl.folkways.core.work.api.Amount;
 import io.github.izakyl.folkways.core.work.api.Need;
+import io.github.izakyl.folkways.core.work.api.Node;
 import io.github.izakyl.folkways.core.work.api.NodeSpec;
 import io.github.izakyl.folkways.core.work.api.Stances;
 import io.github.izakyl.folkways.core.work.api.WorkSite;
@@ -26,6 +29,7 @@ import io.github.izakyl.folkways.vanilla.patrol.PatrolContent;
 import io.github.izakyl.folkways.vanilla.person.ResidentEntity;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -79,7 +83,6 @@ public final class PatrolSupplies {
     }
 
     private final Colony colony;
-    private final LoadoutProfiles profiles;
     private final ResidentMounts mounts;
     private final Runnable changed;
     private final Map<UUID, Set<UUID>> refilling = new HashMap<>();
@@ -99,7 +102,6 @@ public final class PatrolSupplies {
         this.colony = colony;
         this.changed = changed;
         mounts = new ResidentMounts(colony);
-        profiles = new LoadoutProfiles(colony, this::invalidate);
     }
 
     public static PatrolSupplies of(Colony colony) {
@@ -111,21 +113,21 @@ public final class PatrolSupplies {
     }
 
     public LoadoutProfiles profiles() {
-        return profiles;
+        return LoadoutProfiles.of(colony);
     }
 
     public void clear(Body body) {
         validate(body);
-        profiles.assign(List.of(body.id()), Optional.empty());
+        profiles().assign(List.of(body.id()), Optional.empty());
     }
 
     public boolean mayEngage(UUID resident) {
-        return profiles.assigned(resident).isPresent()
+        return profiles().assigned(resident).isPresent()
             || Fronts.of(colony).settings(PatrolContent.ID).choice("no_profile").getPath().equals("engage");
     }
 
     void weaponFailed(UUID resident) {
-        if (profiles.assigned(resident).isPresent()) {
+        if (profiles().assigned(resident).isPresent()) {
             awaitingWeapon.add(resident);
         }
     }
@@ -141,6 +143,18 @@ public final class PatrolSupplies {
     // Whether the resident's own route, when last seen, went to fetch one of its deliveries: it is away for them.
     public boolean underway(UUID resident) {
         return underway.contains(resident);
+    }
+
+    // Residents with a delivery asked for, per profile entry.
+    public Map<UUID, Integer> inTransit(Collection<UUID> residents) {
+        Map<UUID, Integer> counts = new LinkedHashMap<>();
+        for (UUID resident : residents) {
+            Asked each = asked.get(resident);
+            if (each != null) {
+                each.asks().keySet().forEach(entry -> counts.merge(entry, 1, Integer::sum));
+            }
+        }
+        return counts;
     }
 
     // The deliveries asked for residents in this dimension, to be offered to the planner.
@@ -177,7 +191,8 @@ public final class PatrolSupplies {
         }
     }
 
-    private void invalidate(UUID resident) {
+    // The resident's profile changed: whatever was asked for the old one is withdrawn.
+    public void invalidate(UUID resident) {
         revisions.merge(resident, 1L, Long::sum);
         withdraw(resident);
         refilling.remove(resident);
@@ -186,10 +201,8 @@ public final class PatrolSupplies {
         var server = ServerLifecycleHooks.getCurrentServer();
         for (ServerLevel level : server.getAllLevels()) {
             if (level.getEntity(resident) instanceof ResidentEntity body) {
-                body.stopWeaponSession();
-                if (profiles != null) {
-                    mounts.reconcile(level, body, profiles.assigned(resident));
-                }
+                body.stopCombat();
+                mounts.reconcile(level, body, profiles().assigned(resident));
             }
         }
     }
@@ -205,10 +218,10 @@ public final class PatrolSupplies {
     }
 
     public void tick(MinecraftServer server) {
-        mounts.tick(server, profiles);
+        mounts.tick(server, profiles());
         Set<UUID> roster = new HashSet<>();
         colony.residents().forEach(resident -> roster.add(resident.id()));
-        profiles.retain(roster);
+        profiles().ledger().retain(roster);
         refilling.keySet().retainAll(roster);
         awaitingWeapon.retainAll(roster);
         for (var entry : List.copyOf(asked.entrySet())) {
@@ -248,12 +261,12 @@ public final class PatrolSupplies {
         InventorySnapshot.Resident resident = colony.inventory().snapshot().residents().get(body.id());
         if (resident == null || resident.state() != InventorySnapshot.State.OBSERVED) {
             colony.inventory().ensureObservedResident(body.id());
-            return profiles.assigned(body.id()).stream().flatMap(profile -> profile.entries().stream())
+            return profiles().assigned(body.id()).stream().flatMap(profile -> profile.entries().stream())
                 .map(entry -> new Amount(entry.items(), entry.target())).toList();
         }
         List<Amount> kept = new ArrayList<>();
         List<ItemStack> available = new ArrayList<>(resident.pack().stream().map(SlotSnapshot::stackCopy).toList());
-        profiles.assigned(body.id())
+        profiles().assigned(body.id())
             .ifPresent(
             profile -> {
                 for (LoadoutProfile.Entry entry : profile.entries()) {
@@ -273,7 +286,7 @@ public final class PatrolSupplies {
     }
 
     public List<Equipment.Demand> armor(Body body) {
-        return profiles.assigned(body.id()).stream()
+        return profiles().assigned(body.id()).stream()
             .flatMap(profile -> profile.entries().stream())
             .filter(entry -> entry.kind() == LoadoutProfile.Kind.ARMOR)
             .map(entry -> new Equipment.Demand(entry.slot().orElseThrow(), entry.items(), false))
@@ -286,8 +299,8 @@ public final class PatrolSupplies {
         if (!(who.body() instanceof ResidentEntity body) || !(body.level() instanceof ServerLevel level)) {
             return;
         }
-        mounts.reconcile(level, body, profiles.assigned(body.id()));
-        if (profiles.assigned(body.id()).isEmpty()) {
+        mounts.reconcile(level, body, profiles().assigned(body.id()));
+        if (profiles().assigned(body.id()).isEmpty()) {
             withdraw(body.id());
             return;
         }
@@ -334,11 +347,18 @@ public final class PatrolSupplies {
             }
             return;
         }
-        LoadoutProfile profile = profiles.assigned(body.id()).orElseThrow();
+        LoadoutProfile profile = profiles().assigned(body.id()).orElseThrow();
         for (LoadoutProfile.Entry entry : profile.entries()) {
             if (!entry.available()) {
                 withdraw(body.id());
                 report(body.id(), State.UNAVAILABLE, "entry has no usable equipment for its kind or slot", 1);
+                return;
+            }
+            if (entry.kind() == LoadoutProfile.Kind.ARMOR
+                && !body.getItemBySlot(entry.slot().orElseThrow()).isEmpty()
+                && !entry.matches(body.getItemBySlot(entry.slot().orElseThrow()))
+                && !Equipment.managed(body, entry.slot().orElseThrow())) {
+                report(body.id(), State.BLOCKED, "armor slot occupied", 1);
                 return;
             }
             if (entry.kind() == LoadoutProfile.Kind.HORSE_ARMOR
@@ -349,24 +369,29 @@ public final class PatrolSupplies {
                 report(body.id(), State.BLOCKED, "horse armor slot occupied", 1);
                 return;
             }
-            if (entry.kind() == LoadoutProfile.Kind.ARMOR
-                && observed.equipment().containsKey(entry.slot().orElseThrow())
-                && !observed.equipment().get(entry.slot().orElseThrow()).stackCopy().isEmpty()
-                && !Goods.matches(observed.equipment().get(entry.slot().orElseThrow()).stackCopy(), entry.items())) {
-                withdraw(body.id());
-                report(body.id(), State.BLOCKED, "armor slot occupied", 1);
-                return;
-            }
         }
         Map<UUID, Integer> wanted = wanted(body, profile, observedDeficits(body, profile, observed));
+        boolean personalMissing = profile.entries().stream().anyMatch(entry -> !mount(entry)
+            && wanted.containsKey(entry.id()));
+        profile.entries().stream().filter(entry -> !mount(entry)).forEach(entry -> wanted.remove(entry.id()));
+        if (EquipmentProfiles.of(colony).supplying(body.id(), who.route().stream().map(Node::id).toList())) {
+            underway.add(body.id());
+        }
+
         if (wanted.isEmpty()) {
             withdraw(body.id());
-            awaitingWeapon.remove(body.id());
+            if (EquipmentProfiles.of(colony).supplying(body.id(), who.route().stream().map(Node::id).toList())) {
+                underway.add(body.id());
+            }
+            if (!personalMissing) {
+                awaitingWeapon.remove(body.id());
+            }
             if (profile.entries().stream().anyMatch(entry -> entry.kind() == LoadoutProfile.Kind.MOUNT)
                     && !mounts.assigned(body.id())) {
                 report(body.id(), State.UNAVAILABLE, "no free tame pasture horse", 1);
             } else {
-                report(body.id(), State.READY, "stock ready", 0);
+                report(body.id(), personalMissing ? State.FETCHING : State.READY,
+                    personalMissing ? "personal stock asked for" : "stock ready", personalMissing ? 1 : 0);
             }
             return;
         }
@@ -417,8 +442,8 @@ public final class PatrolSupplies {
     private ItemSpec planned(LoadoutProfile.Entry entry, ServerLevel level) {
         ItemSpec goods = planned(entry);
         List<ItemStack> seen = colony.inventory().snapshot().stores().values().stream()
-            .filter(store -> store.dimension().equals(level.dimension()))
-            .flatMap(store -> store.slots().stream()).map(SlotSnapshot::stackCopy)
+            .filter(store -> store.dimension().equals(level.dimension()) && store.usability().usable())
+            .flatMap(store -> store.entries().stream()).map(held -> held.prototype())
             .filter(stack -> !stack.isEmpty() && Goods.matches(stack, goods)).toList();
         if (seen.stream().allMatch(entry::matches)) {
             return goods;
@@ -437,6 +462,10 @@ public final class PatrolSupplies {
         return Goods.members(spec).stream()
             .map(item -> new ItemSpec(ItemSpec.of(item).item(), Optional.empty(), Set.of(), spec.components()))
             .toList();
+    }
+
+    private static boolean mount(LoadoutProfile.Entry entry) {
+        return entry.kind() == LoadoutProfile.Kind.MOUNT || entry.kind() == LoadoutProfile.Kind.HORSE_ARMOR;
     }
 
     boolean valid(Authority authority) {
@@ -514,7 +543,7 @@ public final class PatrolSupplies {
     Map<UUID, Integer> observedDeficits(ResidentEntity body, LoadoutProfile profile,
                                        InventorySnapshot.Resident resident) {
         List<ItemStack> carried = new ArrayList<>(resident.pack().stream().map(SlotSnapshot::stackCopy).toList());
-        if (body.hasWeaponSession()) {
+        if (body.weaponDrawn()) {
             carried.add(body.getMainHandItem().copy());
         }
         return allocate(profile, carried, slot -> resident.equipment().containsKey(slot)
@@ -542,7 +571,7 @@ public final class PatrolSupplies {
         List<ItemStack> available = new ArrayList<>(carried.stream().map(ItemStack::copy).toList());
         List<ItemStack> loaded = new ArrayList<>();
         for (ItemStack weapon : carried) {
-            LoadoutRegistry.using(weapon)
+            Loadouts.using(weapon)
                 .ifPresent(
                 provider -> provider.loadedAmmunition(weapon).forEach(stack -> loaded.add(stack.copy())));
         }
@@ -588,9 +617,9 @@ public final class PatrolSupplies {
     }
 
     public Component detail(ResidentEntity body) {
-        return profiles.assigned(body.id())
+        return profiles().assigned(body.id())
             .map(profile -> Component.literal(profile.name()))
-            .orElseGet(() -> Component.translatable("folkways.loadouts.none"));
+            .orElseGet(() -> Component.translatable("folkways.equipment.none"));
     }
 
     private void report(UUID resident, State state, String reason, long missing) {

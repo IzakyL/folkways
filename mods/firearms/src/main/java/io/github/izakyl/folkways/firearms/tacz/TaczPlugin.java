@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.firearms.tacz;
 
-import io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutRegistry;
+import io.github.izakyl.folkways.core.combat.api.Loadouts;
 import io.github.izakyl.folkways.vanilla.combat.weapon.Weapons;
 import io.github.izakyl.folkways.vanilla.person.PersonBody;
 import net.neoforged.bus.api.EventPriority;
@@ -25,7 +25,7 @@ final class TaczPlugin {
                 event.enqueueWork(
                     () -> {
                         Weapons.register(TaczLoadouts.ID, new TaczWeaponAdapter());
-                        LoadoutRegistry.register(TaczLoadouts.ID, new TaczLoadouts());
+                        Loadouts.register(TaczLoadouts.ID, new TaczLoadouts());
                     }));
         modBus.addListener(
             (RegisterCapabilitiesEvent event) ->

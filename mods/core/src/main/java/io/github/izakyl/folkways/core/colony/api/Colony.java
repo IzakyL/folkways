@@ -41,6 +41,10 @@ public interface Colony {
 
     void publish(ResourceLocation owner, ResourceKey<Level> dimension, Collection<Workshop> workshops);
 
+    default List<Workshop> workshopsIn(ResourceKey<Level> dimension) {
+        return List.of();
+    }
+
     void publishTransport(ResourceLocation owner, ResourceKey<Level> dimension,
                           Collection<TransportPublication.Offering> modes);
 
@@ -55,7 +59,8 @@ public interface Colony {
 
     List<WorldPos> storesIn(ResourceKey<Level> dimension);
 
-    // The resident's view of an offered store, with the player's slot and admission rules applied.
+    // The resident's view of a slot port, with slot and admission rules applied. Non-slot ports return empty;
+    // use StorePorts for transfers and inventory().snapshot() for their goods.
     default Optional<Container> store(ServerLevel level, WorldPos at) {
         return Optional.empty();
     }
@@ -98,6 +103,7 @@ public interface Colony {
 
     // Replaces every store this owner answers for itself in that dimension: its goods are reached only through what
     // the owner offers, so the colony's work never counts them as a store's, whoever else offers it.
+    // Registered usable ports still offer storage room and PUT approaches.
     void withhold(ResourceLocation owner, ResourceKey<Level> dimension, Collection<WorldPos> stores);
 
     // Replaces every rule this owner set on the colony's stores in that dimension.

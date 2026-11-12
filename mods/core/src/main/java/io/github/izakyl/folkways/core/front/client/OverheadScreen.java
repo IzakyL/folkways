@@ -213,7 +213,9 @@ final class OverheadScreen extends Screen {
         }
         if (OverheadTools.selected().isPresent()) {
             OverheadTools.Tool tool = OverheadTools.selected().orElseThrow();
-            drafted.add(act(tool.actionKey(), tool.open()));
+            if (!tool.actionKey().isEmpty()) {
+                drafted.add(act(tool.actionKey(), tool.open()));
+            }
             row(drafted, (width - widthOf(drafted)) / 2, MARGIN + 2 * (Chip.HEIGHT + GAP) + STATUS_HEIGHT + GAP);
             return;
         }

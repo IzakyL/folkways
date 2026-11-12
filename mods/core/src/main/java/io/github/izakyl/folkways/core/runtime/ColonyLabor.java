@@ -18,7 +18,6 @@ import io.github.izakyl.folkways.core.plan.internal.Diagnosis;
 import io.github.izakyl.folkways.core.plan.internal.Gone;
 import io.github.izakyl.folkways.core.plan.internal.Known;
 import io.github.izakyl.folkways.core.plan.internal.Message;
-import io.github.izakyl.folkways.core.plan.internal.PackLoad;
 import io.github.izakyl.folkways.core.plan.internal.Planner;
 import io.github.izakyl.folkways.core.plan.internal.Refused;
 import io.github.izakyl.folkways.core.plan.internal.Schedule;
@@ -61,6 +60,8 @@ import io.github.izakyl.folkways.core.inventory.api.InventorySnapshot;
 import io.github.izakyl.folkways.core.inventory.api.Stash;
 import io.github.izakyl.folkways.core.plan.internal.Resource;
 import io.github.izakyl.folkways.core.combat.api.DefenseControl;
+import io.github.izakyl.folkways.core.equipment.api.EquipmentProfile;
+import io.github.izakyl.folkways.core.equipment.api.EquipmentProfiles;
 import io.github.izakyl.folkways.core.rts.combat.command.ResidentCommands;
 import io.github.izakyl.folkways.core.rts.combat.control.CombatSelectionOwnership;
 import java.util.ArrayList;
@@ -143,6 +144,7 @@ public final class ColonyLabor implements WorkListener {
     private final Map<UUID, UUID> inputWorkers = new LinkedHashMap<>();
     private Map<UUID, List<Claim>> plannedClaims = Map.of();
     private final Set<UUID> declined = new LinkedHashSet<>();
+    private final Map<UUID, Optional<EquipmentProfile>> equipmentRead = new LinkedHashMap<>();
     private final Map<UUID, Tour> tours = new LinkedHashMap<>();
     private Schedule schedule = Schedule.EMPTY;
     private Diagnosis diagnosis = Diagnosis.NOTHING;
@@ -285,7 +287,16 @@ public final class ColonyLabor implements WorkListener {
         runners.away(present.keySet(), colony.claims().carriedOff(), level.getGameTime());
         ColonyView view = present.isEmpty() ? null : ColonySnapshot.of(colony, level);
         Set<UUID> reserved = new LinkedHashSet<>();
+        var equipment = works.service(EquipmentProfiles.ID, EquipmentProfiles.class);
         for (Body body : present.values()) {
+            Optional<EquipmentProfile> profile = equipment.flatMap(profiles -> profiles.assigned(body.id()));
+            Optional<EquipmentProfile> previous = equipmentRead.put(body.id(), profile);
+            if (previous != null && !previous.equals(profile)) {
+                // A reduced personal allowance can turn an idle resident's protected stock into cargo.
+                // Re-read the hand and ask the ordinary hauling planner to return that surplus.
+                survey.read(body.id());
+                inbox.raise(new Message.Idle(body.id()));
+            }
             BodyRunner runner = runners.of(body.id());
             runner.check(level, body);
             boolean controlled = interrupt(level, view, body, runner);
@@ -885,7 +896,8 @@ public final class ColonyLabor implements WorkListener {
         for (var entry : plannedClaims.entrySet()) {
             for (Claim claim : entry.getValue()) {
                 Stash stash = claim.on() instanceof Resource.Lot lot ? lot.where()
-                    : claim.on() instanceof Resource.Space space ? space.where() : null;
+                    : claim.on() instanceof Resource.Space space ? space.where()
+                    : claim.on() instanceof Resource.Transit transit ? transit.where() : null;
                 if (stash != null && aliases.contains(stash.pos())) {
                     claims.add(claim);
                 }
@@ -990,6 +1002,7 @@ public final class ColonyLabor implements WorkListener {
         for (Claim claim : claims) {
             Object item = switch (claim.on()) {
                 case Resource.Lot lot -> lot.spec();
+                case Resource.Transit transit -> transit.spec();
                 case Resource.Space space -> space.spec();
                 case Resource.Cargo cargo -> cargo.spec();
                 case Resource.Handed handed -> handed.spec();
@@ -1280,9 +1293,7 @@ public final class ColonyLabor implements WorkListener {
             }
         }
         Kit kit = Kit.of(works, body);
-        int capacity = body.pack().plannableCells(item -> kit.holds(item.getDefaultInstance())) - kit.keptCells(body);
-        int used = capacity - body.pack().plannableRoom(item -> kit.holds(item.getDefaultInstance()));
-        return PackLoad.fits(used, capacity, order);
+        return io.github.izakyl.folkways.core.plan.api.PackSpace.of(body.pack(), kit.cargoIn(body)).fits(order);
     }
 
     // Two pending deliveries may share a destination even when their source stores differ. Only
@@ -1391,6 +1402,7 @@ public final class ColonyLabor implements WorkListener {
     }
 
     public void gone(UUID resident) {
+        equipmentRead.remove(resident);
         urges.gone(resident);
         offeredUrges.remove(resident);
         history.gone(resident);

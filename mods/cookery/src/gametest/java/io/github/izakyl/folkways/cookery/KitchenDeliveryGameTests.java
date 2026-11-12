@@ -1,11 +1,14 @@
 package io.github.izakyl.folkways.cookery;
 
 import io.github.izakyl.folkways.core.FolkwaysCoreMod;
+import io.github.izakyl.folkways.core.combat.api.WeaponAttack;
 import io.github.izakyl.folkways.core.resident.api.Body;
 import io.github.izakyl.folkways.core.testing.TestWorker;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.core.world.api.WorldSpaces;
+import io.github.izakyl.folkways.vanilla.combat.weapon.Weapons;
 import io.github.izakyl.folkways.vanilla.person.PersonBody;
+import io.github.izakyl.folkways.vanilla.person.ResidentEntity;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -34,6 +37,77 @@ public final class KitchenDeliveryGameTests {
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) {
         event.register(KitchenDeliveryGameTests.class);
+    }
+
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
+    public static void temporaryToolOverPresentationKeepsOnlyTheRealItems(GameTestHelper helper) {
+        temporaryHand(helper, true, false, false);
+    }
+
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
+    public static void temporaryToolOverEmptyHandKeepsOnlyTheRealItems(GameTestHelper helper) {
+        temporaryHand(helper, false, false, false);
+    }
+
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
+    public static void temporaryToolOverUnownedWeaponKeepsOnlyTheRealItems(GameTestHelper helper) {
+        temporaryHand(helper, false, true, false);
+    }
+
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
+    public static void temporaryToolDuringAttackDoesNotRestoreTheHolsteredWeapon(GameTestHelper helper) {
+        temporaryHand(helper, false, true, true);
+    }
+
+    private static void temporaryHand(GameTestHelper helper, boolean presentation, boolean drawn, boolean active) {
+        ResidentEntity body = PersonBody.RESIDENT.get().create(helper.getLevel());
+        body.setNoAi(true);
+        body.setPos(Vec3.atBottomCenterOf(helper.absolutePos(new BlockPos(1, 1, 1))));
+        body.pack().insert(new ItemStack(Items.IRON_SWORD));
+        body.pack().insert(new ItemStack(Items.STICK));
+        WeaponAttack attack = null;
+        if (presentation) {
+            body.presentHeldItem(new ItemStack(Items.IRON_SWORD));
+        } else if (active) {
+            attack = Weapons.open(TestWorker.of(body)).orElseThrow();
+        } else if (drawn) {
+            helper.assertTrue(body.drawWeapon(0), "the real weapon is drawn without an attack");
+        }
+        ItemStack previous = body.getMainHandItem();
+        ItemStack hand = new ItemStack(Items.STICK);
+        try {
+            KitchenDelivery.Result result = KitchenDelivery.run(helper.getLevel(), body.blockPosition(),
+                TestWorker.of(body), hand, () -> {
+                    helper.assertTrue(body.getMainHandItem() == hand, "the station receives the supplied tool");
+                    body.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(Items.BOWL));
+                    return true;
+                });
+            helper.assertTrue(result.success(), "the station action succeeds");
+            helper.assertValueEqual(result.outputs().size(), 1, "the returned container is delivered once");
+            helper.assertTrue(result.outputs().getFirst().is(Items.BOWL), "the output is the returned container");
+            helper.assertValueEqual(body.pack().count(Items.BOWL), 0, "the output is not also holstered");
+            helper.assertValueEqual(body.pack().count(Items.STICK), 1, "the supplied tool is not duplicated");
+            helper.assertValueEqual(body.pack().count(Items.IRON_SWORD), drawn && !active ? 0 : 1,
+                "a drawn weapon is either restored or holstered exactly once");
+            if (active) {
+                helper.assertValueEqual(attack.state(), WeaponAttack.State.STOPPED, "the kitchen action ends combat");
+                helper.assertTrue(body.getMainHandItem().isEmpty(), "the holstered weapon is not restored as a copy");
+            } else {
+                helper.assertTrue(body.getMainHandItem() == previous, "the previous hand is restored");
+                helper.assertValueEqual(body.weaponDrawn(), drawn, "the restored hand retains its physical role");
+            }
+            body.tick();
+            helper.assertValueEqual(body.pack().count(Items.IRON_SWORD), 1, "one real sword remains after a tick");
+            helper.assertValueEqual(body.pack().count(Items.STICK), 1, "one real tool remains after a tick");
+            helper.assertValueEqual(body.getMainHandItem().isEmpty(), !presentation,
+                "only a presentation copy remains in the idle hand");
+            helper.assertFalse(body.weaponDrawn(), "the idle hand has no unowned real item");
+            body.clearHandPresentation();
+            helper.assertTrue(body.getMainHandItem().isEmpty(), "the preserved presentation flag permits clearing");
+        } finally {
+            body.discard();
+        }
+        helper.succeed();
     }
 
     @GameTest(template = "empty", templateNamespace = "folkways_core")

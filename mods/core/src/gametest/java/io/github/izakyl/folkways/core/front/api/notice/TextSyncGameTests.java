@@ -46,7 +46,7 @@ public final class TextSyncGameTests {
 
     @GameTest(template = TEMPLATE, templateNamespace = "folkways_core")
     public static void unknownLineNumbersFailDecoding(GameTestHelper helper) {
-        for (int type : new int[]{-1, 9, 127}) {
+        for (int type : new int[]{-1, 10, 127}) {
             var buffer = new RegistryFriendlyByteBuf(Unpooled.buffer(), helper.getLevel().registryAccess());
             try {
                 buffer.writeVarInt(1);

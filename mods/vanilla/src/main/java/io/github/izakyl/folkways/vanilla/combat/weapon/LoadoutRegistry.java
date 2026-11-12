@@ -1,14 +1,12 @@
 package io.github.izakyl.folkways.vanilla.combat.weapon;
 
+import io.github.izakyl.folkways.core.combat.api.LoadoutProvider;
+import io.github.izakyl.folkways.core.combat.api.Loadouts;
 import io.github.izakyl.folkways.core.item.api.Goods;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import io.github.izakyl.folkways.vanilla.person.ResidentEntity;
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.resources.ResourceLocation;
@@ -17,46 +15,24 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.neoforged.neoforge.common.Tags;
 
+/** The common weapons every resident can fight with, and what a resident carries to fight. */
 public final class LoadoutRegistry {
-    private static volatile Map<ResourceLocation, LoadoutProvider> providers = Map.of();
-
-    static {
-        register(ResourceLocation.fromNamespaceAndPath("folkways_vanilla", "melee"),
-            new Ordinary("melee", ItemSpec.of(Tags.Items.MELEE_WEAPON_TOOLS), false));
-        register(ResourceLocation.fromNamespaceAndPath("folkways_vanilla", "bow"),
-            new Ordinary("bow", ItemSpec.of(Items.BOW), true));
-        register(ResourceLocation.fromNamespaceAndPath("folkways_vanilla", "crossbow"),
-            new Ordinary("crossbow", ItemSpec.of(Items.CROSSBOW), true));
-    }
-
     private LoadoutRegistry() {
     }
 
-    public static synchronized void register(ResourceLocation id, LoadoutProvider provider) {
-        if (providers.containsKey(id)) {
-            throw new IllegalArgumentException("loadout already registered: " + id);
-        }
-        Map<ResourceLocation, LoadoutProvider> next = new LinkedHashMap<>();
-        next.put(Objects.requireNonNull(id), Objects.requireNonNull(provider));
-        next.putAll(providers);
-        providers = Collections.unmodifiableMap(next);
-    }
-
-    public static Optional<LoadoutProvider> find(ResourceLocation id) {
-        return Optional.ofNullable(providers.get(id));
-    }
-
-    public static Map<ResourceLocation, LoadoutProvider> entries() {
-        return providers;
-    }
-
-    public static Optional<LoadoutProvider> using(ItemStack stack) {
-        return providers.values().stream().filter(provider -> provider.accepts(stack)).findFirst();
+    /** Registers the common kinds first, so every extension registered after them is asked before them. */
+    public static void install() {
+        Loadouts.register(ResourceLocation.fromNamespaceAndPath("folkways_vanilla", "melee"),
+            new Ordinary("melee", ItemSpec.of(Tags.Items.MELEE_WEAPON_TOOLS), false));
+        Loadouts.register(ResourceLocation.fromNamespaceAndPath("folkways_vanilla", "bow"),
+            new Ordinary("bow", ItemSpec.of(Items.BOW), true));
+        Loadouts.register(ResourceLocation.fromNamespaceAndPath("folkways_vanilla", "crossbow"),
+            new Ordinary("crossbow", ItemSpec.of(Items.CROSSBOW), true));
     }
 
     public static List<ItemStack> carried(ResidentEntity body) {
         List<ItemStack> stacks = new ArrayList<>();
-        if (body.hasWeaponSession()) {
+        if (body.weaponDrawn()) {
             stacks.add(body.getMainHandItem());
         }
         stacks.addAll(body.pack().contents());

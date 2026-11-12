@@ -2,6 +2,7 @@ package io.github.izakyl.folkways.vanilla.wares;
 
 import io.github.izakyl.folkways.core.extension.api.Declaring;
 import io.github.izakyl.folkways.core.item.api.Containers;
+import io.github.izakyl.folkways.core.inventory.api.port.StorePorts;
 import io.github.izakyl.folkways.core.item.api.ItemFilter;
 import io.github.izakyl.folkways.core.vocation.api.Vocation;
 import io.github.izakyl.folkways.core.vocation.api.VocationGroup;
@@ -102,7 +103,7 @@ public final class WaresContent {
         registering.enrollment(ID, new Enrollment(
             List.of(new Delegation(STATION, new Shape.Block(Stations::isStation)),
                 new Delegation(STORE, Shape.Block.fallback(
-                    (level, pos) -> Containers.at(level, pos).isPresent(), Containers::anchor))),
+                    StorePorts::candidate, Containers::chestAnchor))),
             new Schema(List.of(FUEL)),
             List.of(PAGE)));
     }

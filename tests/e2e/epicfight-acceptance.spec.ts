@@ -39,7 +39,7 @@ test("Epic Fight with Vanilla RTS renders real resident skins and lands native s
       expect(initial.targetHasAi).toBe(false);
       let sawNativeAttack = false;
       const hit = await observe(pair, active, evidence, `${weapon} native collision`, row => {
-        sawNativeAttack ||= row.sessionType.endsWith(".EpicFightWeaponSession") && row.attackAnimation && row.nativeTarget;
+        sawNativeAttack ||= row.attackType.endsWith(".EpicFightWeaponAttack") && row.attackAnimation && row.nativeTarget;
         return sawNativeAttack && row.attacker && row.targetHealth < initial.targetHealth && row.weaponDamage > 9;
       }, 450);
       expect(hit.residentHealth).toBe(20); expect(hit.staffed, "a real production patrol assignment owns this autonomous engagement").toBe(true);
@@ -51,7 +51,7 @@ test("Epic Fight with Vanilla RTS renders real resident skins and lands native s
       await capture(pair.client, info, `${weapon.replace(":", "-")}-native-hit-rendered.png`);
       // Withdraw the actual patrol staffing and relocate its threat; the ordinary runner closes its hand loan.
       await pair.server.run(STOP_AUTONOMY, active);
-      const released = await observe(pair, active, evidence, `${weapon} release native hand`, row => !row.session && !row.authorized && row.weaponPlace.startsWith("pack:"), 160);
+      const released = await observe(pair, active, evidence, `${weapon} release native hand`, row => !row.controller && !row.authorized && row.weaponPlace.startsWith("pack:"), 160);
       for (let elapsed = 0; elapsed < 80; elapsed += 2) {
         await tick.sprint(pair.server, 2);
         const row = await pair.server.run(READ, active);
@@ -59,7 +59,7 @@ test("Epic Fight with Vanilla RTS renders real resident skins and lands native s
         physical(row);
         expect(row.targetHealth, "no delayed native collision remains after the command was replaced").toBe(released.targetHealth);
         expect(row.weaponDamage).toBe(released.weaponDamage);
-        expect(row.session).toBe(false);
+        expect(row.controller).toBe(false);
         expect(row.authorized).toBe(false);
       }
       await pair.server.run(CLEANUP, active); active = undefined;
@@ -113,7 +113,7 @@ test("Epic Fight V command pointer MOVE cancels a real pending native attack and
     await waitInput(pair, scene, evidence, "right-click hostile receives authoritative ATTACK ACK", value =>
       value.routeRequest > beforeAttack && value.accepted && value.intent === "ATTACK" && !value.pending);
     const pending = await observe(pair, scene, evidence, "real selected sword enters native pre-contact windup", row =>
-      row.order === "ATTACK" && row.sessionType.endsWith(".EpicFightWeaponSession") && row.sessionState === "FIRING"
+      row.order === "ATTACK" && row.attackType.endsWith(".EpicFightWeaponAttack") && row.drawn && row.nativeTarget && row.attackAnimation
       && row.attackAnimation && row.nativeTarget && row.authorized && row.preContact, 260);
     expect(pending.weaponDamage, "cancelled native windup has not spent its real item yet").toBe(9);
     expect(pending.targetHealth).toBe(pending.targetMaxHealth);
@@ -135,7 +135,7 @@ test("Epic Fight V command pointer MOVE cancels a real pending native attack and
     expect(moving.targetHealth).toBe(pending.targetHealth);
     const leaving = await observe(pair, scene, evidence, "MOVE physically departs the native attack position", row => {
       expect(row.targetHealth).toBe(pending.targetHealth); expect(row.weaponDamage).toBe(9); expect(row.authorized).toBe(false);
-      return Math.hypot(row.x - pending.x, row.z - pending.z) > .6 && !row.session;
+      return Math.hypot(row.x - pending.x, row.z - pending.z) > .6 && !row.controller;
     }, 80);
     const movingDraw = await render(pair, scene, evidence);
     evidence.push({ step: "real moving native renderer and living motion, without forced STEP/sprint", value: { server: leaving, client: movingDraw } });
@@ -144,7 +144,7 @@ test("Epic Fight V command pointer MOVE cancels a real pending native attack and
       expect(row.targetHealth, "every observed tick after MOVE retains the old target's health").toBe(pending.targetHealth);
       expect(row.weaponDamage, "cancelled windup spends no durability").toBe(9);
       expect(row.authorized, "old target loses the real native collision permission").toBe(false);
-      return Math.hypot(row.x - destination.x - .5, row.z - destination.z - .5) < 1.5 && !row.session;
+      return Math.hypot(row.x - destination.x - .5, row.z - destination.z - .5) < 1.5 && !row.controller;
     }, 500);
     expect(arrived.using).toBe(false);
     const rendered = await render(pair, scene, evidence); expect(rendered.rts).toBe(true);
@@ -155,7 +155,7 @@ test("Epic Fight V command pointer MOVE cancels a real pending native attack and
       await tick.sprint(pair.server, 1); await frames(pair.client, 2);
       const row = await pair.server.run(READ, scene); evidence.push({ step: "arrived command has no residual native strike", value: row }); physical(row);
       expect(row.targetHealth).toBe(pending.targetHealth); expect(row.weaponDamage).toBe(9);
-      expect(row.session || row.authorized || row.using).toBe(false);
+      expect(row.controller || row.authorized || row.using).toBe(false);
     }
     // Upstream deliberately has no command buttons in CombatCards. RELEASE is the bound
     // RTS keyboard command (J by default), shown by the active tool's hint panel.
@@ -169,7 +169,7 @@ test("Epic Fight V command pointer MOVE cancels a real pending native attack and
       value.selected.length === 0 && value.selection.length === 0 && !value.owned && !value.reserved);
     const released = await pair.server.run(READ, scene); physical(released);
     expect(released.weaponPlace).toMatch(/^pack:/);
-    expect(released.order).toBe("NONE"); expect(released.session || released.using || released.sprinting).toBe(false);
+    expect(released.order).toBe("NONE"); expect(released.controller || released.using || released.sprinting).toBe(false);
     evidence.push({ step: "final unique physical weapon after real RELEASE", value: released });
     // No synthetic STEP is invoked: the saved client render/animation/motion readings show what actually ran.
     await capture(pair.client, info, "epicfight-native-released-no-control-leak.png");

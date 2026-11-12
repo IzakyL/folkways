@@ -17,11 +17,9 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.ModList;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
-import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
 @EventBusSubscriber(modid = "folkways_core", bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder("folkways_core")
 @PrefixGameTestTemplate(false)
 public final class NamespaceUpgradeGameTests {
     private NamespaceUpgradeGameTests() {
@@ -29,7 +27,9 @@ public final class NamespaceUpgradeGameTests {
 
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) {
-        event.register(NamespaceUpgradeGameTests.class);
+        if (!Boolean.getBoolean("folkways.core.integrationTests")) {
+            event.register(NamespaceUpgradeGameTests.class);
+        }
     }
 
     @GameTest(template = "empty", templateNamespace = "folkways_core")
@@ -140,6 +140,17 @@ public final class NamespaceUpgradeGameTests {
     }
 
     @GameTest(template = "empty", templateNamespace = "folkways_core")
+    public static void v3RegistryKeepsOptionalBagsAbsent(GameTestHelper helper) throws Exception {
+        CompoundTag raw = TagParser.parseTag("""
+            {colonies:[{keeps:{}},{keeps:{"folkways_core:transport":{stock:9}}}]}
+            """);
+        CompoundTag before = raw.copy();
+        Upgrades.upgrade(Surface.COLONY_REGISTRY, raw, 3);
+        helper.assertValueEqual(raw, before, "version 4 preserves unrelated keeps and does not initialize bags");
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void colonySettingsQueriesNormalizeAcrossModuleTables(GameTestHelper helper) throws Exception {
         CompoundTag raw = TagParser.parseTag("""
             {colonies:[{keeps:{"folkways:front":{drawn:{holding:{food:{items:[
@@ -199,8 +210,8 @@ public final class NamespaceUpgradeGameTests {
         helper.assertTrue(savedStores.getCompound("folkways_core:body_state").getCompound("Perks")
             .getCompound("vocations").getCompound("folkways_vanilla:crafting").getInt("xp") == 123,
             "v2 perk vocation progress survives real entity decoding");
-        helper.assertTrue(savedEntity.getCompound("NeoForgeData").getInt(RawUpgrades.VERSION) == 3,
-            "the loaded body writes the v3 stamp");
+        helper.assertTrue(savedEntity.getCompound("NeoForgeData").getInt(RawUpgrades.VERSION) == DataVersion.CURRENT,
+            "the loaded body writes the current stamp");
         resident.discard();
         loaded.discard();
         var block = BuiltInRegistries.BLOCK.get(ResourceLocation.parse("folkways:creative_supply_box"));

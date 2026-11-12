@@ -594,6 +594,9 @@ public final class TaskToolsGameTests {
             rig.colony.works().rule(CookeryContent.ID, rig.level.dimension(), List.of(
                 new StoreRule.Access(rig.rackAt, false, true)));
             var blocked = rig.stock(KNIVES);
+            helper.assertTrue(rig.colony.inventory().snapshot().store(rig.rackAt).orElseThrow().usability().usable(),
+                "the native rack adapter is admitted as a usable store");
+            helper.assertValueEqual(blocked.inventory().tools().size(), 1, "the real rack knife remains observed");
             helper.assertTrue(blocked.sources().isEmpty(), "a rack with take disabled offers no physical borrowing source");
             helper.assertTrue(blocked.inventory().tools().stream().allMatch(tool ->
                 tool.whereabouts() == KitchenTools.Whereabouts.UNREACHABLE), "the real inaccessible tool remains observed");

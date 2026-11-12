@@ -1,5 +1,6 @@
 package io.github.izakyl.folkways.vanilla.orders;
 
+import io.github.izakyl.folkways.core.item.api.BlockNames;
 import io.github.izakyl.folkways.core.base.persist.Reader;
 import io.github.izakyl.folkways.core.base.persist.Writer;
 import io.github.izakyl.folkways.core.colony.api.Asking;
@@ -411,6 +412,9 @@ final class OrdersPresence implements Facing {
                 colony.inventory().ensureObserved(Stash.at(order.into()));
                 continue;
             }
+            if (observed.isPresent() && !observed.get().usability().usable()) {
+                continue;
+            }
             // A once order is done when its target holds enough, even if the goods came by another route.
             if (!order.standing() && observed.filter(store -> store.state() == InventorySnapshot.State.OBSERVED)
                     .map(store -> held(store, order) >= order.high()).orElse(false)) {
@@ -439,7 +443,7 @@ final class OrdersPresence implements Facing {
                     continue;
                 }
                 Optional<Stances> stands = target.approach().state() == InventorySnapshot.State.OBSERVED
-                    ? Stances.of(target.approach().stands().stream().map(Stand::cell).toList()) : Optional.empty();
+                    ? Stances.of(target.approach().putting().stream().map(Stand::cell).toList()) : Optional.empty();
                 if (stands.isEmpty()) {
                     continue;
                 }
@@ -455,8 +459,8 @@ final class OrdersPresence implements Facing {
     }
 
     private static long held(InventorySnapshot.Store store, Order order) {
-        return store.slots().stream().map(slot -> slot.stackCopy())
-            .filter(stack -> Goods.matches(stack, order.what())).mapToLong(ItemStack::getCount).sum();
+        return !store.usability().usable() ? 0 : store.entries().stream()
+            .filter(entry -> Goods.matches(entry.prototype(), order.what())).mapToLong(entry -> entry.count()).sum();
     }
 
     // Every order the colony keeps, under the container it fills: the container a heading that finds it in the world,
@@ -491,9 +495,11 @@ final class OrdersPresence implements Facing {
     @Override
     public Optional<Board> boardAt(ResourceLocation page, BlockPos at, ColonyView view) {
         ServerLevel level = view.level();
-        // Orders are filed into a store; a cooker is a container too, but the colony loads it itself.
+        // Orders are filed into a store; a cooker is a container too, but the colony loads it itself. A store
+        // without slots, such as a storage network's terminal, has its own page.
         if (!page.equals(OrdersContent.PAGE.id())
-            || !view.blocks(WaresContent.STORE).contains(Containers.anchor(level, at))) {
+            || !view.blocks(WaresContent.STORE).contains(Containers.anchor(level, at))
+            || Containers.at(level, Containers.anchor(level, at)).isEmpty()) {
             return Optional.empty();
         }
         WorldPos into = WorldPos.of(level, Containers.anchor(level, at));
@@ -530,8 +536,7 @@ final class OrdersPresence implements Facing {
     private Board.Row orderRow(Order order, InventorySnapshot inventory, List<Board.Act> acts) {
         var target = inventory.store(order.into());
         Optional<Long> present = target.filter(store -> store.state() == InventorySnapshot.State.OBSERVED)
-            .map(store -> store.slots().stream().map(slot -> slot.stackCopy())
-                .filter(stack -> Goods.matches(stack, order.what())).mapToLong(ItemStack::getCount).sum());
+            .map(store -> held(store, order));
         long left = onTheWay(order);
         if (present.isEmpty()) {
             colony.inventory().ensureObserved(Stash.at(order.into()));
@@ -586,7 +591,7 @@ final class OrdersPresence implements Facing {
     private static Component containerName(ServerLevel level, WorldPos into) {
         BlockPos cell = into.block(level);
         Component block = into.in(level) && level.isLoaded(cell)
-            ? level.getBlockState(cell).getBlock().getName()
+            ? BlockNames.at(level, cell)
             : Component.translatable("folkways.panel.orders.container.away");
         return Component.translatable("folkways.panel.orders.container", block, cell.getX(), cell.getY(), cell.getZ());
     }

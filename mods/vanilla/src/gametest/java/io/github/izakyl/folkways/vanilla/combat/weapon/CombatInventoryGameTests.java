@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.vanilla.combat.weapon;
 
-import io.github.izakyl.folkways.core.combat.api.WeaponSession;
+import io.github.izakyl.folkways.core.combat.api.WeaponAttack;
 import io.github.izakyl.folkways.core.colony.api.Claimed;
 import io.github.izakyl.folkways.core.colony.api.Colonies;
 import io.github.izakyl.folkways.core.inventory.api.InventorySnapshot;
@@ -82,7 +82,7 @@ public final class CombatInventoryGameTests {
                 "observed stock covers the resident's deficit");
             int storeReads = store.reads;
             int packReads = pack.reads;
-            var worker = WeaponSessionGameTests.worker(body);
+            var worker = WeaponHandGameTests.worker(body);
             for (int pass = 0; pass < 16; pass++) {
                 ProfileShortages.read(colony, profile, level.getServer());
                 supplies.keeps(body);
@@ -111,9 +111,10 @@ public final class CombatInventoryGameTests {
             helper.assertTrue(colony.inventory().snapshot().residents().get(body.id()).state()
                 != InventorySnapshot.State.OBSERVED, "the resident observation is incomplete");
             helper.assertTrue(Weapons.ranged(worker), "profile planning does not depend on resident observation");
-            WeaponSession session = Weapons.open(worker).orElseThrow();
-            helper.assertTrue(body.getMainHandItem().is(Items.BOW), "an armed resident can still open a session");
-            session.close();
+            WeaponAttack attack = Weapons.open(worker).orElseThrow();
+            helper.assertTrue(body.getMainHandItem().is(Items.BOW), "an armed resident can still open a attack");
+            attack.stop();
+            body.holsterWeapon();
             InventoryObservations.publish(colony, level);
             body.pack().setItem(0, ItemStack.EMPTY);
             helper.assertTrue(Weapons.ranged(worker), "removing ammunition does not change profile planning");
@@ -127,9 +128,10 @@ public final class CombatInventoryGameTests {
                 "the profile supplies detect the ammunition deficit after publication");
             body.pack().setItem(0, new ItemStack(Items.ARROW, 2));
             InventoryObservations.publish(colony, level);
-            WeaponSession refilled = Weapons.open(worker).orElseThrow();
+            WeaponAttack refilled = Weapons.open(worker).orElseThrow();
             helper.assertTrue(body.getMainHandItem().is(Items.BOW), "a refilled pack opens the real weapon");
-            refilled.close();
+            refilled.stop();
+            body.holsterWeapon();
             WorldPos unknown = WorldPos.of(level, helper.absolutePos(new BlockPos(7, 1, 2)));
             colony.stores(OWNER, level.dimension(), List.of(at, unknown));
             var pending = ProfileShortages.read(colony, profile, level.getServer());

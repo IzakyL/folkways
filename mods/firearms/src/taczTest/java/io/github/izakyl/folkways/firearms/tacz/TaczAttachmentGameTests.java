@@ -70,7 +70,7 @@ public final class TaczAttachmentGameTests {
                 scene.advance = false;
             };
         scene.open();
-        scene.session.fire(scene.target);
+        scene.attack.fire(scene.target);
         helper.startSequence()
             .thenWaitUntil(() -> helper.assertTrue(scene.shots.get() == 1, "first ordinary round fires"))
             .thenExecute(() -> scene.waitMillis(600))
@@ -96,7 +96,7 @@ public final class TaczAttachmentGameTests {
         operator.getDataHolder().baseTimestamp = TaczClock.nowMillis() - 60_000;
         operator.getCacheProperty().setCache(GunProperties.IGNITE, new Ignite(true, true));
         helper.assertTrue(TaczGuns.supported(scene.actual()), "the physical gun itself remains conventional");
-        helper.assertFalse(scene.session.fire(scene.target), "final runtime ignition prevents firing");
+        helper.assertFalse(scene.attack.fire(scene.target), "final runtime ignition prevents firing");
         helper.assertValueEqual(scene.shots.get(), 0, "no projectile is created");
         helper.assertValueEqual(scene.total("45acp"), 6, "runtime rejection spends nothing");
         helper.succeed();
@@ -120,8 +120,8 @@ public final class TaczAttachmentGameTests {
             };
         NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, listener);
         try {
-            helper.assertTrue(scene.session.fire(scene.target), "an ordinary shot is initially permitted");
-            scene.session.tick();
+            helper.assertTrue(scene.attack.fire(scene.target), "an ordinary shot is initially permitted");
+            scene.attack.tick();
             helper.assertValueEqual(changed.get(), 1, "late listener changes the bullet's final payload");
             helper.assertValueEqual(
                 scene.total("45acp"), 5, "native discharge really attempted to spawn its round");

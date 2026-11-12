@@ -2,6 +2,7 @@ package io.github.izakyl.folkways.core.plan.internal;
 
 import io.github.izakyl.folkways.core.FolkwaysConfig;
 import io.github.izakyl.folkways.core.inventory.api.Stash;
+import io.github.izakyl.folkways.core.inventory.api.port.StorePort.Operation;
 import io.github.izakyl.folkways.core.item.api.Goods;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import io.github.izakyl.folkways.core.plan.api.Before;
@@ -153,7 +154,7 @@ public final class Weaver {
     private boolean refitting;
     // Residents the plan already has at work: in hand, or bound to work on the graph.
     private final Set<UUID> occupied = new LinkedHashSet<>();
-    private final Map<Stash, Boolean> unreachable = new HashMap<>();
+    private final Map<Set<Stand>, Boolean> unreachable = new HashMap<>();
     // The walk bringing each input to each workshop, read once a round: stock taken during the round is not seen.
     private record WalkIn(ItemSpec input, WorldPos at) {
     }
@@ -265,7 +266,7 @@ public final class Weaver {
                     public TransportSnapshot snapshot(ItemSpec goods) {
                         List<TransportSnapshot.Carrier> carriers = new ArrayList<>();
                         for (Crew.Hand hand : crew.hands()) {
-                            long room = (long) hand.packCells() * Math.max(1, Goods.stackSize(goods));
+                            long room = hand.capacity(goods);
                             if (hand.takes(Vocations.of(Vocations.HAULING)) && room > 0) {
                                 carriers.add(DirectTransport.carrier(hand.who(), hand.at(), goods, room,
                                     FolkwaysConfig.haulReachTicks()));
@@ -282,16 +283,19 @@ public final class Weaver {
         this.now = now;
         this.crew = crew;
         this.sizing = new PackSizing(crew);
-        List<Able> able = crew.hands().stream().map(Able::of).toList();
-        refitting |= !able.equals(fitFor);
+        List<Able> able = crew.hands().stream().map(hand -> Able.of(hand, now.workshops())).toList();
+        boolean changedAbility = !able.equals(fitFor);
+        refitting |= changedAbility;
         fitFor = able;
         unreachable.clear();
         walkIns.clear();
         // What workshops offer is learned once for as long as the same workshops stand; the stock it is priced
         // against is read again every round.
-        if (costs == null || !now.workshops().equals(costedFor)) {
+        if (costs == null || changedAbility || !now.workshops().equals(costedFor)) {
             costedFor = now.workshops();
-            costs = new Costs(costedFor, this::drawableAnywhere, claims::revision);
+            costs = new Costs(costedFor.stream().filter(workshop -> workshop.bearer().isEmpty()
+                || crew.hands().stream().anyMatch(hand -> workshop.bearer().filter(hand.id()::equals).isPresent()))
+                .toList(), this::drawableAnywhere, claims::revision);
         } else {
             costs.restock();
         }
@@ -836,13 +840,16 @@ public final class Weaver {
     // What one resident could do, as far as fitness reads it: whom, which trades and tools, how big a pack.
     private record Able(UUID id, ResourceLocation kind, int pack, Set<ResourceLocation> trades,
                         List<ResourceLocation> tools,
-                        ToolPolicy toolRules) {
+                        ToolPolicy toolRules, Set<UUID> carried) {
 
-        static Able of(Crew.Hand hand) {
+        static Able of(Crew.Hand hand, List<Workshop> workshops) {
             Set<ResourceLocation> trades = new LinkedHashSet<>();
             hand.licences().forEach(licence -> trades.add(licence.vocation().id()));
             return new Able(hand.id(), hand.who().kind(), hand.packCapacity(), trades,
-                hand.tools().stream().map(tool -> BuiltInRegistries.ITEM.getKey(tool.getItem())).toList(), hand.toolRules());
+                hand.tools().stream().map(tool -> BuiltInRegistries.ITEM.getKey(tool.getItem())).toList(),
+                hand.toolRules(), workshops.stream()
+                    .filter(workshop -> workshop.bearer().filter(hand.id()::equals).isPresent())
+                    .map(Workshop::key).collect(java.util.stream.Collectors.toSet()));
         }
     }
 
@@ -1141,7 +1148,7 @@ public final class Weaver {
         for (Stock.Lot lot : now.stock().lotsOf(edge.spec())) {
             if (drawable(lot.where(), lot.concrete()) > 0 && feeds(lot.where(), edge.consumer(), lot.concrete())) {
                 long cost = !edge.carried() && !reaching(edge.consumer(), lot.where()).isEmpty() ? 0
-                    : carriedTo(edge, lot.where().pos(), now.stands().around(lot.where()),
+                    : carriedTo(edge, lot.where().pos(), now.stands().around(lot.where(), Operation.TAKE),
                     TransportEndpoint.Form.INVENTORY, lot.concrete(),
                     Math.min(left, drawable(lot.where(), lot.concrete())));
                 if (cost == Costs.UNREACHABLE) {
@@ -1262,7 +1269,9 @@ public final class Weaver {
                 continue;
             }
             for (WorldPos hand : hands) {
-                nearest = Math.min(nearest, Transfer.walk(hand, node.spec().site()));
+                nearest = Math.min(nearest, node.worker().isPresent()
+                    && node.spec().site() instanceof WorkSite.AtEntity entity
+                    && node.worker().get().equals(entity.entity()) ? 0 : Transfer.walk(hand, node.spec().site()));
             }
         }
         return nearest == Long.MAX_VALUE ? 0 : nearest;
@@ -1813,13 +1822,28 @@ public final class Weaver {
         }
 
         @Override
+        public boolean direct(Stash where) {
+            return now.stock().direct(where);
+        }
+
+        @Override
         public int preference(Stash where, ItemSpec goods) {
             return now.stock().preference(where, goods);
         }
 
         @Override
         public Set<Stand> around(Stash where) {
-            return now.stands().around(where);
+            return now.stands().around(where, Operation.TAKE);
+        }
+
+        @Override
+        public Set<Stand> putting(Stash where) {
+            return now.stands().around(where, Operation.PUT);
+        }
+
+        @Override
+        public Set<Stand> placing(UUID node, Stash where) {
+            return Weaver.this.reaching(node, where, Operation.PUT);
         }
 
         @Override
@@ -1859,7 +1883,8 @@ public final class Weaver {
 
         @Override
         public Manifest lying(Stash where, ItemSpec concrete, long count) {
-            return now.stock().manifest(where, concrete, claims.taken(new Resource.Lot(where, concrete)), count);
+            return now.stock().manifest(where, concrete, claims.taken(new Resource.Lot(where, concrete))
+                + claims.taken(new Resource.Transit(where, concrete)), count);
         }
 
         @Override
@@ -1970,7 +1995,7 @@ public final class Weaver {
             List<RecoveryStore> stores = new ArrayList<>();
             for (Stash stash : now.stock().stashes()) {
                 if (!now.stock().stores(stash)) continue;
-                Set<Stand> at = now.stands().around(stash);
+                Set<Stand> at = now.stands().around(stash, Operation.PUT);
                 if (at.isEmpty()) {
                     continue;
                 }
@@ -2285,13 +2310,17 @@ public final class Weaver {
     }
 
     private Set<Stand> reaching(UUID node, Stash where) {
+        return reaching(node, where, Operation.TAKE);
+    }
+
+    private Set<Stand> reaching(UUID node, Stash where, Operation operation) {
         Set<Stand> stands = standsOf(node);
         if (stands == null) {
-            return now.stands().around(where);
+            return now.stands().around(where, operation);
         }
         Set<Stand> found = new LinkedHashSet<>();
         for (Stand cell : stands) {
-            if (now.stands().reach(cell).contains(where)) {
+            if (now.stands().around(where, operation).contains(cell)) {
                 found.add(cell);
             }
         }
@@ -2361,6 +2390,8 @@ public final class Weaver {
         List<Placement.Draw> draws = new ArrayList<>();
         for (Claim claim : claims.since(node, 0)) {
             switch (claim.on()) {
+                case Resource.Transit(Stash where, ItemSpec spec) ->
+                    draws.add(new Placement.Draw(Optional.of(where), spec, claim.amount()));
                 case Resource.Lot(Stash where, ItemSpec spec) ->
                     draws.add(new Placement.Draw(Optional.of(where), spec, claim.amount()));
                 case Resource.Cargo(UUID resident, ItemSpec spec) ->
@@ -2520,7 +2551,8 @@ public final class Weaver {
         if (!now.stock().takes(where)) {
             return 0;
         }
-        return Math.max(0, now.stock().heldAt(where, concrete) - claims.taken(new Resource.Lot(where, concrete)));
+        return Math.max(0, now.stock().heldAt(where, concrete) - claims.taken(new Resource.Lot(where, concrete))
+            - claims.taken(new Resource.Transit(where, concrete)));
     }
 
     private boolean drawableAnywhere(ItemSpec spec) {
@@ -2540,9 +2572,16 @@ public final class Weaver {
         if (!now.stock().holds(where)) {
             return 0;
         }
-        return Math.max(0, now.stock().roomAt(where, concrete, directed)
-            + claims.taken(new Resource.Lot(where, concrete))
-            - claims.taken(new Resource.Space(where, concrete)));
+        Map<ItemSpec, Long> puts = new LinkedHashMap<>();
+        Map<ItemSpec, Long> takes = new LinkedHashMap<>();
+        claims.totals().forEach((resource, count) -> {
+            if (resource instanceof Resource.Space space && space.where().equals(where)) {
+                puts.merge(space.spec(), count, Long::sum);
+            } else if (resource instanceof Resource.Lot lot && lot.where().equals(where)) {
+                takes.merge(lot.spec(), count, Long::sum);
+            }
+        });
+        return now.stock().roomAfter(where, concrete, directed, puts, takes);
     }
 
     // A reserve is never filled from another reserve of the same goods: the two would only empty into each other.
@@ -2556,7 +2595,7 @@ public final class Weaver {
     }
 
     private boolean cutOff(Stash where, Set<Stand> around) {
-        return unreachable.computeIfAbsent(where,
+        return unreachable.computeIfAbsent(around,
             ignored -> now.ways().anyoneReaches(cells(around)) instanceof Faring.No);
     }
 

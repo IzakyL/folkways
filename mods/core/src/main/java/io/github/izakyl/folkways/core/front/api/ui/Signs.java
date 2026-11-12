@@ -121,7 +121,13 @@ public final class Signs {
         if (count < 10_000L) {
             return String.format(Locale.ROOT, "%.1fk", count / 1_000.0D);
         }
-        return count / 1_000L + "k";
+        if (count < 1_000_000L) {
+            return count / 1_000L + "k";
+        }
+        if (count < 10_000_000L) {
+            return String.format(Locale.ROOT, "%.1fM", count / 1_000_000.0D);
+        }
+        return count / 1_000_000L + "M";
     }
 
     public static Laid lay(Font font, List<Sign> signs) {

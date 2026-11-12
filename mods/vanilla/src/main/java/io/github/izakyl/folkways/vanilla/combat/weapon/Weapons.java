@@ -1,6 +1,7 @@
 package io.github.izakyl.folkways.vanilla.combat.weapon;
 
-import io.github.izakyl.folkways.core.combat.api.WeaponSession;
+import io.github.izakyl.folkways.core.combat.api.Loadouts;
+import io.github.izakyl.folkways.core.combat.api.WeaponAttack;
 import io.github.izakyl.folkways.core.colony.api.Colonies;
 import io.github.izakyl.folkways.core.colony.api.Colony;
 import io.github.izakyl.folkways.core.item.api.Goods;
@@ -29,17 +30,17 @@ public final class Weapons {
     private static final ResourceLocation PATROLLING = ResourceLocation.fromNamespaceAndPath("folkways_vanilla", "patrolling");
     private static final ToolNeed LEGACY_MELEE = new ToolNeed.Tagged(Tags.Items.MELEE_WEAPON_TOOLS);
 
-    public static final WeaponAdapter BOW = new NativeAdapter(NativeWeaponSession.Kind.BOW, 15);
-    public static final WeaponAdapter CROSSBOW = new NativeAdapter(NativeWeaponSession.Kind.CROSSBOW, 8);
-    public static final WeaponAdapter MELEE = new NativeAdapter(NativeWeaponSession.Kind.MELEE, 4.5);
+    public static final WeaponAdapter BOW = new NativeAdapter(NativeWeaponAttack.Kind.BOW, 15);
+    public static final WeaponAdapter CROSSBOW = new NativeAdapter(NativeWeaponAttack.Kind.CROSSBOW, 8);
+    public static final WeaponAdapter MELEE = new NativeAdapter(NativeWeaponAttack.Kind.MELEE, 4.5);
 
     private record Candidate(WeaponAdapter adapter, ItemStack stack, ItemSpec items) {
         boolean ranged() {
-            return LoadoutRegistry.using(stack).map(provider -> provider.ranged(stack)).orElseGet(adapter::ranged);
+            return Loadouts.using(stack).map(provider -> provider.ranged(stack)).orElseGet(adapter::ranged);
         }
 
         double range(Worker worker) {
-            double reach = LoadoutRegistry.using(stack)
+            double reach = Loadouts.using(stack)
                 .map(provider -> provider.range(stack))
                 .orElseGet(() -> adapter.range(worker, stack));
             return reach + (ranged() ? 0 : MountedMelee.reach(worker.body()));
@@ -71,6 +72,13 @@ public final class Weapons {
         registered = List.copyOf(next);
     }
 
+    /** Explicit physical cleanup used by work nodes after stopping their attack. */
+    public static void holster(Worker worker) {
+        if (worker.body() instanceof ResidentEntity resident) {
+            resident.holsterWeapon();
+        }
+    }
+
     public static boolean armed(Worker worker) {
         if (!(worker.body() instanceof ResidentEntity)) {
             return barehanded(worker) || !worker.held(LEGACY_MELEE).isEmpty();
@@ -98,7 +106,7 @@ public final class Weapons {
             .orElseGet(() -> 4.5 + MountedMelee.reach(worker.body()));
     }
 
-    public static Optional<WeaponSession> open(Worker worker) {
+    public static Optional<WeaponAttack> open(Worker worker) {
         // Other ResidentKinds retain Core ToolUse combat until their own native hand ownership is
         // adapted.
         if (!(worker.body() instanceof ResidentEntity)) {
@@ -132,14 +140,14 @@ public final class Weapons {
 
     public static boolean indirect(Worker worker, LivingEntity target) {
         return adapter(worker, target)
-            .flatMap(candidate -> LoadoutRegistry.using(candidate.stack())
+            .flatMap(candidate -> Loadouts.using(candidate.stack())
                 .map(provider -> provider.indirect(candidate.stack())))
             .orElse(false);
     }
 
     public static boolean longRange(Worker worker, LivingEntity target) {
         return adapter(worker, target).filter(Candidate::ranged)
-            .flatMap(candidate -> LoadoutRegistry.using(candidate.stack())
+            .flatMap(candidate -> Loadouts.using(candidate.stack())
                 .map(provider -> provider.longRange(candidate.stack())))
             .orElse(false);
     }
@@ -149,18 +157,21 @@ public final class Weapons {
             .orElseGet(() -> 4.5 + MountedMelee.reach(worker.body()));
     }
 
-    public static Optional<WeaponSession> open(Worker worker, LivingEntity target) {
+    public static Optional<WeaponAttack> open(Worker worker, LivingEntity target) {
         return Optional.ofNullable(select(worker, target, null));
     }
 
-    /** Return the old hand before opening another; only the current work node advances either session. */
-    public static WeaponSession select(Worker worker, LivingEntity target, WeaponSession current) {
-        WeaponSession selected = select(worker, current, adapter(worker, target), false);
+    /** Holster the old weapon before opening another; only the current work node advances either attack. */
+    public static WeaponAttack select(Worker worker, LivingEntity target, WeaponAttack current) {
+        if (worker.body() instanceof ResidentEntity body && current == null && body.hasActiveAttack()) {
+            return null;
+        }
+        WeaponAttack selected = select(worker, current, adapter(worker, target), false);
         return selected != null || !permitted(worker) || profile(worker).isPresent() || !barehanded(worker)
-            ? selected : NativeWeaponSession.barehanded(worker);
+            ? selected : NativeWeaponAttack.barehanded(worker);
     }
 
-    public static WeaponSession selectRanged(Worker worker, LivingEntity target, WeaponSession current) {
+    public static WeaponAttack selectRanged(Worker worker, LivingEntity target, WeaponAttack current) {
         return select(worker, current, adapter(worker, target, true), true);
     }
 
@@ -169,27 +180,29 @@ public final class Weapons {
     }
 
     public static boolean rangedIndirect(Worker worker, LivingEntity target) {
-        return adapter(worker, target, true).flatMap(candidate -> LoadoutRegistry.using(candidate.stack())
+        return adapter(worker, target, true).flatMap(candidate -> Loadouts.using(candidate.stack())
             .map(provider -> provider.indirect(candidate.stack()))).orElse(false);
     }
 
-    private static WeaponSession select(Worker worker, WeaponSession current, Optional<Candidate> desired,
+    private static WeaponAttack select(Worker worker, WeaponAttack current, Optional<Candidate> desired,
                                         boolean rangedOnly) {
         if (!(worker.body() instanceof ResidentEntity body) || !permitted(worker)) {
             if (current != null) {
-                current.close();
+                current.stop();
+                holster(worker);
             }
             return null;
         }
-        if (current != null && current.state() != WeaponSession.State.CLOSED
-            && current.state() != WeaponSession.State.STOPPING && body.ownsWeaponHand(current)
+        if (current != null && current.state() != WeaponAttack.State.STOPPED
+            && body.isActiveAttack(current)
             && (profile(worker).isEmpty() || desired.filter(candidate ->
                 candidate.adapter().accepts(body.getMainHandItem())
                     && Goods.matches(body.getMainHandItem(), candidate.items())).isPresent())) {
             return current;
         }
         if (current != null) {
-            current.close();
+            current.stop();
+            holster(worker);
         }
         for (int slot = 0; slot < worker.pack().getContainerSize(); slot++) {
             ItemStack stack = worker.pack().getItem(slot);
@@ -200,10 +213,10 @@ public final class Weapons {
                         || !Goods.matches(stack, desired.get().items()))
                     || profile(worker).isPresent() && desired.isEmpty()
                     || !adapter.usable(worker, stack)
-                    || !LoadoutRegistry.using(stack).map(provider -> provider.usable(worker, stack)).orElse(true)) {
+                    || !Loadouts.using(stack).map(provider -> provider.usable(worker, stack)).orElse(true)) {
                     continue;
                 }
-                Optional<WeaponSession> opened = adapter.open(worker, stack);
+                Optional<WeaponAttack> opened = adapter.open(worker, stack);
                 if (opened.isPresent()) {
                     return opened.get();
                 }
@@ -239,7 +252,7 @@ public final class Weapons {
                 if (!candidate.ranged()) {
                     return 2;
                 }
-                boolean indirect = LoadoutRegistry.using(candidate.stack())
+                boolean indirect = Loadouts.using(candidate.stack())
                     .map(provider -> provider.indirect(candidate.stack())).orElse(false);
                 return sight || indirect ? distance <= candidate.range(worker) ? 0 : 1 : 3;
             }));
@@ -275,10 +288,10 @@ public final class Weapons {
         return result;
     }
 
-    private record NativeAdapter(NativeWeaponSession.Kind kind, double range) implements WeaponAdapter {
+    private record NativeAdapter(NativeWeaponAttack.Kind kind, double range) implements WeaponAdapter {
         @Override
         public boolean ranged() {
-            return kind != NativeWeaponSession.Kind.MELEE;
+            return kind != NativeWeaponAttack.Kind.MELEE;
         }
 
         @Override
@@ -286,7 +299,7 @@ public final class Weapons {
             if (!accepts(stack)) {
                 return false;
             }
-            if (!ranged() || kind == NativeWeaponSession.Kind.CROSSBOW && CrossbowItem.isCharged(stack)) {
+            if (!ranged() || kind == NativeWeaponAttack.Kind.CROSSBOW && CrossbowItem.isCharged(stack)) {
                 return true;
             }
             ProjectileWeaponItem item = (ProjectileWeaponItem) stack.getItem();
@@ -310,7 +323,7 @@ public final class Weapons {
         }
 
         @Override
-        public Optional<WeaponSession> open(Worker worker) {
+        public Optional<WeaponAttack> open(Worker worker) {
             for (int slot = 0; slot < worker.pack().getContainerSize(); slot++) {
                 ItemStack stack = worker.pack().getItem(slot);
                 if (usable(worker, stack)) {
@@ -321,9 +334,9 @@ public final class Weapons {
         }
 
         @Override
-        public Optional<WeaponSession> open(Worker worker, ItemStack weapon) {
+        public Optional<WeaponAttack> open(Worker worker, ItemStack weapon) {
             if (!(worker.body() instanceof ResidentEntity resident)
-                || resident.hasWeaponSession()
+                || resident.hasActiveAttack() || resident.weaponDrawn()
                 || worker.pack() != resident.pack()
                 || !resident.isAlive()
                 || resident.isRemoved()
@@ -342,10 +355,12 @@ public final class Weapons {
             if (selected < 0) {
                 return Optional.empty();
             }
-            ItemStack actual = worker.pack().removeItemNoUpdate(selected);
-            NativeWeaponSession session = new NativeWeaponSession(worker, this, kind);
-            resident.claimWeaponHand(session, actual);
-            return Optional.of(session);
+            if (!resident.drawWeapon(selected)) {
+                return Optional.empty();
+            }
+            NativeWeaponAttack attack = new NativeWeaponAttack(worker, this, kind);
+            resident.beginAttack(attack);
+            return Optional.of(attack);
         }
     }
 }

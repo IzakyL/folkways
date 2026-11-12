@@ -11,7 +11,10 @@ import runpy
 NON_CODE = runpy.run_path("tests/architecture/core-packages.py")["NON_CODE"]
 FRAMEWORK = "io.github.izakyl.folkways.core.base.persist.upgrade"
 CODEC_ADAPTER = "io.github.izakyl.folkways.core.upgrade.ComponentCodecs"
+# Only Folkways packages can hold save migrations; third-party "upgrade" packages are ordinary dependencies.
+OWN = "io.github.izakyl.folkways."
 VALUE_CODEC = "com.mojang.serialization.Codec"
+VERSION_PATH = Path("mods/core/src/main/java/io/github/izakyl/folkways/core/base/persist/upgrade/DataVersion.java")
 STEP = re.compile(r"(?:^|/)V(\d+)_[^/]+\.java$")
 # Package moves since a release, applied to its paths and sources; already-relocated text is left unchanged.
 RELOCATIONS = [
@@ -38,6 +41,9 @@ def git(*args):
 
 def main():
     errors = []
+    version_source = NON_CODE.sub(" ", VERSION_PATH.read_text())
+    baseline = int(re.search(r"\bBASELINE\s*=\s*(\d+)", version_source)[1])
+    current = int(re.search(r"\bCURRENT\s*=\s*(\d+)", version_source)[1])
     for path in sorted(Path("mods").glob("*/src/main/java/**/*.java")):
         code = NON_CODE.sub(" ", path.read_text())
         package = re.search(r"\bpackage\s+([\w.]+)\s*;", code).group(1)
@@ -53,7 +59,7 @@ def main():
                     ("java.", "net.minecraft.nbt.", FRAMEWORK + ".")):
                 errors.append(f"{path}: migration imports business/platform code: {imported}")
             if (not migration and not main_mod and not adapter_import and ".upgrade." in imported
-                    and not imported.startswith(FRAMEWORK + ".")):
+                    and imported.startswith(OWN) and not imported.startswith(FRAMEWORK + ".")):
                 errors.append(f"{path}: business code imports a migration: {imported}")
         # Fully-qualified references must not bypass the import boundary.
         references = re.findall(r"\b(?:io|net|com|org)\.[\w.]+", code)
@@ -65,11 +71,13 @@ def main():
             if migration and not codec_reference and not reference.startswith(("net.minecraft.nbt.", FRAMEWORK + ".")):
                 errors.append(f"{path}: migration references forbidden type: {reference}")
             if (not migration and not main_mod and not adapter_reference and ".upgrade." in reference
-                    and not reference.startswith(FRAMEWORK + ".")):
+                    and reference.startswith(OWN) and not reference.startswith(FRAMEWORK + ".")):
                 errors.append(f"{path}: business code references a migration: {reference}")
         if migration and "implements Step" in code and not STEP.search(str(path)):
             errors.append(f"{path}: step filenames must contain target: V3_Description.java")
         match = STEP.search(str(path))
+        if migration and match and not baseline < int(match[1]) <= current:
+            errors.append(f"{path}: migration target outside ({baseline}, {current}]")
         target = re.search(r"int\s+target\s*\(\s*\)\s*\{\s*return\s+(\d+)\s*;", code)
         bag_target = re.search(r'KeepSteps\.bag\s*\(\s*[^,]+,\s*(\d+)\s*,', code)
         if migration and match and not any(candidate and candidate[1] == match[1]
@@ -78,7 +86,7 @@ def main():
 
     # Compare every release, not just the latest: deleted or renamed shipped steps must also fail.
     for tag in git("tag", "--list", "v*").splitlines():
-        version_path = "mods/core/src/main/java/io/github/izakyl/folkways/core/base/persist/upgrade/DataVersion.java"
+        version_path = str(VERSION_PATH)
         released = {relocate(name): name for name in git("ls-tree", "-r", "--name-only", tag, "mods").splitlines()}
         if version_path not in released:
             continue

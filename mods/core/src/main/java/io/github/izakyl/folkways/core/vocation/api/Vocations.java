@@ -8,6 +8,9 @@ import net.minecraft.resources.ResourceLocation;
 
 public final class Vocations {
 
+    public static final ResourceLocation NETWORK_SERVICE =
+        ResourceLocation.fromNamespaceAndPath("folkways_core", "network_service");
+
     public static final ResourceLocation HAULING =
         ResourceLocation.fromNamespaceAndPath("folkways_core", "hauling");
 

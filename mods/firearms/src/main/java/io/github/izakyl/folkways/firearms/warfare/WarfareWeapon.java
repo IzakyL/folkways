@@ -11,7 +11,7 @@ import io.github.izakyl.folkways.core.item.api.Goods;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.vanilla.combat.weapon.WeaponAdapter;
-import io.github.izakyl.folkways.core.combat.api.WeaponSession;
+import io.github.izakyl.folkways.core.combat.api.WeaponAttack;
 import io.github.izakyl.folkways.vanilla.person.ResidentEntity;
 import java.util.HashMap;
 import java.util.Map;
@@ -108,9 +108,9 @@ public final class WarfareWeapon implements WeaponAdapter {
 
 
     @Override
-    public Optional<WeaponSession> open(Worker worker) {
+    public Optional<WeaponAttack> open(Worker worker) {
         if (!(worker.body() instanceof ResidentEntity resident)
-            || resident.hasWeaponSession()
+            || resident.hasActiveAttack() || resident.weaponDrawn()
             || worker.pack() != resident.pack()
             || !resident.isAlive()
             || resident.isRemoved()
@@ -128,9 +128,9 @@ public final class WarfareWeapon implements WeaponAdapter {
     }
 
     @Override
-    public Optional<WeaponSession> open(Worker worker, ItemStack selected) {
+    public Optional<WeaponAttack> open(Worker worker, ItemStack selected) {
         if (!(worker.body() instanceof ResidentEntity resident)
-            || resident.hasWeaponSession()
+            || resident.hasActiveAttack() || resident.weaponDrawn()
             || worker.pack() != resident.pack()
             || !resident.isAlive()
             || resident.isRemoved()
@@ -143,10 +143,12 @@ public final class WarfareWeapon implements WeaponAdapter {
             if (worker.pack().getItem(slot) != selected) {
                 continue;
             }
-            ItemStack actual = worker.pack().removeItemNoUpdate(slot);
-            WarfareSession session = new WarfareSession(worker, this);
-            resident.claimWeaponHand(session, actual);
-            return Optional.of(session);
+            WarfareAttack attack = new WarfareAttack(worker, this);
+            if (!resident.drawWeapon(slot)) {
+                return Optional.empty();
+            }
+            resident.beginAttack(attack);
+            return Optional.of(attack);
         }
         return Optional.empty();
     }

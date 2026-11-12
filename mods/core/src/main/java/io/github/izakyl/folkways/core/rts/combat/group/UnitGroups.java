@@ -63,19 +63,6 @@ public final class UnitGroups {
         return colony.service(GroupContent.ID, UnitGroups.class).orElseThrow();
     }
 
-    public UnitGroup create(Collection<? extends Body> residents) {
-        requireServerThread();
-        List<? extends Body> distinct = residents.stream().distinct().toList();
-        if (distinct.isEmpty()) {
-            throw new IllegalArgumentException("groups require members");
-        }
-        distinct.forEach(this::validate);
-        UnitGroup group = new UnitGroup(this, UUID.randomUUID());
-        groups.put(group.id(), group);
-        distinct.forEach(body -> add(group, body));
-        return group;
-    }
-
     public Optional<UnitGroup> group(UUID id) {
         requireServerThread();
         return Optional.ofNullable(groups.get(id));

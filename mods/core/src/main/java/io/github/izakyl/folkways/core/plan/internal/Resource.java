@@ -14,6 +14,10 @@ public sealed interface Resource {
     record Lot(Stash where, ItemSpec spec) implements Resource {
     }
 
+    // Future stock booked by a storage trunk; unlike a Lot, it never credits free room.
+    record Transit(Stash where, ItemSpec spec) implements Resource {
+    }
+
     record Space(Stash where, ItemSpec spec) implements Resource {
     }
 

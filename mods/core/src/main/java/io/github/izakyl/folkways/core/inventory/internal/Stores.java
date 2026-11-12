@@ -2,6 +2,8 @@ package io.github.izakyl.folkways.core.inventory.internal;
 
 import io.github.izakyl.folkways.core.inventory.api.InventoryFeedback;
 import io.github.izakyl.folkways.core.inventory.api.StoreRule;
+import io.github.izakyl.folkways.core.inventory.api.port.StorePorts;
+import io.github.izakyl.folkways.core.colony.api.Colonies;
 import io.github.izakyl.folkways.core.item.api.Containers;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.core.world.api.WorldSpaces;
@@ -40,9 +42,22 @@ public final class Stores {
     public static Optional<Container> at(ServerLevel level, WorldPos where, boolean directed) {
         return WorldSpaces.resolve(level.getServer(), where)
             .filter(block -> block.level() == level)
-            .flatMap(block -> Containers.at(block.level(), block.cell()))
+            .flatMap(block -> StorePorts.at(block.level(), block.cell()))
+            .filter(port -> port.usability().usable() && usable(level, where))
+            .filter(SlotPort.class::isInstance).map(SlotPort.class::cast).map(SlotPort::container)
             .flatMap(container -> kept(container, rulesAt(level, where), directed))
             .map(container -> new Watched(container, () -> InventoryFeedback.store(level, where)));
+    }
+
+    public static boolean usable(ServerLevel level, WorldPos where) {
+        for (var colony : Colonies.all(level.getServer())) {
+            var store = colony.inventory().snapshot().store(where);
+            if (store.isPresent() && (!store.get().usability().usable()
+                || store.get().aliases().stream().anyMatch(alias -> StorePorts.condemned(alias).isPresent()))) {
+                return false;
+            }
+        }
+        return StorePorts.condemned(where).isEmpty();
     }
 
     public static void ruled(UUID colony, Map<WorldPos, List<StoreRule>> rules) {
@@ -73,6 +88,12 @@ public final class Stores {
     }
 
     public static List<StoreRule> rulesAt(ServerLevel level, WorldPos where) {
+        for (var colony : Colonies.all(level.getServer())) {
+            var store = colony.inventory().snapshot().store(where);
+            if (store.isPresent()) {
+                return rulesAt(store.get().aliases());
+            }
+        }
         BlockPos pos = WorldSpaces.storage(level, where).orElse(null);
         if (pos == null || !level.isLoaded(pos)) {
             return rulesAt(where);
@@ -110,7 +131,7 @@ public final class Stores {
         return kept(container, rules, false);
     }
 
-    private static Optional<Container> kept(Container container, List<StoreRule> rules, boolean directed) {
+    public static Optional<Container> kept(Container container, List<StoreRule> rules, boolean directed) {
         if (directed) {
             rules = rules.stream().filter(rule -> !(rule instanceof StoreRule.Admit)).toList();
         }
@@ -175,6 +196,7 @@ public final class Stores {
             return inner.getMaxStackSize(stack);
         }
 
+
         @Override
         public void setChanged() {
             inner.setChanged();
@@ -238,6 +260,11 @@ public final class Stores {
         @Override
         public int getMaxStackSize() {
             return inner.getMaxStackSize();
+        }
+
+        @Override
+        public int getMaxStackSize(ItemStack stack) {
+            return inner.getMaxStackSize(stack);
         }
 
         @Override

@@ -212,7 +212,7 @@ public final class PointQueueGameTests {
         Scene scene = new Scene(helper);
         List<WorldPos> stops = List.of(scene.at(8, 10), scene.at(16, 10));
         PointRoute route = new PointRoute(scene.groups, scene.people, stops, 0, false, true);
-        UnitGroup group = scene.groups.create(scene.people);
+        UnitGroup group = scene.groups.stopSelection(scene.people);
         group.startPoints(route);
         AtomicBoolean fighting = new AtomicBoolean();
         AtomicLong budgetAtContact = new AtomicLong();

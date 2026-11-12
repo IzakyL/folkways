@@ -13,6 +13,12 @@ public interface Node extends WorkAction {
     @Override
     NodeSpec spec();
 
+    // Inputs exposed by a workshop's material recipe. Operating supplies omitted here remain colony needs;
+    // refinement separates them into their own nodes before external service binds the work.
+    default List<Need> recipeInputs() {
+        return spec().needs();
+    }
+
     // An enclosing work area may accept arrival before the planned stance is reached.
     default boolean arrived(ServerLevel level, Body body, Stances positions, boolean atStance) {
         return atStance;

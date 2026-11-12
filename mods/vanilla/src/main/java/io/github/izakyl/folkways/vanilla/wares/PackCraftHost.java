@@ -1,5 +1,7 @@
 package io.github.izakyl.folkways.vanilla.wares;
 
+import io.github.izakyl.folkways.core.inventory.api.StoreWorkstations;
+
 import io.github.izakyl.folkways.core.item.api.Goods;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import io.github.izakyl.folkways.core.plan.api.Grown;
@@ -28,19 +30,45 @@ import net.minecraft.world.item.crafting.SmithingRecipe;
 import net.minecraft.world.item.crafting.SmithingTransformRecipe;
 import net.minecraft.world.item.crafting.StonecutterRecipe;
 import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.Blocks;
 
 final class PackCraftHost implements StationHost {
 
-    private final UUID id = UUID.randomUUID();
+    private final UUID id;
+    private final Optional<UUID> bearer;
     private final WorldPos at;
     private final Block block;
     private final Stances stances;
+    private final StoreWorkstations.Capability capability;
+    private final Predicate<ServerLevel> available;
+    private final boolean store;
 
     PackCraftHost(WorldPos at, Block block, Stances stances) {
+        this(at, block, StoreWorkstations.vanilla(block), stances, level -> true, false);
+    }
+
+    PackCraftHost(WorldPos at, Block block, StoreWorkstations.Capability capability, Stances stances,
+                  Predicate<ServerLevel> available, boolean store) {
+        this.id = UUID.randomUUID();
+        this.bearer = Optional.empty();
         this.at = at;
         this.block = block;
         this.stances = stances;
+        this.capability = capability;
+        this.available = available;
+        this.store = store;
+    }
+
+    PackCraftHost(UUID bearer, WorldPos at, StoreWorkstations.Capability capability,
+                  Predicate<ServerLevel> available) {
+        this.id = UUID.nameUUIDFromBytes(("folkways_vanilla:carried/" + bearer + "/" + capability)
+            .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        this.bearer = Optional.of(bearer);
+        this.at = at;
+        this.block = capability.station();
+        this.stances = Stances.WHEREVER;
+        this.capability = capability;
+        this.available = available;
+        this.store = true;
     }
 
     @Override
@@ -50,7 +78,7 @@ final class PackCraftHost implements StationHost {
 
     @Override
     public Workshop frozen(RecipeIndex recipes, ServerLevel level, Optional<ItemSpec> fuel) {
-        return new Bench(id, at, block, stances, recipes);
+        return new Bench(id, at, block, capability, stances, recipes, available, store, bearer);
     }
 
     record Job(ItemSpec produces, long perRun, List<Ingredients.Demand> takes, Assembly assembly) {
@@ -66,6 +94,7 @@ final class PackCraftHost implements StationHost {
             }
             return inputs;
         }
+
         List<Need> batchRoom() {
             List<Need> room = new ArrayList<>(inputs());
             room.add(new Need(produces, perRun, true));
@@ -74,8 +103,9 @@ final class PackCraftHost implements StationHost {
         }
     }
 
-    private record Bench(UUID key, WorldPos at, Block block, Stances stances,
-                         RecipeIndex recipes) implements Workshop {
+    private record Bench(UUID key, WorldPos at, Block block, StoreWorkstations.Capability capability,
+                         Stances stances, RecipeIndex recipes, Predicate<ServerLevel> available,
+                         boolean store, Optional<UUID> bearer) implements Workshop {
 
         @Override
         public ResourceLocation id() {
@@ -83,8 +113,13 @@ final class PackCraftHost implements StationHost {
         }
 
         @Override
+        public boolean withholdsStore() {
+            return !store;
+        }
+
+        @Override
         public WorkSite site() {
-            return new WorkSite.AtBlock(at);
+            return bearer.<WorkSite>map(id -> new WorkSite.AtEntity(id, at)).orElseGet(() -> new WorkSite.AtBlock(at));
         }
 
         @Override
@@ -96,24 +131,26 @@ final class PackCraftHost implements StationHost {
             for (Job job : jobs(produce.wanted())) {
                 long runs = produce.runs(site(), job.batchRoom(), job.perRun(),
                     Optional.of(WaresContent.trade()), Long.MAX_VALUE);
-                answers.add(Refinement.Change.of(Grown.of(new PackCraftNode(at, block, stances, job.takes(),
-                    job.produces(), job.perRun(), (int) Math.min(runs, Integer.MAX_VALUE), job.assembly()))));
+                answers.add(Refinement.Change.of(Grown.of(new PackCraftNode(
+                    site(), block, capability, stances, available,
+                    job.takes(), job.produces(), job.perRun(),
+                    (int) Math.min(runs, Integer.MAX_VALUE), job.assembly()))));
             }
             return List.copyOf(answers);
         }
 
         private List<Job> jobs(ItemSpec goal) {
             List<Job> found = new ArrayList<>();
-            if (block == Blocks.CRAFTING_TABLE) {
+            if (capability == StoreWorkstations.Capability.CRAFTING) {
                 for (RecipeHolder<CraftingRecipe> holder : recipes.producing(RecipeType.CRAFTING, goal)) {
                     grid(holder).ifPresent(found::add);
                 }
-            } else if (block == Blocks.STONECUTTER) {
+            } else if (capability == StoreWorkstations.Capability.STONECUTTING) {
                 for (RecipeHolder<StonecutterRecipe> holder
                         : recipes.producing(RecipeType.STONECUTTING, goal)) {
                     stonecut(holder).ifPresent(found::add);
                 }
-            } else if (block == Blocks.SMITHING_TABLE) {
+            } else if (capability == StoreWorkstations.Capability.SMITHING) {
                 for (RecipeHolder<SmithingRecipe> holder : recipes.producing(RecipeType.SMITHING, goal)) {
                     smith(holder).ifPresent(found::add);
                 }

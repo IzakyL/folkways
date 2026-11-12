@@ -3,7 +3,7 @@ package io.github.izakyl.folkways.firearms.tacz;
 import com.tacz.guns.api.item.IAmmo;
 import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.vanilla.combat.weapon.WeaponAdapter;
-import io.github.izakyl.folkways.core.combat.api.WeaponSession;
+import io.github.izakyl.folkways.core.combat.api.WeaponAttack;
 import io.github.izakyl.folkways.vanilla.person.ResidentEntity;
 import java.util.Optional;
 import net.minecraft.server.level.ServerLevel;
@@ -55,14 +55,14 @@ final class TaczWeaponAdapter implements WeaponAdapter {
     }
 
     @Override
-    public Optional<WeaponSession> open(Worker worker) {
+    public Optional<WeaponAttack> open(Worker worker) {
         return open(worker, ItemStack.EMPTY);
     }
 
     @Override
-    public Optional<WeaponSession> open(Worker worker, ItemStack selected) {
+    public Optional<WeaponAttack> open(Worker worker, ItemStack selected) {
         if (!(worker.body() instanceof ResidentEntity body)
-            || body.hasWeaponSession()
+            || body.hasActiveAttack() || body.weaponDrawn()
             || worker.pack() != body.pack()
             || !body.isAlive()
             || body.isRemoved()
@@ -77,11 +77,18 @@ final class TaczWeaponAdapter implements WeaponAdapter {
             if (!usable(worker, body.pack().getItem(slot))) {
                 continue;
             }
-            ItemStack actual = body.pack().removeItemNoUpdate(slot);
-            TaczWeaponSession session = new TaczWeaponSession(worker, this);
-            body.claimWeaponHand(session, actual);
-            session.draw();
-            return Optional.of(session);
+            TaczWeaponAttack attack = new TaczWeaponAttack(worker, this);
+            if (!body.drawWeapon(slot)) {
+                return Optional.empty();
+            }
+            body.beginAttack(attack);
+            try {
+                attack.draw();
+            } catch (RuntimeException | LinkageError failure) {
+                body.stopCombat();
+                throw failure;
+            }
+            return Optional.of(attack);
         }
         return Optional.empty();
     }

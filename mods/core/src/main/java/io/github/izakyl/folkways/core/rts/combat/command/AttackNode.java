@@ -14,7 +14,7 @@ import io.github.izakyl.folkways.core.work.api.Workload;
 import io.github.izakyl.folkways.core.world.api.Footing;
 import io.github.izakyl.folkways.core.world.api.Reach;
 import io.github.izakyl.folkways.core.world.api.WorldSpaces;
-import io.github.izakyl.folkways.core.combat.api.WeaponSession;
+import io.github.izakyl.folkways.core.combat.api.WeaponAttack;
 import java.util.LinkedHashSet;
 import java.util.Optional;
 import java.util.Set;
@@ -24,14 +24,14 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.phys.Vec3;
 
-/** An explicit target's approach and real native hand session, both owned solely by BodyRunner. */
+/** An explicit target's approach and real native hand attack, both owned solely by BodyRunner. */
 final class AttackNode implements Node {
     private final ResidentCommands commands;
     private final ResidentCommands.Order order;
     private final UUID step;
     private final NodeSpec spec;
     private final boolean reachable;
-    private WeaponSession session;
+    private WeaponAttack attack;
     private RefusalKind failure;
     private long advancedAt = Long.MIN_VALUE;
 
@@ -79,29 +79,30 @@ final class AttackNode implements Node {
             return false;
         }
         advancedAt = level.getGameTime();
-        WeaponSession previous = session;
-        session = Combatant.get().select(who, target, session);
-        if (session != previous || session == null) {
-            if (session == null
-                || !session.explicitTarget(target, () -> commands.permitsAttack(order, step, who, target))) {
+        WeaponAttack previous = attack;
+        attack = Combatant.get().select(who, target, attack);
+        if (attack != previous || attack == null) {
+            if (attack == null
+                || !attack.explicitTarget(target, () -> commands.permitsAttack(order, step, who, target))) {
                 failure = LaborRefusal.GOODS_GONE;
                 return false;
             }
             // Labor runs after the entity tick, so the lease spans the one tick between two advances.
-            session.leasedBy(() -> level.getGameTime() - advancedAt <= 1);
+            attack.leasedBy(() -> level.getGameTime() - advancedAt <= 1);
         }
-        if (session.state() == WeaponSession.State.READY && !session.fire(target)) {
+        if (attack.state() == WeaponAttack.State.READY && !attack.fire(target)) {
             return false;
         }
-        session.tick();
+        attack.tick();
         return target.isAlive()
-            && session.state() != WeaponSession.State.CLOSED
-            && session.state() != WeaponSession.State.STOPPING;
+            && attack.state() != WeaponAttack.State.STOPPED;
     }
 
     public void released(ServerLevel level, Worker who, Ending how) {
-        if (session != null) {
-            session.close();
+        if (attack != null) {
+            attack.stop();
+            io.github.izakyl.folkways.core.resident.api.Bodies.of(who.body())
+                .ifPresent(body -> Combatant.get().stand(body));
         }
         commands.ended(order, how);
     }

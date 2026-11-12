@@ -52,7 +52,8 @@ final class SlotObservation {
             return false;
         }
         for (int slot = 0; slot < one.size(); slot++) {
-            if (!ItemStack.matches(one.get(slot).stackCopy(), other.get(slot).stackCopy())) {
+            if (one.get(slot).stackLimit() != other.get(slot).stackLimit()
+                || !ItemStack.matches(one.get(slot).stackCopy(), other.get(slot).stackCopy())) {
                 return false;
             }
         }

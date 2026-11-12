@@ -1,5 +1,7 @@
 package io.github.izakyl.folkways.core.resident.internal;
 
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.nbt.Tag;
 import io.github.izakyl.folkways.core.base.persist.Reader;
 import io.github.izakyl.folkways.core.resident.api.Balk;
 import io.github.izakyl.folkways.core.resident.api.Body;
@@ -101,5 +103,11 @@ public final class BodyState implements BodyStateAccess, INBTSerializable<Compou
         Reader reader = Reader.of(tag);
         pack.load(reader.blob(TAG_PACK).orElseThrow(), provider);
         perks.load(reader.blob(TAG_PERKS).orElseThrow());
+        // Unreleased development saves used a separate container. Every stack is returned, including components.
+        reader.blob("Kit").ifPresent(saved -> {
+            for (Tag row : saved.getList("items", Tag.TAG_COMPOUND)) {
+                pack.recover(ItemStack.parseOptional(provider, (CompoundTag) row));
+            }
+        });
     }
 }

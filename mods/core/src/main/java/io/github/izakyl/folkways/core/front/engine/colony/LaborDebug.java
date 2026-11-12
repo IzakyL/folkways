@@ -204,6 +204,8 @@ public final class LaborDebug {
             Component entry = switch (claim.on()) {
                 case Resource.Transport(var resource, var unit) -> Component.translatable(
                     "folkways.debug.suspended.claim.transport", resource.toString(), claim.amount(), unit.toString());
+                case Resource.Transit(var stash, var goods) -> Component.translatable("folkways.debug.suspended.claim.lot",
+                    goods.describe(), claim.amount(), stash.toString());
                 case Resource.Lot(var stash, var goods) -> Component.translatable("folkways.debug.suspended.claim.lot",
                     goods.describe(), claim.amount(), stash.toString());
                 case Resource.Space(var stash, var goods) -> Component.translatable("folkways.debug.suspended.claim.space",

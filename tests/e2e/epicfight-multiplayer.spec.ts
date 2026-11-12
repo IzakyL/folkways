@@ -61,7 +61,7 @@ test("two real Epic Fight clients see one native guard, through guest disconnect
       await frames(pair.client, 2); await frames(extra, 2);
       const server = await pair.server.run(NATIVE, scene);
       const a = await pair.client.run(DRAW, scene), b = await extra.run(DRAW, scene);
-      sawServerAttack ||= server.sessionType.endsWith(".EpicFightWeaponSession") && server.nativeTarget && server.attackAnimation;
+      sawServerAttack ||= server.attackType.endsWith(".EpicFightWeaponAttack") && server.nativeTarget && server.attackAnimation;
       sawPrimaryAttack ||= a.attackAnimation;
       sawGuestAttack ||= b.attackAnimation;
       if (attempt % 10 === 0) evidence.push({ step: `both clients native combat ${attempt}`, value: { server, primary: a, guest: b } });
@@ -161,7 +161,7 @@ function physical(state: Native) {
   expect(state.weaponCount, "pack, borrowed native hand and nearby drops together hold one spear").toBe(1);
   expect(state.components, "the real spear retains its components except legitimate durability").toBe(true);
   expect(state.weaponDamage).toBeGreaterThan(9);
-  expect(state.weaponPlace, "physical spear must occupy its current native hand or actual pack slot").toMatch(state.session ? /^mainhand$/ : /^pack:\d+$/);
+  expect(state.weaponPlace, "physical spear must occupy its current native hand or actual pack slot").toMatch(state.drawn ? /^mainhand$/ : /^pack:\d+$/);
 }
 function drawn(draw: Draw) {
   expect(draw.present && draw.patch && draw.epicfight && draw.bridge).toBe(true);

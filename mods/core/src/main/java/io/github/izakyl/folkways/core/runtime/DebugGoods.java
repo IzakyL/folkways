@@ -2,6 +2,7 @@ package io.github.izakyl.folkways.core.runtime;
 
 import io.github.izakyl.folkways.core.front.api.notice.DebugText;
 import io.github.izakyl.folkways.core.front.api.notice.Line;
+import io.github.izakyl.folkways.core.inventory.api.port.PortReader.Entry;
 import io.github.izakyl.folkways.core.item.api.Goods;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import io.github.izakyl.folkways.core.plan.internal.Claim;
@@ -31,8 +32,9 @@ final class DebugGoods {
         Map<Item, Long> own = count(pack);
         Map<Item, Long> loose = count(cargo);
         loose.forEach((item, amount) -> own.merge(item, -amount, Long::sum));
-        Map<Item, Long> claimed = take(cargo, planned, claim -> claim.on() instanceof Resource.Cargo one ? one.spec()
-            : claim.on() instanceof Resource.Handed one ? one.spec() : null);
+        Map<Item, Long> claimed = take(entries(cargo), planned,
+            claim -> claim.on() instanceof Resource.Cargo one ? one.spec()
+                : claim.on() instanceof Resource.Handed one ? one.spec() : null);
         claimed.forEach((item, amount) -> loose.merge(item, -amount, Long::sum));
         List<Line> lines = new ArrayList<>();
         rows(lines, own, DebugText.OWN);
@@ -49,8 +51,11 @@ final class DebugGoods {
      * A store: the stock the plan will draw (lot claims), the stock nobody has asked for, and the room the plan has
      * set aside for goods still on their way (space claims).
      */
-    static List<Line> stored(List<ItemStack> contents, List<Claim> claims) {
-        Map<Item, Long> free = count(contents);
+    static List<Line> stored(List<Entry> contents, List<Claim> claims) {
+        Map<Item, Long> free = new LinkedHashMap<>();
+        for (Entry entry : contents) {
+            free.merge(entry.prototype().getItem(), entry.count(), Long::sum);
+        }
         Map<Item, Long> drawn = take(contents, claims,
             claim -> claim.on() instanceof Resource.Lot lot ? lot.spec() : null);
         drawn.forEach((item, amount) -> free.merge(item, -amount, Long::sum));
@@ -72,7 +77,7 @@ final class DebugGoods {
     }
 
     // How much of the goods the claims cover, matched stack by stack and never more than is there.
-    private static Map<Item, Long> take(List<ItemStack> goods, List<Claim> claims,
+    private static Map<Item, Long> take(List<Entry> goods, List<Claim> claims,
                                         java.util.function.Function<Claim, ItemSpec> spec) {
         List<ItemSpec> specs = new ArrayList<>();
         List<long[]> left = new ArrayList<>();
@@ -84,8 +89,9 @@ final class DebugGoods {
             }
         }
         Map<Item, Long> taken = new LinkedHashMap<>();
-        for (ItemStack stack : goods) {
-            long there = stack.getCount();
+        for (Entry entry : goods) {
+            ItemStack stack = entry.prototype();
+            long there = entry.count();
             for (int at = 0; at < specs.size() && there > 0; at++) {
                 if (left.get(at)[0] > 0 && Goods.matches(stack, specs.get(at))) {
                     long off = Math.min(there, left.get(at)[0]);
@@ -96,6 +102,11 @@ final class DebugGoods {
             }
         }
         return taken;
+    }
+
+    private static List<Entry> entries(List<ItemStack> stacks) {
+        return stacks.stream().filter(stack -> !stack.isEmpty())
+            .map(stack -> new Entry(stack, stack.getCount())).toList();
     }
 
     private static Map<Item, Long> count(List<ItemStack> stacks) {

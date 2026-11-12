@@ -40,11 +40,19 @@ abstract class CraftNode implements Node {
     }
 
     static NodeSpec.Builder specOf(UUID id, WorldPos at, Stances stances, Workload workload) {
+        return specOf(id, new WorkSite.AtBlock(at), stances, workload);
+    }
+
+    static NodeSpec.Builder specOf(WorkSite site, Stances stances, Workload workload) {
+        return specOf(UUID.randomUUID(), site, stances, workload);
+    }
+
+    private static NodeSpec.Builder specOf(UUID id, WorkSite site, Stances stances, Workload workload) {
         return NodeSpec
-            .of(id, WaresContent.ID, new WorkSite.AtBlock(at), stances, workload)
+            .of(id, WaresContent.ID, site, stances, workload)
             .vocation(WaresContent.trade())
             .gesture(WorkGesture.SWING)
-            .focus(at.cell());
+            .focus(site.cell());
     }
 
     @Override
@@ -54,7 +62,7 @@ abstract class CraftNode implements Node {
 
     @Override
     public final Outcome commit(ServerLevel level, Worker who) {
-        if (!standing(level)) {
+        if (!standing(level) || worker().filter(id -> !id.equals(who.resident().id())).isPresent()) {
             return Outcome.failed(WaresRefusal.NOT_A_STATION);
         }
         return work(level, who);
@@ -77,7 +85,7 @@ abstract class CraftNode implements Node {
         return why == WaresRefusal.STATION_FULL ? Recourse.waitFor(FULL_WAIT_TICKS) : Recourse.FAIL;
     }
 
-    final boolean standing(ServerLevel level) {
+    boolean standing(ServerLevel level) {
         return at.in(level) && level.isLoaded(at.block(level)) && level.getBlockState(at.block(level)).is(block);
     }
 
@@ -89,7 +97,7 @@ abstract class CraftNode implements Node {
         return at.cell();
     }
 
-    final List<WorkNoise> worked() {
+    List<WorkNoise> worked() {
         return StationNoise.of(block, cell());
     }
 

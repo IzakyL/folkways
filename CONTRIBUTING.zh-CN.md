@@ -45,6 +45,8 @@ Gradle 编译时需要可选集成的 jar，即使某个测试环境并不加载
 
 九个模组 jar 汇总到 `build/libs/`，运行时使用的 LDLib2 放在 `build/deps/`。
 每个模组是 `mods/` 下的一个 Gradle 子项目，各自的作用见[模组一览](README.zh-CN.md#模组一览)。
+小队编组和直接指挥属于 Core 的 **RTS** 模式（手持殖民书 → **V** → **RTS**）。
+命令测试夹具应使用 RTS API；装备分配使用**装备方案**页。
 
 Windows 下请按 Blockwright 的[本地构建说明](https://github.com/IzakyL/blockwright/blob/master/CONTRIBUTING.md)
 和 [Windows 环境要求](https://github.com/IzakyL/blockwright/blob/master/docs/environment.md#windows-development-candidate)
@@ -71,6 +73,62 @@ CI 会运行构建检查、按模组划分的 GameTests，以及真实客户端�
 运行单个模组的 GameTests：`./gradlew --offline -PgameTestMod=<mod> runGameTestServer`，`<mod>` 为 `mods/` 下的目录名；
 扩展所联动的模组会自动加载。模组内部的子联动需单独开启：Firearms 用 `-PtaczTests=true` 或 `-PwarfareTests=true`，
 Create 用 `-PfirefightingTests=true`，Cookery 用 `-PtavernTests=true`，Carving 用 `-PcreatePlacementTests=true`。
+
+Carts GameTest 需要开启对应依赖：`./gradlew --offline -PgameTestMod=carts -PcartsTests=true runGameTestServer`。
+
+存储端口 GameTest 每次只加载一个原生模组：
+
+```sh
+./gradlew --offline -PgameTestMod=core -PstorageProfile=sophisticatedStorage runGameTestServer
+./gradlew --offline -PgameTestMod=core -PstorageProfile=sophisticatedBackpacks runGameTestServer
+./gradlew --offline -PgameTestMod=core -PstorageProfile=drawers runGameTestServer
+./gradlew --offline -PgameTestMod=core -PstorageProfile=functional runGameTestServer
+./gradlew --offline -PgameTestMod=core -PstorageProfile=createStorage runGameTestServer
+./gradlew --offline -PgameTestMod=core -PstorageProfile=toms runGameTestServer
+./gradlew --offline -PgameTestMod=core -PstorageProfile=colossal runGameTestServer
+./gradlew --offline -PgameTestMod=core -PstorageProfile=qio runGameTestServer
+```
+
+加 `-PstorageLaborTests=true` 运行居民劳动测试；省略该参数则仅测试原生端口。
+增加 `-PstorageVanilla=false` 可验证未安装 Folkways Vanilla 时的原生端口（不可与居民测试共用）。
+对应的 Blockwright 依赖 profile 是 `storage_sophisticated`、`storage_backpacks`、`storage_drawers` 和 `storage_functional`。
+
+新 profile 分别固定 Create: Storage（ausmez）1.3.8 + Create 6.0.10、Tom’s Simple Storage 2.4.2、
+Colossal Chests 1.9.1 + CyclopsCore 1.30.1、Mekanism 10.7.19.85。
+对应 Blockwright 依赖 profile 为 `storage_createStorage`、`storage_toms`、`storage_colossal`、`storage_qio`。
+先运行一次 `npm run setup` 获取固定下载，之后 Gradle 使用 `--offline`。
+独立源码集分别为 `createStorageTest`、`tomsTest`、`colossalTest`、`qioTest`；
+`-PstorageLaborTests=true` 会添加 `portsLaborTest`，验证居民经每种受支持访问点取放物品。
+Create 控制器仅支持手动存入；巨型箱墙沿用已有 point claim 账本；QIO 仪表盘复用 take/put 方块标签，不提供合成。QIO 访问点及全部驱动器须位于同一维度，
+因为 Core 在各维度分别预订库存。
+
+```sh
+./gradlew --offline :core:compileJava :core:compileCreateStorageTestJava :core:compileTomsTestJava :core:compileColossalTestJava :core:compileQioTestJava :core:compilePortsLaborTestJava
+```
+
+AE2 同样使用 Core 下的可选测试套件：
+
+```sh
+./gradlew --offline -PgameTestMod=core -Pae2Tests=true runGameTestServer
+./gradlew --offline -PgameTestMod=core -Pae2Tests=true -Pae2LaborTests=true runGameTestServer
+./gradlew --offline -PgameTestMod=core -Pae2Tests=true -Pae2Vanilla=false runGameTestServer
+```
+
+Refined Storage 2 也使用 Core 下的可选测试套件：
+
+```sh
+./gradlew --offline -PgameTestMod=core -Prs2Tests=true runGameTestServer
+./gradlew --offline -PgameTestMod=core -Prs2Tests=true -Prs2LaborTests=true runGameTestServer
+./gradlew --offline -PgameTestMod=core -Prs2Tests=true -Prs2Vanilla=false runGameTestServer
+```
+
+Blockwright 的 `rs2` profile 安装 Refined Storage 2.0.9，该版本没有外部必需模组依赖。
+GameTest profile 请串行运行以控制内存占用；RS2、AE2 与存储 profile 互斥。
+
+Blockwright 的 `ae2` profile 在 Core 之外安装 AE2 与 GuideME。可选套件只加载选定的原生模组、
+Core 和未显式禁用的 Vanilla；每种组合使用独立世界，RS2、AE2 与存储 profile 分开运行。
+默认 Core 套件使用 `folkways_core` 命名空间；可选套件使用同一命名空间和独立 fixture source set。
+未适配的模组容器必须实现原版 `Container` 并加入 `folkways_core:store/allowed` 方块标签才能登记为仓库。
 
 ## 提交 PR
 

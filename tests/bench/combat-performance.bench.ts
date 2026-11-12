@@ -13,7 +13,7 @@ type Sample = {
   loadedZombies: number;
   targetedZombies: number;
   guardOrders: number;
-  activeWeaponSessions: number;
+  activeDrawnWeapons: number;
   attackedResidents: number;
   attackedZombies: number;
   attackedEntities: number;
@@ -103,7 +103,7 @@ test("combat entity populations: live tick cost and AI activity", async ({}, tes
         notes: [
           "Each population warms up for 200 ticks before the final 100 ticks are recorded.",
           "Engine MSPT omits NeoForge ServerTickEvent.Post work; fullTickMspt includes Pre-to-Post listeners.",
-          "Health is deliberately inflated for population stability; observations include whether guard orders, weapon sessions, and actual damage occurred.",
+          "Health is deliberately inflated for population stability; observations include whether guard orders, drawn weapons, and actual damage occurred.",
           "This artifact reports observations only and defines no performance pass threshold.",
         ],
         samples,
@@ -210,14 +210,14 @@ for (String id : Args.of(ctx).strings("zombies")) {
   var entity = level.getEntity(UUID.fromString(id));
   if (entity instanceof Mob mob) zombies.add(mob);
 }
-int targeted = 0, guards = 0, weaponSessions = 0, attackedResidents = 0, attackedZombies = 0;
+int targeted = 0, guards = 0, drawnWeapons = 0, attackedResidents = 0, attackedZombies = 0;
 int pathingResidents = 0, pathingZombies = 0;
 for (Mob resident : residents) {
   if (!resident.getNavigation().isDone()) pathingResidents++;
   if (resident instanceof ResidentEntity body) {
     if (ResidentCommands.of(colony).current(body.id())
         .map(order -> order.mode() == ResidentCommands.Mode.GUARD).orElse(false)) guards++;
-    if (body.hasWeaponSession()) weaponSessions++;
+    if (body.weaponDrawn()) drawnWeapons++;
   }
   if (resident.getLastHurtByMob() != null) attackedResidents++;
 }
@@ -249,7 +249,7 @@ for (long sample : fullTickNanos) {
 return Map.ofEntries(
   Map.entry("tick", ((MinecraftServer)ctx.server()).getTickCount()),
   Map.entry("loadedResidents", residents.size()), Map.entry("loadedZombies", zombies.size()),
-  Map.entry("targetedZombies", targeted), Map.entry("guardOrders", guards), Map.entry("activeWeaponSessions", weaponSessions),
+  Map.entry("targetedZombies", targeted), Map.entry("guardOrders", guards), Map.entry("activeDrawnWeapons", drawnWeapons),
   Map.entry("attackedResidents", attackedResidents), Map.entry("attackedZombies", attackedZombies),
   Map.entry("attackedEntities", attackedResidents + attackedZombies),
   Map.entry("pathingResidents", pathingResidents), Map.entry("pathingZombies", pathingZombies),

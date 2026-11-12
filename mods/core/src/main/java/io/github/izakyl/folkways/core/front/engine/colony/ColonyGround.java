@@ -77,7 +77,9 @@ public final class ColonyGround {
         WorldPos at = WorldPos.of(level, pos);
         boolean point = io.github.izakyl.folkways.core.front.engine.Enrollments.delegation(owner)
             .filter(delegation -> delegation.shape() instanceof io.github.izakyl.folkways.core.front.api.Shape.Point).isPresent();
-        return colony.hold(owner, point ? new Claimed.Point(at) : new Claimed.Block(at));
+        return colony.hold(owner, (point
+            || io.github.izakyl.folkways.core.inventory.api.port.StorePorts.ledger(level, pos))
+            ? new Claimed.Point(at) : new Claimed.Block(at));
     }
 
     public static void letGo(ServerLevel level, Colony colony, BlockPos pos) {

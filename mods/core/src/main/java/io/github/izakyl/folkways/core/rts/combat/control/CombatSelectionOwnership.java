@@ -9,7 +9,6 @@ import io.github.izakyl.folkways.core.work.api.Urge;
 import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.core.world.api.Realm;
 import io.github.izakyl.folkways.core.world.api.WorldSpaces;
-import io.github.izakyl.folkways.core.front.api.ui.Pages;
 import io.github.izakyl.folkways.core.rts.combat.command.ResidentCommands;
 import io.github.izakyl.folkways.core.rts.combat.group.UnitGroup;
 import io.github.izakyl.folkways.core.rts.combat.group.UnitGroups;
@@ -305,20 +304,7 @@ public final class CombatSelectionOwnership {
         return authorized(player) && (owner == null || owner.equals(player.getUUID()));
     }
 
-    /** A page's existing colony authority can inspect ownership without holding a book or creating a lease. */
-    public boolean availableOnPage(ServerPlayer player, UUID resident) {
-        requireThread();
-        prune();
-        UUID owner = owners.get(resident);
-        return player.getServer() == server
-            && player.isAlive()
-            && !player.isRemoved()
-            && !player.isSpectator()
-            && Pages.colonyOf(player).filter(found -> found.id().equals(colony.id())).isPresent()
-            && (owner == null || owner.equals(player.getUUID()));
-    }
-
-    /** Record only a newly accepted RTS command generation, never a pre-existing autonomous or page command. */
+    /** Record only a newly accepted RTS command generation, never a pre-existing autonomous command. */
     public void trackGroup(ServerPlayer player, UnitGroup group) {
         requireThread();
         prune();

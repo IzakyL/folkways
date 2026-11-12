@@ -481,7 +481,7 @@ public final class UnitGroup {
             failedWaiting(EndReason.NO_SURVIVORS);
             return;
         }
-        // Fear and an asynchronously closing native weapon session retain their existing runner;
+        // Fear and an asynchronously closing native weapon attack retain their existing runner;
         // do not replace or pull back those members while they yield to danger.
         if (orders.values().stream().anyMatch(ResidentCommands.Order::yieldingToDanger)) {
             phase = Phase.WAITING_FOR_MEMBER;

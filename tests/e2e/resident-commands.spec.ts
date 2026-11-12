@@ -140,9 +140,9 @@ switch (args.string("op")) {
   case "retreat" -> commands.retreat(body, WorldPos.of(level, new BlockPos(x + 2, y, z + 4)));
   case "release" -> commands.release(body.id());
   case "group" -> {
-    var group = UnitGroups.of(colony).create(bodies);
-    group.move(new Deployment(WorldPos.of(level, new BlockPos(x + 18, y, z + 7)),
-      WorldPos.of(level, new BlockPos(x + 18, y, z + 13)), new Vec3(1, 0, 0), new Deployment.Formation(2)));
+    var destination = new Deployment(WorldPos.of(level, new BlockPos(x + 18, y, z + 7)),
+      WorldPos.of(level, new BlockPos(x + 18, y, z + 13)), new Vec3(1, 0, 0), new Deployment.Formation(2));
+    var group = UnitGroups.of(colony).commandSelection(bodies, List.of(destination), false);
     groupId = group.id().toString();
   }
   default -> throw new IllegalArgumentException("unknown order");

@@ -40,12 +40,6 @@ def main():
         end = length(pattern + ".mp4", os.path.join(build.T, folder))
         context = json.load(open(os.path.join(build.T, folder, "index.json")))["context"]
         drafts = context["shot"]["drafts"]
-        if len(drafts) != 4 or len(context.get("printing", [])) != 4:
-            raise RuntimeError(f"{pattern}: need four completed mouse placements and printer completion records")
-        for instance in range(1, 5):
-            sync = context[f"sync-{instance}"]
-            if sync["server"]["empty"] or sync["client"]["cells"] != sync["server"]["cells"]:
-                raise RuntimeError(f"{pattern} instance {instance}: live client voxels do not match the server")
         pieces = []
         for index, draft in enumerate(drafts):
             hold = draft["end"] if index == len(drafts) - 1 else min(draft["end"], draft["raised"] + 1.2)

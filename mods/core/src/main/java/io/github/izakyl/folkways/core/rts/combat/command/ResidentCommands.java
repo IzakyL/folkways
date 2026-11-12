@@ -416,7 +416,7 @@ public final class ResidentCommands {
         }
         if (!order.deliberateGuard
             || order.engaged()
-            // A native attack may outlive the short detection lease. Let its actual hand loan
+            // A native attack may outlive the short detection lease. Let its actual drawn weapon
             // finish;
             // repeatedly cancelling a long draw at the lease boundary would prevent every shot.
             || Combatant.get().engaged(order.body)) {

@@ -267,7 +267,8 @@ final class Routing implements Refinement {
                 publication = plan.situation().transports().get();
             }
             Map<Route, TransportTravel.Result> routes = new LinkedHashMap<>();
-            var result = TransportEstimate.estimate(new TransportQuery(from, to, batch, List.of()), publication,
+            var result = TransportEstimate.estimate(new TransportQuery(from, to, batch, List.of()),
+                available(plan, transfer),
                 carrying(transfer, plan, from, to, routes), rejected, count -> {
                     if (count < transfer.count()) {
                         batches.add(count);
@@ -300,6 +301,12 @@ final class Routing implements Refinement {
         }
         plan.because(Why.NO_SOURCE);
         return 0;
+    }
+
+    private TransportPublication available(Plan plan, Transfer transfer) {
+        return new TransportPublication(publication.version(), publication.entries().stream()
+            .filter(entry -> !(entry.offering().mode() instanceof StorageTransport mode)
+                || plan.roomFor(mode.store(), transfer.goods()) >= transfer.count()).toList());
     }
 
     // Lays every leg of the route in order, each continuing from what the one before hands over.
@@ -380,7 +387,7 @@ final class Routing implements Refinement {
             ignored -> view.estimate(kind, from, to, departure));
         List<TransportSnapshot.Carrier> carriers = new ArrayList<>();
         for (Crew.Hand hand : plan.crew().hands()) {
-            long room = (long) hand.packCells() * Math.max(1, Goods.stackSize(transfer.goods()));
+            long room = hand.capacity(transfer.goods());
             if (transfer.from() instanceof From.Carried carried && carried.hand().equals(hand.id())) {
                 room += carried.stacks().stream().filter(stack -> Goods.matches(stack, transfer.goods()))
                     .mapToLong(net.minecraft.world.item.ItemStack::getCount).sum();
@@ -438,7 +445,7 @@ final class Routing implements Refinement {
 
     private static TransportEndpoint destination(To to, Plan plan) {
         return switch (to) {
-            case To.Stored stored -> endpoint("destination", stored.into().pos(), plan.around(stored.into()),
+            case To.Stored stored -> endpoint("destination", stored.into().pos(), plan.putting(stored.into()),
                 TransportEndpoint.Form.INVENTORY);
             case To.Feeding feeding -> endpoint("destination",
                 plan.node(feeding.edge().consumer()).spec().site().where(), plan.stands(feeding.edge().consumer()),
@@ -462,7 +469,7 @@ final class Routing implements Refinement {
                 return false;
             }
             TransferNode put = TransferNode.relay(stored.into(), new Need(transfer.goods(), transfer.count(), true),
-                plan.around(stored.into()));
+                plan.putting(stored.into()));
             session.nodes(1);
             plan.add(put);
             plan.book(new Resource.Space(stored.into(), transfer.goods()), put.id(), transfer.count());
@@ -474,7 +481,7 @@ final class Routing implements Refinement {
         return carry(last, plan) == transfer.count();
     }
 
-    private final class Leg implements TransportLaying {
+    private final class Leg implements StorageTransport.Laying {
         private final Plan plan;
         private final From source;
         private final Transfer transfer;
@@ -612,6 +619,30 @@ final class Routing implements Refinement {
             }
             output = new From.Made(maker, transfer.count());
             return true;
+        }
+
+        public boolean storage(StorageTransport mode, TransportQuote selected) {
+            session.use();
+            var store = mode.store();
+            if (!selected.equals(quote) || !plan.situation().stock().takes(store)
+                    || !plan.situation().stock().stores(store)
+                    || !plan.situation().stock().admits(store, transfer.goods())
+                    || plan.roomFor(store, transfer.goods()) < transfer.count()) {
+                return false;
+            }
+            Need goods = new Need(transfer.goods(), transfer.count(), true);
+            TransferNode put = TransferNode.transitPut(store, goods, mode.putting());
+            TransferNode take = TransferNode.transitTake(store, goods, mode.taking());
+            add(put);
+            add(take);
+            // The take owns both claims from planning through completion. It cannot free its own transit room.
+            plan.book(new Resource.Space(store, goods.spec()), take.id(), goods.count());
+            plan.book(new Resource.Transit(store, goods.spec()), take.id(), goods.count());
+            plan.into(put.id(), store);
+            plan.from(take.id(), store);
+            plan.carry(take.id(), new Amount(goods.spec(), goods.count()));
+            flow(put.id(), take.id(), goods.spec(), goods.count());
+            return feed(put.id()) && output(take.id());
         }
 
         public boolean direct(TransportQuote selected) {

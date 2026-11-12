@@ -11,7 +11,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.WeakHashMap;
-import java.util.stream.Stream;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.item.ItemStack;
 
@@ -52,7 +51,7 @@ public final class ColonyStocks {
 
     public static Map<ItemSpec, Integer> tally(Colony colony, MinecraftServer server) {
         Map<ItemSpec, Integer> held = new LinkedHashMap<>();
-        counted(colony).goods.forEach((spec, count) -> held.put(spec, count.intValue()));
+        counted(colony).goods.forEach((spec, count) -> held.put(spec, (int) Math.min(Integer.MAX_VALUE, count)));
         return held;
     }
 
@@ -70,11 +69,16 @@ public final class ColonyStocks {
         Counted previous = TOTALS.get(inventory);
         if (previous != null && previous.version.epoch().equals(version.epoch())
             && previous.version.contents() == version.contents()
-            && previous.version.topology() == version.topology()) {
+            && previous.version.topology() == version.topology()
+            && previous.version.policy() == version.policy()) {
             return previous;
         }
         Map<ItemSpec, Long> held = new LinkedHashMap<>();
-        slots(snapshot).map(SlotSnapshot::stackCopy).filter(stack -> !stack.isEmpty())
+        snapshot.stores().values().stream().filter(store -> store.usability().usable())
+            .flatMap(store -> store.entries().stream())
+            .forEach(entry -> held.merge(Goods.specOf(entry.prototype()), entry.count(), Long::sum));
+        snapshot.residents().values().stream().flatMap(resident -> resident.pack().stream())
+            .map(SlotSnapshot::stackCopy).filter(stack -> !stack.isEmpty())
             .forEach(stack -> held.merge(Goods.specOf(stack), (long) stack.getCount(), Long::sum));
         Map<ItemSpec, Long> goods = Map.copyOf(held);
         Counted counted = new Counted(version, goods);
@@ -82,8 +86,4 @@ public final class ColonyStocks {
         return counted;
     }
 
-    private static Stream<SlotSnapshot> slots(InventorySnapshot snapshot) {
-        return Stream.concat(snapshot.stores().values().stream().flatMap(store -> store.slots().stream()),
-            snapshot.residents().values().stream().flatMap(resident -> resident.pack().stream()));
-    }
 }

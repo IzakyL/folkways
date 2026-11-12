@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Optional;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -45,6 +46,7 @@ public final class ColonyLookCard {
                     rows.add(new Row.Gauge(gauge.meter(), (float) gauge.value() / gauge.max()));
                 case Line.Bar bar -> rows.add(new Row.Bar(bar.fill()));
                 case Line.Goods goods -> goods(goods).ifPresent(rows::add);
+                case Line.Contents contents -> contents(contents, rows);
             }
         }
         return rows;
@@ -83,6 +85,39 @@ public final class ColonyLookCard {
         return stacks.isEmpty() ? Optional.empty() : Optional.of(new Row.Goods(stacks, counts));
     }
 
+    // A store's goods in a grid of icons, then one quiet line for the kinds left out and the slots taken.
+    private static void contents(Line.Contents line, List<Row> rows) {
+        if (line.empty()) {
+            rows.add(new Row.Text(Component.translatable("folkways.store.contents.empty").getString(), TEXT_COLOR));
+            return;
+        }
+        List<ItemStack> stacks = new ArrayList<>();
+        List<String> counts = new ArrayList<>();
+        int more = line.more();
+        for (Line.Stack stack : line.stacks()) {
+            Item item = BuiltInRegistries.ITEM.get(stack.item());
+            if (item == Items.AIR) {
+                more++;
+                continue;
+            }
+            stacks.add(new ItemStack(item));
+            counts.add(Signs.compact(stack.count()));
+        }
+        if (!stacks.isEmpty()) {
+            rows.add(new Row.Grid(stacks, counts));
+        }
+        List<String> notes = new ArrayList<>();
+        if (more > 0) {
+            notes.add(Component.translatable("folkways.store.contents.more", more).getString());
+        }
+        if (line.total() > 0) {
+            notes.add(Component.translatable("folkways.store.contents.room", line.used(), line.total()).getString());
+        }
+        if (!notes.isEmpty()) {
+            rows.add(new Row.Text(String.join(" · ", notes), TEXT_COLOR));
+        }
+    }
+
     private static long gameTime() {
         Minecraft minecraft = Minecraft.getInstance();
         return minecraft.level == null ? 0L : minecraft.level.getGameTime();
@@ -101,6 +136,14 @@ public final class ColonyLookCard {
 
         record Goods(List<ItemStack> stacks, List<String> counts) implements Row {
             public Goods {
+                stacks = List.copyOf(stacks);
+                counts = List.copyOf(counts);
+            }
+        }
+
+        /** Goods laid in even columns, each icon with its count beside it. */
+        record Grid(List<ItemStack> stacks, List<String> counts) implements Row {
+            public Grid {
                 stacks = List.copyOf(stacks);
                 counts = List.copyOf(counts);
             }

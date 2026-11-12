@@ -1,14 +1,14 @@
 package io.github.izakyl.folkways.epicfight;
 
 import io.github.izakyl.folkways.core.FolkwaysCoreMod;
+import io.github.izakyl.folkways.core.combat.api.Loadouts;
 import io.github.izakyl.folkways.core.work.api.Ending;
 import io.github.izakyl.folkways.core.front.engine.colony.ColonyFront;
 import io.github.izakyl.folkways.core.front.engine.colony.ColonySettings;
 import io.github.izakyl.folkways.core.work.api.Node;
 import io.github.izakyl.folkways.core.work.api.Workload;
 import io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutProfiles;
-import io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutRegistry;
-import io.github.izakyl.folkways.core.combat.api.WeaponSession;
+import io.github.izakyl.folkways.core.combat.api.WeaponAttack;
 import io.github.izakyl.folkways.vanilla.combat.weapon.Weapons;
 import io.github.izakyl.folkways.vanilla.patrol.PatrolContent;
 import java.util.List;
@@ -42,7 +42,7 @@ public final class EpicFightReviewGameTests {
             for (ItemStack tool : List.of(new ItemStack(Items.IRON_PICKAXE), new ItemStack(Items.IRON_SHOVEL),
                     new ItemStack(Items.IRON_HOE))) {
                 helper.assertFalse(EpicFightWeaponAdapter.INSTANCE.accepts(tool), "EF capability does not turn " + tool + " into a weapon");
-                helper.assertTrue(LoadoutRegistry.using(tool).isEmpty(), "profiles cannot list " + tool + " as a weapon");
+                helper.assertTrue(Loadouts.using(tool).isEmpty(), "profiles cannot list " + tool + " as a weapon");
             }
             helper.assertTrue(EpicFightWeaponAdapter.INSTANCE.accepts(new ItemStack(Items.IRON_AXE)), "axes stay native weapons");
             // Without a profile, a pickaxe scanned first must not win over the carried sword.
@@ -52,10 +52,11 @@ public final class EpicFightReviewGameTests {
             ItemStack pickaxe = new ItemStack(Items.IRON_PICKAXE);
             s.resident.pack().setItem(0, pickaxe);
             s.resident.pack().setItem(3, s.sword);
-            WeaponSession session = Weapons.open(s.worker, s.zombie).orElseThrow();
-            helper.assertTrue(s.resident.getMainHandItem() == s.sword, "the sword, not the earlier pickaxe, is borrowed");
+            WeaponAttack attack = Weapons.open(s.worker, s.zombie).orElseThrow();
+            helper.assertTrue(ItemStack.matches(s.resident.getMainHandItem(), s.sword), "the sword, not the earlier pickaxe, is borrowed");
             helper.assertTrue(s.resident.pack().getItem(0) == pickaxe, "the pickaxe stays in the pack");
-            session.close();
+            attack.stop();
+            s.resident.holsterWeapon();
         }
         helper.succeed();
     }
@@ -68,11 +69,12 @@ public final class EpicFightReviewGameTests {
             horse.moveTo(s.resident.getX(), s.resident.getY(), s.resident.getZ());
             s.level.addFreshEntity(horse);
             helper.assertTrue(s.resident.startRiding(horse, true) && s.resident.isPassenger(), "resident rides the horse");
-            WeaponSession session = Weapons.open(s.worker, s.zombie).orElse(null);
-            helper.assertTrue(session != null, "a profile sword still opens a session while mounted");
-            helper.assertFalse(session instanceof EpicFightWeaponSession, "EF declines the rider and upstream melee takes the profile sword");
-            helper.assertTrue(s.resident.getMainHandItem() == s.sword, "the exact profile sword is borrowed");
-            session.close();
+            WeaponAttack attack = Weapons.open(s.worker, s.zombie).orElse(null);
+            helper.assertTrue(attack != null, "a profile sword still opens a attack while mounted");
+            helper.assertFalse(attack instanceof EpicFightWeaponAttack, "EF declines the rider and upstream melee takes the profile sword");
+            helper.assertTrue(ItemStack.matches(s.resident.getMainHandItem(), s.sword), "the exact profile sword is borrowed");
+            attack.stop();
+            s.resident.holsterWeapon();
             s.resident.stopRiding();
             helper.assertValueEqual(s.resident.pack().count(Items.IRON_SWORD), 1, "closing returns the one sword");
         } finally {
@@ -84,15 +86,16 @@ public final class EpicFightReviewGameTests {
     @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
     public static void lapsedLeaseStopsStrikeBeforeCollision(GameTestHelper helper) {
         EpicFightTestScene s = new EpicFightTestScene(helper);
-        WeaponSession session = s.open();
+        WeaponAttack attack = s.open();
         AtomicBoolean lease = new AtomicBoolean(true);
-        session.leasedBy(lease::get);
+        attack.leasedBy(lease::get);
         float health = s.zombie.getHealth();
-        helper.assertTrue(session.fire(s.zombie), "leased strike starts");
+        helper.assertTrue(attack.fire(s.zombie), "leased strike starts");
         lease.set(false);
         helper.startSequence().thenIdle(2).thenExecute(() -> {
-            helper.assertValueEqual(session.state(), WeaponSession.State.STOPPING, "native preTick observes the lapsed lease");
-            session.close();
+            helper.assertFalse(attack.fire(s.zombie), "native preTick observes the lapsed lease");
+            attack.stop();
+            s.resident.holsterWeapon();
         }).thenIdle(30).thenExecute(() -> {
             helper.assertValueEqual(s.zombie.getHealth(), health, "a lapsed lease never lands a hit");
             helper.assertValueEqual(s.resident.pack().getItem(0).getDamageValue(), 9, "a lapsed lease spends no wear");
@@ -106,13 +109,14 @@ public final class EpicFightReviewGameTests {
         Workload.Continuous workload = (Workload.Continuous) node.spec().workload();
         float health = s.zombie.getHealth();
         helper.assertTrue(workload.holds(s.level, s.worker), "the upstream node opens a real EF strike");
-        helper.assertTrue(s.resident.hasWeaponSession(), "the strike holds the hand");
+        helper.assertTrue(s.resident.weaponDrawn(), "the strike holds the hand");
         // The node is then suspended (or paused) and never advances again: the strike must not land.
         helper.startSequence().thenIdle(30).thenExecute(() -> {
             helper.assertValueEqual(s.zombie.getHealth(), health, "a node that stopped advancing grants no collision");
-            helper.assertValueEqual(s.resident.getMainHandItem().getDamageValue(), 9, "no wear is spent");
+            helper.assertTrue(s.resident.getMainHandItem().isEmpty(), "the idle sweep holsters the revoked strike");
+            helper.assertValueEqual(s.resident.pack().getItem(0).getDamageValue(), 9, "no wear is spent");
             node.released(s.level, s.worker, Ending.DROPPED);
-            helper.assertFalse(s.resident.hasWeaponSession(), "release still returns the loan");
+            helper.assertFalse(s.resident.weaponDrawn(), "release still returns the loan");
             helper.assertValueEqual(s.resident.pack().count(Items.IRON_SWORD), 1, "one sword returns");
         }).thenSucceed();
     }
@@ -124,11 +128,12 @@ public final class EpicFightReviewGameTests {
             bystander.setNoAi(true);
             bystander.moveTo(s.zombie.getX(), s.zombie.getY(), s.zombie.getZ() + 0.6);
             s.level.addFreshEntity(bystander);
-            EpicFightWeaponSession session = (EpicFightWeaponSession) s.open();
-            helper.assertTrue(session.fire(s.zombie), "strike starts on the admitted target");
-            helper.assertTrue(session.permits(s.zombie), "the admitted target may be struck");
-            helper.assertFalse(session.permits(bystander), "another hostile inside the sweep may not");
-            session.close();
+            EpicFightWeaponAttack attack = (EpicFightWeaponAttack) s.open();
+            helper.assertTrue(attack.fire(s.zombie), "strike starts on the admitted target");
+            helper.assertTrue(attack.permits(s.zombie), "the admitted target may be struck");
+            helper.assertFalse(attack.permits(bystander), "another hostile inside the sweep may not");
+            attack.stop();
+            s.resident.holsterWeapon();
         } finally {
             bystander.discard();
         }

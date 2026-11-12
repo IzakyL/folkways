@@ -1,6 +1,7 @@
 package io.github.izakyl.folkways.vanilla.person;
 
 import com.mojang.blaze3d.vertex.PoseStack;
+import io.github.izakyl.folkways.core.equipment.api.WornGearLayers;
 import io.github.izakyl.folkways.vanilla.person.look.ResidentLook;
 import io.github.izakyl.folkways.vanilla.person.look.ResidentLooks;
 import net.minecraft.client.model.HumanoidModel;
@@ -28,6 +29,7 @@ public final class ResidentSkinRenderer extends HumanoidMobRenderer<ResidentEnti
         addLayer(new HumanoidArmorLayer<>(this,
             new HumanoidModel<>(context.bakeLayer(ModelLayers.PLAYER_INNER_ARMOR)),
             new HumanoidModel<>(context.bakeLayer(ModelLayers.PLAYER_OUTER_ARMOR)), context.getModelManager()));
+        WornGearLayers.of(this).forEach(this::addLayer);
     }
 
     @Override

@@ -7,6 +7,8 @@ import io.github.izakyl.folkways.core.inventory.api.InventorySnapshot;
 import io.github.izakyl.folkways.core.inventory.api.SlotSnapshot;
 import io.github.izakyl.folkways.core.inventory.api.Stash;
 import io.github.izakyl.folkways.core.inventory.api.StoreRule;
+import io.github.izakyl.folkways.core.inventory.api.port.Room;
+import io.github.izakyl.folkways.core.inventory.api.port.StorePort.Operation;
 import io.github.izakyl.folkways.core.inventory.internal.ObservationBudget;
 import io.github.izakyl.folkways.core.inventory.internal.Stands;
 import io.github.izakyl.folkways.core.plan.api.Workshop;
@@ -15,6 +17,9 @@ import io.github.izakyl.folkways.core.plan.internal.Crew;
 import io.github.izakyl.folkways.core.plan.internal.Known;
 import io.github.izakyl.folkways.core.plan.internal.Situation;
 import io.github.izakyl.folkways.core.plan.internal.Stock;
+import io.github.izakyl.folkways.core.plan.internal.StorageTransport;
+import io.github.izakyl.folkways.core.transport.api.TransportSnapshot;
+import io.github.izakyl.folkways.core.transport.api.TransportTravel;
 import io.github.izakyl.folkways.core.resident.api.Body;
 import io.github.izakyl.folkways.core.resident.api.Licence;
 import io.github.izakyl.folkways.core.transport.api.TransportPublication;
@@ -89,6 +94,7 @@ final class Survey {
 
     private Stock stock;
     private Stands stands;
+    private final Set<Stash> transportStores = new LinkedHashSet<>();
 
     void asked(Asks asks) {
         overHands = asks.hands();
@@ -184,7 +190,7 @@ final class Survey {
             }
         }
         for (InventorySnapshot.Store store : next.stores().values()) {
-            if (store.labor() && store.dimension().equals(level.dimension())
+            if (store.storage() && store.dimension().equals(level.dimension())
                 && store.state() != InventorySnapshot.State.OBSERVED) {
                 colony.inventory().ensureObserved(store.stash());
                 waitingForInventory = true;
@@ -240,7 +246,24 @@ final class Survey {
 
     Known known(Ways ways, List<Workshop> workshops) {
         gather();
-        return new Known(new Situation(ways, stock, workshops, stands, transports, transportVersion, at),
+        Stock captured = stock;
+        Stands approaches = stands;
+        Set<Stash> candidates = Set.copyOf(transportStores);
+        long capturedAt = at;
+        ResourceKey<Level> capturedDimension = dimension;
+        Supplier<TransportPublication> published = transports;
+        return new Known(new Situation(ways, stock, workshops, stands, () -> {
+            TransportPublication external = published.get();
+            List<TransportPublication.Entry> entries = new ArrayList<>(external.entries());
+            for (Stash store : candidates) {
+                StorageTransport mode = new StorageTransport(store, captured,
+                    approaches.around(store, Operation.PUT), approaches.around(store, Operation.TAKE));
+                entries.add(new TransportPublication.Entry(StorageTransport.ID, capturedDimension,
+                    new TransportPublication.Offering(mode,
+                        new TransportSnapshot(capturedAt, capturedAt, TransportTravel.UNKNOWN, List.of()), true)));
+            }
+            return new TransportPublication(external.version(), entries);
+        }, transportVersion, at),
             List.copyOf(hands.values()));
     }
 
@@ -258,37 +281,47 @@ final class Survey {
             return;
         }
         List<Stock.Holding> holdings = new ArrayList<>();
-        Map<Stash, Integer> empty = new LinkedHashMap<>();
+        Map<Stash, Room> rooms = new LinkedHashMap<>();
         Map<Stash, List<StoreRule>> rules = new LinkedHashMap<>();
         Map<Stash, Set<Item>> refused = new LinkedHashMap<>();
         Stands.Builder around = Stands.building();
+        transportStores.clear();
+        Set<Stash> direct = new LinkedHashSet<>();
+        Set<Stash> supplied = new LinkedHashSet<>();
         if (inventory != null) {
             for (InventorySnapshot.Store reading : inventory.stores().values()) {
-                if (!reading.dimension().equals(dimension) || !reading.labor()
-                    || reading.state() != InventorySnapshot.State.OBSERVED
-                    || reading.slots().stream().noneMatch(slot -> slot.accessibleSlot().isPresent())) {
+                if (!reading.dimension().equals(dimension) || !reading.storage()
+                    || reading.state() != InventorySnapshot.State.OBSERVED || !reading.usability().usable()) {
                     continue;
                 }
                 Stash where = reading.stash();
-                int free = 0;
-                for (SlotSnapshot slot : reading.slots()) {
-                    if (slot.accessibleSlot().isEmpty()) {
-                        continue;
-                    }
-                    ItemStack stack = slot.stackCopy();
-                    if (stack.isEmpty()) {
-                        free++;
-                    } else {
-                        holdings.add(new Stock.Holding(where, stack));
-                    }
+                if (reading.labor()) {
+                    supplied.add(where);
                 }
-                empty.put(where, free);
-                rules.put(where, reading.rules());
+                for (var entry : reading.entries()) {
+                    holdings.add(new Stock.Holding(where, entry.prototype(), entry.count()));
+                }
+                rooms.put(where, reading.room());
+                if (reading.container()) {
+                    direct.add(where);
+                }
+                List<StoreRule> permissions = new ArrayList<>(reading.rules());
+                boolean takes = reading.labor() && reading.operations().values().stream()
+                    .anyMatch(ops -> ops.contains(Operation.TAKE));
+                boolean puts = reading.operations().values().stream().anyMatch(ops -> ops.contains(Operation.PUT));
+                if (!takes || !puts) {
+                    permissions.add(new StoreRule.Access(where.pos(), takes, puts));
+                }
+                rules.put(where, permissions);
+                if (reading.labor() && reading.operations().size() > 1 && takes && puts
+                        && StoreRule.takes(permissions) && StoreRule.stores(permissions)) {
+                    transportStores.add(where);
+                }
                 refused.put(where, reading.refused());
-                around.container(where, reading.approach().stands());
+                around.container(where, takes ? reading.approach().taking() : Set.of(), reading.approach().putting());
             }
         }
-        stock = new Stock(holdings, empty, rules, refused);
+        stock = Stock.observed(holdings, rooms, rules, refused).supplied(supplied).direct(direct);
         stands = around.done();
     }
 
@@ -314,16 +347,17 @@ final class Survey {
         for (Vocation vocation : Vocations.all()) {
             body.licences().of(vocation).ifPresent(licences::add);
         }
+        var space = io.github.izakyl.folkways.core.plan.api.PackSpace.of(body.pack(), kit.cargoIn(contents));
         Crew.Hand had = hands.put(resident, new Crew.Hand(
             body.resident(),
             Feet.of(body.mob()),
-            Math.max(0, observed.pack().size() - contents.size()),
-            Math.max(0, observed.pack().size() - tools) - kit.keptCells(contents),
+            space.free(),
+            space.size(),
             pace(body),
             List.copyOf(licences),
             kit.inPack(contents),
             Optional.empty(),
-            kit.cargoIn(contents), KitRules.snapshot(colony.works())));
+            kit.cargoIn(contents), KitRules.snapshot(colony.works()), space));
         seen.accept(body, suppliesRead.getOrDefault(resident, true));
         return had == null || !sameHand(had, hands.get(resident));
     }

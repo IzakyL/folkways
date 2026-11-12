@@ -53,6 +53,8 @@ test profile does not load them.
 
 The build gathers the nine mod jars in `build/libs/` and runtime LDLib2 in `build/deps/`.
 Each mod is a Gradle project under `mods/`; see [Mods](README.md#mods) for what each one does.
+Squad grouping and direct commands belong to Core’s **RTS** mode (Colony Book → **V** → **RTS**).
+Keep command fixtures on the RTS APIs; equipment assignment uses the **Equipment profiles** page.
 
 For Windows, prepare a compatible source-built SDK using Blockwright's
 [local build instructions](https://github.com/IzakyL/blockwright/blob/master/CONTRIBUTING.md)
@@ -85,6 +87,65 @@ Run one mod's GameTests with `./gradlew --offline -PgameTestMod=<mod> runGameTes
 Integrations inside a mod need their own switch: `-PtaczTests=true` or `-PwarfareTests=true`
 for Firearms, `-PfirefightingTests=true` for Create, `-PtavernTests=true` for Cookery and
 `-PcreatePlacementTests=true` for Carving.
+
+Carts GameTests require their fixture switch: `./gradlew --offline -PgameTestMod=carts -PcartsTests=true runGameTestServer`.
+
+Storage GameTests (one native mod per profile):
+
+```sh
+./gradlew --offline -PgameTestMod=core -PstorageProfile=sophisticatedStorage runGameTestServer
+./gradlew --offline -PgameTestMod=core -PstorageProfile=sophisticatedBackpacks runGameTestServer
+./gradlew --offline -PgameTestMod=core -PstorageProfile=drawers runGameTestServer
+./gradlew --offline -PgameTestMod=core -PstorageProfile=functional runGameTestServer
+./gradlew --offline -PgameTestMod=core -PstorageProfile=createStorage runGameTestServer
+./gradlew --offline -PgameTestMod=core -PstorageProfile=toms runGameTestServer
+./gradlew --offline -PgameTestMod=core -PstorageProfile=colossal runGameTestServer
+./gradlew --offline -PgameTestMod=core -PstorageProfile=qio runGameTestServer
+```
+
+Add `-PstorageLaborTests=true` to include resident labour tests; omit it for native ports only.
+Add `-PstorageVanilla=false` to verify native ports without Folkways Vanilla (incompatible with resident tests).
+The corresponding Blockwright fixture profiles are `storage_sophisticated`, `storage_backpacks`,
+`storage_drawers` and `storage_functional`.
+
+The new profiles pin Create: Storage (ausmez) 1.3.8 + Create 6.0.10, Tom’s Simple Storage 2.4.2,
+Colossal Chests 1.9.1 + CyclopsCore 1.30.1, and Mekanism 10.7.19.85 respectively.
+Their Blockwright fixture profiles are `storage_createStorage`, `storage_toms`, `storage_colossal` and `storage_qio`.
+Use `npm run setup` once to resolve the pinned downloads, then `--offline` for Gradle.
+Each profile has its own source set (`createStorageTest`, `tomsTest`, `colossalTest`, `qioTest`);
+`-PstorageLaborTests=true` adds `portsLaborTest` and tests resident take/put at each supported access kind.
+The Create controller supports hand insertion only. Colossal walls use the existing point-claim ledger;
+QIO dashboards reuse the take/put block tags and provide no crafting. QIO access and all drives must
+be in one dimension, because Core reserves inventory independently in each dimension.
+
+```sh
+./gradlew --offline :core:compileJava :core:compileCreateStorageTestJava :core:compileTomsTestJava :core:compileColossalTestJava :core:compileQioTestJava :core:compilePortsLaborTestJava
+```
+
+AE2 is also a Core optional suite:
+
+```sh
+./gradlew --offline -PgameTestMod=core -Pae2Tests=true runGameTestServer
+./gradlew --offline -PgameTestMod=core -Pae2Tests=true -Pae2LaborTests=true runGameTestServer
+./gradlew --offline -PgameTestMod=core -Pae2Tests=true -Pae2Vanilla=false runGameTestServer
+```
+
+Refined Storage 2 is another Core optional suite:
+
+```sh
+./gradlew --offline -PgameTestMod=core -Prs2Tests=true runGameTestServer
+./gradlew --offline -PgameTestMod=core -Prs2Tests=true -Prs2LaborTests=true runGameTestServer
+./gradlew --offline -PgameTestMod=core -Prs2Tests=true -Prs2Vanilla=false runGameTestServer
+```
+
+The `rs2` Blockwright profile installs Refined Storage 2.0.9, which has no external required mod dependencies.
+Run GameTest profiles serially to keep memory usage bounded. RS2, AE2 and storage profiles are mutually exclusive.
+
+The `ae2` Blockwright profile installs AE2 and GuideME alongside Core. Optional suites use only the
+selected native mod and Core, plus Vanilla unless disabled. Every combination owns a separate world;
+RS2, AE2 and storage profiles run separately. The default Core suite uses `folkways_core`; optional suites use
+the same namespace and their own fixture source sets. Unadapted modded containers must implement vanilla
+`Container` and join the `folkways_core:store/allowed` block tag to enroll as stores.
 
 ## Pull requests
 

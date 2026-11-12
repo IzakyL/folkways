@@ -2,7 +2,6 @@ package io.github.izakyl.folkways.vanilla.wares;
 
 import io.github.izakyl.folkways.core.colony.api.Claim;
 import io.github.izakyl.folkways.core.colony.api.ClaimRelease;
-import io.github.izakyl.folkways.core.colony.api.Claimed;
 import io.github.izakyl.folkways.core.colony.api.Colony;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
 import java.util.ArrayList;
@@ -42,10 +41,8 @@ final class StorePresence implements Claim.Watch {
     private void offer() {
         Map<ResourceKey<Level>, List<WorldPos>> byDimension = new LinkedHashMap<>();
         for (Claim holding : colony.claims(WaresContent.STORE)) {
-            if (holding.what() instanceof Claimed.Block(WorldPos cell)) {
-                cell.level(server).ifPresent(level ->
-                    byDimension.computeIfAbsent(level.dimension(), key -> new ArrayList<>()).add(cell));
-            }
+            holding.what().singleCell().ifPresent(cell -> cell.level(server).ifPresent(level ->
+                byDimension.computeIfAbsent(level.dimension(), key -> new ArrayList<>()).add(cell)));
         }
         for (ResourceKey<Level> gone : offeredIn) {
             if (!byDimension.containsKey(gone)) {

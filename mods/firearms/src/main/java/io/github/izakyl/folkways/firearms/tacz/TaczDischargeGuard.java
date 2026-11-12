@@ -24,30 +24,30 @@ public final class TaczDischargeGuard {
 
     // Save compatibility: retain the historical projectile NBT key (see SAVE_COMPATIBILITY.md).
     private static final String COLONY = "folkways_tacz_colony";
-    private static final Map<ResidentEntity, TaczWeaponSession> ACTIVE = new IdentityHashMap<>();
+    private static final Map<ResidentEntity, TaczWeaponAttack> ACTIVE = new IdentityHashMap<>();
 
     private TaczDischargeGuard() {
     }
 
-    static void claim(ResidentEntity body, TaczWeaponSession session) {
-        ACTIVE.put(body, session);
+    static void claim(ResidentEntity body, TaczWeaponAttack attack) {
+        ACTIVE.put(body, attack);
     }
 
-    static void release(ResidentEntity body, TaczWeaponSession session) {
-        ACTIVE.remove(body, session);
+    static void release(ResidentEntity body, TaczWeaponAttack attack) {
+        ACTIVE.remove(body, attack);
     }
 
-    /** Capture the session object as a generation, before the first synchronous burst discharge. */
+    /** Capture the attack object as a generation, before the first synchronous burst discharge. */
     public static BooleanSupplier capture(LivingEntity shooter, ItemStack gun, BooleanSupplier task) {
         if (!(shooter instanceof ResidentEntity body)) {
             return task;
         }
-        TaczWeaponSession generation = ACTIVE.get(body);
+        TaczWeaponAttack generation = ACTIVE.get(body);
         LivingEntity intent = generation == null ? null : generation.target();
         return () ->
             generation != null
                 && ACTIVE.get(body) == generation
-                && generation.discharge(gun, intent)
+                && generation.discharge(intent)
                 && task.getAsBoolean();
     }
 
@@ -76,8 +76,8 @@ public final class TaczDischargeGuard {
         if (event.getLogicalSide().isClient() || !(event.getShooter() instanceof ResidentEntity body)) {
             return;
         }
-        TaczWeaponSession session = ACTIVE.get(body);
-        if (session == null || !session.discharge(event.getGunItemStack(), session.target())) {
+        TaczWeaponAttack attack = ACTIVE.get(body);
+        if (attack == null || !attack.discharge(attack.target())) {
             event.setCanceled(true);
         }
     }

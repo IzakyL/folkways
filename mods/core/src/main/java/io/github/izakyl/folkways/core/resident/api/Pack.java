@@ -1,5 +1,6 @@
 package io.github.izakyl.folkways.core.resident.api;
 
+import io.github.izakyl.folkways.core.item.api.Inserting;
 import java.util.List;
 import java.util.function.Predicate;
 import net.minecraft.core.HolderLookup;
@@ -9,7 +10,7 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 
-public interface Pack extends Container {
+public interface Pack extends Container, Inserting {
 
     int DEFAULT_SIZE = 18;
 
@@ -17,7 +18,19 @@ public interface Pack extends Container {
 
     void onChanged(Runnable listener);
 
+    /** Binds native worn inventories and safely returns old development-save overflow. */
+    void bind(Body owner);
+
+    /** Base-pack growth from resident perks; storage items never use this. */
     void applyCapacityMultiplier(double multiplier);
+
+    int ownCells();
+
+    int slotLimit(int slot, ItemStack stack);
+
+    ItemStack insertSlot(int slot, ItemStack stack, boolean simulate);
+
+    void recover(ItemStack stack);
 
     int plannableCells(Predicate<Item> tool);
 

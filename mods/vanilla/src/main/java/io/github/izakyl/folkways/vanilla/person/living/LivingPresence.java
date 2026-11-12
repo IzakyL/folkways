@@ -1,5 +1,8 @@
 package io.github.izakyl.folkways.vanilla.person.living;
 
+import io.github.izakyl.folkways.core.resident.api.Bodies;
+import io.github.izakyl.folkways.core.resident.api.KitCapabilities;
+import io.github.izakyl.folkways.core.resident.api.KitProviders;
 import io.github.izakyl.folkways.core.base.persist.Reader;
 import io.github.izakyl.folkways.core.base.persist.Writer;
 import io.github.izakyl.folkways.core.colony.api.Closing;
@@ -323,6 +326,7 @@ final class LivingPresence implements Facing {
                 Hunger his = bellies.computeIfAbsent(resident.id(), id -> new Hunger());
                 his.setExhaustionRateMul((float) view.effectsOf(resident).value(Stats.APPETITE));
                 if (server.getTickCount() % VITALS_INTERVAL == 0) {
+                    autoFeed(living, his, level);
                     step(living, his, level, naturalRegen);
                     Mood mood = mood(resident.id());
                     Optional<WorldPos> bed = bedFor(resident.id()).filter(at -> at.in(level));
@@ -366,6 +370,35 @@ final class LivingPresence implements Facing {
         // Elapsed awake time is charged by tick(), never again by a delayed execution total.
         wear.computeIfAbsent(body.id(), id -> new Rest()).walked(effort.distance() * travelFatigue);
         unwritten = true;
+    }
+
+    private void autoFeed(LivingEntity entity, Hunger hunger, ServerLevel level) {
+        var loaded = Bodies.of(entity);
+        if (loaded.isEmpty() || hunger.foodLevel() >= Hunger.REGEN_FOOD_LEVEL
+            || KitProviders.capabilities(loaded.get())
+                .ability(KitCapabilities.AUTO_FEED) <= 0) {
+            return;
+        }
+        Body body = loaded.get();
+        var pack = body.pack();
+        for (int slot = 0; slot < pack.getContainerSize(); slot++) {
+            ItemStack stack = pack.getItem(slot);
+            FoodProperties food = stack.isEmpty() ? null : stack.getFoodProperties(entity);
+            if (!wouldEat(body.id(), stack, food)) {
+                continue;
+            }
+            var outcome = EatAction.consume(level, body.mob(), body.id(), body.mob()::spawnAtLocation,
+                this, pack, slot);
+            if (outcome instanceof io.github.izakyl.folkways.core.work.api.Outcome.Done done) {
+                for (ItemStack made : done.made()) {
+                    ItemStack rest = io.github.izakyl.folkways.core.item.api.Containers.insert(pack, made);
+                    if (!rest.isEmpty()) {
+                        body.mob().spawnAtLocation(rest);
+                    }
+                }
+            }
+            return;
+        }
     }
 
     private void step(LivingEntity body, Hunger his, ServerLevel level, boolean naturalRegen) {

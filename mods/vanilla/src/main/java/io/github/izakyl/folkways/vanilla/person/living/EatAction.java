@@ -69,9 +69,15 @@ final class EatAction implements Node {
 
     // Table displays and pocket rations use the same native food interaction and remainder handling.
     static Outcome consume(ServerLevel level, Worker who, LivingPresence works, Container pack, int slot) {
+        return consume(level, who.body(), who.resident().id(), who::spill, works, pack, slot);
+    }
+
+    static Outcome consume(ServerLevel level, net.minecraft.world.entity.Mob body, UUID resident,
+                           java.util.function.Consumer<ItemStack> spill, LivingPresence works,
+                           Container pack, int slot) {
         ItemStack stack = pack.getItem(slot);
-        FoodProperties food = stack.isEmpty() ? null : stack.getFoodProperties(who.body());
-        if (food == null || !works.wouldEat(who.resident().id(), food)) {
+        FoodProperties food = stack.isEmpty() ? null : stack.getFoodProperties(body);
+        if (food == null || !works.wouldEat(resident, food)) {
             return Outcome.failed(LivingRefusal.NOTHING_TO_EAT);
         }
         ItemStack eaten = stack.copyWithCount(1);
@@ -81,15 +87,15 @@ final class EatAction implements Node {
         pack.setChanged();
         ItemDrops.Captured<ItemStack> used;
         try {
-            used = ItemDrops.capture(level, who.body().getBoundingBox().inflate(1),
-                () -> bite.finishUsingItem(level, who.body()));
+            used = ItemDrops.capture(level, body.getBoundingBox().inflate(1),
+                () -> bite.finishUsingItem(level, body));
         } catch (ItemDrops.CaptureFailure broken) {
-            LOGGER.warn("resident {}'s food interaction failed", who.resident().id(), broken.getCause());
+            LOGGER.warn("resident {}'s food interaction failed", resident, broken.getCause());
             if (!bite.isEmpty()) {
                 // The food never reached consumption; discard canceled byproducts and return that one bite.
                 ItemStack back = Containers.insert(pack, bite);
                 if (!back.isEmpty()) {
-                    who.spill(back);
+                    spill.accept(back);
                 }
                 return Outcome.failed(LivingRefusal.NOTHING_TO_EAT);
             }
@@ -104,7 +110,7 @@ final class EatAction implements Node {
             // Players receive food containers in Player.eat; a resident has its own pantry and belly.
             left.add(remainder);
         }
-        works.ate(who.resident().id(), food, eaten, level.getGameTime());
+        works.ate(resident, food, eaten, level.getGameTime());
         return new Outcome.Done(List.of(), left, Optional.empty());
     }
 }

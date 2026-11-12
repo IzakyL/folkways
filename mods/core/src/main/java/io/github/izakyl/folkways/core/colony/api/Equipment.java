@@ -18,8 +18,12 @@ public final class Equipment {
         List<Demand> wanted(Colony colony, Body body);
     }
 
+    /** Something to wear: armour in its own slot, or anything held in the off hand. */
     public record Demand(EquipmentSlot slot, ItemSpec items, boolean automaticSupply) {
         public boolean matches(ItemStack stack) {
+            if (slot == EquipmentSlot.OFFHAND) {
+                return !stack.isEmpty() && Goods.matches(stack, items);
+            }
             EquipmentSlot custom = stack.getEquipmentSlot();
             Equipable equipable = Equipable.get(stack);
             EquipmentSlot actual =
@@ -34,10 +38,15 @@ public final class Equipment {
         public Demand {
             Objects.requireNonNull(slot);
             Objects.requireNonNull(items);
-            if (slot.getType() != EquipmentSlot.Type.HUMANOID_ARMOR) {
-                throw new IllegalArgumentException("clothing needs an armor slot, not " + slot);
+            if (!wearable(slot)) {
+                throw new IllegalArgumentException("clothing needs an armor slot or the off hand, not " + slot);
             }
         }
+    }
+
+    /** The slots clothing demands may name: the four armour slots and the off hand. */
+    public static boolean wearable(EquipmentSlot slot) {
+        return slot.getType() == EquipmentSlot.Type.HUMANOID_ARMOR || slot == EquipmentSlot.OFFHAND;
     }
 
     public interface Access {

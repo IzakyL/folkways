@@ -3,7 +3,7 @@ package io.github.izakyl.folkways.core.runtime;
 import io.github.izakyl.folkways.core.inventory.api.ColonyInventory;
 import io.github.izakyl.folkways.core.inventory.internal.InventoryIndex;
 import io.github.izakyl.folkways.core.inventory.api.InventorySnapshot;
-import io.github.izakyl.folkways.core.inventory.api.SlotSnapshot;
+import io.github.izakyl.folkways.core.inventory.api.port.PortReader.Entry;
 import io.github.izakyl.folkways.core.front.api.notice.DebugText;
 import io.github.izakyl.folkways.core.front.api.notice.Line;
 import io.github.izakyl.folkways.core.inventory.api.StoreRule;
@@ -19,7 +19,6 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.ComponentUtils;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.Item;
-import net.minecraft.world.item.ItemStack;
 
 public record StoreDebug(boolean available, List<Difference> differences) {
     public record Difference(Item item, long cached, long live) {
@@ -40,11 +39,11 @@ public record StoreDebug(boolean available, List<Difference> differences) {
         }
         Map<Item, Long> cached = new LinkedHashMap<>();
         Map<Item, Long> actual = new LinkedHashMap<>();
-        for (SlotSnapshot slot : store.slots()) {
-            count(cached, slot.stackCopy());
+        for (Entry entry : store.entries()) {
+            count(cached, entry);
         }
-        for (ItemStack stack : contents.get()) {
-            count(actual, stack);
+        for (Entry entry : contents.get()) {
+            count(actual, entry);
         }
         List<Difference> differences = new ArrayList<>();
         var items = new LinkedHashSet<>(cached.keySet());
@@ -71,7 +70,7 @@ public record StoreDebug(boolean available, List<Difference> differences) {
         var version = one.version();
         lines.add(debugLine("store", word(one.state().name()), one.incarnation(),
             text("version", version.contents(), version.policy())));
-        lines.addAll(DebugGoods.stored(one.slots().stream().map(SlotSnapshot::stackCopy).toList(), claims));
+        lines.addAll(DebugGoods.stored(one.entries(), claims));
         for (StoreRule rule : one.rules()) {
             Component detail = switch (rule) {
                 case StoreRule.Reserve reserve -> text("reserve", goods(reserve.goods()));
@@ -116,9 +115,7 @@ public record StoreDebug(boolean available, List<Difference> differences) {
         return DebugText.line(key, args);
     }
 
-    private static void count(Map<Item, Long> counts, ItemStack stack) {
-        if (!stack.isEmpty()) {
-            counts.merge(stack.getItem(), (long) stack.getCount(), Long::sum);
-        }
+    private static void count(Map<Item, Long> counts, Entry entry) {
+        counts.merge(entry.prototype().getItem(), entry.count(), Long::sum);
     }
 }

@@ -106,6 +106,9 @@ final class ToolStock {
         List<KitchenTools.Tool> tools = new ArrayList<>();
         Map<UUID, Source> sources = new LinkedHashMap<>();
         for (InventorySnapshot.Store store : observed.stores().values()) {
+            if (!store.usability().usable()) {
+                continue;
+            }
             Optional<Stances> approach = approach(store);
             for (SlotSnapshot slot : store.slots()) {
                 ItemStack stack = slot.stackCopy();
@@ -176,7 +179,7 @@ final class ToolStock {
 
     private static Optional<Stances> approach(InventorySnapshot.Store store) {
         return store.approach().state() == InventorySnapshot.State.OBSERVED
-            ? Stances.of(store.approach().stands().stream().map(Stand::cell).toList()) : Optional.empty();
+            ? Stances.of(store.approach().taking().stream().map(Stand::cell).toList()) : Optional.empty();
     }
 
     private void observeDrops(InventorySnapshot observed, List<KitchenTools.Lease> loans, Set<UUID> accounted,
@@ -238,7 +241,7 @@ final class ToolStock {
         List<Destination> targets = new ArrayList<>();
         for (InventorySnapshot.Store store : colony.inventory().snapshot().stores().values()) {
             if (!store.dimension().equals(level.dimension()) || store.state() != InventorySnapshot.State.OBSERVED
-                    || !StoreRule.stores(store.rules())) {
+                    || !store.usability().usable() || !StoreRule.stores(store.rules())) {
                 continue;
             }
             long room = roomCount(store, stack);

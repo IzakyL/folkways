@@ -4,6 +4,7 @@ import io.github.izakyl.folkways.core.item.api.ItemDrops;
 import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.core.world.api.WorldSpaces;
+import io.github.izakyl.folkways.vanilla.person.ResidentEntity;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Supplier;
@@ -28,6 +29,11 @@ public final class KitchenDelivery {
     public static Result run(ServerLevel level, BlockPos at, Worker who, ItemStack hand,
                              Supplier<Boolean> action) {
         Mob body = who.body();
+        if (body instanceof ResidentEntity resident && resident.hasActiveAttack()) {
+            // End combat before remembering the hand: replacing it would holster the weapon,
+            // and restoring that displaced stack would duplicate the item already in the pack.
+            resident.stopCombat();
+        }
         ItemStack previous = body.getMainHandItem();
         List<AABB> bounds = new ArrayList<>(List.of(new AABB(at).inflate(1.0),
             body.getBoundingBox().inflate(1.0)));

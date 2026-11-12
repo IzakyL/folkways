@@ -123,15 +123,15 @@ public final class TaczProfileGameTests {
         scene.open();
         scene.target.setPos(scene.body.getX() + 17, scene.body.getY(), scene.body.getZ());
         helper.assertTrue(
-            scene.session.spottedTarget(scene.target, scene.target.position(), () -> true),
+            scene.attack.spottedTarget(scene.target, scene.target.position(), () -> true),
             "a live observation can be bound before range validation");
-        helper.assertFalse(scene.session.fire(scene.target), "shared spotting does not extend the per-gun cap");
+        helper.assertFalse(scene.attack.fire(scene.target), "shared spotting does not extend the per-gun cap");
         scene.target.setPos(scene.body.getX() + 6, scene.body.getY(), scene.body.getZ());
         var wall = scene.body.blockPosition().offset(3, 1, 0);
         helper.getLevel().setBlockAndUpdate(wall, Blocks.STONE.defaultBlockState());
-        helper.assertFalse(scene.session.fire(scene.target), "direct guns retain their own line-of-sight check");
+        helper.assertFalse(scene.attack.fire(scene.target), "direct guns retain their own line-of-sight check");
         helper.getLevel().setBlockAndUpdate(wall, Blocks.AIR.defaultBlockState());
-        helper.assertTrue(scene.session.fire(scene.target), "clear sight within range permits a real fire intent");
+        helper.assertTrue(scene.attack.fire(scene.target), "clear sight within range permits a real fire intent");
         helper.assertValueEqual(scene.total("45acp"), 3, "refusals and fire intents do not invent or spend rounds");
         helper.succeed();
     }
@@ -142,14 +142,14 @@ public final class TaczProfileGameTests {
         AtomicBoolean authorized = new AtomicBoolean(true);
         scene.open();
         helper.assertTrue(
-            scene.session.spottedTarget(scene.target, scene.target.position(), authorized::get),
+            scene.attack.spottedTarget(scene.target, scene.target.position(), authorized::get),
             "sentry observation installs a live direct-fire permission");
         scene.firstShot =
             () -> {
                 authorized.set(false);
                 scene.advance = false;
             };
-        scene.session.fire(scene.target);
+        scene.attack.fire(scene.target);
         helper.startSequence()
             .thenWaitUntil(
             () -> helper.assertTrue(scene.shots.get() == 1, "first authorized round fires"))

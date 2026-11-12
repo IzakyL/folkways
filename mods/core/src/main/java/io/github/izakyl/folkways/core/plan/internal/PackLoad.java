@@ -29,6 +29,11 @@ public final class PackLoad {
         return true;
     }
 
+    public static boolean fits(Crew.Hand hand, List<List<Amount>> inOrder) {
+        return hand.space() == null ? fits(hand.packCapacity() - hand.packCells(), hand.packCapacity(), inOrder)
+            : hand.space().fits(inOrder);
+    }
+
     static int cells(Map<ItemSpec, Long> carrying) {
         int held = 0;
         for (Map.Entry<ItemSpec, Long> amount : carrying.entrySet()) {

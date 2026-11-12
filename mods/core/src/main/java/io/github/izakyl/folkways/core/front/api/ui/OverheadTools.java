@@ -100,6 +100,11 @@ public final class OverheadTools {
             this(id, BUILD, nameKey, icon, camera, actionKey, open);
         }
 
+        /** A tool whose handler supplies all controls, without a separate action button. */
+        public Tool(ResourceLocation id, ResourceLocation mode, String nameKey, ResourceLocation icon, Camera camera) {
+            this(id, mode, nameKey, icon, camera, "", () -> {});
+        }
+
         public Tool {
             Objects.requireNonNull(id);
             Objects.requireNonNull(mode);

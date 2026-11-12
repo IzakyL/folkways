@@ -1,5 +1,6 @@
 package io.github.izakyl.folkways.firearms.warfare;
 
+import io.github.izakyl.folkways.core.combat.api.Loadouts;
 import io.github.izakyl.folkways.firearms.FolkwaysFirearmsMod;
 import com.atsuishio.superbwarfare.api.event.ShootEvent;
 import com.atsuishio.superbwarfare.data.gun.GunData;
@@ -41,9 +42,8 @@ import io.github.izakyl.folkways.vanilla.combat.SpottedTargets;
 import io.github.izakyl.folkways.vanilla.combat.WeaponStations;
 import io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutProfile;
 import io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutProfiles;
-import io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutRegistry;
 import io.github.izakyl.folkways.vanilla.combat.weapon.PatrolSupplies;
-import io.github.izakyl.folkways.core.combat.api.WeaponSession;
+import io.github.izakyl.folkways.core.combat.api.WeaponAttack;
 import io.github.izakyl.folkways.vanilla.combat.weapon.Weapons;
 import io.github.izakyl.folkways.vanilla.patrol.PatrolContent;
 import io.github.izakyl.folkways.vanilla.patrol.PatrolStaffing;
@@ -175,21 +175,23 @@ public final class WarfareGameTests {
         data.save();
         f.body.pack().insert(gun);
         Zombie target = f.enemy(10, 10);
-        WeaponSession session = Weapons.open(worker(f.body)).orElseThrow();
-        f.sessions.add(session);
-        helper.assertTrue(session.fire(target), "actual loose ammunition allows firing");
+        WeaponAttack attack = Weapons.open(worker(f.body)).orElseThrow();
+        f.attacks.add(attack);
+        helper.assertTrue(attack.fire(target), "actual loose ammunition allows firing");
         helper.onEachTick(
             () -> {
-                session.tick();
-                if (session.state() == WeaponSession.State.READY) {
-                    session.fire(target);
+                attack.tick();
+                if (attack.state() == WeaponAttack.State.READY) {
+                    attack.fire(target);
                 }
             });
         helper.runAfterDelay(
             45,
             () -> {
-                session.close();
-                session.close();
+                attack.stop();
+                f.body.holsterWeapon();
+                attack.stop();
+                f.body.holsterWeapon();
                 helper.assertValueEqual(f.shots.get(), 2, "two loaded rounds permit two shots");
                 ItemStack returned =
                     f.body.pack().contents().stream()
@@ -209,14 +211,14 @@ public final class WarfareGameTests {
                     1,
                     "idempotent closure returns one gun");
                 helper.assertTrue(
-                    Weapons.open(worker(f.body)).isEmpty(), "an empty gun and empty pack cannot open a session");
+                    Weapons.open(worker(f.body)).isEmpty(), "an empty gun and empty pack cannot open a attack");
                 helper.succeed();
             });
     }
 
     @GameTest(batch = "warfare", template = "warfare_range", timeoutTicks = 120)
     public static void reopeningOrRestockingAGunCannotResetItsNativeCadence(GameTestHelper helper) {
-        // The pump keeps its session until each shot, then reopens; the pistol goes back to the pack every tick.
+        // The pump keeps its attack until each shot, then reopens; the pistol goes back to the pack every tick.
         List<Cadence> guns = List.of(
             new Cadence(helper, ModItems.M_870.get(), ModItems.SHOTGUN_AMMO.get(), true),
             new Cadence(helper, ModItems.GLOCK_17.get(), ModItems.HANDGUN_AMMO.get(), false));
@@ -224,18 +226,18 @@ public final class WarfareGameTests {
             .thenWaitUntil(() -> guns.forEach(gun -> helper.assertValueEqual(
                 gun.scene.shots.get(), 3, "three supplied rounds eventually discharge from " + gun.item)))
             .thenExecute(() -> guns.forEach(gun -> helper.assertTrue(gun.spaced(), gun.held
-                ? "reopening sessions cannot bypass the native pump"
+                ? "reopening attacks cannot bypass the native pump"
                 : "copying a stack back into the pack never bypasses RPM")))
             .thenSucceed();
     }
 
-    // One gun firing three rounds at a still enemy, a fresh session at a time, noting when each shot left.
+    // One gun firing three rounds at a still enemy, a fresh attack at a time, noting when each shot left.
     private static final class Cadence {
         final Scene scene;
         final Item item;
         final boolean held;
         final List<Long> times = new ArrayList<>();
-        WeaponSession current;
+        WeaponAttack current;
 
         Cadence(GameTestHelper helper, Item item, Item ammo, boolean held) {
             scene = new Scene(helper, false);
@@ -252,7 +254,7 @@ public final class WarfareGameTests {
                     }
                     if (current == null) {
                         current = Weapons.open(worker(scene.body)).orElseThrow();
-                        scene.sessions.add(current);
+                        scene.attacks.add(current);
                         current.fire(target);
                     }
                     int before = scene.shots.get();
@@ -262,7 +264,8 @@ public final class WarfareGameTests {
                         times.add(scene.level.getGameTime());
                     }
                     if (shot || !held) {
-                        current.close();
+                        current.stop();
+                        scene.body.holsterWeapon();
                         current = null;
                     }
                 });
@@ -287,16 +290,16 @@ public final class WarfareGameTests {
         wolf.setNoAi(true);
         f.level.addFreshEntity(wolf);
         f.entities.add(wolf);
-        WeaponSession session = Weapons.open(worker(f.body)).orElseThrow();
-        f.sessions.add(session);
-        helper.assertFalse(session.fire(enemy), "a pet in the line of fire blocks the attack");
+        WeaponAttack attack = Weapons.open(worker(f.body)).orElseThrow();
+        f.attacks.add(attack);
+        helper.assertFalse(attack.fire(enemy), "a pet in the line of fire blocks the attack");
         wolf.discard();
         ResidentEntity friend = PersonBody.RESIDENT.get().create(f.level);
         friend.setNoAi(true);
         f.place(friend, 7, 10);
         f.level.addFreshEntity(friend);
         f.entities.add(friend);
-        helper.assertFalse(session.fire(enemy), "another resident blocks the attack too");
+        helper.assertFalse(attack.fire(enemy), "another resident blocks the attack too");
         helper.assertValueEqual(
             f.body.pack().count(ModItems.HANDGUN_AMMO.get()), 2, "blocked shots spend no ammunition");
         helper.succeed();
@@ -305,7 +308,7 @@ public final class WarfareGameTests {
     @GameTest(batch = "warfare", template = "warfare_range")
     public static void firearmChoicesUseTheSharedRegistryAndLoanTheSelectedActualGun(GameTestHelper helper) {
         Scene f = new Scene(helper, false);
-        var provider = LoadoutRegistry.find(WarfareWeapons.LOADOUT).orElseThrow();
+        var provider = Loadouts.find(WarfareWeapons.LOADOUT).orElseThrow();
         for (var weapon : WarfareWeapons.ALL) {
             ItemStack stack = new ItemStack(BuiltInRegistries.ITEM.get(weapon.nativeId()));
             helper.assertTrue(provider.accepts(stack), "each supported physical gun has a provider");
@@ -328,14 +331,16 @@ public final class WarfareGameTests {
         f.body.pack().insert(selected);
         f.body.pack().insert(new ItemStack(ModItems.HANDGUN_AMMO.get()));
         ItemStack actual = f.body.pack().getItem(1);
-        WeaponSession session = WarfareWeapons.ALL.getFirst().open(worker(f.body), actual).orElseThrow();
-        f.sessions.add(session);
+        WeaponAttack attack = WarfareWeapons.ALL.getFirst().open(worker(f.body), actual).orElseThrow();
+        f.attacks.add(attack);
         helper.assertTrue(
-            f.body.getMainHandItem() == actual,
+            ItemStack.matches(f.body.getMainHandItem(), actual),
             "the shared adapter receives and loans the selected real stack");
-        helper.assertTrue(session.continuousEngagement(), "native gun sessions retain their hand between shots");
-        session.close();
-        session.close();
+        helper.assertTrue(attack.continuousEngagement(), "native gun attacks retain their hand between shots");
+        attack.stop();
+        f.body.holsterWeapon();
+        attack.stop();
+        f.body.holsterWeapon();
         helper.assertValueEqual(
             f.body.pack().count(ModItems.GLOCK_17.get()), 2, "closing returns the selected gun exactly once");
         helper.succeed();
@@ -396,21 +401,21 @@ public final class WarfareGameTests {
         f.body.pack().insert(new ItemStack(ModItems.GLOCK_17.get()));
         f.body.pack().insert(new ItemStack(ModItems.HANDGUN_AMMO.get(), 2));
         Zombie target = f.enemy(10, 10);
-        WeaponSession session = Weapons.open(worker(f.body)).orElseThrow();
-        f.sessions.add(session);
-        helper.assertTrue(session.fire(target), "a plain gun accepts the target");
+        WeaponAttack attack = Weapons.open(worker(f.body)).orElseThrow();
+        f.attacks.add(attack);
+        helper.assertTrue(attack.fire(target), "a plain gun accepts the target");
         GunData data = GunData.from(f.body.getMainHandItem());
         data.perk.set(HEBullet.INSTANCE, (short) 1);
         data.save();
         helper.assertTrue(data.get(GunProp.EXPLOSION_DAMAGE) > 0, "the test uses the native HE trait");
-        session.tick();
+        attack.tick();
         helper.assertTrue(
-            session.state() == WeaponSession.State.CLOSED,
+            !attack.fire(target),
             "an unsafe component change closes the actual loan before discharge");
         helper.assertValueEqual(f.shots.get(), 0, "no explosive bullet is fired");
         helper.assertValueEqual(
             f.body.pack().count(ModItems.HANDGUN_AMMO.get()), 2, "rejection preserves physical ammo");
-        var provider = LoadoutRegistry.find(WarfareWeapons.LOADOUT).orElseThrow();
+        var provider = Loadouts.find(WarfareWeapons.LOADOUT).orElseThrow();
         for (String override :
             List.of(
             "invalid JSON",
@@ -1102,12 +1107,12 @@ public final class WarfareGameTests {
                     event.setCanceled(true);
                 }
             };
-        WeaponSession session = Weapons.open(worker(f.body)).orElseThrow();
-        f.sessions.add(session);
+        WeaponAttack attack = Weapons.open(worker(f.body)).orElseThrow();
+        f.attacks.add(attack);
         NeoForge.EVENT_BUS.addListener(reject);
         try {
-            helper.assertTrue(session.fire(target), "the clear shot begins");
-            session.tick();
+            helper.assertTrue(attack.fire(target), "the clear shot begins");
+            attack.tick();
             helper.assertValueEqual(
                 Goods.countIn(f.body.pack(), ItemSpec.exact(round)),
                 1L,
@@ -1366,7 +1371,7 @@ public final class WarfareGameTests {
         final PatrolSupplies supplies;
         final Container store;
         final List<Entity> entities = new ArrayList<>();
-        final List<WeaponSession> sessions = new ArrayList<>();
+        final List<WeaponAttack> attacks = new ArrayList<>();
         final List<WeaponStations.Lease> leases = new ArrayList<>();
         final List<Node> nodes = new ArrayList<>();
         UUID zone;
@@ -1594,7 +1599,7 @@ public final class WarfareGameTests {
             NeoForge.EVENT_BUS.unregister(listener);
             leases.forEach(WeaponStations.Lease::close);
             SentryPosts.of(colony).close();
-            sessions.forEach(WeaponSession::close);
+            attacks.forEach(WeaponAttack::stop);
             if (labor != null) {
                 labor.close();
             }

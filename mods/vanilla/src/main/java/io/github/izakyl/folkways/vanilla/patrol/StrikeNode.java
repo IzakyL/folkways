@@ -13,7 +13,7 @@ import io.github.izakyl.folkways.core.work.api.Workload;
 import io.github.izakyl.folkways.core.work.api.Xp;
 import io.github.izakyl.folkways.vanilla.combat.SpottedTargets;
 import io.github.izakyl.folkways.vanilla.combat.Threats;
-import io.github.izakyl.folkways.core.combat.api.WeaponSession;
+import io.github.izakyl.folkways.core.combat.api.WeaponAttack;
 import io.github.izakyl.folkways.vanilla.combat.weapon.Weapons;
 import java.util.List;
 import java.util.Optional;
@@ -24,12 +24,12 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
 
-// BodyRunner owns the attack and its hand loan, including a weapon's continuing engagement.
+// BodyRunner owns the attack and its drawn weapon, including a weapon's continuing engagement.
 final class StrikeNode implements Node {
 
     private final NodeSpec spec;
     private final UUID foe;
-    private WeaponSession session;
+    private WeaponAttack attack;
     private boolean attempted;
     private boolean killed;
     private long advancedAt = Long.MIN_VALUE;
@@ -81,30 +81,30 @@ final class StrikeNode implements Node {
             return false;
         }
         advancedAt = level.getGameTime();
-        WeaponSession previous = session;
-        session = Weapons.select(who, target, session);
-        if (session == null) {
+        WeaponAttack previous = attack;
+        attack = Weapons.select(who, target, attack);
+        if (attack == null) {
             return false;
         }
-        if (previous != session) {
-            session.leasedBy(() -> engaged(level));
+        if (previous != attack) {
+            attack.leasedBy(() -> engaged(level));
         }
-        if (!attempted || previous != session) {
+        if (!attempted || previous != attack) {
             attempted = true;
             if (!fire(level, who, target)) {
                 return false;
             }
         }
-        if (session.continuousEngagement() && session.state() == WeaponSession.State.READY
+        if (attack.continuousEngagement() && attack.state() == WeaponAttack.State.READY
             && !fire(level, who, target)) {
             return false;
         }
-        session.tick();
+        attack.tick();
         killed = !target.isAlive();
         return !killed
-            && (session.continuousEngagement() && session.state() == WeaponSession.State.READY
-            || session.state() == WeaponSession.State.FIRING
-            || session.state() == WeaponSession.State.RELOADING);
+            && (attack.continuousEngagement() && attack.state() == WeaponAttack.State.READY
+            || attack.state() == WeaponAttack.State.FIRING
+            || attack.state() == WeaponAttack.State.RELOADING);
     }
 
     private boolean fire(ServerLevel level, Worker who, LivingEntity target) {
@@ -112,18 +112,19 @@ final class StrikeNode implements Node {
             Optional<SpottedTargets> spots = Bodies.of(who.body()).flatMap(body -> body.colonyId())
                 .flatMap(id -> Colonies.of(level.getServer(), id)).map(SpottedTargets::of);
             Optional<SpottedTargets.Spot> spot = spots.flatMap(shared -> shared.get(who.body(), foe));
-            if (spot.isEmpty() || !session.spottedTarget(target, spot.get().position(),
+            if (spot.isEmpty() || !attack.spottedTarget(target, spot.get().position(),
                 () -> authorized.getAsBoolean() && spots.get().resolve(spot.get(), who.body()).isPresent())) {
                 return false;
             }
         }
-        return session.fire(target);
+        return attack.fire(target);
     }
 
     @Override
     public void released(ServerLevel level, Worker who, Ending how) {
-        if (session != null) {
-            session.close();
+        if (attack != null) {
+            attack.stop();
+            Weapons.holster(who);
         }
     }
 

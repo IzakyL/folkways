@@ -128,10 +128,34 @@ public final class InventoryIndexGameTests {
     }
 
     @GameTest(template = "empty", templateNamespace = "folkways_core")
+    public static void worksiteApproachesDoNotWaitForSlicedInventoryReads(GameTestHelper helper) {
+        var level = helper.getLevel();
+        BlockPos pos = helper.absolutePos(new BlockPos(1, 1, 1));
+        level.setBlockAndUpdate(pos.below(), Blocks.STONE.defaultBlockState());
+        level.setBlockAndUpdate(pos, Blocks.OAK_SIGN.defaultBlockState());
+        WorldPos at = WorldPos.of(level, pos);
+        Probe probe = new Probe(80);
+        PROBES.put(pos, probe);
+        ColonyData data = new ColonyData();
+        try {
+            data.inventory().observe(OWNER, level, List.of(at));
+            var store = store(data, at);
+            helper.assertTrue(store.state() != State.OBSERVED && probe.reads == 0,
+                "large inventory reads remain deferred and atomic");
+            helper.assertTrue(store.approach().state() == State.OBSERVED && !store.approach().stands().isEmpty(),
+                "a Workshop can already use the physical worksite approaches");
+        } finally {
+            PROBES.remove(pos);
+            data.inventory().clear();
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void nonInventoryWorksiteDoesNotBlockCoverage(GameTestHelper helper) {
         var level = helper.getLevel();
         BlockPos cell = helper.absolutePos(new BlockPos(1, 1, 1));
-        level.setBlockAndUpdate(cell, Blocks.COMPOSTER.defaultBlockState());
+        level.setBlockAndUpdate(cell, Blocks.STONE.defaultBlockState());
         WorldPos at = WorldPos.of(level, cell);
         ColonyData data = new ColonyData();
         try {
@@ -139,7 +163,7 @@ public final class InventoryIndexGameTests {
             data.inventory().advance(level, data.works(), Map.of());
             data.inventory().work(level.getServer(), 100);
             helper.assertTrue(store(data, at).state() == State.UNSUPPORTED && !store(data, at).labor(),
-                "a composter is a worksite without a container");
+                "a stone worksite has neither a container nor an item capability");
             helper.assertTrue(data.inventory().snapshot().coverage().complete(),
                 "a non-inventory worksite does not leave stock coverage incomplete");
             ENDPOINTS.put(data.colonyId(), List.of(new InventoryProviders.Endpoint(OWNER, at)));
@@ -187,6 +211,8 @@ public final class InventoryIndexGameTests {
             helper.assertTrue(probe.reads == reads && data.inventory().snapshot() == snapshot,
                 "unchanged totals and index advances read no containers and retain the publication");
             helper.assertFalse(snapshot.stores().get(Stash.at(at)).labor(), "providers stay outside labor stock");
+            helper.assertFalse(snapshot.stores().get(Stash.at(at)).storage(),
+                "inventory providers do not become ordinary PUT destinations");
             probe.setItem(0, new ItemStack(Items.BREAD, 7));
             data.inventory().changed(Stash.at(at));
             data.inventory().work(level.getServer(), 20);

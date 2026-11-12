@@ -1,0 +1,7 @@
+{
+  "__comment": "殖民地样板: AE2 合成计划里代表“交给殖民地工坊做”的那一步, 用殖民书摊开那页的贴图。",
+  "parent": "minecraft:item/generated",
+  "textures": {
+    "layer0": "folkways_core:item/colony_book_page_member"
+  }
+}

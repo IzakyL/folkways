@@ -60,7 +60,7 @@ public final class EquipmentCoordinator implements Equipment.Access {
         List<Demand> desired = wanted(colony, body);
         boolean changed = false;
         for (EquipmentSlot slot : EquipmentSlot.values()) {
-            if (slot.getType() != EquipmentSlot.Type.HUMANOID_ARMOR) {
+            if (!Equipment.wearable(slot)) {
                 continue;
             }
             if (managed(body, slot)
@@ -106,7 +106,7 @@ public final class EquipmentCoordinator implements Equipment.Access {
     public boolean release(Body body) {
         boolean changed = false;
         for (EquipmentSlot slot : EquipmentSlot.values()) {
-            if (slot.getType() == EquipmentSlot.Type.HUMANOID_ARMOR && managed(body, slot)) {
+            if (Equipment.wearable(slot) && managed(body, slot)) {
                 changed |= unwear(body, slot);
             }
         }

@@ -45,11 +45,9 @@ import net.minecraft.world.level.storage.PlayerDataStorage;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
-import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
 @EventBusSubscriber(modid = "folkways_core", bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder("folkways_core")
 @PrefixGameTestTemplate(false)
 public final class DiskContainerUpgradeGameTests {
     private DiskContainerUpgradeGameTests() {
@@ -57,7 +55,9 @@ public final class DiskContainerUpgradeGameTests {
 
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) {
-        event.register(DiskContainerUpgradeGameTests.class);
+        if (!Boolean.getBoolean("folkways.core.integrationTests")) {
+            event.register(DiskContainerUpgradeGameTests.class);
+        }
     }
 
     private static RegionStorageInfo info(GameTestHelper helper) {
@@ -175,6 +175,9 @@ public final class DiskContainerUpgradeGameTests {
                 loaded.getBlockEntityNbt(chestPos), level.registryAccess());
             helper.assertTrue(inventory != null, "chest inventory loads");
             assertInventory(helper, inventory);
+            helper.assertValueEqual(restored.saveWithFullMetadata(level.registryAccess())
+                .getCompound("NeoForgeData").getInt(RawUpgrades.VERSION), DataVersion.CURRENT,
+                "legacy block entities save at the current Folkways version");
             loaded.setBlockEntity(restored);
             loaded.setBlockEntity(inventory);
             CompoundTag saved = ChunkSerializer.write(level, loaded);
@@ -228,6 +231,9 @@ public final class DiskContainerUpgradeGameTests {
                 helper.assertTrue(decoded.size() == 2, "both legacy entities survive region loading");
                 helper.assertValueEqual(BuiltInRegistries.ENTITY_TYPE.getKey(decoded.get(0).getType()).toString(),
                     "folkways_vanilla:resident", "legacy entity type alias");
+                helper.assertValueEqual(decoded.getFirst().saveWithoutId(new CompoundTag())
+                    .getCompound("NeoForgeData").getInt(RawUpgrades.VERSION), DataVersion.CURRENT,
+                    "legacy residents save at the current Folkways version");
                 assertBox(helper, ((ItemEntity) decoded.get(1)).getItem());
                 entities.storeEntities(loaded);
                 CompoundTag saved = region.read(pos).join().orElseThrow();
@@ -302,6 +308,7 @@ public final class DiskContainerUpgradeGameTests {
         }
         helper.succeed();
     }
+
     @GameTest(template = "empty", templateNamespace = "folkways_core")
     public static void componentCodecsNormalizeJsonAndPreserveUnknownIds(GameTestHelper helper) {
         var filter = FolkwaysDataComponents.FILTER_TAG.get().codec();

@@ -3,9 +3,7 @@ package io.github.izakyl.folkways.vanilla.patrol;
 import io.github.izakyl.folkways.core.combat.api.Supplies;
 import io.github.izakyl.folkways.vanilla.combat.weapon.PatrolSupplyReadout;
 import io.github.izakyl.folkways.core.colony.api.Colony;
-import io.github.izakyl.folkways.core.colony.api.Equipment;
 import io.github.izakyl.folkways.core.colony.api.KitRules;
-import io.github.izakyl.folkways.core.colony.api.PackKeeps;
 import io.github.izakyl.folkways.core.extension.api.Declaring;
 import io.github.izakyl.folkways.core.vocation.api.Vocation;
 import io.github.izakyl.folkways.core.vocation.api.VocationGroup;
@@ -24,7 +22,6 @@ import io.github.izakyl.folkways.core.front.api.Shape;
 import io.github.izakyl.folkways.core.front.api.panel.PageKind;
 import io.github.izakyl.folkways.vanilla.FolkwaysVanillaConfig;
 import io.github.izakyl.folkways.vanilla.combat.SpottedTargets;
-import io.github.izakyl.folkways.vanilla.combat.ui.LoadoutContent;
 import io.github.izakyl.folkways.vanilla.combat.weapon.PatrolSupplies;
 import io.github.izakyl.folkways.vanilla.person.ResidentEntity;
 import java.util.List;
@@ -95,10 +92,7 @@ public final class PatrolContent {
     public static void declare(Declaring declaring) {
         declaring.vocation(SPEC.ordered(100).grouped(VocationGroup.DEFENCE));
         KitRules.supplyPolicy(
-            ID, (colony, body) -> !(body.mob() instanceof ResidentEntity person) || !person.hasWeaponSession());
-        Equipment.register(
-            ID, (colony, body) -> suppliesOf(colony).map(supplies -> supplies.armor(body)).orElse(List.of()));
-        PackKeeps.add((colony, body) -> suppliesOf(colony).map(supplies -> supplies.keeps(body)).orElse(List.of()));
+            ID, (colony, body) -> !(body.mob() instanceof ResidentEntity person) || !person.weaponDrawn());
         declaring.colony(Supplies.ID, scope -> scope.share(new PatrolSupplyReadout(scope.colony())));
         declaring.colony(SpottedTargets.ID, scope -> {
             SpottedTargets spots = new SpottedTargets(scope.colony());
@@ -155,7 +149,7 @@ public final class PatrolContent {
             ResourceLocation.fromNamespaceAndPath("folkways_vanilla", "flee"),
             ResourceLocation.fromNamespaceAndPath("folkways_vanilla", "engage")),
             ResourceLocation.fromNamespaceAndPath("folkways_vanilla", "flee")))),
-            List.of(PAGE, LoadoutContent.PAGE,
+            List.of(PAGE,
                 PageKind.boarded(SentryPosts.ID, "folkways.page.sentry_posts",
                 ResourceLocation.withDefaultNamespace("bow")))));
     }

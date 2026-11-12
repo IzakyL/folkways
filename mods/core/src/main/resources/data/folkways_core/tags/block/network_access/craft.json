@@ -1,0 +1,209 @@
+{
+  "replace": false,
+  "values": [
+    {
+      "id": "ae2:cable_bus",
+      "required": false
+    },
+    {
+      "id": "ae2:chest",
+      "required": false
+    },
+    {
+      "id": "refinedstorage:black_crafting_grid",
+      "required": false
+    },
+    {
+      "id": "refinedstorage:black_grid",
+      "required": false
+    },
+    {
+      "id": "refinedstorage:black_pattern_grid",
+      "required": false
+    },
+    {
+      "id": "refinedstorage:blue_crafting_grid",
+      "required": false
+    },
+    {
+      "id": "refinedstorage:blue_grid",
+      "required": false
+    },
+    {
+      "id": "refinedstorage:blue_pattern_grid",
+      "required": false
+    },
+    {
+      "id": "refinedstorage:brown_crafting_grid",
+      "required": false
+    },
+    {
+      "id": "refinedstorage:brown_grid",
+      "required": false
+    },
+    {
+      "id": "refinedstorage:brown_pattern_grid",
+      "required": false
+    },
+    {
+      "id": "refinedstorage:crafting_grid",
+      "required": false
+    },
+    {
+      "id": "refinedstorage:cyan_crafting_grid",
+      "required": false
+    },
+    {
+      "id": "refinedstorage:cyan_grid",
+      "required": false
+    },
+    {
+      "id": "refinedstorage:cyan_pattern_grid",
+      "required": false
+    },
+    {
+      "id": "refinedstorage:gray_crafting_grid",
+      "required": false
+    },
+    {
+      "id": "refinedstorage:gray_grid",
+      "required": false
+    },
+    {
+      "id": "refinedstorage:gray_pattern_grid",
+      "required": false
+    },
+    {
+      "id": "refinedstorage:green_crafting_grid",
+      "required": false
+    },
+    {
+      "id": "refinedstorage:green_grid",
+      "required": false
+    },
+    {
+      "id": "refinedstorage:green_pattern_grid",
+      "required": false
+    },
+    {
+      "id": "refinedstorage:grid",
+      "required": false
+    },
+    {
+      "id": "refinedstorage:light_gray_crafting_grid",
+      "required": false
+    },
+    {
+      "id": "refinedstorage:light_gray_grid",
+      "required": false
+    },
+    {
+      "id": "refinedstorage:light_gray_pattern_grid",
+      "required": false
+    },
+    {
+      "id": "refinedstorage:lime_crafting_grid",
+      "required": false
+    },
+    {
+      "id": "refinedstorage:lime_grid",
+      "required": false
+    },
+    {
+      "id": "refinedstorage:lime_pattern_grid",
+      "required": false
+    },
+    {
+      "id": "refinedstorage:magenta_crafting_grid",
+      "required": false
+    },
+    {
+      "id": "refinedstorage:magenta_grid",
+      "required": false
+    },
+    {
+      "id": "refinedstorage:magenta_pattern_grid",
+      "required": false
+    },
+    {
+      "id": "refinedstorage:orange_crafting_grid",
+      "required": false
+    },
+    {
+      "id": "refinedstorage:orange_grid",
+      "required": false
+    },
+    {
+      "id": "refinedstorage:orange_pattern_grid",
+      "required": false
+    },
+    {
+      "id": "refinedstorage:pattern_grid",
+      "required": false
+    },
+    {
+      "id": "refinedstorage:pink_crafting_grid",
+      "required": false
+    },
+    {
+      "id": "refinedstorage:pink_grid",
+      "required": false
+    },
+    {
+      "id": "refinedstorage:pink_pattern_grid",
+      "required": false
+    },
+    {
+      "id": "refinedstorage:purple_crafting_grid",
+      "required": false
+    },
+    {
+      "id": "refinedstorage:purple_grid",
+      "required": false
+    },
+    {
+      "id": "refinedstorage:purple_pattern_grid",
+      "required": false
+    },
+    {
+      "id": "refinedstorage:red_crafting_grid",
+      "required": false
+    },
+    {
+      "id": "refinedstorage:red_grid",
+      "required": false
+    },
+    {
+      "id": "refinedstorage:red_pattern_grid",
+      "required": false
+    },
+    {
+      "id": "refinedstorage:white_crafting_grid",
+      "required": false
+    },
+    {
+      "id": "refinedstorage:white_grid",
+      "required": false
+    },
+    {
+      "id": "refinedstorage:white_pattern_grid",
+      "required": false
+    },
+    {
+      "id": "refinedstorage:yellow_crafting_grid",
+      "required": false
+    },
+    {
+      "id": "refinedstorage:yellow_grid",
+      "required": false
+    },
+    {
+      "id": "refinedstorage:yellow_pattern_grid",
+      "required": false
+    },
+    {
+      "id": "refinedstorage:storage_monitor",
+      "required": false
+    }
+  ]
+}

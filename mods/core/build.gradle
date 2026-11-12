@@ -28,6 +28,7 @@ dependencies {
     gameTestFixturesImplementation sourceSets.main.output
     gameTestFixturesImplementation project(":vanilla")
     gametestImplementation sourceSets.gameTestFixtures.output
+    compileOnly lib("curios"), lib("accessories")
     compileOnly lib("emi")
     compileOnly lib("jei")
     compileOnly lib("jecharacters")
@@ -75,4 +76,65 @@ publishing.publications.mod.artifact apiJar
 dependencies {
     cookeryTestImplementation project(":cookery")
     cookeryTestCompileOnly lib("kaleidoscope_cookery")
+}
+
+// Optional native fixtures stay out of the base Core suite and of every other profile.
+["curiosTest", "accessoriesTest", "storageTest", "sophisticatedStorageTest", "sophisticatedBackpacksTest", "drawersTest", "functionalTest",
+    "storageLaborTest", "ae2Test", "ae2LaborTest", "rs2Test", "rs2LaborTest",
+    "createStorageTest", "tomsTest", "colossalTest", "qioTest", "portsLaborTest"].each { suite ->
+    sourceSets.create(suite)
+    neoForge.addModdingDependenciesTo(sourceSets[suite])
+    configurations["${suite}CompileOnly"].extendsFrom configurations.compileOnly
+    configurations["${suite}Implementation"].extendsFrom configurations.implementation
+    configurations["${suite}RuntimeOnly"].extendsFrom configurations.runtimeOnly
+    dependencies.add("${suite}Implementation", sourceSets.main.output)
+    dependencies.add("${suite}Implementation", sourceSets.gameTestFixtures.output)
+}
+["sophisticatedStorageTest", "sophisticatedBackpacksTest", "drawersTest", "functionalTest",
+    "storageLaborTest", "createStorageTest", "tomsTest", "colossalTest", "qioTest", "portsLaborTest"].each { suite ->
+    dependencies.add("${suite}Implementation", sourceSets.storageTest.output)
+}
+dependencies {
+    compileOnly lib("ae2"), lib("refinedstorage")
+    compileOnly lib("fxntstorage"), lib("toms_storage"), lib("colossalchests"), lib("cyclopscore"), lib("mekanism")
+    portsLaborTestImplementation project(":vanilla")
+    ["createStorage", "toms", "colossal", "qio"].each { suite ->
+        add("portsLaborTestImplementation", sourceSets["${suite}Test"].output)
+    }
+    compileOnly lib("sophisticatedcore"), lib("sophisticatedstorage"), lib("sophisticatedbackpacks")
+    compileOnly lib("storagedrawers"), lib("functionalstorage"), lib("titanium")
+    sophisticatedBackpacksTestImplementation project(":vanilla")
+    curiosTestImplementation project(":vanilla")
+    accessoriesTestImplementation project(":vanilla")
+    storageLaborTestImplementation project(":vanilla")
+    ae2LaborTestImplementation project(":vanilla")
+    ae2LaborTestImplementation sourceSets.ae2Test.output
+    rs2LaborTestImplementation project(":vanilla")
+    rs2LaborTestImplementation sourceSets.rs2Test.output
+}
+
+tasks.named("compileGametestJava", JavaCompile) {
+    // CURRENT is inlined into assertions; a version change must also rebuild otherwise unchanged tests.
+    inputs.file("src/main/java/io/github/izakyl/folkways/core/base/persist/upgrade/DataVersion.java")
+        .withPropertyName("dataVersion")
+}
+
+// Compile and register only the requested Core fixtures in a focused base run.
+def coreGameTestClasses = providers.gradleProperty("coreGameTestClasses").getOrElse("")
+if (coreGameTestClasses) {
+    sourceSets.gametest.java.setIncludes(coreGameTestClasses.split(",").collect { "**/${it.trim()}.java" })
+    def focusedClasses = layout.buildDirectory.dir("classes/java/focusedGametest/${coreGameTestClasses.hashCode()}")
+    tasks.named("compileGametestJava", JavaCompile) {
+        destinationDirectory = focusedClasses
+    }
+    sourceSets.gametest.output.classesDirs.setFrom(focusedClasses)
+}
+if (coreGameTestClasses || providers.gradleProperty("vanillaGameTestClasses").isPresent()
+    || providers.gradleProperty("accessoryProfile").isPresent()) {
+    sourceSets.gameTestFixtures.java.exclude("**/*GameTests.java")
+    def focusedFixtures = layout.buildDirectory.dir("classes/java/focusedGameTestFixtures")
+    tasks.named("compileGameTestFixturesJava", JavaCompile) {
+        destinationDirectory = focusedFixtures
+    }
+    sourceSets.gameTestFixtures.output.classesDirs.setFrom(focusedFixtures)
 }

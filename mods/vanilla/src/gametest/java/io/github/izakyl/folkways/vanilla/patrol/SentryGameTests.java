@@ -4,6 +4,7 @@ import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.colony.api.Claimed;
 import io.github.izakyl.folkways.core.colony.api.Colonies;
 import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.combat.api.Loadouts;
 import io.github.izakyl.folkways.core.item.api.Goods;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import io.github.izakyl.folkways.core.resident.api.Body;
@@ -23,11 +24,10 @@ import io.github.izakyl.folkways.vanilla.combat.SpottedTargets;
 import io.github.izakyl.folkways.vanilla.combat.WeaponStations;
 import io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutProfile;
 import io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutProfiles;
-import io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutProvider;
-import io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutRegistry;
+import io.github.izakyl.folkways.core.combat.api.LoadoutProvider;
 import io.github.izakyl.folkways.vanilla.combat.weapon.PatrolSupplies;
 import io.github.izakyl.folkways.vanilla.combat.weapon.ProfileShortages;
-import io.github.izakyl.folkways.core.combat.api.WeaponSession;
+import io.github.izakyl.folkways.core.combat.api.WeaponAttack;
 import io.github.izakyl.folkways.vanilla.combat.weapon.Weapons;
 import io.github.izakyl.folkways.vanilla.person.PersonBody;
 import io.github.izakyl.folkways.vanilla.person.PersonContent;
@@ -78,7 +78,7 @@ public final class SentryGameTests {
         event.register(SentryGameTests.class);
         if (!registered) {
             registered = true;
-            LoadoutRegistry.register(ResourceLocation.fromNamespaceAndPath("folkways_vanilla", "test_long_range"),
+            Loadouts.register(ResourceLocation.fromNamespaceAndPath("folkways_vanilla", "test_long_range"),
                 new LoadoutProvider() {
                     public boolean accepts(ItemStack weapon) {
                         return weapon.is(Items.BOW) && weapon.has(DataComponents.CUSTOM_NAME)
@@ -239,8 +239,8 @@ public final class SentryGameTests {
         Fixture fixture = new Fixture(helper);
         Zombie target = fixture.zombie(new BlockPos(11, 1, 2));
         fixture.sentry.setNoAi(true);
-        WeaponSession weapon = Weapons.open(worker(fixture.sentry, List.of()), target).orElseThrow();
-        fixture.sessions.add(weapon);
+        WeaponAttack weapon = Weapons.open(worker(fixture.sentry, List.of()), target).orElseThrow();
+        fixture.sessions.add(() -> { weapon.stop(); fixture.sentry.holsterWeapon(); });
         helper.assertTrue(weapon.fire(target), "drawing begins along a clear line");
         ResidentEntity ally = fixture.resident(new BlockPos(6, 1, 2));
         ally.setNoAi(true);
@@ -802,9 +802,9 @@ public final class SentryGameTests {
                 return;
             }
             closed = true;
-            for (AutoCloseable session : sessions) {
+            for (AutoCloseable attack : sessions) {
                 try {
-                    session.close();
+                    attack.close();
                 } catch (Exception failure) {
                     throw new AssertionError(failure);
                 }

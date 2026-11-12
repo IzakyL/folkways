@@ -16,6 +16,7 @@ import io.github.izakyl.folkways.core.inventory.api.InventoryFeedback;
 import io.github.izakyl.folkways.core.inventory.api.Stash;
 import io.github.izakyl.folkways.core.inventory.api.StoreRule;
 import io.github.izakyl.folkways.core.inventory.internal.InventorySources;
+import io.github.izakyl.folkways.core.inventory.internal.ProxyStores;
 import io.github.izakyl.folkways.core.inventory.internal.Stores;
 import io.github.izakyl.folkways.core.item.api.Containers;
 import io.github.izakyl.folkways.core.plan.api.Grown;
@@ -58,6 +59,7 @@ import net.minecraft.world.level.Level;
 public final class ColonyWorks extends Stretch implements Colony, InventorySources {
 
     private final ColonyData colony;
+    private final ProxyStores proxies = new ProxyStores(this);
 
     private final List<Scope> scopes = new ArrayList<>();
 
@@ -508,6 +510,10 @@ public final class ColonyWorks extends Stretch implements Colony, InventorySourc
 
     @Override
     public Optional<Claim> hold(ResourceLocation owner, Claimed what) {
+        return proxies.hold(required(), owner, what, () -> holdSingle(owner, what));
+    }
+
+    private Optional<Claim> holdSingle(ResourceLocation owner, Claimed what) {
         MinecraftServer running = required();
         if (what instanceof Claimed.Point point && WorldSpaces.resolve(running, point.cell())
                 .filter(where -> where.level().isLoaded(where.cell())
@@ -518,7 +524,11 @@ public final class ColonyWorks extends Stretch implements Colony, InventorySourc
             return Optional.empty();
         }
         Optional<Claim> taken = colony.claims().hold(running, owner, what);
-        taken.ifPresent(this::held);
+        taken.ifPresent(claim -> {
+            what.singleCell().ifPresent(at ->
+                io.github.izakyl.folkways.core.inventory.internal.PortHooks.registered(this, at));
+            held(claim);
+        });
         return taken;
     }
 
@@ -610,6 +620,7 @@ public final class ColonyWorks extends Stretch implements Colony, InventorySourc
     }
 
     void released(Claim claim, ClaimRelease why) {
+        proxies.released(server, claim, why);
         if (claim.what() instanceof Claimed.Entity entity) {
             colony.inventory().left(entity.entity());
         }
@@ -659,6 +670,7 @@ public final class ColonyWorks extends Stretch implements Colony, InventorySourc
         return ColonySnapshot.of(colony, level);
     }
 
+    @Override
     public List<Workshop> workshopsIn(ResourceKey<Level> dimension) {
         return workshops.in(dimension);
     }
@@ -696,6 +708,7 @@ public final class ColonyWorks extends Stretch implements Colony, InventorySourc
         if (over()) {
             return;
         }
+        proxies.refresh(server);
         for (ServerLevel level : server.getAllLevels()) {
             Map<UUID, Body> present = new LinkedHashMap<>();
             for (Body body : colony.claims().bodiesIn(level)) {
