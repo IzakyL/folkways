@@ -9,8 +9,11 @@ import java.util.Set;
 import java.util.stream.Stream;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.tags.FluidTags;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
+import net.minecraft.world.level.pathfinder.PathType;
+import net.minecraft.world.level.pathfinder.WalkNodeEvaluator;
 import net.minecraft.world.phys.Vec3;
 
 /** Construction may move a resident within its closed work area; travel beyond it remains a walk. */
@@ -75,9 +78,22 @@ public final class SiteTravel {
     }
 
     private static boolean safe(ServerLevel level, Mob body, BlockPos feet) {
-        return level.isLoaded(feet) && level.isLoaded(feet.above()) && level.isLoaded(feet.below())
-            && level.getWorldBorder().isWithinBounds(feet) && Footing.withFeetAt(level, feet)
-            && Breathing.canStay(body, feet)
+        if (!level.isLoaded(feet) || !level.isLoaded(feet.above()) || !level.isLoaded(feet.below())
+                || !level.getWorldBorder().isWithinBounds(feet) || !Footing.withFeetAt(level, feet)) {
+            return false;
+        }
+        // Collision and breathing alone do not rule out lava or a burning floor.
+        if (!body.fireImmune() && (level.getFluidState(feet).is(FluidTags.LAVA)
+                || level.getFluidState(feet.above()).is(FluidTags.LAVA))) {
+            return false;
+        }
+        PathType type = WalkNodeEvaluator.getPathTypeStatic(body, feet);
+        boolean dangerous = switch (type) {
+            case LAVA, DAMAGE_FIRE, DANGER_FIRE -> !body.fireImmune();
+            case DAMAGE_OTHER, DAMAGE_CAUTIOUS, DANGER_OTHER, DANGER_POWDER_SNOW, POWDER_SNOW -> true;
+            default -> false;
+        };
+        return !dangerous && body.getPathfindingMalus(type) >= 0 && Breathing.canStay(body, feet)
             && level.noCollision(body, body.getBoundingBox().move(
                 feet.getX() + 0.5D - body.getX(), feet.getY() - body.getY(), feet.getZ() + 0.5D - body.getZ()));
     }

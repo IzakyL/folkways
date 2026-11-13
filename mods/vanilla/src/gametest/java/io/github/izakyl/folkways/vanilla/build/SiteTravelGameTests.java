@@ -16,6 +16,7 @@ import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.phys.Vec3;
@@ -126,6 +127,49 @@ public final class SiteTravelGameTests {
             body.addEffect(new net.minecraft.world.effect.MobEffectInstance(
                 net.minecraft.world.effect.MobEffects.WATER_BREATHING, 600));
             helper.assertTrue(SiteTravel.place(level, body, goal), "water breathing permits the underwater landing");
+        } finally {
+            reopen.run();
+            body.discard();
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
+    public static void aLavaLandingStaysUnsafeWithFireResistance(GameTestHelper helper) {
+        burningLanding(helper, Blocks.LAVA, 0);
+    }
+
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
+    public static void lavaAtHeadHeightStaysUnsafeWithFireResistance(GameTestHelper helper) {
+        burningLanding(helper, Blocks.LAVA, 1);
+    }
+
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
+    public static void aMagmaLandingStaysUnsafeWithFireResistance(GameTestHelper helper) {
+        burningLanding(helper, Blocks.MAGMA_BLOCK, -1);
+    }
+
+    private static void burningLanding(GameTestHelper helper, Block hazard, int height) {
+        ServerLevel level = helper.getLevel();
+        BlockPos start = helper.absolutePos(new BlockPos(1, 2, 2));
+        BlockPos goal = start.offset(4, 0, 0);
+        floor(level, start);
+        floor(level, goal);
+        level.setBlock(goal.above(height), hazard.defaultBlockState(), 2);
+        ResidentEntity body = body(level, start);
+        Runnable reopen = Closures.close(level, BoundingBox.fromCorners(start.offset(-1, -1, -1), goal.offset(1, 3, 1)));
+        try {
+            for (boolean fireResistance : new boolean[] {false, true}) {
+                if (fireResistance) {
+                    body.addEffect(new net.minecraft.world.effect.MobEffectInstance(
+                        net.minecraft.world.effect.MobEffects.FIRE_RESISTANCE, 600));
+                    helper.assertFalse(body.fireImmune(), "fire resistance does not make the resident fire immune");
+                }
+                helper.assertFalse(SiteTravel.place(level, body, goal), "site relocation refuses a burning landing");
+                helper.assertFalse(new SiteTravel().toward(level, body, Set.of(goal)),
+                    "site travel refuses a burning destination");
+                helper.assertValueEqual(body.blockPosition(), start, "rejected moves leave the resident in place");
+            }
         } finally {
             reopen.run();
             body.discard();
