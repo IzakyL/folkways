@@ -34,7 +34,11 @@ final class ColonyPattern implements IPatternDetails {
 
         @Override
         public IPatternDetails decodePattern(AEItemKey key, Level level) {
-            return key.is(FolkwaysItems.NETWORK_PATTERN.get()) ? new ColonyPattern(key, level) : null;
+            try {
+                return key.is(FolkwaysItems.NETWORK_PATTERN.get()) ? new ColonyPattern(key, level) : null;
+            } catch (RuntimeException invalid) {
+                return null;
+            }
         }
     };
 
@@ -42,7 +46,16 @@ final class ColonyPattern implements IPatternDetails {
     private final List<IInput> inputs;
     private final List<GenericStack> outputs;
 
-    ColonyPattern(String reference, WorkshopRecipes.Recipe recipe, ServerLevel level) {
+    static Optional<ColonyPattern> of(String reference, WorkshopRecipes.Recipe recipe, ServerLevel level) {
+        try {
+            return Optional.of(new ColonyPattern(reference, recipe, level));
+        } catch (RuntimeException invalid) {
+            // A recipe may contain components or goods that cannot cross the network bridge.
+            return Optional.empty();
+        }
+    }
+
+    private ColonyPattern(String reference, WorkshopRecipes.Recipe recipe, ServerLevel level) {
         CompoundTag data = new CompoundTag();
         data.putString("recipe", reference);
         ListTag inputs = new ListTag();
@@ -73,6 +86,9 @@ final class ColonyPattern implements IPatternDetails {
     }
 
     private static List<IInput> readInputs(CompoundTag data, Level level) {
+        if (!data.contains("inputs", Tag.TAG_LIST)) {
+            throw new IllegalArgumentException("missing pattern inputs");
+        }
         List<IInput> inputs = new ArrayList<>();
         for (var raw : data.getList("inputs", Tag.TAG_COMPOUND)) {
             CompoundTag amount = (CompoundTag) raw;
@@ -80,6 +96,9 @@ final class ColonyPattern implements IPatternDetails {
             long count = amount.getLong("count");
             List<GenericStack> possibilities = new ArrayList<>();
             choices(spec, possibilities);
+            if (possibilities.isEmpty() || count <= 0) {
+                throw new IllegalArgumentException("unrepresentable pattern input");
+            }
             inputs.add(new Input(spec, count, List.copyOf(possibilities)));
         }
         return List.copyOf(inputs);
@@ -91,11 +110,16 @@ final class ColonyPattern implements IPatternDetails {
             return;
         }
         for (var item : Goods.members(spec)) {
-            ItemStack stack = Goods.display(new ItemSpec(
-                Optional.of(BuiltInRegistries.ITEM.getKey(item)),
-                Optional.empty(), Set.of(), spec.components()));
-            if (Goods.matches(stack, spec)) {
-                choices.add(new GenericStack(AEItemKey.of(stack), 1));
+            try {
+                ItemStack stack = Goods.display(new ItemSpec(
+                    Optional.of(BuiltInRegistries.ITEM.getKey(item)),
+                    Optional.empty(), Set.of(), spec.components()));
+                AEItemKey key = AEItemKey.of(stack);
+                if (key != null && Goods.matches(stack, spec)) {
+                    choices.add(new GenericStack(key, 1));
+                }
+            } catch (RuntimeException invalid) {
+                // Other members may still represent this input.
             }
         }
     }
@@ -105,7 +129,15 @@ final class ColonyPattern implements IPatternDetails {
         for (var raw : data.getList("outputs", Tag.TAG_COMPOUND)) {
             CompoundTag amount = (CompoundTag) raw;
             ItemSpec spec = ItemSpec.load(Reader.of(amount.getCompound("spec")), level.registryAccess()).orElseThrow();
-            outputs.add(new GenericStack(AEItemKey.of(Goods.display(spec)), amount.getLong("count")));
+            AEItemKey key = AEItemKey.of(Goods.display(spec));
+            long count = amount.getLong("count");
+            if (key == null || count <= 0) {
+                throw new IllegalArgumentException("unrepresentable pattern output");
+            }
+            outputs.add(new GenericStack(key, count));
+        }
+        if (outputs.isEmpty()) {
+            throw new IllegalArgumentException("missing pattern outputs");
         }
         return List.copyOf(outputs);
     }

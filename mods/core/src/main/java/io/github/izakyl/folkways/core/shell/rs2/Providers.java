@@ -5,6 +5,7 @@ import com.refinedmods.refinedstorage.api.autocrafting.task.Task;
 import io.github.izakyl.folkways.core.colony.api.Colony;
 import io.github.izakyl.folkways.core.colony.api.ColonyView;
 import io.github.izakyl.folkways.core.front.api.panel.Board;
+import io.github.izakyl.folkways.core.item.api.Goods;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import io.github.izakyl.folkways.core.shell.crafting.ColonyRecipes;
 import io.github.izakyl.folkways.core.shell.crafting.DeviceSettings;
@@ -17,6 +18,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -32,6 +34,9 @@ final class Providers {
     private final ColonyRecipes recipes;
     private final Map<Devices.NetworkKey, ColonyProvider> providers = new HashMap<>();
     private final List<ColonyProvider> all = new ArrayList<>();
+    private final Map<String, Optional<Pattern>> built = new HashMap<>();
+    private List<String> references = List.of();
+    private long tags = -1;
     private NetworkBuffers buffers;
     private final DeviceSettings settings;
     private Map<Pattern, String> patterns = Map.of();
@@ -83,15 +88,26 @@ final class Providers {
         }
         if (server.overworld().getGameTime() % 20 == 0) {
             recipes.refresh(server);
-            Map<Pattern, String> offered = new LinkedHashMap<>();
-            Map<Pattern, List<ItemSpec>> made = new HashMap<>();
-            recipes.entries().forEach(entry -> {
-                Pattern pattern = ColonyPattern.of(entry);
-                offered.put(pattern, entry.reference());
-                made.put(pattern, entry.recipe().outputs().stream().map(Amount::spec).toList());
-            });
-            patterns = Map.copyOf(offered);
-            outputs = Map.copyOf(made);
+            List<String> current = recipes.entries().stream().map(ColonyRecipes.Entry::reference).toList();
+            if (tags != Goods.tagGeneration()) {
+                // Patterns list tag members as choices; a tag reload invalidates them.
+                built.clear();
+                references = List.of();
+                tags = Goods.tagGeneration();
+            }
+            if (!references.equals(current)) {
+                built.keySet().retainAll(Set.copyOf(current));
+                Map<Pattern, String> offered = new LinkedHashMap<>();
+                Map<Pattern, List<ItemSpec>> made = new HashMap<>();
+                recipes.entries().forEach(entry -> built.computeIfAbsent(entry.reference(),
+                    ignored -> ColonyPattern.of(entry.reference(), entry.recipe())).ifPresent(pattern -> {
+                        offered.put(pattern, entry.reference());
+                        made.put(pattern, entry.recipe().outputs().stream().map(Amount::spec).toList());
+                    }));
+                patterns = Map.copyOf(offered);
+                outputs = Map.copyOf(made);
+                references = current;
+            }
         }
         buffers.tick(access);
         filtered.keySet().retainAll(ports.keySet());

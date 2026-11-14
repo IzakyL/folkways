@@ -38,7 +38,15 @@ public final class Goods {
         return false;
     }
 
+    private static volatile long tagGeneration;
+
+    /** Changes whenever tag membership may have changed; callers caching goods-derived data compare it. */
+    public static long tagGeneration() {
+        return tagGeneration;
+    }
+
     public static void forgetTags() {
+        tagGeneration++;
         DEFAULT_SPECS.clear();
         STACK_SIZES.clear();
         MEMBERS.clear();

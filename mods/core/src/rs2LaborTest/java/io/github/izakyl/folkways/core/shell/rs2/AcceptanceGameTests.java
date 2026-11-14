@@ -46,7 +46,7 @@ public final class AcceptanceGameTests {
             provider.connect(port);
             Cleanup.on(helper, provider::destroy);
             Cleanup.on(helper, buffers::close);
-            var pattern = ColonyPattern.of(entry);
+            var pattern = ColonyPattern.of(entry.reference(), entry.recipe()).orElseThrow();
             var inputs = List.of(new ResourceAmount(new ItemResource(Items.IRON_INGOT), 2),
                 new ResourceAmount(new ItemResource(Items.COPPER_INGOT), 1));
             provider.patterns(Map.of(pattern, entry.reference()));

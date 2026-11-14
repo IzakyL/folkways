@@ -114,7 +114,32 @@ public final class HoseGameTests {
     }
 
     private static void hoseWork(GameTestHelper helper, boolean cancel, int height) {
+        ServerLevel level = helper.getLevel();
+        BlockPos cabinet = helper.absolutePos(new BlockPos(2, 1 + height, 3));
+        int range = NativeSprayBridge.hoseRange(HandheldNozzleType.CONE);
+        Set<Long> chunks = new LinkedHashSet<>();
+        Set<Long> forced = new LinkedHashSet<>();
+        // The remote fire extends beyond the template's tickets. Merely setting its block can leave
+        // it outside loaded chunks, where FireSurvey correctly skips it instead of assigning work.
+        for (int x = (cabinet.getX() - 8) >> 4; x <= (cabinet.getX() + range + 9) >> 4; x++) {
+            for (int z = (cabinet.getZ() - 4) >> 4; z <= (cabinet.getZ() + 4) >> 4; z++) {
+                long chunk = ChunkPos.asLong(x, z);
+                chunks.add(chunk);
+                if (!level.getForcedChunks().contains(chunk) && level.setChunkForced(x, z, true)) {
+                    forced.add(chunk);
+                }
+                level.getChunk(x, z);
+            }
+        }
+        helper.startSequence().thenWaitUntil(() -> helper.assertTrue(chunks.stream().allMatch(chunk ->
+            level.isPositionEntityTicking(new BlockPos(ChunkPos.getX(chunk) << 4, cabinet.getY(),
+                ChunkPos.getZ(chunk) << 4))), "the cabinet, resident and remote fire chunks are ticking"))
+            .thenExecute(() -> hoseWork(helper, cancel, height, forced));
+    }
+
+    private static void hoseWork(GameTestHelper helper, boolean cancel, int height, Set<Long> forced) {
         Rig rig = new Rig(helper, height);
+        rig.forced.addAll(forced);
         BlockPos cabinet = rig.cabinet.getBlockPos();
         int range = NativeSprayBridge.hoseRange(rig.cabinet.getNozzleType());
         BlockPos fire = cabinet.east(range + 8);
