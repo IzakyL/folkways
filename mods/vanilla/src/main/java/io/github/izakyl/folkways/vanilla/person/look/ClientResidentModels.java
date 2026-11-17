@@ -6,11 +6,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.regex.Pattern;
+import java.util.Set;
 import java.util.stream.Stream;
 import net.minecraft.SharedConstants;
 import net.minecraft.client.Minecraft;
@@ -41,8 +42,6 @@ public final class ClientResidentModels {
     private static final String FINGERPRINT_FILE = "fingerprint.txt";
     private static final String ASSETS_DIR = "assets";
     private static final int MAX_LIBRARY_BYTES = ModelLibrary.MAX_LIBRARY_BYTES;
-    private static final Pattern PACK_PATH = Pattern.compile("assets(/[a-z0-9_.-]+)+");
-    private static final Pattern DOTS_ONLY = Pattern.compile("(^|/)\\.+(/|$)");
 
     private static Transfer pending;
 
@@ -102,6 +101,9 @@ public final class ClientResidentModels {
         if (transfer == null || !transfer.fingerprint.equals(packet.fingerprint())) {
             return;
         }
+        if (transfer.skipped.contains(packet.path())) {
+            return;
+        }
         if (!transfer.accept(packet)) {
             pending = null;
             LOGGER.warn("[folkways-models] discarding the transfer: {} does not fit what was offered", packet.path());
@@ -112,6 +114,7 @@ public final class ClientResidentModels {
             install(transfer);
         }
     }
+
     public static void onLoggingOut(ClientPlayerNetworkEvent.LoggingOut event) {
         pending = null;
         ResidentLooks.forgetRuntime();
@@ -159,7 +162,7 @@ public final class ClientResidentModels {
     }
 
     private static Optional<Path> resolve(Path root, String path) {
-        if (!PACK_PATH.matcher(path).matches() || DOTS_ONLY.matcher(path).find()) {
+        if (!ModelAssetPaths.accepts(path)) {
             return Optional.empty();
         }
         Path file = root.resolve(path).normalize();
@@ -200,6 +203,7 @@ public final class ClientResidentModels {
     private static final class Transfer {
         private final String fingerprint;
         private final Map<String, Integer> expected;
+        private final Set<String> skipped = new HashSet<>();
         private final Map<String, List<byte[]>> arrived = new LinkedHashMap<>();
 
         private Transfer(String fingerprint, Map<String, Integer> expected) {
@@ -209,11 +213,13 @@ public final class ClientResidentModels {
 
         static Transfer of(ModelLibraryPacket packet) {
             Map<String, Integer> expected = new LinkedHashMap<>();
+            Transfer transfer = new Transfer(packet.fingerprint(), expected);
             long total = 0;
             for (ModelLibraryPacket.Asset asset : packet.assets()) {
                 if (asset.bytes() < 0 || resolve(packRoot(), asset.path()).isEmpty()) {
                     LOGGER.warn("[folkways-models] refusing the offered path {}", asset.path());
-                    return null;
+                    transfer.skipped.add(asset.path());
+                    continue;
                 }
                 total += asset.bytes();
                 expected.put(asset.path(), asset.bytes());
@@ -222,7 +228,7 @@ public final class ClientResidentModels {
                 LOGGER.warn("[folkways-models] refusing {} bytes of models, past the {} cap", total, MAX_LIBRARY_BYTES);
                 return null;
             }
-            return new Transfer(packet.fingerprint(), expected);
+            return transfer;
         }
 
         boolean accept(ModelAssetPacket packet) {

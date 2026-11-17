@@ -206,6 +206,6 @@ Keep native container and slot restrictions intact; player insertion is unaffect
 
 Update English and Chinese pages together. Use the game's locale catalogs for UI
 names and keep commands, paths and Java symbols literal. Documentation stays at the
-overview level: the READMEs, contribution guides, integrations page and save compatibility rules. Do not
+overview level: the READMEs, contribution guides, integrations page, data pack guide and save compatibility rules. Do not
 add detailed reference pages or per-module READMEs. `THIRD_PARTY.md` is a license
 inventory and stays in English only.

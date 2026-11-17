@@ -1,5 +1,6 @@
 package io.github.izakyl.folkways.vanilla.build.draft.client;
 
+import io.github.izakyl.folkways.core.library.FileNames;
 import io.github.izakyl.folkways.core.library.Shelves;
 import io.github.izakyl.folkways.vanilla.build.draft.Pattern;
 import io.github.izakyl.folkways.vanilla.build.draft.Patterns;
@@ -116,7 +117,7 @@ public final class LocalPatterns {
     private static Optional<ResourceLocation> idOf(Path folder, Path file, String suffix, String prefix) {
         String relative = folder.relativize(file).toString().replace('\\', '/');
         String stem = relative.substring(0, relative.length() - suffix.length());
-        ResourceLocation id = ResourceLocation.tryBuild(Shelves.NAMESPACE, prefix + stem);
+        ResourceLocation id = ResourceLocation.tryBuild(Shelves.NAMESPACE, prefix + FileNames.encodePath(stem));
         if (id == null) {
             LOGGER.error("{}: a file name may hold only a-z, 0-9, _, - and .", file);
         }

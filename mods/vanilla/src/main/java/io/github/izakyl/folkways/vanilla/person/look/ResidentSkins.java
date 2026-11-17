@@ -1,5 +1,6 @@
 package io.github.izakyl.folkways.vanilla.person.look;
 
+import io.github.izakyl.folkways.core.library.FileNames;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import java.awt.image.BufferedImage;
@@ -87,10 +88,14 @@ final class ResidentSkins {
                 + " bytes in total; this skin is not carried");
             return Optional.empty();
         }
-        ResourceLocation texture = at.withPath("textures/entity/resident_skins/" + stem + PNG);
+        ResourceLocation texture = at.withPath(texturePath(stem));
         assets.put(ModelLibrary.packPath(texture), pixels);
         ResidentLook.Arms arms = manifest.arms().orElseGet(() -> armsOf(image));
         return Optional.of(new ResidentLook(new ResidentLook.Skin(texture, arms), manifest.weight()));
+    }
+
+    static String texturePath(String stem) {
+        return "textures/entity/resident_skins/" + FileNames.encodePath(stem) + PNG;
     }
 
     private static BufferedImage imageOf(byte[] pixels) {

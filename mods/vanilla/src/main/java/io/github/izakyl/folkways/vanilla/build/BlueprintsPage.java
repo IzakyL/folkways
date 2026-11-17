@@ -1,5 +1,6 @@
 package io.github.izakyl.folkways.vanilla.build;
 
+import io.github.izakyl.folkways.core.library.FileNames;
 import com.lowdragmc.lowdraglib2.gui.ui.UIElement;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Label;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Button;
@@ -56,7 +57,7 @@ public final class BlueprintsPage implements Draw {
         // Kept under the server's or the player's own, then the folders after blueprint/; a pack's blueprints
         // stand in a folder of their namespace.
         String filed() {
-            String path = id.getPath().substring(Templates.BLUEPRINT.length());
+            String path = FileNames.decodePath(id.getPath().substring(Templates.BLUEPRINT.length()));
             boolean ours = id.getNamespace().equals("folkways_vanilla") || id.getNamespace().equals(Shelves.NAMESPACE);
             return (own ? "own:" : "shared:") + (ours ? "" : id.getNamespace() + "/") + path;
         }

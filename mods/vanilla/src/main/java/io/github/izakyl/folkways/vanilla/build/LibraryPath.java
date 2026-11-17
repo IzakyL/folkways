@@ -17,7 +17,7 @@ public record LibraryPath(List<String> segments) {
             || text.contains(":")) {
             return Optional.empty();
         }
-        List<String> segments = List.of(text.split("[/\\\\]"));
+        List<String> segments = List.of(text.split("[/\\\\]", -1));
         if (segments.isEmpty() || segments.size() > MAX_DEPTH) {
             return Optional.empty();
         }
@@ -34,15 +34,9 @@ public record LibraryPath(List<String> segments) {
             || segment.equals(".") || segment.equals("..")) {
             return false;
         }
-        for (int i = 0; i < segment.length(); i++) {
-            char ch = segment.charAt(i);
-            boolean plain = ch == '_' || ch == '-' || ch == '.' || ch == ' '
-                || (ch >= '0' && ch <= '9')
-                || (ch >= 'a' && ch <= 'z')
-                || (ch >= 'A' && ch <= 'Z');
-            if (!plain) {
-                return false;
-            }
+        if (!segment.codePoints().allMatch(ch -> Character.isLetterOrDigit(ch)
+            || ch == '_' || ch == '-' || ch == '.' || ch == ' ')) {
+            return false;
         }
         return !segment.chars().allMatch(ch -> ch == '.' || ch == ' ');
     }

@@ -1,6 +1,5 @@
 package io.github.izakyl.folkways.vanilla.build;
 
-import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.vanilla.FolkwaysVanillaMod;
 import java.util.Collections;
 import java.util.List;
@@ -27,6 +26,8 @@ public final class LibraryPathGameTests {
         "\\\\server\\share\\x.nbt",
         "C:/windows/x.nbt",
         "houses//x.nbt",
+        "houses/",
+        "houses/房子\u0001.nbt",
         "houses/./x.nbt",
         "...",
         "  ",
@@ -47,6 +48,8 @@ public final class LibraryPathGameTests {
         LibraryPath path = LibraryPath.of("houses/oak cottage.nbt").orElseThrow();
         helper.assertValueEqual(path.segments().size(), 2, "segments");
         helper.assertTrue(path.name().equals("oak cottage.nbt"), "leaf is the file's own name");
+        helper.assertValueEqual(LibraryPath.of("房屋/Zombie房子.nbt").orElseThrow().name(),
+            "Zombie房子.nbt", "Unicode letters retain their original spelling");
         for (String escape : ESCAPES) {
             helper.assertTrue(LibraryPath.of(escape).isEmpty(), "a name that must not parse did: " + escape);
         }

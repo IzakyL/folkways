@@ -1,5 +1,6 @@
 package io.github.izakyl.folkways.vanilla.build;
 
+import io.github.izakyl.folkways.core.library.FileNames;
 import io.github.izakyl.folkways.core.front.api.Books;
 import io.github.izakyl.folkways.core.front.api.Ghost;
 import io.github.izakyl.folkways.core.front.client.SelectorWindow;
@@ -103,7 +104,7 @@ public final class HeldBlueprints {
 
     private static String nameOf(ResourceLocation id) {
         String path = id.getPath();
-        return path.substring(path.lastIndexOf('/') + 1);
+        return FileNames.decodePath(path.substring(path.lastIndexOf('/') + 1));
     }
 
     private record Held(BlueprintsPage.Entry entry, CompoundTag file, Blueprint blueprint) implements Placing.Held {

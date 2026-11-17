@@ -1,9 +1,9 @@
 package io.github.izakyl.folkways.vanilla.build;
 
+import io.github.izakyl.folkways.core.library.FileNames;
 import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.work.api.StructureCompat;
 import io.github.izakyl.folkways.core.front.api.Books;
-import io.github.izakyl.folkways.core.library.Shelves;
 import io.github.izakyl.folkways.vanilla.build.draft.Chosen;
 import io.github.izakyl.folkways.vanilla.build.draft.Drafting;
 import io.github.izakyl.folkways.vanilla.build.draft.Hint;
@@ -55,9 +55,11 @@ public final class BuildPackets {
     private static void handleCapture(CaptureBlueprintPacket packet, IPayloadContext context) {
         context.enqueueWork(() -> {
             if (!(context.player() instanceof ServerPlayer player)
-                || Books.actingFor(player, packet.colony()).isEmpty()) return;
+                || Books.actingFor(player, packet.colony()).isEmpty()) {
+                return;
+            }
             Optional<LibraryPath> name = LibraryPath.of(packet.name());
-            if (name.isEmpty() || ResourceLocation.tryBuild(Shelves.NAMESPACE, packet.name()) == null) {
+            if (name.isEmpty()) {
                 refuse(player, Component.translatable("folkways.blueprints.capture.name_invalid"));
                 return;
             }
@@ -65,7 +67,7 @@ public final class BuildPackets {
             try {
                 var box = net.minecraft.world.level.levelgen.structure.BoundingBox.fromCorners(packet.from(), packet.to());
                 CompoundTag file = BlueprintCapture.read(level, box, pos -> level.mayInteract(player, pos));
-                saveCapture(packet.name(), file);
+                saveCapture(String.join("/", name.get().segments()), file);
                 Templates.reload(level.getServer().getResourceManager());
                 PatternPackets.offerToEveryone(level.getServer());
                 player.displayClientMessage(Component.translatable("folkways.blueprints.capture.saved", packet.name()), true);
@@ -134,7 +136,7 @@ public final class BuildPackets {
                 return;
             }
             String path = packet.blueprint().getPath();
-            setDown(player, packet.colonyId(), path.substring(path.lastIndexOf('/') + 1),
+            setDown(player, packet.colonyId(), FileNames.decodePath(path.substring(path.lastIndexOf('/') + 1)),
                 Templates.blueprint(packet.blueprint()), packet.siteName(), packet.anchor(), packet.airIsEmpty(),
                 packet.rotation(), packet.mirror(), packet.raiseInCreative());
         });

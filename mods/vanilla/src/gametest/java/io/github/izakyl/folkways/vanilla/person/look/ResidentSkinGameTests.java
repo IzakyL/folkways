@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.vanilla.person.look;
 
-import io.github.izakyl.folkways.core.FolkwaysCoreMod;
+import io.github.izakyl.folkways.core.library.FileNames;
 import io.github.izakyl.folkways.vanilla.FolkwaysVanillaMod;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
@@ -109,6 +109,37 @@ public final class ResidentSkinGameTests {
             helper.assertTrue(library.skinsRejected().size() == 1 && library.skinsRejected().getFirst()
                 .startsWith(id(ModelLibrary.SKIN_FOLDER + "/farmers/wren.json").toString()),
                 "the error names the full manifest resource path");
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = TEMPLATE, templateNamespace = "folkways_core", timeoutTicks = 40)
+    public static void unicodeAndUppercaseSkinsHaveStrictTexturePaths(GameTestHelper helper) {
+        Skins files = new Skins();
+        for (String name : java.util.List.of("Zombie", "房子", "Black_Red3", "blue")) {
+            helper.assertTrue(ResidentSkins.texturePath(name).matches("[a-z0-9_./-]+"),
+                "even a raw stem from relaxed ResourceLocation validation yields a strict path");
+            String stem = FileNames.encodePath(name);
+            files.png(stem, skin(64, false));
+        }
+        ModelLibrary library = ModelLibrary.read(files.held);
+        helper.assertValueEqual(library.entries().size(), 4, "every skin is available");
+        for (ResidentLook look : library.entries().values()) {
+            ResourceLocation texture = ((ResidentLook.Skin) look.appearance()).texture();
+            helper.assertTrue(texture.getPath().matches("[a-z0-9_./-]+"), "strict texture path");
+            helper.assertTrue(ModelAssetPaths.accepts(ModelLibrary.packPath(texture)), "client accepts the texture");
+            helper.assertTrue(library.assets().containsKey(ModelLibrary.packPath(texture)), "pixels are carried");
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = TEMPLATE, templateNamespace = "folkways_core", timeoutTicks = 40)
+    public static void assetPathsRejectTraversalAndNonLowercaseNames(GameTestHelper helper) {
+        helper.assertTrue(ModelAssetPaths.accepts("assets/local/textures/blue.png"), "ordinary asset");
+        for (String path : java.util.List.of("assets/local/../x", "assets/./x", "assets/.../x",
+                "assets/local/Zombie.png", "assets/local/房子.png", "assets//x", "/assets/local/x",
+                "assets/local/x:bad", "assets/local/x\\bad")) {
+            helper.assertTrue(!ModelAssetPaths.accepts(path), "unsafe asset: " + path);
         }
         helper.succeed();
     }

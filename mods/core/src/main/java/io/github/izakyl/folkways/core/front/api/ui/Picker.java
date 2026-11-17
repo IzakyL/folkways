@@ -20,6 +20,7 @@ import com.lowdragmc.lowdraglib2.gui.ui.event.UIEvents;
 import dev.vfyjxf.taffy.style.AlignContent;
 import dev.vfyjxf.taffy.style.AlignItems;
 import dev.vfyjxf.taffy.style.FlexDirection;
+import io.github.izakyl.folkways.core.library.FileNames;
 import io.github.izakyl.folkways.core.item.api.OptionQuery;
 import io.github.izakyl.folkways.core.front.api.Schema;
 import java.util.ArrayList;
@@ -133,7 +134,9 @@ public final class Picker {
     private final boolean ticked;
     private final BiConsumer<String, String> say;
     private Function<IdTree.Folder<Leaf>, Component> naming = Picker::rootNamed;
-    private Function<Leaf, Component[]> tooltips = leaf -> new Component[] {Component.literal(leaf.key())};
+    // Library files with names outside a-z travel encoded; the tooltip shows the name they were given.
+    private Function<Leaf, Component[]> tooltips =
+        leaf -> new Component[] {Component.literal(FileNames.decodePath(leaf.key()))};
     private Consumer<String> hovered = key -> {
     };
     private boolean openRoots;

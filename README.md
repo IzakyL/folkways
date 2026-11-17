@@ -38,7 +38,8 @@ versions. Back up your world before trying a nightly build.
   Enable `blueprints.simpleConstruction` (default `false`) to have builders stop on entering the site and work in place.
 - **Care for residents.** They sleep in their own beds, carry three days of
   rations, tire from work and travel, and flee danger. Data packs can replace
-  colony name and appearance pools.
+  colony name and appearance pools; see [DATAPACKS.md](DATAPACKS.md) for data packs,
+  tags and the `folkways/` library folder.
 - **Let them grow with practice.** Each trade has ten levels, and every level
   draws a speciality; levels 3, 6 and 10 also draw a shared perk.
 - **Set tables and build homes.** Dining areas serve table meals, beds grade their

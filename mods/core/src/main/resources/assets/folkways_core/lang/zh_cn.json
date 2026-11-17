@@ -145,7 +145,7 @@
   "folkways.lessons.basics": "基础",
   "folkways.lessons.play_all": "全部观看",
   "folkways.library.heading": "Folkways 资源库——服务器文件夹：%s",
-  "folkways.library.misnamed": "  ✗ %s：文件名只能使用 a-z、0-9、_、- 和 .",
+  "folkways.library.misnamed": "  ✗ %s：此路径无法作为资源库文件读取",
   "folkways.library.more": "  ……还有 %s 条",
   "folkways.library.open": "打开文件夹",
   "folkways.library.pack": "Folkways 资源文件夹",

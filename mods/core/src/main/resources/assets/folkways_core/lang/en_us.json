@@ -145,7 +145,7 @@
   "folkways.lessons.basics": "Basics",
   "folkways.lessons.play_all": "Watch all",
   "folkways.library.heading": "Folkways library — the server folder is %s",
-  "folkways.library.misnamed": "  ✗ %s: a file name may hold only a-z, 0-9, _, - and .",
+  "folkways.library.misnamed": "  ✗ %s: this path cannot be read as a library file",
   "folkways.library.more": "  … and %s more",
   "folkways.library.open": "Open the folder",
   "folkways.library.pack": "Folkways library folder",

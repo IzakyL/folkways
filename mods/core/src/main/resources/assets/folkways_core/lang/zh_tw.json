@@ -145,7 +145,7 @@
   "folkways.lessons.basics": "基礎",
   "folkways.lessons.play_all": "全部觀看",
   "folkways.library.heading": "Folkways 資源庫——伺服器資料夾：%s",
-  "folkways.library.misnamed": "  ✗ %s：檔案名稱只能使用 a-z、0-9、_、- 和 .",
+  "folkways.library.misnamed": "  ✗ %s：此路徑無法作為資源庫檔案讀取",
   "folkways.library.more": "  ……還有 %s 條",
   "folkways.library.open": "開啟資料夾",
   "folkways.library.pack": "Folkways 資源資料夾",

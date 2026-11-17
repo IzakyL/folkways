@@ -67,7 +67,7 @@ public final class LooseFolder {
         }
     }
 
-    // The files on a shelf whose names a resource location cannot hold, so the pack never sees them.
+    // Files that still cannot be represented by the loose pack.
     public static List<String> misnamed(Shelves.Shelf shelf) {
         Path folder = shelf.path();
         if (!Files.isDirectory(folder)) {
@@ -77,7 +77,7 @@ public final class LooseFolder {
         try (Stream<Path> files = Files.walk(folder)) {
             files.filter(Files::isRegularFile).forEach(file -> {
                 String relative = relative(folder, file);
-                if (!ResourceLocation.isValidPath(relative)) {
+                if (!ResourceLocation.isValidPath(FileNames.encodePath(relative))) {
                     misnamed.add(relative);
                 }
             });
@@ -120,7 +120,7 @@ public final class LooseFolder {
 
         private static Path fileOn(Shelves.Shelf shelf, String inside) {
             Path folder = shelf.path().normalize();
-            Path file = folder.resolve(inside).normalize();
+            Path file = folder.resolve(FileNames.decodePath(inside)).normalize();
             return file.startsWith(folder) ? file : folder;
         }
 
@@ -145,7 +145,7 @@ public final class LooseFolder {
             }
             try (Stream<Path> files = Files.walk(folder)) {
                 for (Path file : files.filter(Files::isRegularFile).sorted().toList()) {
-                    String inPack = shelf.folder() + "/" + relative(folder, file);
+                    String inPack = shelf.folder() + "/" + FileNames.encodePath(relative(folder, file));
                     if (!inPack.startsWith(path + "/")) {
                         continue;
                     }

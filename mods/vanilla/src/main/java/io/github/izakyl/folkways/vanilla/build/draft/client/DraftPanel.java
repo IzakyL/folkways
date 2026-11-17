@@ -17,6 +17,7 @@ import io.github.izakyl.folkways.core.front.api.ui.Rows;
 import io.github.izakyl.folkways.core.front.api.ui.Taking;
 import io.github.izakyl.folkways.core.front.api.ui.Tokens;
 import io.github.izakyl.folkways.core.front.ui.screen.RememberedSettings;
+import io.github.izakyl.folkways.core.library.FileNames;
 import io.github.izakyl.folkways.core.library.Shelves;
 import io.github.izakyl.folkways.vanilla.build.SiteNameField;
 import io.github.izakyl.folkways.vanilla.build.draft.Chosen;
@@ -202,13 +203,13 @@ public final class DraftPanel {
         ResourceLocation id = pattern.id();
         boolean ours = id.getNamespace().equals("folkways_vanilla") || id.getNamespace().equals(Shelves.NAMESPACE);
         return (LocalPatterns.local(pattern) ? "own:" : "shared:") + (ours ? "" : id.getNamespace() + "/")
-            + id.getPath();
+            + FileNames.decodePath(id.getPath());
     }
 
     // A pattern's own words come first; the game's language files name the ones that bring none.
     private static Component nameOf(Pattern pattern) {
         return pattern.face().word(language(), Face.TITLE).<Component>map(Component::literal)
-            .orElseGet(() -> Component.literal(pattern.id().getPath()));
+            .orElseGet(() -> Component.literal(FileNames.decodePath(pattern.id().getPath())));
     }
 
     private static String language() {

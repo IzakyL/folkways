@@ -1,5 +1,6 @@
 package io.github.izakyl.folkways.vanilla.person.look;
 
+import io.github.izakyl.folkways.core.library.FileNames;
 import com.lowdragmc.lowdraglib2.gui.ui.UIElement;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Dialog;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Label;
@@ -100,7 +101,7 @@ public final class LookPicker {
     // What a look is called: its own translation where a pack gives one, a maid's name where it is a maid.
     public static Component nameOf(ResourceLocation look) {
         String path = look.getPath();
-        String last = path.substring(path.lastIndexOf('/') + 1);
+        String last = FileNames.decodePath(path.substring(path.lastIndexOf('/') + 1));
         String fallback = MaidLooks.nameKey(look)
             .map(key -> Component.translatableWithFallback(key, last).getString())
             .orElse(last);
@@ -108,7 +109,7 @@ public final class LookPicker {
     }
 
     private static Component folderName(IdTree.Folder<Picker.Leaf> folder) {
-        String fallback = folder.name().contains("/") ? folder.name() : modName(folder.name());
+        String fallback = folder.name().contains("/") ? FileNames.decodePath(folder.name()) : modName(folder.name());
         return Component.translatableWithFallback("folkways.looks.folder." + folder.dotted(), fallback);
     }
 
