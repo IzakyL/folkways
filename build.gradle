@@ -13,6 +13,7 @@ def modProjects = [
     folkways_carving: ":carving",
     folkways_firearms: ":firearms",
     folkways_carts: ":carts",
+    folkways_airline: ":airline",
     folkways_epicfight: ":epicfight",
 ]
 modProjects.values().each { evaluationDependsOn(it) }
@@ -26,6 +27,7 @@ def testSwitch = { String name, String owner = null ->
 def modularGolemsTests = testSwitch("modularGolemsTests", "golems")
 def cartsTests = testSwitch("cartsTests", "carts")
 def firefightingTests = testSwitch("firefightingTests")
+def airlineTests = testSwitch("airlineTests", "airline")
 def epicfightTests = testSwitch("epicfightTests", "epicfight")
 def cookeryTests = testSwitch("cookeryTests", "cookery")
 def warfareTests = testSwitch("warfareTests")
@@ -80,13 +82,14 @@ def testedMods = modProjects.findAll { id, path -> (path != ":golems" || modular
     && (path != ":cookery" || cookeryTests)
     && (path != ":carving" || chiselsTests)
     && (path != ":carts" || cartsTests)
+    && (path != ":airline" || airlineTests || warfareTests)
     && (path != ":epicfight" || epicfightTests)
     && (!(storageProfile || accessoryProfile || ae2Tests || rs2Tests) || path == ":core"
         || path == ":vanilla" && (accessoryProfile ? true : storageProfile ? storageVanilla : rs2Tests ? rs2Vanilla : ae2Vanilla)) }
 if (gameTestMod && !(gameTestMod in ["core", "vanilla", "create", "cookery", "golems",
-    "firearms", "carving", "carts", "epicfight"])) {
+    "firearms", "carving", "carts", "airline", "epicfight"])) {
     throw new GradleException("Unknown GameTest mod '${gameTestMod}'; "
-        + "choose core, vanilla, create, cookery, golems, firearms, carving, carts or epicfight")
+        + "choose core, vanilla, create, cookery, golems, firearms, carving, carts, airline or epicfight")
 }
 if ((ae2Tests || rs2Tests || storageProfile || accessoryProfile) && gameTestMod != "core") {
     throw new GradleException("Optional storage, AE2 and RS2 GameTests require -PgameTestMod=core")
@@ -114,7 +117,8 @@ def suiteMods = testedMods.findAll { id, path -> !gameTestMod || path == ":${gam
 def gameTestSuites = [cookery: cookeryTests, golems: modularGolemsTests, tavern: tavernTests,
     warfare: warfareTests, tacz: taczTests, firefighting: firefightingTests,
     ae2: ae2Tests, ae2Labor: ae2LaborTests, rs2: rs2Tests, rs2Labor: rs2LaborTests,
-    carving: chiselsTests, createPlacement: createPlacementTests, carts: cartsTests, epicfight: epicfightTests,
+    carving: chiselsTests, createPlacement: createPlacementTests, carts: cartsTests, airline: airlineTests,
+    epicfight: epicfightTests,
     storage: storageProfile, storageLabor: storageLaborTests, accessories: accessoryProfile,
     coexistence: providers.gradleProperty("accessoryCoexistence").isPresent(),
     compat: providers.gradleProperty("accessoryCompat").isPresent()]
@@ -183,14 +187,23 @@ neoForge {
         gameTestServer {
             type = "gameTestServer"
             systemProperty "folkways.testMethods", providers.gradleProperty("gameTestMethods").getOrElse("")
+            systemProperty "folkways.airline.testFilter", providers.gradleProperty("gameTestFilter").getOrElse(".*")
+            systemProperty "folkways.airline.testShard", providers.gradleProperty("gameTestShard").getOrElse("")
             gameDirectory = layout.projectDirectory.dir(gameTestDirectory)
             programArgument "--nogui"
+            programArgument "--mixin"
+            programArgument "folkways-core-tests.mixins.json"
             systemProperty "folkways.core.integrationTests", integrationTests.toString()
             systemProperty "folkways.ae2.laborTests",
                 ae2LaborTests.toString()
             systemProperty "folkways.rs2.laborTests", rs2LaborTests.toString()
             if (storageProfile) {
                 systemProperty "folkways.storage.profile", storageProfile
+            }
+            if (gameTestMod == "airline") {
+                jvmArgument "-Xmx4G"
+                programArgument "--mixin"
+                programArgument "folkways-airline-tests.mixins.json"
             }
             // Keep the existing dependency tests with Core, without repeating them in every mod's check.
             systemProperty "neoforge.enabledGameTestNamespaces",
@@ -262,9 +275,10 @@ dependencies {
     if (ae2Tests) { runtimeOnly core.lib("ae2"), core.lib("guideme") }
     if (rs2Tests) { runtimeOnly core.lib("refinedstorage") }
     if (cartsTests) { runtimeOnly core.lib("astikorcartsredux") }
+    if (airlineTests) { runtimeOnly core.lib("sable"), core.lib("sable-companion") }
     if (epicfightTests) { runtimeOnly core.lib("epicfight"), core.lib("geckolib") }
     if (tavernTests) { runtimeOnly core.lib("kaleidoscope_tavern") }
-    if (warfareTests) { runtimeOnly core.lib("superbwarfare"), core.lib("kotlinforforge"), core.lib("geckolib") }
+    if (warfareTests) { runtimeOnly core.lib("superbwarfare"), core.lib("kotlinforforge"), core.lib("geckolib"), core.lib("sable"), core.lib("sable-companion") }
     if (modularGolemsTests) {
         runtimeOnly core.lib("modulargolems"), core.lib("l2library"), core.lib("l2core"), core.lib("l2serial")
     }
@@ -367,7 +381,7 @@ tasks.named("check") {
     if (cookeryTests) { dependsOn ":core:compileCookeryTestJava", ":vanilla:compileCookeryTestJava" }
 }
 
-if (firefightingTests || ae2Tests || rs2Tests || storageProfile || accessoryProfile) {
+if (firefightingTests || airlineTests || ae2Tests || rs2Tests || storageProfile || accessoryProfile) {
     tasks.named("runGameTestServer") {
         doLast {
             def log = file("${gameTestDirectory}/logs/latest.log")
@@ -376,5 +390,28 @@ if (firefightingTests || ae2Tests || rs2Tests || storageProfile || accessoryProf
                     + "see ${log}")
             }
         }
+    }
+}
+
+// Prepare once, then launch independent JVMs without holding Gradle's project execution locks.
+tasks.register("exportAirlineGameTestLaunch") {
+    def run = tasks.named("runGameTestServer")
+    dependsOn { run.get().taskDependencies.getDependencies(run.get()) }
+    def output = layout.buildDirectory.file("airline-gametest-launch.json")
+    outputs.file(output)
+    outputs.upToDateWhen { false }
+    doLast {
+        if (gameTestMod != "airline") {
+            throw new GradleException("exportAirlineGameTestLaunch requires -PgameTestMod=airline")
+        }
+        def launch = run.get()
+        launch.classpath(launch.classpathProvider)
+        def command = [launch.javaLauncher.get().executablePath.asFile.absolutePath]
+        command.addAll((launch.jvmArgs + launch.allJvmArgs).unique())
+        command.addAll(["-cp", launch.classpath.asPath, launch.mainClass.get()])
+        command.addAll(launch.args)
+        output.get().asFile.text = groovy.json.JsonOutput.toJson([
+            command: command, environment: launch.environmentProperty.get()
+        ])
     }
 }

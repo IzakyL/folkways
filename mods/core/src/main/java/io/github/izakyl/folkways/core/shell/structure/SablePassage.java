@@ -136,7 +136,7 @@ public final class SablePassage implements Passage {
             return false;
         }
         AABB corridor = new AABB(on.get(), off.get()).inflate(0.3, 0, 0.3).expandTowards(0, 1.9, 0);
-        return Structures.obstacles(level, corridor).isEmpty() && level.noCollision(corridor.deflate(0, 0.01, 0));
+        return Structures.obstacles(level, corridor, ((Realm.Frame) aboard.realm()).structure()).isEmpty() && level.noCollision(corridor.deflate(0, 0.01, 0));
     }
 
     @Override

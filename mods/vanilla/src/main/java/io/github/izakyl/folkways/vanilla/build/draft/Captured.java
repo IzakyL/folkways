@@ -87,11 +87,11 @@ final class Captured implements World {
                     sections[at] = held[at].getStates().copy();
                 }
             }
-            // As Level.getHeight answers: one above the highest cell that blocks motion.
+            // As Level.getHeight answers: one above the highest occupied cell.
             int[] tops = new int[SIDE * SIDE];
             for (int z = 0; z < SIDE; z++) {
                 for (int x = 0; x < SIDE; x++) {
-                    tops[z * SIDE + x] = chunk.getHeight(Heightmap.Types.MOTION_BLOCKING, x, z) + 1;
+                    tops[z * SIDE + x] = chunk.getHeight(Heightmap.Types.WORLD_SURFACE, x, z) + 1;
                 }
             }
             return new Column(sections, tops);

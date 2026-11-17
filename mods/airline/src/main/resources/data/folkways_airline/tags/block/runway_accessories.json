@@ -1,0 +1,12 @@
+{
+  "values": [
+    {
+      "id": "superbwarfare:aircraft_catapult",
+      "required": false
+    },
+    {
+      "id": "superbwarfare:catapult_controller",
+      "required": false
+    }
+  ]
+}

@@ -25,6 +25,7 @@ import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import io.github.izakyl.folkways.core.resident.api.Bodies;
 import io.github.izakyl.folkways.core.runtime.LaborFixture;
 import io.github.izakyl.folkways.core.testing.Cleanup;
+import io.github.izakyl.folkways.core.testing.SelectedTests;
 import io.github.izakyl.folkways.core.testing.TestWorker;
 import io.github.izakyl.folkways.core.vocation.api.Vocations;
 import io.github.izakyl.folkways.core.work.api.LaborRefusal;
@@ -53,6 +54,7 @@ import io.github.izakyl.folkways.vanilla.person.PersonBody;
 import io.github.izakyl.folkways.vanilla.person.PersonContent;
 import io.github.izakyl.folkways.vanilla.person.ResidentEntity;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -99,12 +101,10 @@ import net.neoforged.neoforge.common.util.FakePlayerFactory;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
 import net.neoforged.neoforge.event.level.ExplosionEvent;
-import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 import org.joml.Vector3f;
 
 @EventBusSubscriber(modid = FolkwaysFirearmsMod.ID, bus = EventBusSubscriber.Bus.MOD)
-@GameTestHolder("folkways_firearms")
 @PrefixGameTestTemplate(false)
 public final class WarfareGameTests {
 
@@ -127,10 +127,16 @@ public final class WarfareGameTests {
 
     @SubscribeEvent
     public static void register(RegisterGameTestsEvent event) {
-        event.register(WarfareGameTests.class);
+        // GameTestHolder auto-discovery bypasses method filtering; use explicit template namespaces instead.
+        SelectedTests.register(event, WarfareGameTests.class);
+        Arrays.stream(WarfareGameTests.class.getDeclaredMethods())
+            .filter(method -> method.isAnnotationPresent(BeforeBatch.class)
+                || method.isAnnotationPresent(AfterBatch.class))
+            .forEach(event::register);
     }
 
-    @GameTest(batch = "warfare", template = "warfare_range", timeoutTicks = 500)
+    @GameTest(templateNamespace = "folkways_firearms", batch = "warfare", template = "warfare_range",
+        timeoutTicks = 500)
     public static void firearmLoadoutCollectsStockThenFiresExactlyTheSuppliedRounds(GameTestHelper helper) {
         Scene f = new Scene(helper, true);
         f.store.setItem(0, new ItemStack(ModItems.GLOCK_17.get()));
@@ -164,7 +170,8 @@ public final class WarfareGameTests {
             .thenSucceed();
     }
 
-    @GameTest(batch = "warfare", template = "warfare_range", timeoutTicks = 100)
+    @GameTest(templateNamespace = "folkways_firearms", batch = "warfare", template = "warfare_range",
+        timeoutTicks = 100)
     public static void gunsPreservePlayerLoadedRoundsAndActualItemComponents(GameTestHelper helper) {
         Scene f = new Scene(helper, false);
         ItemStack gun = new ItemStack(ModItems.GLOCK_17.get());
@@ -216,7 +223,8 @@ public final class WarfareGameTests {
             });
     }
 
-    @GameTest(batch = "warfare", template = "warfare_range", timeoutTicks = 120)
+    @GameTest(templateNamespace = "folkways_firearms", batch = "warfare", template = "warfare_range",
+        timeoutTicks = 120)
     public static void reopeningOrRestockingAGunCannotResetItsNativeCadence(GameTestHelper helper) {
         // The pump keeps its attack until each shot, then reopens; the pistol goes back to the pack every tick.
         List<Cadence> guns = List.of(
@@ -279,7 +287,8 @@ public final class WarfareGameTests {
         }
     }
 
-    @GameTest(batch = "warfare", template = "warfare_range", timeoutTicks = 300)
+    @GameTest(templateNamespace = "folkways_firearms", batch = "warfare", template = "warfare_range",
+        timeoutTicks = 300)
     public static void friendlyResidentsAndPetsBlockGunfire(GameTestHelper helper) {
         Scene f = new Scene(helper, false);
         f.body.pack().insert(new ItemStack(ModItems.GLOCK_17.get()));
@@ -305,7 +314,7 @@ public final class WarfareGameTests {
         helper.succeed();
     }
 
-    @GameTest(batch = "warfare", template = "warfare_range")
+    @GameTest(templateNamespace = "folkways_firearms", batch = "warfare", template = "warfare_range")
     public static void firearmChoicesUseTheSharedRegistryAndLoanTheSelectedActualGun(GameTestHelper helper) {
         Scene f = new Scene(helper, false);
         var provider = Loadouts.find(WarfareWeapons.LOADOUT).orElseThrow();
@@ -346,7 +355,8 @@ public final class WarfareGameTests {
         helper.succeed();
     }
 
-    @GameTest(batch = "warfare", template = "warfare_range", timeoutTicks = 550)
+    @GameTest(templateNamespace = "folkways_firearms", batch = "warfare", template = "warfare_range",
+        timeoutTicks = 550)
     public static void unsafePhysicalGunVariantsCannotReplaceOrReserveTheUsableLoadout(GameTestHelper helper) {
         Scene f = new Scene(helper, true);
         ItemStack unsafe = new ItemStack(ModItems.GLOCK_17.get());
@@ -395,7 +405,7 @@ public final class WarfareGameTests {
             .thenSucceed();
     }
 
-    @GameTest(batch = "warfare", template = "warfare_range")
+    @GameTest(templateNamespace = "folkways_firearms", batch = "warfare", template = "warfare_range")
     public static void explosiveOrAlteredGunComponentsRevokeEvenAnOpenHandLoan(GameTestHelper helper) {
         Scene f = new Scene(helper, false);
         f.body.pack().insert(new ItemStack(ModItems.GLOCK_17.get()));
@@ -446,7 +456,7 @@ public final class WarfareGameTests {
         after(level);
     }
 
-    @GameTest(batch = "warfare_rules", template = "warfare_range")
+    @GameTest(templateNamespace = "folkways_firearms", batch = "warfare_rules", template = "warfare_range")
     public static void nativeResidentExplosionsHonorRuleChangesCancellationAndProtectedBlockLists(
         GameTestHelper helper) {
         Scene f = new Scene(helper, false);
@@ -516,7 +526,8 @@ public final class WarfareGameTests {
         helper.succeed();
     }
 
-    @GameTest(batch = "warfare", template = "warfare_mortar", timeoutTicks = 220)
+    @GameTest(templateNamespace = "folkways_firearms", batch = "warfare", template = "warfare_mortar",
+        timeoutTicks = 220)
     public static void mortarInSentryZoneUsesOnlyADistantPatrolObservation(GameTestHelper helper) {
         Scene f = new Scene(helper, false);
         MortarEntity mortar = (MortarEntity) f.station(ModEntities.MORTAR.get(), 6, 10);
@@ -552,7 +563,8 @@ public final class WarfareGameTests {
             .thenSucceed();
     }
 
-    @GameTest(batch = "warfare", template = "warfare_mortar", timeoutTicks = 220)
+    @GameTest(templateNamespace = "folkways_firearms", batch = "warfare", template = "warfare_mortar",
+        timeoutTicks = 220)
     public static void predictedMortarImpactHoldsForAlliesAndOwnColonyBlocks(GameTestHelper helper) {
         Scene f = new Scene(helper, false);
         MortarEntity mortar = (MortarEntity) f.station(ModEntities.MORTAR.get(), 6, 10);
@@ -616,12 +628,14 @@ public final class WarfareGameTests {
             .thenSucceed();
     }
 
-    @GameTest(batch = "warfare", template = "warfare_range", timeoutTicks = 600)
+    @GameTest(templateNamespace = "folkways_firearms", batch = "warfare", template = "warfare_range",
+        timeoutTicks = 600)
     public static void mk42OperatorWalksToTheExternalHullAndFires(GameTestHelper helper) {
         walkingStation(helper, ModEntities.MK_42.get(), false, false);
     }
 
-    @GameTest(batch = "warfare", template = "warfare_range", timeoutTicks = 600)
+    @GameTest(templateNamespace = "folkways_firearms", batch = "warfare", template = "warfare_range",
+        timeoutTicks = 600)
     public static void arrivingOperatorBoardsWithoutAnEnemyAndWithdrawsCleanly(GameTestHelper helper) {
         Scene f = new Scene(helper, true, 20, 18, true);
         VehicleEntity station = f.station(ModEntities.MK_42.get(), 6, 10);
@@ -647,22 +661,26 @@ public final class WarfareGameTests {
             }).thenSucceed();
     }
 
-    @GameTest(batch = "warfare", template = "warfare_mortar", timeoutTicks = 600)
+    @GameTest(templateNamespace = "folkways_firearms", batch = "warfare", template = "warfare_mortar",
+        timeoutTicks = 600)
     public static void mortarOperatorWalksToAnExternalFootingAndFires(GameTestHelper helper) {
         walkingStation(helper, ModEntities.MORTAR.get(), false, false);
     }
 
-    @GameTest(batch = "warfare", template = "warfare_range", timeoutTicks = 600)
+    @GameTest(templateNamespace = "folkways_firearms", batch = "warfare", template = "warfare_range",
+        timeoutTicks = 600)
     public static void stationApproachFallsBackFromAnEnclosedFootingAndBlockingEntity(GameTestHelper helper) {
         walkingStation(helper, ModEntities.MK_42.get(), true, false);
     }
 
-    @GameTest(batch = "warfare", template = "warfare_range", timeoutTicks = 800)
+    @GameTest(templateNamespace = "folkways_firearms", batch = "warfare", template = "warfare_range",
+        timeoutTicks = 800)
     public static void sealedStationApproachWaitsWithoutMountingThenRetriesWhenOpened(GameTestHelper helper) {
         walkingStation(helper, ModEntities.MK_42.get(), false, true);
     }
 
-    @GameTest(batch = "warfare", template = "warfare_range", timeoutTicks = 180)
+    @GameTest(templateNamespace = "folkways_firearms", batch = "warfare", template = "warfare_range",
+        timeoutTicks = 180)
     public static void containedUnenrolledStationLeavesSentryFiringOnlyHandheldWeapon(GameTestHelper helper) {
         Scene f = new Scene(helper, false);
         VehicleEntity station = f.station(ModEntities.MK_42.get(), 6, 10);
@@ -685,7 +703,8 @@ public final class WarfareGameTests {
             }).thenSucceed();
     }
 
-    @GameTest(batch = "warfare", template = "warfare_mortar", timeoutTicks = 220)
+    @GameTest(templateNamespace = "folkways_firearms", batch = "warfare", template = "warfare_mortar",
+        timeoutTicks = 220)
     public static void spyglassForwardObserverReportsBeyondDefaultSightForNativeMortar(GameTestHelper helper) {
         Scene f = new Scene(helper, false);
         MortarEntity mortar = (MortarEntity) f.station(ModEntities.MORTAR.get(), 6, 10);
@@ -719,7 +738,7 @@ public final class WarfareGameTests {
             .thenSucceed();
     }
 
-    @GameTest(batch = "warfare", template = "warfare_range")
+    @GameTest(templateNamespace = "folkways_firearms", batch = "warfare", template = "warfare_range")
     public static void stationIncumbentsSurviveUnloadWithoutBorrowingColocatedWeapons(GameTestHelper helper) {
         Scene f = new Scene(helper, false);
         VehicleEntity original = f.station(ModEntities.MK_42.get(), 6, 10);
@@ -747,7 +766,7 @@ public final class WarfareGameTests {
         helper.succeed();
     }
 
-    @GameTest(batch = "warfare", template = "warfare_range")
+    @GameTest(templateNamespace = "folkways_firearms", batch = "warfare", template = "warfare_range")
     public static void entityStationEnrollmentRetainsKeeperAuthorityRangeAndColonyExclusion(GameTestHelper helper) {
         Scene f = new Scene(helper, false);
         VehicleEntity station = f.station(ModEntities.MK_42.get(), 6, 10);
@@ -785,7 +804,7 @@ public final class WarfareGameTests {
         helper.succeed();
     }
 
-    @GameTest(batch = "warfare", template = "warfare_range")
+    @GameTest(templateNamespace = "folkways_firearms", batch = "warfare", template = "warfare_range")
     public static void stationsNeedIndependentEnrollmentAndUnsafeProjectileTypesAreExcluded(GameTestHelper helper) {
         Scene f = new Scene(helper, false);
         VehicleEntity outside = f.station(ModEntities.MK_42.get(), 20, 10);
@@ -815,7 +834,8 @@ public final class WarfareGameTests {
         helper.succeed();
     }
 
-    @GameTest(batch = "warfare", template = "warfare_range", timeoutTicks = 120)
+    @GameTest(templateNamespace = "folkways_firearms", batch = "warfare", template = "warfare_range",
+        timeoutTicks = 120)
     public static void nativeStationSeatIsExclusiveAndClosesWhenTradeIsRevoked(GameTestHelper helper) {
         Scene f = new Scene(helper, false);
         VehicleEntity station = f.station(ModEntities.MK_42.get(), 6, 10);
@@ -834,7 +854,7 @@ public final class WarfareGameTests {
         helper.succeed();
     }
 
-    @GameTest(batch = "warfare", template = "warfare_range")
+    @GameTest(templateNamespace = "folkways_firearms", batch = "warfare", template = "warfare_range")
     public static void ownedHowitzerRetainsAimInsteadOfResidentHeadPitch(GameTestHelper helper) {
         Scene f = new Scene(helper, false);
         ArtilleryEntity station = (ArtilleryEntity) f.station(ModEntities.FH_77BW.get(), 6, 10);
@@ -867,7 +887,8 @@ public final class WarfareGameTests {
         });
     }
 
-    @GameTest(batch = "warfare", template = "warfare_mortar", timeoutTicks = 180)
+    @GameTest(templateNamespace = "folkways_firearms", batch = "warfare", template = "warfare_mortar",
+        timeoutTicks = 180)
     public static void removingCombatAssignmentRevokesPendingMortarBeforeReconciliation(GameTestHelper helper) {
         Scene f = new Scene(helper, false);
         MortarEntity mortar = (MortarEntity) f.station(ModEntities.MORTAR.get(), 6, 10);
@@ -901,7 +922,8 @@ public final class WarfareGameTests {
         }).thenSucceed();
     }
 
-    @GameTest(batch = "warfare", template = "warfare_range", timeoutTicks = 100)
+    @GameTest(templateNamespace = "folkways_firearms", batch = "warfare", template = "warfare_range",
+        timeoutTicks = 100)
     public static void restoredStationSnapshotReleasesOnlyItsOrphanedSeat(GameTestHelper helper) {
         Scene f = new Scene(helper, false);
         VehicleEntity station = f.station(ModEntities.MK_42.get(), 6, 10);
@@ -928,7 +950,8 @@ public final class WarfareGameTests {
             });
     }
 
-    @GameTest(batch = "warfare", template = "warfare_range", timeoutTicks = 180)
+    @GameTest(templateNamespace = "folkways_firearms", batch = "warfare", template = "warfare_range",
+        timeoutTicks = 180)
     public static void aDirectStationEmitsThroughItsNativeQueueAndConsumesOneShell(GameTestHelper helper) {
         Scene f = new Scene(helper, false);
         VehicleEntity station = f.station(ModEntities.MK_42.get(), 6, 10);
@@ -968,7 +991,8 @@ public final class WarfareGameTests {
             .thenSucceed();
     }
 
-    @GameTest(batch = "warfare", template = "warfare_mortar", timeoutTicks = 180)
+    @GameTest(templateNamespace = "folkways_firearms", batch = "warfare", template = "warfare_mortar",
+        timeoutTicks = 180)
     public static void anAllyEnteringDuringMortarPreparationCancelsWithoutSpendingTheShell(GameTestHelper helper) {
         Scene f = new Scene(helper, false);
         MortarEntity mortar = (MortarEntity) f.station(ModEntities.MORTAR.get(), 6, 10);
@@ -1006,7 +1030,8 @@ public final class WarfareGameTests {
             .thenSucceed();
     }
 
-    @GameTest(batch = "warfare", template = "warfare_mortar", timeoutTicks = 180)
+    @GameTest(templateNamespace = "folkways_firearms", batch = "warfare", template = "warfare_mortar",
+        timeoutTicks = 180)
     public static void staleHiddenTargetAndRevokedDutyCancelPendingMortarFire(GameTestHelper helper) {
         Scene f = new Scene(helper, false);
         MortarEntity mortar = (MortarEntity) f.station(ModEntities.MORTAR.get(), 6, 10);
@@ -1042,7 +1067,7 @@ public final class WarfareGameTests {
             .thenSucceed();
     }
 
-    @GameTest(batch = "warfare", template = "warfare_range")
+    @GameTest(templateNamespace = "folkways_firearms", batch = "warfare", template = "warfare_range")
     public static void deathUnloadAndStationRemovalReleaseNativeSeatsImmediately(GameTestHelper helper) {
         for (String how : List.of("death", "unload", "removal")) {
             Scene f = new Scene(helper, false);
@@ -1066,7 +1091,8 @@ public final class WarfareGameTests {
         helper.succeed();
     }
 
-    @GameTest(batch = "warfare", template = "warfare_range", timeoutTicks = 450)
+    @GameTest(templateNamespace = "folkways_firearms", batch = "warfare", template = "warfare_range",
+        timeoutTicks = 450)
     public static void profileShellTargetIsCollectedFromRealStoresWithoutAHiddenDutyAmount(GameTestHelper helper) {
         Scene f = new Scene(helper, true);
         f.station(ModEntities.MORTAR.get(), 6, 10);
@@ -1093,7 +1119,7 @@ public final class WarfareGameTests {
             .thenSucceed();
     }
 
-    @GameTest(batch = "warfare", template = "warfare_range")
+    @GameTest(templateNamespace = "folkways_firearms", batch = "warfare", template = "warfare_range")
     public static void rejectedProjectileInsertionRefundsTheExactPhysicalGunRound(GameTestHelper helper) {
         Scene f = new Scene(helper, false);
         f.body.pack().insert(new ItemStack(ModItems.GLOCK_17.get()));
@@ -1123,7 +1149,8 @@ public final class WarfareGameTests {
         helper.succeed();
     }
 
-    @GameTest(batch = "warfare", template = "warfare_range", timeoutTicks = 80)
+    @GameTest(templateNamespace = "folkways_firearms", batch = "warfare", template = "warfare_range",
+        timeoutTicks = 80)
     public static void aStationOutsideTheAssignedZoneNeverAcquiresAnOperatorOrFires(GameTestHelper helper) {
         Scene f = new Scene(helper, false);
         VehicleEntity station = f.station(ModEntities.MK_42.get(), 20, 10);
@@ -1144,7 +1171,8 @@ public final class WarfareGameTests {
             });
     }
 
-    @GameTest(batch = "warfare", template = "warfare_mortar", timeoutTicks = 100)
+    @GameTest(templateNamespace = "folkways_firearms", batch = "warfare", template = "warfare_mortar",
+        timeoutTicks = 100)
     public static void unpostingPreservesUnrelatedNativeMortarPreparation(GameTestHelper helper) {
         Scene f = new Scene(helper, false);
         MortarEntity mortar = (MortarEntity) f.station(ModEntities.MORTAR.get(), 6, 10);
@@ -1163,7 +1191,8 @@ public final class WarfareGameTests {
         helper.succeed();
     }
 
-    @GameTest(batch = "warfare_rules", template = "warfare_mortar", timeoutTicks = 200)
+    @GameTest(templateNamespace = "folkways_firearms", batch = "warfare_rules", template = "warfare_mortar",
+        timeoutTicks = 200)
     public static void mobGriefingPermissionIsRecheckedBeforeNativeStationLaunch(GameTestHelper helper) {
         Scene f = new Scene(helper, false);
         MortarEntity mortar = (MortarEntity) f.station(ModEntities.MORTAR.get(), 6, 10);

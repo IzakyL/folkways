@@ -104,6 +104,18 @@ public final class Ldlib2 {
             "target", node == null ? "absent" : Rules.observed(tree, node)));
     }
 
+    /** Whether the pinned element still belongs to the open panel after an asynchronous rebuild. */
+    public static Object attached(Context ctx, Args args) throws Exception {
+        Routes routes = Routes.of(args);
+        Located located = Panel.locate(ClientGame.mc(ctx), routes);
+        if (!located.found() || located.modularUI() != Handles.resolve(args.string("ui"))) {
+            return false;
+        }
+        Object target = Handles.resolve(args.string("element"));
+        Tree current = tree(located, routes, args, 0);
+        return current.truncated() || current.nodes().stream().anyMatch(node -> node.target == target);
+    }
+
     /** What acting on {@code node} needs, pinned by handle so a press is judged by this very UI. */
     private static Map<String, Object> target(Located located, Tree tree, Node node) {
         double[] aim = Rules.aim(node);

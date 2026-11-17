@@ -5,6 +5,7 @@ import dev.ryanhcode.sable.api.sublevel.SubLevelContainer;
 import dev.ryanhcode.sable.companion.ClientSubLevelAccess;
 import dev.ryanhcode.sable.companion.math.Pose3dc;
 import dev.ryanhcode.sable.sublevel.SubLevel;
+import dev.ryanhcode.sable.sublevel.ServerSubLevel;
 import io.github.izakyl.folkways.core.world.api.WorldSpaces;
 import java.util.Optional;
 import java.util.UUID;
@@ -88,6 +89,24 @@ public final class SableSpaces implements WorldSpaces.Source {
                 ? drawn.renderPose(partialTick)
                 : subLevel.logicalPose();
             return pose.transformPosition(local.add(Vec3.atLowerCornerOf(storageOrigin())));
+        }
+
+        @Override
+        public Vec3 angularVelocity() {
+            return subLevel instanceof ServerSubLevel server
+                ? new Vec3(server.latestAngularVelocity.x, server.latestAngularVelocity.y,
+                    server.latestAngularVelocity.z).scale(1.0 / 20) : Vec3.ZERO;
+        }
+
+        @Override
+        public Vec3 velocity(Vec3 local) {
+            if (!(subLevel instanceof ServerSubLevel server)) {
+                return Vec3.ZERO;
+            }
+            Vec3 arm = toWorld(local).subtract(new Vec3(server.logicalPose().position().x(),
+                server.logicalPose().position().y(), server.logicalPose().position().z()));
+            return new Vec3(server.latestLinearVelocity.x, server.latestLinearVelocity.y, server.latestLinearVelocity.z)
+                .scale(1.0 / 20).add(angularVelocity().cross(arm));
         }
 
         @Override

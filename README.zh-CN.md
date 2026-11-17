@@ -43,12 +43,28 @@ Folkways 是面向 **Minecraft 1.21.1 / NeoForge** 的殖民地模组。
 | Folkways × Create | `mods/create` | 机械动力 6.0.7+；消防附加 0.2.3-beta+ 可选（其需要 Create [6.0.10,6.1)） | 列车、包裹、轨道和蓝图施工；装有消防附加时使用灭火器和消防栓水带并补液 |
 | Folkways × Modular Golems                 | `mods/golems` | 模块化傀儡 3.1.6+                                                                    | 傀儡加入居民名单，像人类居民一样承担工种                               |
 | Folkways × Kaleidoscope Cookery           | `mods/cookery`       | 森罗厨房 1.6.0+；可选森罗酒馆 1.2.0+                                                    | 居民用原生厨具种植、处理、烹饪和储存食物；装有酒馆时还会酿酒、供酒     |
-| Folkways Firearms | `mods/firearms` | 可选：TACZ 1.1.8+（含 1.2.0）；卓越前线 0.8.9.2+ 及 Kotlin for Forge [5.12.0,6) | 装有相应原生模组时，居民使用实体弹药操作枪械和火炮阵地 |
+| Folkways Firearms | `mods/firearms` | 可选：TACZ 1.1.8+（含 1.2.0）；卓越前线 [0.8.9.2,0.8.9.3) 及 Kotlin for Forge [5.12.0,6) | 装有相应原生模组时，居民使用实体弹药操作枪械和火炮阵地 |
 | Folkways × AstikorCarts Redux | `mods/carts` | AstikorCarts Redux 1.2.2+ | 搬运居民套上手推车或运输车，把仓库间的货物装在车厢里，与背包分开 |
 | Folkways × Epic Fight                     | `mods/epicfight`（jar：`folkways-epicfight`） | Epic Fight 21.17.1+；Core 和 Vanilla 须来自同一次 Folkways 构建 | 居民使用 Epic Fight 原生近战、受击动作和日常移动动画，并以 GEO 模型渲染 |
 
 升级到 Carving 时，先删除旧的 `folkways-chiselsandbits-*.jar`，再安装 `folkways-carving-*.jar`；
 新旧同时安装会重复注册并崩溃。
+
+Folkways Airline 提供机场图纸、勘测、塔台与移动着陆设施。
+RTS 飞机收到移动或盘旋指令时自行起飞，按所选高度档（贴地、巡航、高空）保持在前方地形之上，默认降落到已保存的归属机场；机场自动分配适用的空闲位置。
+跑道与滑行道图纸支持任意水平方向。跑道编号按着陆航向四舍五入到十度（正北为 36）；
+平行跑道使用 L/C/R 标识，另一端的左右标识互换。
+
+跑道由连续白色边线与两端钢琴键式入口标志界定，也支持斜向；图纸另绘制长虚线中线和成对瞄准点。
+停机坪为连续灰色道面，黄色引导线末端的三格白色停止线标识机位；道面边界和相邻机位净空决定停放尺寸。
+相连道面无需黄色中线即可滑行；路径优先靠近引导线并保持居中，按沿途最小边界净空限制机型翼展，无法到达的机位或跑道会报告缺陷。
+直升机坪用白色边框与细长白色 H（宽约为高的六成）识别，可选黄色接地圆圈。各类设施均可位于连续道面中，无需草缝。
+
+机场预订让 Superb Warfare 战斗出动（含弹射起飞）与降落按申请先后排队。未安装 Airline 时，Firearms 使用本地跑道队列。预订不写入存档。
+
+卓越前线载具在乘员离乘后仍归属原殖民地，自动释放空闲乘员也保留归属。
+载具停稳后，可在指令卡点击 **放弃归属**，让乘员离乘并放弃载具。未归属载具仅在玩家客户端正在追踪时显示并可接管；
+已归属殖民地的载具只要仍已加载，就可在任意距离指挥。已锁定的载具不能接管或指挥。
 
 ## 安装
 
@@ -66,7 +82,7 @@ Folkways 是面向 **Minecraft 1.21.1 / NeoForge** 的殖民地模组。
 
 各个 jar 的作用和依赖见[模组一览](#模组一览)。
 Firearms 仅在装有 TACZ 或卓越前线时启用相应集成，Create 仅在装有消防附加时启用消防集成。
-装有这些原生模组时，版本要求为：TACZ 1.1.8+、卓越前线 0.8.9.2+、消防附加 0.2.3-beta+。
+装有这些原生模组时，版本要求为：TACZ 1.1.8+、卓越前线 [0.8.9.2,0.8.9.3)、消防附加 0.2.3-beta+。
 直接指挥和编队属于 Core。
 
 Core 已内置 Ponder 和 Flywheel；Vanilla 已内置 Starlark 解释器，无需单独安装这三个组件。
@@ -83,7 +99,8 @@ Core 已内置 Ponder 和 Flywheel；Vanilla 已内置 Starlark 解释器，无�
 
 使用战斗功能时，打开**装备方案**页，创建方案、填好栏位并分配人类居民；把选定的武器、护甲和匹配弹药放入允许取出的已登记仓库。
 启用**巡逻**工种并为巡逻路线或哨点安排人手，即可自主守卫。需要直接指挥时，手持殖民书按 **V**，
-切换到 **RTS** 模式，在其中选中居民、编组并下达命令。
+切换到 **RTS** 模式，在其中选中居民、编组并下达命令。拆分或重组编队后，武器规则仍随居民保留；
+射程限制决定居民开火前需要接近到多远。
 
 使用损害管制时，手持殖民书按 **V**，选择**损管**，标记两个角点并保护区域，再允许居民从事**损害管制**工作。
 修复默认关闭：右键区域，点击**重制基准**并开启**补回缺失方块**。
@@ -107,15 +124,12 @@ Core 已内置 Ponder 和 Flywheel；Vanilla 已内置 Starlark 解释器，无�
 
 ## 可选集成
 
-Folkways 还可与机械动力及其消防附加、Sable、AstikorCarts Redux、Chisels & Bits、森罗厨房与森罗酒馆、
-模块化傀儡、TACZ、卓越前线、Epic Fight、GeckoLib、车万女仆、FTB Teams、JEI/EMI、Just Enough Characters、
-Shoulder Surfing Reloaded、AppleSkin、Iris、Curios 9.3.1+、Accessories 1.1.0-beta.54+、Sophisticated Storage、Sophisticated Backpacks、Storage Drawers、
-Functional Storage、Create: Storage、Tom’s Simple Storage、Colossal Chests、Mekanism QIO、
-Applied Energistics 2（AE2）和 Refined Storage 2 配合使用。各联动的内容、游戏内用法和版本要求见[模组联动](INTEGRATIONS.zh-CN.md)。
+Folkways 还可与约三十个模组配合使用，涵盖机械动力与 Create Aeronautics、烹饪、枪械与战斗、仓储网络、饰品以及客户端工具。
+各联动的内容、游戏内用法和版本要求见[模组联动](INTEGRATIONS.zh-CN.md)。
 
 ## 从源码构建
 
-准备 **Java 21 JDK** 和 **Node.js 22.14+**，在 **Linux x64** 上从仓库根目录执行锁定的构建流程：
+准备 **Java 21 JDK** 和 **Node.js 22.14+**，在 **Linux x64** 或 **Windows 11 x64**（使用 `gradlew.bat`）上从仓库根目录执行锁定的构建流程：
 
 ```sh
 npm ci
@@ -125,8 +139,7 @@ npm run setup
 
 Setup 会下载锁定版本的集成依赖，并生成 Gradle 必需的清单。
 九个模组 jar 汇总到 `build/libs/`。
-Blockwright 源码已支持 Windows，当前锁定的 npm 发布包早于这次改动。
-Windows 下可使用从源码构建的 SDK 和 `gradlew.bat`，详见[开发环境](CONTRIBUTING.zh-CN.md#开发环境)。
+Blockwright 测试 SDK 对 Windows 的支持仍处于候选阶段，详见[开发环境](CONTRIBUTING.zh-CN.md#开发环境)。
 
 开发与 PR 流程见[贡献指南](CONTRIBUTING.zh-CN.md)。
 请在上游[报告问题](https://github.com/IzakyL/folkways/issues/new?template=bug_report.yml)或[提出功能建议](https://github.com/IzakyL/folkways/issues/new?template=feature_request.yml)，

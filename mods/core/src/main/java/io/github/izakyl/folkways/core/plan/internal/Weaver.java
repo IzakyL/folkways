@@ -198,7 +198,14 @@ public final class Weaver {
     private final Map<UUID, Set<UUID>> shownBefore = new HashMap<>();
     private Set<UUID> shownHeld = Set.of();
 
+    private final UUID colony;
+
     public Weaver(Claims claims, Cooldowns cooldowns) {
+        this(claims, cooldowns, new UUID(0, 0));
+    }
+
+    public Weaver(Claims claims, Cooldowns cooldowns, UUID colony) {
+        this.colony = colony;
         this.claims = claims;
         this.cooldowns = cooldowns;
         claims.watch(dirty::add);

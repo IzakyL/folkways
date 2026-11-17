@@ -1,9 +1,10 @@
 package io.github.izakyl.folkways.vanilla.combat.weapon;
 
-import io.github.izakyl.folkways.core.combat.api.Loadouts;
-import io.github.izakyl.folkways.core.combat.api.WeaponAttack;
 import io.github.izakyl.folkways.core.colony.api.Colonies;
 import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.combat.api.Loadouts;
+import io.github.izakyl.folkways.core.combat.api.WeaponAttack;
+import io.github.izakyl.folkways.core.combat.api.WeaponRules;
 import io.github.izakyl.folkways.core.item.api.Goods;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import io.github.izakyl.folkways.core.resident.api.ResidentKinds;
@@ -19,7 +20,7 @@ import java.util.Objects;
 import java.util.Optional;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.item.CrossbowItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -43,7 +44,7 @@ public final class Weapons {
             double reach = Loadouts.using(stack)
                 .map(provider -> provider.range(stack))
                 .orElseGet(() -> adapter.range(worker, stack));
-            return reach + (ranged() ? 0 : MountedMelee.reach(worker.body()));
+            return WeaponRules.range(worker, stack, reach + (ranged() ? 0 : MountedMelee.reach(worker.body())));
         }
     }
 
@@ -134,57 +135,65 @@ public final class Weapons {
         return supplies(worker).map(supplies -> supplies.mayEngage(worker.resident().id())).orElse(true);
     }
 
-    public static boolean ranged(Worker worker, LivingEntity target) {
+    public static boolean ranged(Worker worker, Entity target) {
         return adapter(worker, target).filter(candidate -> candidate.ranged()).isPresent();
     }
 
-    public static boolean indirect(Worker worker, LivingEntity target) {
+    public static boolean indirect(Worker worker, Entity target) {
         return adapter(worker, target)
             .flatMap(candidate -> Loadouts.using(candidate.stack())
                 .map(provider -> provider.indirect(candidate.stack())))
             .orElse(false);
     }
 
-    public static boolean longRange(Worker worker, LivingEntity target) {
+    public static boolean longRange(Worker worker, Entity target) {
         return adapter(worker, target).filter(Candidate::ranged)
             .flatMap(candidate -> Loadouts.using(candidate.stack())
                 .map(provider -> provider.longRange(candidate.stack())))
             .orElse(false);
     }
 
-    public static double range(Worker worker, LivingEntity target) {
+    public static double range(Worker worker, Entity target) {
         return adapter(worker, target).map(candidate -> candidate.range(worker))
             .orElseGet(() -> 4.5 + MountedMelee.reach(worker.body()));
     }
 
-    public static Optional<WeaponAttack> open(Worker worker, LivingEntity target) {
+    public static Optional<WeaponAttack> open(Worker worker, Entity target) {
         return Optional.ofNullable(select(worker, target, null));
     }
 
     /** Holster the old weapon before opening another; only the current work node advances either attack. */
-    public static WeaponAttack select(Worker worker, LivingEntity target, WeaponAttack current) {
+    public static WeaponAttack select(Worker worker, Entity target, WeaponAttack current) {
+        if (current != null && !WeaponRules.permits(
+            worker, target, worker.body().getMainHandItem())) {
+            current.stop();
+            holster(worker);
+            current = null;
+        }
         if (worker.body() instanceof ResidentEntity body && current == null && body.hasActiveAttack()) {
             return null;
         }
-        WeaponAttack selected = select(worker, current, adapter(worker, target), false);
+        Optional<Candidate> desired = adapter(worker, target);
+        WeaponAttack selected = select(worker, target, current, desired, false);
         return selected != null || !permitted(worker) || profile(worker).isPresent() || !barehanded(worker)
-            ? selected : NativeWeaponAttack.barehanded(worker);
+            ? selected : WeaponRules.permits(
+                worker, target, ItemStack.EMPTY) ? NativeWeaponAttack.barehanded(worker) : null;
     }
 
-    public static WeaponAttack selectRanged(Worker worker, LivingEntity target, WeaponAttack current) {
-        return select(worker, current, adapter(worker, target, true), true);
+    public static WeaponAttack selectRanged(Worker worker, Entity target, WeaponAttack current) {
+        return select(worker, target, current, adapter(worker, target, true), true);
     }
 
-    public static double rangedRange(Worker worker, LivingEntity target) {
+    public static double rangedRange(Worker worker, Entity target) {
         return adapter(worker, target, true).map(candidate -> candidate.range(worker)).orElse(0.0);
     }
 
-    public static boolean rangedIndirect(Worker worker, LivingEntity target) {
+    public static boolean rangedIndirect(Worker worker, Entity target) {
         return adapter(worker, target, true).flatMap(candidate -> Loadouts.using(candidate.stack())
             .map(provider -> provider.indirect(candidate.stack()))).orElse(false);
     }
 
-    private static WeaponAttack select(Worker worker, WeaponAttack current, Optional<Candidate> desired,
+    private static WeaponAttack select(Worker worker, Entity target, WeaponAttack current, Optional<Candidate> desired,
                                         boolean rangedOnly) {
         if (!(worker.body() instanceof ResidentEntity body) || !permitted(worker)) {
             if (current != null) {
@@ -195,6 +204,7 @@ public final class Weapons {
         }
         if (current != null && current.state() != WeaponAttack.State.STOPPED
             && body.isActiveAttack(current)
+            && WeaponRules.permits(worker, target, body.getMainHandItem())
             && (profile(worker).isEmpty() || desired.filter(candidate ->
                 candidate.adapter().accepts(body.getMainHandItem())
                     && Goods.matches(body.getMainHandItem(), candidate.items())).isPresent())) {
@@ -208,7 +218,8 @@ public final class Weapons {
             ItemStack stack = worker.pack().getItem(slot);
             for (Registered entry : registered) {
                 WeaponAdapter adapter = entry.adapter();
-                if (!adapter.accepts(stack) || rangedOnly && !adapter.ranged()
+                if (!WeaponRules.permits(worker, target, stack)
+                    || !adapter.accepts(stack) || rangedOnly && !adapter.ranged()
                     || desired.isPresent() && (!desired.get().adapter().equals(adapter)
                         || !Goods.matches(stack, desired.get().items()))
                     || profile(worker).isPresent() && desired.isEmpty()
@@ -227,12 +238,14 @@ public final class Weapons {
         return null;
     }
 
-    private static Optional<Candidate> adapter(Worker worker, LivingEntity target) {
+    private static Optional<Candidate> adapter(Worker worker, Entity target) {
         return adapter(worker, target, false);
     }
 
-    private static Optional<Candidate> adapter(Worker worker, LivingEntity target, boolean rangedOnly) {
+    private static Optional<Candidate> adapter(Worker worker, Entity target, boolean rangedOnly) {
         List<Candidate> candidates = new ArrayList<>(candidates(worker));
+        candidates.removeIf(candidate -> !WeaponRules.permitsApproach(
+            worker, target, candidate.stack()));
         if (rangedOnly) {
             candidates.removeIf(candidate -> !candidate.ranged());
         }

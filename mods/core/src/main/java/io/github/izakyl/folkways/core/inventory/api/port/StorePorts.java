@@ -194,6 +194,11 @@ public final class StorePorts {
         }
 
         @Override
+        public Optional<java.util.Set<io.github.izakyl.folkways.core.world.api.Stand>> approach(ServerLevel level) {
+            return inner.approach(level);
+        }
+
+        @Override
         public Optional<List<WorldPos>> proxyMembers() {
             return inner.proxyMembers();
         }

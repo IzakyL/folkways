@@ -403,7 +403,18 @@ function horizontalTrack(elements: Element[], view: { x: number; y: number; widt
       + "or its horizontalScrollDisplay is NEVER");
   }
   const bar = bars[0];
-  return { x: bar.x, y: Math.round(bar.y + bar.height / 2), width: bar.width };
+  // The Horizontal element includes the two arrow buttons. Only its middle child is the track;
+  // clicking the arrows moves one step, so those positions cannot calibrate the scroll range.
+  const track = elements.slice(bar.index + 1).find(element => element.depth === bar.depth + 1
+    && element.className.endsWith(".UIElement") && element.width > 0 && element.height > 0);
+  if (!track) {
+    throw new Error(`panel: no track inside horizontal scrollbar ${bar.index}`);
+  }
+  return {
+    x: track.contentX,
+    y: Math.round(track.contentY + track.contentHeight / 2),
+    width: track.contentWidth,
+  };
 }
 
 async function clickTrackAt(
@@ -450,13 +461,14 @@ export async function scrollCellIntoView(
   const ends = [(view.x - atLeft) / span, (view.x + view.width - cell.width - atLeft) / span]
     .map((fraction) => Math.min(Math.max(fraction, 0), 1))
     .sort((a, b) => a - b);
-  const wanted = (ends[0] + ends[1]) / 2;
+  let wanted = (ends[0] + ends[1]) / 2;
   evidence.fraction = wanted;
   let landed = await clickTrackAt(server, client, track, wanted, token);
   evidence.landed = landed;
   for (let nudge = 0; nudge < TRACK_NUDGES && !inside(landed); nudge++) {
     const off = landed < view.x ? view.x - landed : view.x + view.width - cell.width - landed;
     const next = Math.min(Math.max(wanted + off / span, 0), 1);
+    wanted = next;
     landed = await clickTrackAt(server, client, track, next, token);
     evidence[`nudge_${nudge}`] = { off, fraction: next, landed };
   }

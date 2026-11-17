@@ -29,7 +29,7 @@ public final class PonderIntegration {
         LessonsPage.install(PonderIntegration::shelves, PonderHint::play);
         for (String namespace : List.of("folkways_core", "folkways_vanilla", "folkways_create", "folkways_cookery",
                 "folkways_firearms", "folkways_carts", "folkways_carving", "folkways_golems",
-                "folkways_epicfight")) {
+                "folkways_epicfight", "folkways_airline")) {
             PonderIndex.addPlugin(new FolkwaysPonderPlugin(namespace));
         }
     }

@@ -339,9 +339,7 @@ if (combat) {
     var mode = type.getDeclaredField("attackMoveMode");
     mode.setAccessible(true);
     out.put("attackMode", mode.getBoolean(handler));
-    var label = type.getDeclaredMethod("movementMode");
-    label.setAccessible(true);
-    out.put("modeLabel", ((net.minecraft.network.chat.Component) label.invoke(handler)).getString());
+    out.put("modeLabel", mode.getBoolean(handler) ? "Attack move" : "Move");
     var options = ((net.minecraft.network.chat.contents.TranslatableContents)
         handler.cues().get(1).does().getContents()).getArgs();
     out.put("modeColors", java.util.Arrays.stream(options)
@@ -360,16 +358,11 @@ if (combat) {
     var pressed = cards.getClass().getDeclaredField("PRESSED");
     pressed.setAccessible(true);
     for (var hit : (List<?>) hitsField.get(cards)) {
-        var actionMethod = hit.getClass().getDeclaredMethod("action");
-        actionMethod.setAccessible(true);
-        var action = actionMethod.invoke(hit);
-        var kindMethod = action.getClass().getDeclaredMethod("kind");
-        kindMethod.setAccessible(true);
         var row = new LinkedHashMap<String, Object>();
-        row.put("kind", kindMethod.invoke(action).toString());
-        var slot = action.getClass().getDeclaredMethod("slot");
+        row.put("kind", "GROUP");
+        var slot = hit.getClass().getDeclaredMethod("slot");
         slot.setAccessible(true);
-        row.put("slot", slot.invoke(action));
+        row.put("slot", slot.invoke(hit));
         var texture = hit.getClass().getDeclaredMethod("texture");
         texture.setAccessible(true);
         row.put("texture", texture.invoke(hit) == pressed.get(null) ? "pressed" : "other");

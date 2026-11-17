@@ -5,6 +5,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtOps;
@@ -20,6 +21,7 @@ public final class Pages {
 
     // The colony a player may act for through the book in hand.
     private static Function<ServerPlayer, Optional<Colony>> authority = player -> Optional.empty();
+    private static Function<Player, Optional<BlockPos>> site = player -> Optional.empty();
     private static Consumer<ResourceLocation> opening = page -> {};
 
     private Pages() {
@@ -41,6 +43,15 @@ public final class Pages {
 
     public static Optional<Colony> colonyOf(Player player) {
         return player instanceof ServerPlayer serverPlayer ? authority.apply(serverPlayer) : Optional.empty();
+    }
+
+    public static void installSiteContext(Function<Player, Optional<BlockPos>> installed) {
+        site = Objects.requireNonNull(installed);
+    }
+
+    /** The fixed block whose page the current colony panel is showing, if any. */
+    public static Optional<BlockPos> siteOf(Player player) {
+        return site.apply(player);
     }
 
     public static Optional<ServerLevel> levelOf(Player player) {

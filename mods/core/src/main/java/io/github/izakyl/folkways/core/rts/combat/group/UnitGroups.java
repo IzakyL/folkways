@@ -1,13 +1,16 @@
 package io.github.izakyl.folkways.core.rts.combat.group;
 
-import io.github.izakyl.folkways.core.combat.api.Commands;
 import io.github.izakyl.folkways.core.base.persist.Reader;
 import io.github.izakyl.folkways.core.base.persist.Writer;
 import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.combat.api.Commands;
+import io.github.izakyl.folkways.core.combat.api.Vehicles;
+import io.github.izakyl.folkways.core.combat.api.WeaponRules;
 import io.github.izakyl.folkways.core.resident.api.Bodies;
 import io.github.izakyl.folkways.core.resident.api.Body;
-import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.core.rts.combat.command.ResidentCommands;
+import io.github.izakyl.folkways.core.rts.combat.control.CombatSelectionOwnership;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -19,7 +22,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.Entity;
 
 /** Colony-owned actual membership; player shortcut selections belong to the RTS client. */
 public final class UnitGroups {
@@ -28,6 +31,17 @@ public final class UnitGroups {
     final ResidentCommands commands;
     private final Map<UUID, UnitGroup> groups = new LinkedHashMap<>();
     private final Map<UUID, UnitGroup> membership = new LinkedHashMap<>();
+    private final Map<UUID, Map<String, WeaponRules.Rule>> residentRules = new LinkedHashMap<>();
+
+    public Map<String, WeaponRules.Rule> weaponRules(UUID resident) {
+        return residentRules.getOrDefault(resident, Map.of());
+    }
+
+    void weaponRule(UUID resident, String weapon, WeaponRules.Rule rule) {
+        var rules = new LinkedHashMap<>(weaponRules(resident));
+        rules.put(weapon, rule);
+        residentRules.put(resident, Map.copyOf(rules));
+    }
 
     UnitGroups(Colony colony, MinecraftServer server) {
         this.colony = colony;
@@ -37,6 +51,10 @@ public final class UnitGroups {
         Reader kept = Reader.of(colony.kept(GroupContent.ID));
         if (kept.keys().isEmpty()) {
             return;
+        }
+        for (Reader saved : kept.children("residentRules")) {
+            saved.uuid("id").filter(roster::contains).ifPresent(id ->
+                saved.blob("rules").ifPresent(rules -> residentRules.put(id, WeaponRules.read(rules))));
         }
         for (Reader saved : kept.requiredChildren("groups")) {
             saved.uuid("id")
@@ -71,6 +89,26 @@ public final class UnitGroups {
     public Optional<UnitGroup> ofResident(UUID resident) {
         requireServerThread();
         return Optional.ofNullable(membership.get(resident));
+    }
+
+    /** Vehicle routes share the selected-unit ownership and shortcut lifetime. */
+    public Vehicles.Result commandVehicle(ServerPlayer player, Entity vehicle, Vehicles.Order order,
+                                          boolean append, int cycle) {
+        requireServerThread();
+        var ownership = CombatSelectionOwnership.of(colony);
+        if (!ownership.selectedVehicle(player, vehicle)) {
+            return Vehicles.Result.refused("unauthorized");
+        }
+        var provider = Vehicles.of(vehicle).orElseThrow();
+        Vehicles.Result result = append
+            ? provider.appendPoint(vehicle, order.points().getFirst(), order.action() == Vehicles.Action.ATTACK_MOVE)
+            : cycle >= 0 ? provider.cycle(vehicle, cycle) : provider.order(vehicle, order);
+        if (result.accepted()) {
+            var route = provider.status(vehicle).route();
+            ownership.trackVehicle(player, vehicle, new Vehicles.Order(order.action(), route.points(),
+                route.cycleStart(), order.target(), order.airport()));
+        }
+        return result;
     }
 
     /** A client selection becomes actual membership only after its complete command is accepted. */
@@ -149,7 +187,7 @@ public final class UnitGroups {
     }
 
     /** A complete existing squad keeps its identity; a partial selection becomes one new actual squad. */
-    public UnitGroup attackSelection(List<Body> residents, Mob target, ServerPlayer commander) {
+    public UnitGroup attackSelection(List<Body> residents, Entity target, ServerPlayer commander) {
         requireServerThread();
         List<Body> people = selection(residents);
         UnitGroup group = exactSelection(people).orElseGet(() -> detachedSelection(people));
@@ -322,10 +360,18 @@ public final class UnitGroups {
         colony.keep(
             GroupContent.ID,
             Writer.of()
+            .children("residentRules", residentRules.entrySet(), entry -> {
+                var row = Writer.of().uuid("id", entry.getKey()).tag();
+                row.put("rules", WeaponRules.write(entry.getValue()));
+                return row;
+            })
             .children(
             "groups",
             groups.values(),
-            group -> Writer.of().uuid("id", group.id()).uuids("members", group.members).tag())
+            group -> {
+                var row = Writer.of().uuid("id", group.id()).uuids("members", group.members).tag();
+                return row;
+            })
             .tag());
     }
 

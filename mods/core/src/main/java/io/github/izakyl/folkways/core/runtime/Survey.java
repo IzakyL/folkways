@@ -318,7 +318,11 @@ final class Survey {
                     transportStores.add(where);
                 }
                 refused.put(where, reading.refused());
-                around.container(where, takes ? reading.approach().taking() : Set.of(), reading.approach().putting());
+                if (reading.approach().declared()) {
+                    around.declared(where, takes ? reading.approach().taking() : Set.of(), reading.approach().putting());
+                } else {
+                    around.container(where, takes ? reading.approach().taking() : Set.of(), reading.approach().putting());
+                }
             }
         }
         stock = Stock.observed(holdings, rooms, rules, refused).supplied(supplied).direct(direct);

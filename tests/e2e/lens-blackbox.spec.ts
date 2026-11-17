@@ -40,7 +40,8 @@ const CARD_GROWTH_CAP = 6.0;
 const CARD_MAX_WIDTH_PX = 160;
 const EYE_HEIGHT = 1.62;
 
-const FARM_RGB = [0.559, 0.92, 0.35] as const;
+// The farm delegation is folkways_vanilla:farm (hue 190), after the namespace split.
+const FARM_RGB = [0.3496, 0.824933, 0.92] as const;
 const CONTAINER_RGB = [0.3, 0.6, 0.95] as const;
 const SHADE_FACTORS = [1.0, 0.72];
 

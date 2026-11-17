@@ -1,11 +1,12 @@
 package io.github.izakyl.folkways.core.rts.combat.command;
 
+import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.colony.api.Colonies;
 import io.github.izakyl.folkways.core.colony.api.KitRules;
+import io.github.izakyl.folkways.core.combat.api.Commands;
+import io.github.izakyl.folkways.core.combat.api.Vehicles;
 import io.github.izakyl.folkways.core.extension.api.Declaring;
 import io.github.izakyl.folkways.core.resident.api.Bodies;
-import io.github.izakyl.folkways.core.combat.api.Commands;
-import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
@@ -39,15 +40,18 @@ public final class CommandContent {
             });
     }
 
-    static boolean defeated(Mob target) {
+    static boolean defeated(Entity target) {
         // isAlive also becomes false for a healthy discarded, unloaded or transferred entity.
-        return target.isDeadOrDying() || target.getRemovalReason() == Entity.RemovalReason.KILLED;
+        return target instanceof Mob mob && mob.isDeadOrDying()
+            || target.getRemovalReason() == Entity.RemovalReason.KILLED;
     }
 
     @SubscribeEvent
     public static void left(EntityLeaveLevelEvent event) {
         if (event.getLevel() instanceof ServerLevel level) {
-            if (event.getEntity() instanceof Mob target) {
+            if (event.getEntity() instanceof Mob
+                || Vehicles.of(event.getEntity()).isPresent()) {
+                Entity target = event.getEntity();
                 Colonies.all(level.getServer())
                     .forEach(
                     colony ->

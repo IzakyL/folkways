@@ -311,6 +311,23 @@ public final class Panel {
                 refusals.add(holder.getKey() + " (." + holder.getValue() + "): " + message(refused));
             }
         }
+        // A vanilla screen can carry a ModularUI as one of its widgets, as the overhead view's RTS unit window does.
+        if (screen instanceof net.minecraft.client.gui.screens.Screen vanilla) {
+            for (Object child : vanilla.children()) {
+                if (!child.getClass().getName().endsWith("ModularUI$ModularUIWidget")) {
+                    continue;
+                }
+                try {
+                    Object ui = child.getClass().getMethod("getModularUI").invoke(child);
+                    if (ui != null) {
+                        return new Located(screen.getClass().getName(), "widget", ui, refusals);
+                    }
+                } catch (Exception | LinkageError refused) {
+                    refusals.add("widget: " + message(refused));
+                }
+            }
+            refusals.add("widget: no ModularUI widget among the screen's children");
+        }
         return new Located(screen.getClass().getName(), null, null, refusals);
     }
 

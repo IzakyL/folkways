@@ -1,6 +1,7 @@
 package io.github.izakyl.folkways.core.combat.api;
 
 import java.util.function.BooleanSupplier;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.phys.Vec3;
 
@@ -22,6 +23,14 @@ public interface WeaponAttack {
 
     /** Queue one attack. Ticks and discharge recheck hostility or the explicit lease, plus sight and range. */
     boolean fire(LivingEntity target);
+
+    default boolean fireEntity(Entity target) {
+        return target instanceof LivingEntity living && fire(living);
+    }
+
+    default boolean explicitEntityTarget(Entity target, BooleanSupplier authorized) {
+        return target instanceof LivingEntity living && explicitTarget(living, authorized);
+    }
 
     /** Opt in to firing at an immutable observation; recheck permission immediately before every discharge. */
     default boolean spottedTarget(LivingEntity target, Vec3 observed, BooleanSupplier authorized) {

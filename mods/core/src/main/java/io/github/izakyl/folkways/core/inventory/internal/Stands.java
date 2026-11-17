@@ -88,6 +88,15 @@ public final class Stands {
             return this;
         }
 
+        /** Port-declared approaches may cross realms; ordinary container footings may not. */
+        public Builder declared(Stash where, Collection<Stand> take, Collection<Stand> put) {
+            taking.computeIfAbsent(where, key -> new LinkedHashSet<>()).addAll(take);
+            putting.computeIfAbsent(where, key -> new LinkedHashSet<>()).addAll(put);
+            around.computeIfAbsent(where, key -> new LinkedHashSet<>()).addAll(take);
+            around.get(where).addAll(put);
+            return this;
+        }
+
         public Stands done() {
             Stands stands = new Stands(around);
             stands.taking = sealed(taking);

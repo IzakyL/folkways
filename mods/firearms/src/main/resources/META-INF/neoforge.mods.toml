@@ -55,7 +55,7 @@ config = "folkways-firearms-tacz.mixins.json"
 modId = "superbwarfare"
 type = "optional"
 reason = "Enables resident firearms and emplacements from Superb Warfare."
-versionRange = "[0.8.9.2,)"
+versionRange = "[0.8.9.2,0.8.9.3)"
 ordering = "AFTER"
 side = "BOTH"
 

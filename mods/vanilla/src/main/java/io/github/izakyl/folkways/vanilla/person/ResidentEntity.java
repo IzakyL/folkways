@@ -219,10 +219,29 @@ public class ResidentEntity extends PathfinderMob implements Body {
     public void onRemovedFromLevel() {
         endCombat();
         super.onRemovedFromLevel();
-        if (level() instanceof ServerLevel serverLevel) {
-            colonyId().flatMap(id -> Colonies.of(serverLevel.getServer(), id))
-                .ifPresent(colony -> colony.removed(getUUID(), getRemovalReason()));
-        }
+    }
+
+    @Override
+    public void setLevelCallback(net.minecraft.world.level.entity.EntityInLevelCallback callback) {
+        super.setLevelCallback(new net.minecraft.world.level.entity.EntityInLevelCallback() {
+            private boolean removed;
+
+            @Override
+            public void onMove() {
+                callback.onMove();
+            }
+
+            @Override
+            public void onRemove(RemovalReason reason) {
+                callback.onRemove(reason);
+                // Chunk tracking stops before setRemoved; this callback receives every actual removal.
+                if (!removed && level() instanceof ServerLevel serverLevel) {
+                    removed = true;
+                    colonyId().flatMap(id -> Colonies.of(serverLevel.getServer(), id))
+                        .ifPresent(colony -> colony.removed(getUUID(), reason));
+                }
+            }
+        });
     }
 
     @Override

@@ -65,12 +65,34 @@ This repository builds nine mods, one per directory under `mods/`. Each ships as
 | Folkways × Create | `mods/create` | Create 6.0.7+; FireFighting Additions 0.2.3-beta+ optional (requires Create [6.0.10,6.1)) | Trains, parcels, track and schematics; with the addon, residents fight fires with extinguishers and hydrant hoses and refill extinguishers |
 | Folkways × Modular Golems                 | `mods/golems` | Modular Golems 3.1.6+                                                              | Golems join the roster and take trades like people                                                                              |
 | Folkways × Kaleidoscope Cookery           | `mods/cookery`       | Kaleidoscope Cookery 1.6.0+; Kaleidoscope Tavern 1.2.0+ optional                    | Residents grow, prepare, cook and store food with its native appliances; with Tavern, they make and serve wine                  |
-| Folkways Firearms | `mods/firearms` | Optional: TACZ 1.1.8+ (including 1.2.0); Superb Warfare 0.8.9.2+ and Kotlin for Forge [5.12.0,6) | Residents use native firearms and emplacements with physical ammunition when their target mod is installed |
+| Folkways Firearms | `mods/firearms` | Optional: TACZ 1.1.8+ (including 1.2.0); Superb Warfare [0.8.9.2,0.8.9.3) and Kotlin for Forge [5.12.0,6) | Residents use native firearms and emplacements with physical ammunition when their target mod is installed |
 | Folkways × AstikorCarts Redux | `mods/carts` | AstikorCarts Redux 1.2.2+ | Haulers hitch hand and supply carts and carry store deliveries in the cart storage, separately from their packs |
 | Folkways × Epic Fight                     | `mods/epicfight` (jar: `folkways-epicfight`) | Epic Fight 21.17.1+; Core and Vanilla from the same Folkways build | Residents use native Epic Fight melee, hit reactions, everyday movement and GEO rendering |
 
 When updating to Carving, remove the old `folkways-chiselsandbits-*.jar` before installing
 `folkways-carving-*.jar`; keeping both causes duplicate registrations and a crash.
+
+Folkways Airline provides airport patterns, surveys, towers and moving landing facilities. RTS aircraft take off on their own when ordered to move or loiter, hold
+a chosen altitude band (Low, Cruise or High) above the terrain ahead, and land at their saved home airport by
+default; airports assign suitable free surfaces automatically.
+Runways and taxiway patterns accept any level heading. Runway numbers follow the landing heading rounded
+to ten degrees (north is 36); parallel runways receive L/C/R designators, mirrored at the opposite end.
+
+Runways are delimited by continuous white edge lines and piano-key threshold stripes at both ends, including on
+oblique headings. The drawing adds long centreline dashes and paired aiming points. Aprons are continuous gray
+pavement: a yellow lead-in ending at a three-block white stop line identifies each stand. Clearance to pavement
+boundaries and neighbouring stands determines parking dimensions. Connected pavement is
+taxiable without a yellow centreline; routes prefer guide lines and central clearance, and admit aircraft by the
+minimum boundary clearance along the route. Unreachable stands or runways are reported. Helipads use a white
+border and slender white H (width about 60% of height), with an optional yellow touchdown circle. All facilities
+can share continuous pavement; grass gaps are unnecessary.
+
+Airport bookings queue Superb Warfare combat departures (including catapults) and landings in request order. Without Airline, Firearms keeps a local runway queue. Bookings are not saved.
+
+Colony ownership of a Superb Warfare vehicle remains after crew dismount, including automatic idle release.
+Use **Release ownership** on its command card to disembark and give it up while grounded. Unowned vehicles appear
+and can be claimed only while the player's client tracks them; colony-owned vehicles remain commandable at any
+distance while loaded. Locked vehicles cannot be claimed or commanded.
 
 ## Installation
 
@@ -92,7 +114,7 @@ Install **Core and Vanilla**, then add extensions for the mods you use.
 See [Mods](#mods) for what each jar adds and what it needs.
 Firearms activates each integration only when TACZ or Superb Warfare is installed;
 Create activates firefighting only when FireFighting Additions is installed.
-When present, they need TACZ 1.1.8+, Superb Warfare 0.8.9.2+ and FireFighting Additions
+When present, they need TACZ 1.1.8+, Superb Warfare [0.8.9.2,0.8.9.3) and FireFighting Additions
 0.2.3-beta+. Direct commands and squads are part of Core.
 
 Ponder and Flywheel are bundled in Core; the Starlark interpreter is bundled in
@@ -114,7 +136,8 @@ For combat, open **Equipment profiles**, create a profile, fill its slots and as
 Keep the selected weapons, armor and matching ammunition in registered stores
 that allow taking items. Enable the **Patrol** trade and staff patrol routes
 or sentry posts for autonomous defense. For direct control, hold the Colony Book, press **V**
-and select **RTS** to group and command residents.
+and select **RTS** to group and command residents. Weapon rules stay with residents when squads are split or regrouped;
+range limits determine how close they approach before firing.
 
 For damage control, hold the Colony Book, press **V** and choose **Damage Control**.
 Mark two corners, protect the area and allow residents to work in **Damage control**.
@@ -144,19 +167,14 @@ Small arrows show direction; the view covers 48 blocks and reports truncation ab
 
 ## Optional integrations
 
-Folkways also works with Create and its FireFighting Additions, Sable, AstikorCarts Redux,
-Chisels & Bits, Kaleidoscope Cookery and Tavern, Modular Golems, TACZ, Superb Warfare,
-Epic Fight, GeckoLib, Touhou Little Maid, FTB Teams, JEI/EMI, Just Enough Characters,
-Shoulder Surfing Reloaded, AppleSkin, Iris,
-Curios 9.3.1+, Accessories 1.1.0-beta.54+, Sophisticated Storage, Sophisticated Backpacks, Storage Drawers, Functional Storage,
-Create: Storage, Tom’s Simple Storage, Colossal Chests, Mekanism QIO, Applied Energistics 2
-(AE2) and Refined Storage 2. See [Integrations](INTEGRATIONS.md) for
-what each one adds, how to use it in game and the versions it needs.
+Folkways also works with about thirty other mods, from Create and Create Aeronautics, cooking, firearms and combat mods to
+storage networks, accessories and client tools. See [Integrations](INTEGRATIONS.md) for what each one
+adds, how to use it in game and the versions it needs.
 
 ## Building from source
 
-With a **Java 21 JDK** and **Node.js 22.14+**, run the locked setup on **Linux x64**
-from the repository root:
+With a **Java 21 JDK** and **Node.js 22.14+**, run the locked setup on **Linux x64** or
+**Windows 11 x64** (use `gradlew.bat` there) from the repository root:
 
 ```sh
 npm ci
@@ -166,9 +184,8 @@ npm run setup
 
 Setup downloads the pinned integration dependencies and writes the manifest
 required by Gradle. The nine mod jars are collected in `build/libs/`.
-Blockwright's native Windows support is available in its source tree; the pinned
-npm release predates it. For Windows builds using a source-built SDK and
-`gradlew.bat`, see [development setup](CONTRIBUTING.md#development-setup).
+Windows support in the Blockwright test SDK is a candidate; see
+[development setup](CONTRIBUTING.md#development-setup).
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the development and pull request workflow.
 [Report bugs](https://github.com/IzakyL/folkways/issues/new?template=bug_report.yml)

@@ -24,9 +24,14 @@ public final class WarfareMixinPlugin extends FolkwaysMixinPlugin {
             return List.of();
         }
         var mixins = new ArrayList<>(List.of("ArtilleryAimSourceMixin", "VehicleFireMixin", "VehicleQueueMixin",
-            "ProjectileReceiptMixin", "MortarFireMixin", "CustomExplosionMixin", "ExplosionStartMixin"));
+            "VehicleMotionMixin", "VehicleTargetMixin", "CatapultMotionMixin", "CatapultRailMixin", "ProjectileReceiptMixin",
+            "MortarFireMixin", "CustomExplosionMixin", "ExplosionStartMixin"));
         if (FMLEnvironment.dist.isClient()) {
             mixins.add("ArtilleryAimMixin");
+            if (LoadingModList.get().getModFileById("iris") != null
+                && LoadingModList.get().getModFileById("simplebedrockmodel") != null) {
+                mixins.add("BedrockTriangleWriterMixin");
+            }
         }
         return mixins;
     }

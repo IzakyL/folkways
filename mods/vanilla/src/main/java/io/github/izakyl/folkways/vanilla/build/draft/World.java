@@ -51,7 +51,7 @@ public interface World {
                 if (!level.hasChunkAt(x, z)) {
                     return OptionalInt.empty();
                 }
-                return OptionalInt.of(level.getHeight(Heightmap.Types.MOTION_BLOCKING, x, z));
+                return OptionalInt.of(level.getHeight(Heightmap.Types.WORLD_SURFACE, x, z));
             }
 
             @Override

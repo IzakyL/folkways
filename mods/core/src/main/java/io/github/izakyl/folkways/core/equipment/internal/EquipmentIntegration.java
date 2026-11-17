@@ -1,6 +1,8 @@
 package io.github.izakyl.folkways.core.equipment.internal;
 
 import io.github.izakyl.folkways.core.colony.api.Equipment;
+import io.github.izakyl.folkways.core.combat.api.VehicleProfiles;
+import io.github.izakyl.folkways.core.combat.internal.VehicleProfilePage;
 import io.github.izakyl.folkways.core.colony.api.PackKeeps;
 import io.github.izakyl.folkways.core.equipment.api.EquipmentKits;
 import io.github.izakyl.folkways.core.equipment.api.EquipmentProfiles;
@@ -38,6 +40,9 @@ public final class EquipmentIntegration {
             });
         });
         bus.addListener(Registering.class, event -> {
+            event.enrollment(VehicleProfiles.ID, new Enrollment(List.of(), Schema.none(), List.of(
+                PageKind.boarded(VehicleProfiles.ID, "combat.vehicle.profile",
+                    ResourceLocation.withDefaultNamespace("minecart")).inNavigation())));
             event.enrollment(EquipmentProfiles.ID, new Enrollment(List.of(), Schema.none(), List.of(
                 PageKind.boarded(EquipmentProfiles.ID, "folkways.equipment.title",
                     ResourceLocation.withDefaultNamespace("armor_stand")).inNavigation())));
@@ -46,6 +51,7 @@ public final class EquipmentIntegration {
         });
         bus.addListener(RegisteringUi.class, event -> {
             event.page(EquipmentProfiles.ID, EquipmentPage::new);
+            event.page(VehicleProfiles.ID, VehicleProfilePage::new);
             event.inlay(Bay.RESIDENT, EquipmentProfiles.ID, EquipmentInlay::new);
         });
     }

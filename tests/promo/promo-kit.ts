@@ -1,3 +1,4 @@
+import { seedInstance } from "@izakyl/blockwright-client";
 import { launchPair, type E2EPair } from "../shared/harness/pair";
 import { camera, input, player, type MinecraftClient, type MinecraftServer } from "@izakyl/blockwright-minecraft";
 import { stillWorld, walkSpeed } from "@izakyl/blockwright-cinema";
@@ -6,7 +7,7 @@ import { VisualRun } from "../shared/capture/visual-kit";
 import { outPath, tracePath } from "../shared/harness/out-paths";
 import { seedShaders, type Patch as ShaderPatch } from "../shared/capture/shaders";
 import { placeServerModels, reloadServerModels, type ModelManifest } from "../shared/ui/model-folder";
-import { seededOffThreadServer } from "../shared/harness/mod-settings";
+import { markSeeded, seededOffThreadServer } from "../shared/harness/mod-settings";
 import { safeAction, tryCommand } from "../shared/harness/bw-helpers";
 import { newRunId } from "../shared/harness/run-id";
 
@@ -28,17 +29,33 @@ export type SeededModel = { source: string; name: string; manifest?: ModelManife
 export async function launchPromoPair(
   scope: string,
   seed?: { models?: SeededModel[]; config?: string; zones?: Record<string, number>;
+    /** Skip shader seeding for films that use vanilla rendering. */
+    shaders?: boolean;
+    /** Files copied into each instance before launch: destination path to source path. */
+    files?: { client?: Record<string, string>; server?: Record<string, string> };
     /** The shader pack's own settings and further edits to its sources, over the ones every film takes. */
     look?: { options: Record<string, string | number>; patches?: ShaderPatch[] } },
 ): Promise<PromoPair> {
   const clientInstance = `promo-${scope}-client-${RUN_ID}`;
   const serverInstance = `promo-${scope}-server-${RUN_ID}`;
-  seedShaders(clientInstance, undefined, seed?.look?.options, seed?.look?.patches);
+  if (seed?.shaders !== false) {
+    seedShaders(clientInstance, undefined, seed?.look?.options, seed?.look?.patches);
+  } else {
+    seedInstance(clientInstance, { fresh: true });
+    markSeeded(clientInstance);
+  }
+  seededOffThreadServer(serverInstance, seed?.zones);
+  for (const [role, instance] of [["client", clientInstance], ["server", serverInstance]] as const) {
+    for (const [destination, source] of Object.entries(seed?.files?.[role] ?? {})) {
+      seedInstance(instance).copy(source, destination);
+      markSeeded(instance);
+    }
+  }
   const pair = await launchPair({
     config: seed?.config ?? PROMO_CONFIG,
     server: {
       trace: tracePath("promo", `${scope}-server`),
-      instance: seededOffThreadServer(serverInstance, seed?.zones),
+      instance: serverInstance,
     },
     client: { trace: tracePath("promo", `${scope}-client`), instance: clientInstance },
   });

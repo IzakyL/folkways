@@ -19,6 +19,13 @@ export type RigMove = {
   carry?: boolean;
   /** Springiness of the eye; higher keeps closer to the path. */
   omega?: number;
+  /**
+   * Glides eye and aim from where the last move left them into this move's framing over this many seconds, eased
+   * in and out, before the spring takes over: one continuous camera instead of a cut.
+   */
+  glide?: number;
+  /** The field of view to reach, eased across the glide (or at once without one). */
+  fov?: number;
   /** Scrolls the debug card from `from` to `to` gui px over `seconds`, starting `delay` seconds into the move. */
   scroll?: { from: number; to: number; delay: number; seconds: number };
 };
@@ -65,7 +72,12 @@ if (rig != null) {
     next.started = true;
     // A new aim turns over from where the last one looked instead of snapping.
     if (rig.lastLook != null) next.fromLook = rig.lastLook.clone();
+    next.fromEye = rig.eye.clone();
 }
+next.glide = a.has("glide") ? a.number("glide") : 0;
+if (next.glide > 0) next.blend = next.glide;
+next.fov0 = mc.options.fov().get();
+next.fov = a.has("fov") ? a.number("fov") : -1;
 next.keys = points(a.value("eye"));
 next.looks = points(a.value("look"));
 next.seconds = a.has("seconds") ? a.number("seconds") : 0;
@@ -73,8 +85,10 @@ next.carry = a.has("carry") && Boolean.TRUE.equals(a.value("carry"));
 next.omega = a.has("omega") ? a.number("omega") : 4.0;
 next.follow = entityId(mc, a.has("follow") ? String.valueOf(a.value("follow")) : null);
 next.lookAt = entityId(mc, a.has("lookAt") ? String.valueOf(a.value("lookAt")) : null);
-var offset = points(a.value("offset"));
-if (!offset.isEmpty()) next.offset = offset.get(0);
+if (a.has("offset")) {
+    var offset = a.object("offset");
+    next.offset = new double[] {offset.number("x"), offset.number("y"), offset.number("z")};
+}
 if (a.has("scroll")) {
     var s = (Map<?, ?>) a.value("scroll");
     next.scrollFrom = ((Number) s.get("from")).doubleValue();
@@ -92,7 +106,8 @@ next.previous = next.t0;
 rig = next;
 Rig held = next;
 View.holdCamera(CameraOverride.of(Boolean.FALSE, partial -> held.frame(partial)));
-return Map.of("moving", true, "keys", next.keys.size(), "carry", next.carry);`,
+return Map.of("moving", true, "keys", next.keys.size(), "carry", next.carry,
+    "offset", List.of(next.offset[0], next.offset[1], next.offset[2]));`,
     members: `
 private static Rig rig;
 private static java.lang.reflect.Field scrollField;
@@ -140,7 +155,8 @@ private static final class Rig {
     final double[] eye = new double[3], vel = new double[3];
     List<double[]> keys = List.of(), looks = List.of();
     double[] offset = {0, 2, -4};
-    double[] fromLook, lastLook;
+    double[] fromLook, lastLook, fromEye;
+    double glide, fov, fov0;
     double blend = 1.2;
     double seconds, omega;
     boolean carry, started, scrolling;
@@ -165,7 +181,15 @@ private static final class Rig {
         }
         double dt = Math.min(0.1, (now - previous) / 1.0e9);
         previous = now;
-        if (!started) {
+        if (glide > 0 && fromEye != null && elapsed < glide) {
+            // The glide sets the eye itself, and leaves the spring the speed it ends with.
+            double g = ease(elapsed / glide);
+            for (int k = 0; k < 3; k++) {
+                double was = eye[k];
+                eye[k] = fromEye[k] + (want[k] - fromEye[k]) * g;
+                if (dt > 0) vel[k] = (eye[k] - was) / dt;
+            }
+        } else if (!started) {
             System.arraycopy(want, 0, eye, 0, 3);
             started = true;
         } else if (dt > 0) {
@@ -190,6 +214,10 @@ private static final class Rig {
             for (int k = 0; k < 3; k++) target[k] = fromLook[k] + (target[k] - fromLook[k]) * b;
         }
         lastLook = target.clone();
+        if (fov > 0) {
+            int lens = (int) Math.round(fov0 + (fov - fov0) * (glide > 0 ? ease(elapsed / glide) : 1));
+            if (mc.options.fov().get() != lens) mc.options.fov().set(lens);
+        }
         double dx = target[0] - eye[0], dy = target[1] - eye[1], dz = target[2] - eye[2];
         yaw = (float) Math.toDegrees(Math.atan2(-dx, dz));
         pitch = (float) -Math.toDegrees(Math.atan2(dy, Math.hypot(dx, dz)));

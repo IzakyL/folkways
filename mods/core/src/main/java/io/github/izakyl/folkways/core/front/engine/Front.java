@@ -47,6 +47,7 @@ public final class Front {
         FolkwaysItems.register(modBus);
         FolkwaysPlayerAttachments.register(modBus);
         ColonyShell.register();
+        Pages.installSiteContext(ColonyShell::siteOf);
         modBus.addListener(RegisteringUi.class, PageKinds::registerUi);
         modBus.addListener(BuildCreativeModeTabContentsEvent.class, event -> {
             if (event.getTabKey() == CreativeModeTabs.TOOLS_AND_UTILITIES) {

@@ -38,7 +38,7 @@ for (const stage of twins()) test(stage.title("book feedback: bounded stock sear
   let pair: E2EPair | undefined; const evidence: Record<string, any> = { stage: stage.kind };
   const run = newRunId();
   try {
-    pair = await launchPair({ config: stage.config,
+    pair = await launchPair({ config: "blockwright.toml#" + (stage.kind === "ground" ? "cookery" : "cookery-sable"),
       server: { trace: tracePath("e2e", stage.name("book-feedback-server-" + run)), instance: seededServer(stage.name("book-feedback-server-" + run)) },
       client: { trace: tracePath("e2e", stage.name("book-feedback-client-" + run)), instance: stage.name("book-feedback-client-" + run) } });
     const { server, client } = pair;

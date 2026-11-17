@@ -20,6 +20,16 @@ public final class WorldSpaces {
         Vec3 toWorld(Vec3 local);
         Vec3 toLocal(Vec3 world);
 
+        /** World velocity at a local point, in blocks per server tick. */
+        default Vec3 velocity(Vec3 local) {
+            return Vec3.ZERO;
+        }
+
+        /** World angular velocity, in radians per server tick. */
+        default Vec3 angularVelocity() {
+            return Vec3.ZERO;
+        }
+
         default Vec3 toWorld(Vec3 local, float partialTick) {
             return toWorld(local);
         }

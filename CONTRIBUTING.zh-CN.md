@@ -25,12 +25,10 @@
 | Java            | JDK 21                                                   |
 | Node.js         | 22.14 或更新版本                                         |
 | Gradle          | 使用仓库内的 `./gradlew`，Windows 使用 `gradlew.bat`     |
-| Blockwright SDK | Linux x64 使用 npm 包；Windows 11 x64 使用源码构建的 SDK |
+| Blockwright SDK | npm 包：Linux x64，或 Windows 11 x64（候选支持）         |
 
-[Blockwright](https://github.com/IzakyL/blockwright) 源码已实现原生 Windows 支持。
-本仓库锁定的 npm 包 `0.1.0-alpha.1` 发布于这次实现之前，仍声明仅支持 Linux x64，
-因此在 Windows 上直接执行 `npm ci` 会因 `EBADPLATFORM` 失败。
-本仓库的 CI 使用 Ubuntu 24.04。使用发布包时，请在 Linux x64 上从仓库根目录执行：
+本仓库锁定的 [Blockwright](https://github.com/IzakyL/blockwright) npm 包同时附带 Linux x64 与 Windows 11 x64 的原生驱动。
+本仓库的 CI 使用 Ubuntu 24.04。请从仓库根目录执行（Windows 使用 `gradlew.bat`）：
 
 ```sh
 npm ci
@@ -48,11 +46,9 @@ Gradle 编译时需要可选集成的 jar，即使某个测试环境并不加载
 小队编组和直接指挥属于 Core 的 **RTS** 模式（手持殖民书 → **V** → **RTS**）。
 命令测试夹具应使用 RTS API；装备分配使用**装备方案**页。
 
-Windows 下请按 Blockwright 的[本地构建说明](https://github.com/IzakyL/blockwright/blob/master/CONTRIBUTING.md)
-和 [Windows 环境要求](https://github.com/IzakyL/blockwright/blob/master/docs/environment.md#windows-development-candidate)
-准备兼容的源码 SDK。客户端测试需要已登录的 Windows 11 x64 桌面和支持 OpenGL 的 GPU，
-显示设备使用 `auto` 或 `gpu`。通过该 SDK 准备好 `.blockwright/mods.json` 后，使用 `gradlew.bat` 构建。
-报告测试结果时请注明 SDK 版本及平台；本地 Windows 测试与 Linux CI 是不同的验证运行。
+Windows 11 x64 目前是 Blockwright 的候选支持平台，环境要求见其 [Windows 说明](https://github.com/IzakyL/blockwright/blob/master/docs/environment.md#windows-development-candidate)。
+客户端测试需要已登录的 Windows 11 x64 桌面和支持 OpenGL 的 GPU，显示设备使用 `auto` 或 `gpu`。
+报告测试结果时请注明平台；本地 Windows 测试与 Linux CI 是不同的验证运行。
 
 ## 验证修改
 
@@ -70,65 +66,62 @@ npm run typecheck
 CI 会运行构建检查、按模组划分的 GameTests，以及真实客户端的建村冒烟测试，
 但不会运行全部客户端和素材录制套件。完整矩阵见 `.github/workflows/build.yml`。
 
-运行单个模组的 GameTests：`./gradlew --offline -PgameTestMod=<mod> runGameTestServer`，`<mod>` 为 `mods/` 下的目录名；
-扩展所联动的模组会自动加载。模组内部的子联动需单独开启：Firearms 用 `-PtaczTests=true` 或 `-PwarfareTests=true`，
-Create 用 `-PfirefightingTests=true`，Cookery 用 `-PtavernTests=true`，Carving 用 `-PcreatePlacementTests=true`。
-
-Carts GameTest 需要开启对应依赖：`./gradlew --offline -PgameTestMod=carts -PcartsTests=true runGameTestServer`。
-
-存储端口 GameTest 每次只加载一个原生模组：
+GameTests 统一使用以下模板，按需加上下表中的开关：
 
 ```sh
-./gradlew --offline -PgameTestMod=core -PstorageProfile=sophisticatedStorage runGameTestServer
-./gradlew --offline -PgameTestMod=core -PstorageProfile=sophisticatedBackpacks runGameTestServer
-./gradlew --offline -PgameTestMod=core -PstorageProfile=drawers runGameTestServer
-./gradlew --offline -PgameTestMod=core -PstorageProfile=functional runGameTestServer
-./gradlew --offline -PgameTestMod=core -PstorageProfile=createStorage runGameTestServer
-./gradlew --offline -PgameTestMod=core -PstorageProfile=toms runGameTestServer
-./gradlew --offline -PgameTestMod=core -PstorageProfile=colossal runGameTestServer
-./gradlew --offline -PgameTestMod=core -PstorageProfile=qio runGameTestServer
+./gradlew --offline -PgameTestMod=<mod> [-P<开关>=<值> ...] runGameTestServer
 ```
 
-加 `-PstorageLaborTests=true` 运行居民劳动测试；省略该参数则仅测试原生端口。
-增加 `-PstorageVanilla=false` 可验证未安装 Folkways Vanilla 时的原生端口（不可与居民测试共用）。
-对应的 Blockwright 依赖 profile 是 `storage_sophisticated`、`storage_backpacks`、`storage_drawers` 和 `storage_functional`。
+| 属性 | 启用内容 | 限制 |
+|---|---|---|
+| `gameTestMod` | 单个模组的测试套件，取值为 `mods/` 下的目录名；扩展所联动的模组会自动加载 | 省略时只启用 Core 的基础套件 |
+| `cookeryTests`、`modularGolemsTests`、`cartsTests`、`epicfightTests`、`chiselsTests` | 原生模组及其扩展的测试夹具；`cookeryTests` 还会加入 Core 与 Vanilla 的 Cookery 夹具 | `gameTestMod` 分别为 `cookery`、`golems`、`carts`、`epicfight`、`carving` 时默认开启 |
+| `taczTests`、`warfareTests` | TACZ 或卓越前线夹具（Firearms） | 默认关闭 |
+| `firefightingTests` | 消防附加夹具（Create） | 默认关闭 |
+| `tavernTests` | 森罗酒馆夹具（Cookery） | 需要 `cookeryTests` |
+| `createPlacementTests` | Create 放置夹具（Carving） | 需要 `gameTestMod=carving` |
+| `storageProfile` | 单个仓储模组：`sophisticatedStorage`、`sophisticatedBackpacks`、`drawers`、`functional`、`createStorage`、`toms`、`colossal` 或 `qio` | 仅限 Core；AE2、RS2 与存储 profile 互斥 |
+| `ae2Tests`、`rs2Tests` | Applied Energistics 2 或 Refined Storage 2 夹具 | 仅限 Core；两者互斥，也不能与存储 profile 同时使用 |
+| `storageLaborTests`、`ae2LaborTests`、`rs2LaborTests` | 在原生端口测试之外加入居民劳动测试 | 需要对应的 profile 或套件，以及 Vanilla |
+| `storageVanilla`、`ae2Vanilla`、`rs2Vanilla` | 设为 `false` 时在不装 Folkways Vanilla 的情况下测试原生端口 | 不能与劳动测试同用 |
+| `accessoryProfile` | `curios` 或 `accessories`，并加载 Sophisticated Backpacks | 仅限 Core；不加载 Core 基础套件 |
+| `accessoryCoexistence`、`accessoryCompat` | 在 Curios 旁加入真实 Accessories，或在 Accessories 中加入旧 cclayer | 只要设置即生效，与取值无关；分别搭配 `accessoryProfile=curios` 或 `accessories` |
+| `coreGameTestClasses`、`vanillaGameTestClasses` | 只编译并注册列出的 GameTest 类（逗号分隔） | — |
+| `gameTestFilter` | Airline 测试全名的正则（忽略大小写，方法名不带类名前缀） | 与 `gameTestMethods` 一起先过滤再分片 |
+| `gameTestShard` | Airline batch 分片 `i/n`，`i` 从 0 开始 | 要求 `0 <= i < n`；先过滤再分片 |
+| `gameTestMethods` | 只重跑列出的测试方法（限支持该功能的夹具） | — |
+| `gameTestNamespaces`、`gameTestDirectory` | 覆盖启用的命名空间或运行目录 | 否则每种开关组合在 `run/gametest/` 下使用独立世界 |
 
-新 profile 分别固定 Create: Storage（ausmez）1.3.8 + Create 6.0.10、Tom’s Simple Storage 2.4.2、
-Colossal Chests 1.9.1 + CyclopsCore 1.30.1、Mekanism 10.7.19.85。
-对应 Blockwright 依赖 profile 为 `storage_createStorage`、`storage_toms`、`storage_colossal`、`storage_qio`。
-先运行一次 `npm run setup` 获取固定下载，之后 Gradle 使用 `--offline`。
-独立源码集分别为 `createStorageTest`、`tomsTest`、`colossalTest`、`qioTest`；
-`-PstorageLaborTests=true` 会添加 `portsLaborTest`，验证居民经每种受支持访问点取放物品。
-Create 控制器仅支持手动存入；巨型箱墙沿用已有 point claim 账本；QIO 仪表盘复用 take/put 方块标签，不提供合成。QIO 访问点及全部驱动器须位于同一维度，
-因为 Core 在各维度分别预订库存。
+先运行一次 `npm run setup` 下载锁定的测试模组，之后 Gradle 一律使用 `--offline`。原生模组套件在
+[`blockwright.toml`](blockwright.toml) 中有对应的 Blockwright profile（`ae2`、`rs2`、`storage_<名称>`、`curios`、`accessories`）。
+GameTest profile 请串行运行以控制内存占用。
+
+Airline GameTests：`./gradlew --offline -PgameTestMod=airline runGameTestServer`。
+
+用独立服务器进程并行运行 Airline（默认 3 个）：
 
 ```sh
-./gradlew --offline :core:compileJava :core:compileCreateStorageTestJava :core:compileTomsTestJava :core:compileColossalTestJava :core:compileQioTestJava :core:compilePortsLaborTestJava
+npm run test:airline:shards -- --shards 3
+npm run test:airline:shards -- --shards 2 '-PgameTestFilter=runway.*'
 ```
 
-AE2 同样使用 Core 下的可选测试套件：
+脚本先由 Gradle 准备、编译一次并导出 Java 启动命令，再并行启动 JVM，避开 Gradle 项目锁。
+每个进程使用新的独立运行目录，自动写入 `eula.txt`，退出后删除世界。
+日志、起止时间、耗时及通过/失败汇总保留在 `build/airline-shards/`，任一分片失败即非零退出。
+额外 `-P` 参数会透传，包括 `gameTestMethods` ；
+`gameTestMod`、`gameTestShard`、`gameTestDirectory` 由脚本管理。
+每个服务器约需 6 GiB；Linux 上脚本等待可用内存达到 `6 × N + 2` GiB 后才启动。
+分片保持 batch 完整：过滤后按 timeoutTicks 之和降序排列（同权按 batch 名），
+依次分给负载最小的分片（同负载按分片号）。直接调用 Gradle 也可用 `-PgameTestShard=0/3`，
+脚本在启动服务器前结束 Gradle，因此服务器执行不会被 Gradle 锁串行化，各分片也无需重复构建准备。
+`gameTestFilter` 匹配日志中的完整测试名，如 `runwaymarkingssurveyandaircraftfit`，不带类名前缀。
+Airline GameTest 模板与局部夹具使用单独分配的场地、带测试前缀的机场名，并在成功或失败时清理资源。
+普通原生夹具共用 batch；统计服务器全局勘测预算的测试保留独占 batch，
+在测试旁注明原因。生产环境的机场注册表与交通仍按维度共享。
+需要加载大范围区块的夹具使用较小的共享 batch，限制同时驻留的区块内存。
+分片 JVM 运行期间不要重新编译：导出的启动命令会直接读取当前 worktree 的构建输出。
 
-```sh
-./gradlew --offline -PgameTestMod=core -Pae2Tests=true runGameTestServer
-./gradlew --offline -PgameTestMod=core -Pae2Tests=true -Pae2LaborTests=true runGameTestServer
-./gradlew --offline -PgameTestMod=core -Pae2Tests=true -Pae2Vanilla=false runGameTestServer
-```
-
-Refined Storage 2 也使用 Core 下的可选测试套件：
-
-```sh
-./gradlew --offline -PgameTestMod=core -Prs2Tests=true runGameTestServer
-./gradlew --offline -PgameTestMod=core -Prs2Tests=true -Prs2LaborTests=true runGameTestServer
-./gradlew --offline -PgameTestMod=core -Prs2Tests=true -Prs2Vanilla=false runGameTestServer
-```
-
-Blockwright 的 `rs2` profile 安装 Refined Storage 2.0.9，该版本没有外部必需模组依赖。
-GameTest profile 请串行运行以控制内存占用；RS2、AE2 与存储 profile 互斥。
-
-Blockwright 的 `ae2` profile 在 Core 之外安装 AE2 与 GuideME。可选套件只加载选定的原生模组、
-Core 和未显式禁用的 Vanilla；每种组合使用独立世界，RS2、AE2 与存储 profile 分开运行。
-默认 Core 套件使用 `folkways_core` 命名空间；可选套件使用同一命名空间和独立 fixture source set。
-未适配的模组容器必须实现原版 `Container` 并加入 `folkways_core:store/allowed` 方块标签才能登记为仓库。
+`npm run test:airline` 运行机场塔台客户端夹具。
 
 ## 提交 PR
 
@@ -136,6 +129,8 @@ Core 和未显式禁用的 Vanilla；每种组合使用独立世界，RS2、AE2 
 2. 遵循下方约定，更新相关测试和文档。
 3. 运行与改动相关的检查和游戏测试。
 4. 向 [IzakyL/folkways](https://github.com/IzakyL/folkways/pulls) 提交 PR，说明问题、修改后的行为和验证方式；列明未运行的检查及剩余限制。
+
+PR 以 squash 方式合并到 master。分支内的持久化格式变化只需对照 `origin/master` 考虑迁移，见[存档兼容性](SAVE_COMPATIBILITY.zh-CN.md#修改持久化格式)。
 
 提交信息使用 `type(scope): summary` 格式，例如：
 
@@ -178,4 +173,4 @@ feat(draft): add a dock pattern
 
 同步更新英文和中文版，界面名称以游戏语言文件为准，命令、路径和 Java 符号保持原文。
 文档只保留概述层面：README、贡献指南、模组联动说明、数据包指南和存档兼容规则，不再添加详细参考页面或单个模组的 README。
-`THIRD_PARTY.md` 是许可证清单，仅保留英文。
+`THIRD_PARTY.md` 是许可证清单，`AGENTS.md` 是面向编程智能体的索引，两者都只保留英文。

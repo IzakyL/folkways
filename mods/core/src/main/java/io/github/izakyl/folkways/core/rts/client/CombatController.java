@@ -1,23 +1,27 @@
 package io.github.izakyl.folkways.core.rts.client;
 
 import com.mojang.blaze3d.platform.InputConstants;
-import io.github.izakyl.folkways.core.resident.api.Bodies;
-import io.github.izakyl.folkways.core.world.api.Footing;
-import io.github.izakyl.folkways.core.world.api.Realm;
-import io.github.izakyl.folkways.core.world.api.WorldPos;
-import io.github.izakyl.folkways.core.world.api.WorldSpaces;
+import io.github.izakyl.folkways.core.combat.api.Vehicles;
 import io.github.izakyl.folkways.core.front.api.ui.Cue;
 import io.github.izakyl.folkways.core.front.api.ui.ModeOverlays;
 import io.github.izakyl.folkways.core.front.api.ui.OverheadTools;
 import io.github.izakyl.folkways.core.front.client.Overhead;
 import io.github.izakyl.folkways.core.front.engine.charter.CurrentColony;
+import io.github.izakyl.folkways.core.resident.api.Bodies;
+import io.github.izakyl.folkways.core.rts.combat.net.ClientUnits;
 import io.github.izakyl.folkways.core.rts.combat.net.CombatControlPacket;
 import io.github.izakyl.folkways.core.rts.combat.net.CombatPackets;
 import io.github.izakyl.folkways.core.rts.combat.net.CombatWaypointReply;
+import io.github.izakyl.folkways.core.rts.combat.net.UnitSnapshot;
 import io.github.izakyl.folkways.core.rts.combat.ui.CombatContent;
+import io.github.izakyl.folkways.core.world.api.Footing;
+import io.github.izakyl.folkways.core.world.api.Realm;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
+import io.github.izakyl.folkways.core.world.api.WorldSpaces;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -27,7 +31,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.BooleanSupplier;
-import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.Util;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
@@ -37,6 +40,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.TamableAnimal;
 import net.minecraft.world.level.ClipContext;
@@ -46,7 +50,7 @@ import net.minecraft.world.phys.Vec3;
 import org.lwjgl.glfw.GLFW;
 
 /** Pointer feedback is local; selection, shortcut membership and every waypoint are server-authoritative. */
-final class CombatController implements OverheadTools.Handler {
+final class CombatController implements OverheadTools.Handler, UnitWindow.Host {
     private static final int SELECTED = 0xFF8FEAC3;
     private static final int DRAFT = 0xFFFFDC7A;
     private static final int CLOSE_RADIUS = 12;
@@ -54,6 +58,11 @@ final class CombatController implements OverheadTools.Handler {
     private static final long FAILURE_DURATION_MS = 3000;
     private final CombatCards cards = new CombatCards();
     private final LinkedHashSet<UUID> selected = new LinkedHashSet<>();
+    // The server selection contains both resident and vehicle UUIDs.
+    private final LinkedHashSet<UUID> vehicles = new LinkedHashSet<>();
+    private final UnitWindow window = new UnitWindow(this);
+    private static final Map<UUID, Entity> SEEN = new HashMap<>();
+    private int unitsIn;
     private final Map<Integer, List<UUID>> shortcuts = new HashMap<>();
     private final Map<UUID, LivingEntity> residents = new LinkedHashMap<>();
     private final List<WorldPos> route = new ArrayList<>();
@@ -65,7 +74,9 @@ final class CombatController implements OverheadTools.Handler {
     private boolean routeOpen;
     private boolean routeAttackMove;
     private UUID routeCommandId;
+    // What a plain right-click on ground does, set by right-clicking the card's Move or Attack button.
     private boolean attackMoveMode;
+    private Command armed = Command.NONE;
     private PendingRoute pendingReplacement;
     private boolean dragging;
     private boolean additiveSelection;
@@ -76,6 +87,15 @@ final class CombatController implements OverheadTools.Handler {
     private long failureUntil;
 
     private record Context(UUID player, UUID colony, Realm realm) {
+    }
+
+    /** A command button waiting for its target: the next left click in the world completes it. */
+    enum Command {
+        NONE,
+        MOVE,
+        ATTACK,
+        BOARD,
+        LOITER
     }
 
     /** Input-only route context while a replacement is waiting for its authoritative reply. */
@@ -130,19 +150,26 @@ final class CombatController implements OverheadTools.Handler {
             return;
         }
         synchronizeControl();
-        boolean retained = !selected.isEmpty() || shortcuts.values().stream().anyMatch(group -> !group.isEmpty());
+        boolean retained = !selected.isEmpty() || !vehicles.isEmpty() || shortcuts.values().stream().anyMatch(group -> !group.isEmpty());
         if (!active()) {
             if (retained && heartbeatIn-- <= 0) {
                 CombatPackets.heartbeat();
                 heartbeatIn = 40;
             }
             refreshResidents(minecraft);
+            window.tick();
             return;
         }
         if (requestIn-- <= 0) {
             CombatPackets.requestRoster();
             requestIn = 20;
         }
+        if (unitsIn-- <= 0) {
+            ClientUnits.refresh(context.colony());
+            unitsIn = 20;
+        }
+        see(minecraft);
+        window.tick();
         if (retained && heartbeatIn-- <= 0) {
             CombatPackets.heartbeat();
             heartbeatIn = 40;
@@ -163,8 +190,239 @@ final class CombatController implements OverheadTools.Handler {
                 && !resident.isRemoved()
                 && roster.contains(resident.getUUID())) {
                 residents.put(resident.getUUID(), resident);
+                SEEN.putIfAbsent(resident.getUUID(), resident);
             }
         }
+    }
+
+    /** Client bodies of every listed unit, crew member and squad member, for faces and world picking. */
+    private void see(Minecraft minecraft) {
+        SEEN.clear();
+        Set<UUID> wanted = new HashSet<>();
+        for (UnitSnapshot.Unit unit : ClientUnits.units()) {
+            wanted.add(unit.id());
+            wanted.addAll(unit.members());
+            unit.seats().forEach(seat -> seat.occupant().ifPresent(wanted::add));
+        }
+        if (!wanted.isEmpty()) {
+            for (Entity entity : minecraft.level.entitiesForRendering()) {
+                if (wanted.contains(entity.getUUID()) && entity.isAlive() && !entity.isRemoved()) {
+                    SEEN.put(entity.getUUID(), entity);
+                }
+            }
+        }
+        if (ClientUnits.snapshot().isPresent()) {
+            vehicles.removeIf(id -> unit(id).filter(unit -> unit.kind() == UnitSnapshot.Kind.VEHICLE).isEmpty());
+        }
+    }
+
+    static Entity seen(UUID id) {
+        return SEEN.get(id);
+    }
+
+    /** Whether the client already shows this body riding that vehicle, ahead of the next unit snapshot. */
+    static boolean riding(UUID resident, UUID vehicle) {
+        Entity body = SEEN.get(resident);
+        return body != null && body.getVehicle() != null && body.getVehicle().getUUID().equals(vehicle);
+    }
+
+    static Map<UUID, UUID> aboard(Set<UUID> residents) {
+        Map<UUID, UUID> result = new HashMap<>();
+        for (UUID id : residents) {
+            Entity body = SEEN.get(id);
+            if (body != null && body.getVehicle() != null) {
+                result.put(id, body.getVehicle().getUUID());
+            }
+        }
+        return result;
+    }
+
+    private static Optional<UnitSnapshot.Unit> unit(UUID id) {
+        return ClientUnits.unit(id);
+    }
+
+    @Override
+    public Optional<UnitSnapshot.Unit> focus() {
+        if (!active() || context == null) {
+            return Optional.empty();
+        }
+        if (vehicles.size() == 1 && selected.isEmpty()) {
+            return unit(vehicles.iterator().next());
+        }
+        if (vehicles.isEmpty() && !selected.isEmpty()) {
+            return ClientUnits.units().stream()
+                .filter(unit -> unit.kind() == UnitSnapshot.Kind.SQUAD && unit.members().containsAll(selected))
+                .findFirst();
+        }
+        return Optional.empty();
+    }
+
+    @Override
+    public void failed(Component reason) {
+        if (active()) {
+            failureMessage = reason;
+            failureUntil = Util.getMillis() + FAILURE_DURATION_MS;
+        }
+    }
+
+    @Override
+    public void selectResidents(Set<UUID> residents) {
+        if (ready()) {
+            vehicles.clear();
+            replaceSelection(residents);
+        }
+    }
+
+    @Override
+    public Set<UUID> selectedResidents() {
+        // The card belongs to the RTS tool: another book tool keeps the selection but not its card.
+        return active() ? Set.copyOf(selected) : Set.of();
+    }
+
+    @Override
+    public Set<UUID> selectedVehicles() {
+        return active() ? Set.copyOf(vehicles) : Set.of();
+    }
+
+    @Override
+    public void selectVehicle(UUID vehicle) {
+        if (ready()) {
+            replaceSelection(Set.of());
+            selectVehicles(Set.of(vehicle), false);
+        }
+    }
+
+    @Override
+    public Command armed() {
+        return armed;
+    }
+
+    @Override
+    public void arm(Command command) {
+        armed = command;
+    }
+
+    @Override
+    public boolean attackMoveDefault() {
+        return attackMoveMode;
+    }
+
+    @Override
+    public void attackMoveDefault(boolean attack) {
+        attackMoveMode = attack;
+    }
+
+    @Override
+    public void stop() {
+        command(CombatKeys.STOP);
+    }
+
+    UnitWindow window() {
+        return window;
+    }
+
+    private boolean listedVehicle(Entity entity) {
+        return unit(entity.getUUID()).filter(unit -> unit.kind() == UnitSnapshot.Kind.VEHICLE).isPresent();
+    }
+
+    /** Vehicles the colony crews or has reserved seats in: the ones box selection and the unit strip offer. */
+    private boolean ownVehicle(UnitSnapshot.Unit unit) {
+        return unit.kind() == UnitSnapshot.Kind.VEHICLE && (context != null
+            && unit.owner().filter(context.colony()::equals).isPresent()
+            || unit.seats().stream().anyMatch(seat -> seat.occupant().isPresent()));
+    }
+
+    /** The listed vehicle under the pointer, nearest first; blocks in front hide it. */
+    private Optional<UUID> vehicleAt(double x, double y) {
+        Minecraft minecraft = Minecraft.getInstance();
+        return Overhead.screenRay(x, y).flatMap(ray -> {
+            Vec3 end = ray.origin().add(ray.direction().scale(512));
+            BlockHitResult obstruction = minecraft.level.clip(new ClipContext(ray.origin(), end,
+                ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, minecraft.player));
+            double nearest = obstruction.getLocation().distanceToSqr(ray.origin()) + 4;
+            UUID found = null;
+            for (UnitSnapshot.Unit unit : ClientUnits.units()) {
+                Entity entity = SEEN.get(unit.id());
+                if (unit.kind() != UnitSnapshot.Kind.VEHICLE || entity == null) {
+                    continue;
+                }
+                Optional<Vec3> hit = entity.getBoundingBox().inflate(.15).clip(ray.origin(), end);
+                if (hit.isPresent() && hit.get().distanceToSqr(ray.origin()) < nearest) {
+                    nearest = hit.get().distanceToSqr(ray.origin());
+                    found = unit.id();
+                }
+            }
+            return Optional.ofNullable(found);
+        });
+    }
+
+    private void selectVehicles(Set<UUID> next, boolean additive) {
+        if (!additive) {
+            vehicles.clear();
+        }
+        for (UUID id : next) {
+            if (additive && next.size() == 1 && vehicles.contains(id)) {
+                vehicles.remove(id);
+            } else {
+                vehicles.add(id);
+            }
+        }
+        replaceSelection(Set.copyOf(selected));
+    }
+
+    private void board(UUID vehicle) {
+        if (ClientUnits.snapshot().isEmpty()) {
+            fail("folkways.rts.syncing");
+            return;
+        }
+        window.track(ClientUnits.board(vehicle, List.copyOf(selected)), vehicle);
+        // Seated residents leave the RTS roster as crew; follow them into the vehicle's window.
+        replaceSelection(Set.of());
+        selectVehicles(Set.of(vehicle), false);
+    }
+
+    private void commandVehicles(double x, double y, boolean targets) {
+        if (ClientUnits.snapshot().isEmpty()) {
+            fail("folkways.rts.syncing");
+            return;
+        }
+        if (targets && !Screen.hasControlDown()) {
+            Optional<Entity> target = target(x, y);
+            if (target.isPresent()) {
+                for (UUID vehicle : vehicles) {
+                    window.track(ClientUnits.order(vehicle, new Vehicles.Order(Vehicles.Action.ATTACK, List.of(), -1,
+                        Optional.of(target.get().getUUID()), Optional.empty())), vehicle);
+                }
+                return;
+            }
+        }
+        Optional<WorldPos> point = ground(x, y);
+        if (point.isEmpty()) {
+            fail("folkways.rts.ground_required");
+            return;
+        }
+        Vehicles.Action action = attackMoveMode ? Vehicles.Action.ATTACK_MOVE : Vehicles.Action.MOVE;
+        for (UUID vehicle : vehicles) {
+            if (Screen.hasControlDown()) {
+                var status = unit(vehicle).map(UnitSnapshot.Unit::status);
+                int closing = status.map(value -> nearWaypoint(x, y, value.route().points(),
+                    value.route().cycleStart() < 0)).orElse(-1);
+                if (closing >= 0 && status.orElseThrow().route().points().size() > closing + 1) {
+                    window.track(ClientUnits.cycle(vehicle, closing), vehicle);
+                } else {
+                    window.track(ClientUnits.appendPoint(vehicle, point.get(), attackMoveMode), vehicle);
+                }
+            } else {
+                // Fixed wing cannot stop over a point: sent there, it circles it.
+                boolean fixedWing = unit(vehicle).filter(found -> found.capabilities().airframe()
+                    == Vehicles.Airframe.FIXED_WING && found.capabilities().actions().contains(Vehicles.Action.LOITER))
+                    .isPresent();
+                window.track(ClientUnits.order(vehicle, new Vehicles.Order(fixedWing ? Vehicles.Action.LOITER : action,
+                    List.of(point.get()), -1, Optional.empty(), Optional.empty())), vehicle);
+            }
+        }
+        moveMarker = point.get();
+        markerUntil = Util.getMillis() + 3000;
     }
 
     private void synchronizeControl() {
@@ -184,7 +442,13 @@ final class CombatController implements OverheadTools.Handler {
                 if (!state.accepted() && userOperation) {
                     fail("folkways.combat.error.rejected");
                 }
+                Set<UUID> nextVehicles = state.selection().stream()
+                    .filter(id -> unit(id).filter(value -> value.kind() == UnitSnapshot.Kind.VEHICLE).isPresent())
+                    .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+                vehicles.clear();
+                vehicles.addAll(nextVehicles);
                 Set<UUID> next = new LinkedHashSet<>(state.selection());
+                next.removeAll(nextVehicles);
                 boolean selectionChanged = !selected.equals(next);
                 if (selectionChanged) {
                     clearRoute();
@@ -316,27 +580,16 @@ final class CombatController implements OverheadTools.Handler {
 
     @Override
     public List<Cue> cues() {
+        if (armed != Command.NONE) {
+            return List.of(
+                Cue.of("folkways.rts.armed." + armed.name().toLowerCase(java.util.Locale.ROOT), Cue.Key.CLICK),
+                Cue.of("folkways.rts.armed.cancel", Cue.Key.ALT_CLICK));
+        }
         return List.of(
             Cue.of("folkways.keys.combat.select", Cue.Key.CLICK),
-            Cue.of(movementOptions(), Cue.Key.ALT_CLICK),
+            Cue.of("folkways.rts.move_options", Cue.Key.ALT_CLICK),
             Cue.of("folkways.keys.combat.route", Cue.Key.MODIFIER, Cue.Key.ALT_CLICK),
-            Cue.bound(
-                "folkways.rts.move_mode.hint",
-                CombatKeys.MOVE_MODE.getName()),
-            Cue.bound("folkways.rts.stop.tooltip", CombatKeys.STOP.getName()),
             Cue.bound("folkways.rts.release_control.tooltip", CombatKeys.RELEASE.getName()));
-    }
-
-    private Component movementMode() {
-        return Component.translatable(attackMoveMode ? "folkways.rts.mode.attack_move" : "folkways.rts.mode.move");
-    }
-
-    private Component movementOptions() {
-        Component move = Component.translatable("folkways.rts.mode.move")
-            .withStyle(style -> style.withColor(attackMoveMode ? 0x888888 : 0xFFE29A).withBold(!attackMoveMode));
-        Component attack = Component.translatable("folkways.rts.mode.attack_move")
-            .withStyle(style -> style.withColor(attackMoveMode ? 0xFFE29A : 0x888888).withBold(attackMoveMode));
-        return Component.translatable("folkways.rts.move_options", move, attack);
     }
 
     @Override
@@ -362,33 +615,38 @@ final class CombatController implements OverheadTools.Handler {
     @Override
     public boolean mouseClicked(double x, double y, int button) {
         if (unmodified()) {
-            for (KeyMapping mapping : List.of(CombatKeys.MOVE_MODE, CombatKeys.STOP, CombatKeys.RELEASE)) {
+            for (KeyMapping mapping : CombatKeys.ALL) {
                 if (mapping.matchesMouse(button) && mapping.isConflictContextAndModifierActive()) {
                     command(mapping);
                     return true;
                 }
             }
         }
-        if (y >= cards.visibleTop()) {
+        if (cards.covers(x, y)) {
             if (button == InputConstants.MOUSE_BUTTON_LEFT) {
-                CombatCards.Action action = cards.clicked(x, y);
-                if (!ready()) {
-                    return true;
-                }
-                if (action != null) {
-                    switch (action.kind()) {
-                        case GROUP -> shortcut(action.slot(), Screen.hasControlDown());
-                        case UNIT -> {
-                            if (residents.containsKey(action.resident())) {
-                                replaceSelection(Set.of(action.resident()));
-                            }
-                        }
-                        case PREVIOUS -> cards.page(false, selected.size());
-                        case NEXT -> cards.page(true, selected.size());
-                    }
+                int slot = cards.clicked(x, y);
+                if (slot > 0 && ready()) {
+                    shortcut(slot, Screen.hasControlDown());
                 }
             }
             return true;
+        }
+        if (armed != Command.NONE) {
+            if (button == InputConstants.MOUSE_BUTTON_RIGHT) {
+                armed = Command.NONE;
+                return true;
+            }
+            if (button == InputConstants.MOUSE_BUTTON_LEFT) {
+                Command command = armed;
+                // Shift keeps the command armed for another target, as it queues in other RTS games.
+                if (!Screen.hasShiftDown()) {
+                    armed = Command.NONE;
+                }
+                if (ready()) {
+                    execute(command, x, y);
+                }
+                return true;
+            }
         }
         if (button == InputConstants.MOUSE_BUTTON_LEFT) {
             additiveSelection = Screen.hasShiftDown();
@@ -409,9 +667,78 @@ final class CombatController implements OverheadTools.Handler {
         if (!ready()) {
             return true;
         }
-        if (selected.isEmpty()) {
+        order(x, y, null, true);
+        return true;
+    }
+
+    private void execute(Command command, double x, double y) {
+        switch (command) {
+            case MOVE -> order(x, y, false, false);
+            case ATTACK -> order(x, y, true, false);
+            case BOARD -> {
+                if (selected.isEmpty()) {
+                    fail("folkways.rts.select_first");
+                    return;
+                }
+                vehicleAt(x, y).ifPresentOrElse(this::board, () -> fail("folkways.rts.board_pick"));
+            }
+            case LOITER -> loiter(x, y);
+            case NONE -> {
+            }
+        }
+    }
+
+    private void loiter(double x, double y) {
+        Optional<WorldPos> point = ground(x, y);
+        if (point.isEmpty()) {
+            fail("folkways.rts.ground_required");
+            return;
+        }
+        for (UUID vehicle : vehicles) {
+            if (unit(vehicle).filter(found -> found.capabilities().actions().contains(Vehicles.Action.LOITER))
+                .isPresent()) {
+                window.track(ClientUnits.order(vehicle, new Vehicles.Order(Vehicles.Action.LOITER,
+                    List.of(point.get()), -1, Optional.empty(), Optional.empty())), vehicle);
+            }
+        }
+        moveMarker = point.get();
+        markerUntil = Util.getMillis() + 3000;
+    }
+
+    /**
+     * Issues an order at a screen point. A plain right-click is smart: a vehicle boards, a hostile is attacked,
+     * ground is moved to. The Move button only moves; the Attack button attacks a target or attack-moves to ground.
+     */
+    private void order(double x, double y, Boolean forced, boolean smart) {
+        boolean persistent = attackMoveMode;
+        if (forced != null) {
+            attackMoveMode = forced;
+        }
+        try {
+            order(x, y, smart);
+        } finally {
+            attackMoveMode = persistent;
+        }
+    }
+
+    private void order(double x, double y, boolean smart) {
+        boolean attack = attackMoveMode;
+        if (selected.isEmpty() && vehicles.isEmpty()) {
             fail("folkways.rts.select_first");
-            return true;
+            return;
+        }
+        if (smart && !selected.isEmpty() && !Screen.hasControlDown()) {
+            Optional<UUID> ride = vehicleAt(x, y);
+            if (ride.isPresent()) {
+                board(ride.get());
+                return;
+            }
+        }
+        if (!vehicles.isEmpty()) {
+            commandVehicles(x, y, smart || attack);
+            if (selected.isEmpty()) {
+                return;
+            }
         }
         PendingRoute pending = pendingReplacement;
         List<WorldPos> inputRoute = pending == null ? route : pending.points;
@@ -419,65 +746,65 @@ final class CombatController implements OverheadTools.Handler {
         boolean inputAttackMove = pending == null ? routeAttackMove : pending.attackMove;
         if (Screen.hasControlDown() && !inputRoute.isEmpty() && attackMoveMode != inputAttackMove) {
             fail("folkways.rts.route_mode_mismatch");
-            return true;
+            return;
         }
         if (Screen.hasControlDown() && inputCycleStart >= 0) {
             fail("folkways.rts.route_closed");
-            return true;
+            return;
         }
         int closing = Screen.hasControlDown() && pending == null ? nearWaypoint(x, y, route, routeOpen) : -1;
         if (closing >= 0) {
             if (closing >= inputRoute.size() - 1) {
                 fail("folkways.rts.cycle_too_short");
-                return true;
+                return;
             }
             sendRouteRequest(
                 () -> CombatPackets.append(List.copyOf(selected), inputRoute.get(closing), routeAttackMove));
-            return true;
+            return;
         }
-        if (!Screen.hasControlDown()) {
-            Optional<Mob> target = target(x, y);
+        if ((smart || attack) && !Screen.hasControlDown()) {
+            Optional<Entity> target = target(x, y);
             if (target.isPresent()) {
                 if (sendRouteRequest(() -> CombatPackets.attack(List.copyOf(selected), target.get().getUUID())) >= 0) {
                     cancelPendingRoute();
                 }
-                return true;
+                return;
             }
         }
         Optional<WorldPos> point = ground(x, y);
         if (point.isEmpty()) {
             fail("folkways.rts.ground_required");
-            return true;
+            return;
         }
         if (Screen.hasControlDown()) {
             if (pending != null) {
                 if (pending.cycleStart >= 0) {
                     fail("folkways.rts.route_closed");
-                    return true;
+                    return;
                 }
                 int existing = pending.points.indexOf(point.get());
                 if (existing >= 0) {
                     if (existing >= pending.points.size() - 1) {
                         fail("folkways.rts.cycle_too_short");
-                        return true;
+                        return;
                     }
                     pending.cycleStart = existing;
                     pending.additions.addLast(point.get());
                     sendNextPendingAddition(pending);
-                    return true;
+                    return;
                 }
                 if (pending.points.size() >= CombatPackets.MAX_POINTS) {
                     fail("folkways.rts.route_full", CombatPackets.MAX_POINTS);
-                    return true;
+                    return;
                 }
                 pending.points.add(point.get());
                 pending.additions.addLast(point.get());
                 sendNextPendingAddition(pending);
-                return true;
+                return;
             }
             if (route.size() >= CombatPackets.MAX_POINTS && !route.contains(point.get())) {
                 fail("folkways.rts.route_full", CombatPackets.MAX_POINTS);
-                return true;
+                return;
             }
             boolean mode = attackMoveMode;
             long request = sendRouteRequest(() -> CombatPackets.append(List.copyOf(selected), point.get(), mode));
@@ -501,7 +828,6 @@ final class CombatController implements OverheadTools.Handler {
                 markerUntil = Util.getMillis() + 3000;
             }
         }
-        return true;
     }
 
     private boolean ready() {
@@ -519,7 +845,7 @@ final class CombatController implements OverheadTools.Handler {
             return false;
         }
         endX = x;
-        endY = Math.min(y, cards.visibleTop() - 1);
+        endY = y;
         return true;
     }
 
@@ -530,15 +856,17 @@ final class CombatController implements OverheadTools.Handler {
         }
         dragging = false;
         endX = x;
-        endY = Math.min(y, cards.visibleTop() - 1);
+        endY = y;
         if (!ready()) {
             return true;
         }
         Minecraft minecraft = Minecraft.getInstance();
         CombatProjection projection = new CombatProjection(minecraft);
         Set<UUID> next = new LinkedHashSet<>();
+        Set<UUID> nextVehicles = new LinkedHashSet<>();
         CombatProjection.Rect area = CombatProjection.Rect.between(startX, startY, endX, endY);
-        if (Math.hypot(endX - startX, endY - startY) < 4) {
+        boolean click = Math.hypot(endX - startX, endY - startY) < 4;
+        if (click) {
             double nearest = Double.POSITIVE_INFINITY;
             UUID pointed = null;
             for (LivingEntity resident : residents.values()) {
@@ -553,6 +881,8 @@ final class CombatController implements OverheadTools.Handler {
             }
             if (pointed != null) {
                 next.add(pointed);
+            } else {
+                vehicleAt(endX, endY).ifPresent(nextVehicles::add);
             }
         } else {
             for (LivingEntity resident : residents.values()) {
@@ -560,6 +890,13 @@ final class CombatController implements OverheadTools.Handler {
                     .bounds(resident.getBoundingBox())
                     .filter(area::intersects)
                     .ifPresent(bounds -> next.add(resident.getUUID()));
+            }
+            for (UnitSnapshot.Unit unit : ClientUnits.units()) {
+                Entity vehicle = SEEN.get(unit.id());
+                if (vehicle != null && ownVehicle(unit)) {
+                    projection.bounds(vehicle.getBoundingBox()).filter(area::intersects)
+                        .ifPresent(bounds -> nextVehicles.add(unit.id()));
+                }
             }
         }
         if (additiveSelection) {
@@ -572,8 +909,15 @@ final class CombatController implements OverheadTools.Handler {
                 combined.addAll(next);
             }
             replaceSelection(combined);
+            if (click) {
+                selectVehicles(nextVehicles, true);
+            } else {
+                vehicles.addAll(nextVehicles);
+                replaceSelection(Set.copyOf(selected));
+            }
         } else {
             replaceSelection(next);
+            selectVehicles(nextVehicles, false);
         }
         return true;
     }
@@ -582,7 +926,7 @@ final class CombatController implements OverheadTools.Handler {
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
         if (unmodified() && (modifiers & (GLFW.GLFW_MOD_SHIFT | GLFW.GLFW_MOD_CONTROL
             | GLFW.GLFW_MOD_ALT | GLFW.GLFW_MOD_SUPER)) == 0) {
-            for (KeyMapping mapping : List.of(CombatKeys.MOVE_MODE, CombatKeys.STOP, CombatKeys.RELEASE)) {
+            for (KeyMapping mapping : CombatKeys.ALL) {
                 if (mapping.matches(keyCode, scanCode) && mapping.isConflictContextAndModifierActive()) {
                     command(mapping);
                     return true;
@@ -606,7 +950,15 @@ final class CombatController implements OverheadTools.Handler {
             shortcut(slot, control);
             return true;
         }
-        if (keyCode == GLFW.GLFW_KEY_ESCAPE && !selected.isEmpty()) {
+        if (keyCode == GLFW.GLFW_KEY_ESCAPE && window.closePopup()) {
+            return true;
+        }
+        if (keyCode == GLFW.GLFW_KEY_ESCAPE && armed != Command.NONE) {
+            armed = Command.NONE;
+            return true;
+        }
+        if (keyCode == GLFW.GLFW_KEY_ESCAPE && (!selected.isEmpty() || !vehicles.isEmpty())) {
+            vehicles.clear();
             replaceSelection(Set.of());
             return true;
         }
@@ -619,23 +971,36 @@ final class CombatController implements OverheadTools.Handler {
 
     private void command(KeyMapping mapping) {
         dragging = false;
-        if (mapping == CombatKeys.MOVE_MODE) {
-            attackMoveMode = !attackMoveMode;
-            return;
-        }
         if (!ready()) {
             return;
         }
-        if (selected.isEmpty()) {
+        if (selected.isEmpty() && vehicles.isEmpty()) {
             fail("folkways.rts.select_first");
             return;
         }
+        if (mapping != CombatKeys.STOP && mapping != CombatKeys.RELEASE) {
+            // A command-card key presses its button, so the key and the click do exactly the same thing; a key
+            // whose button the card does not show (a ground vehicle's Land) does nothing.
+            CombatKeys.CARD.entrySet().stream().filter(entry -> entry.getValue() == mapping).findFirst()
+                .ifPresent(entry -> window.press(entry.getKey()));
+            return;
+        }
         if (mapping == CombatKeys.STOP) {
-            if (sendRouteRequest(() -> CombatPackets.stop(List.copyOf(selected))) >= 0) {
+            for (UUID vehicle : vehicles) {
+                if (ClientUnits.snapshot().isPresent()) {
+                    window.track(ClientUnits.order(vehicle, new Vehicles.Order(Vehicles.Action.STOP, List.of(), -1,
+                        Optional.empty(), Optional.empty())), vehicle);
+                }
+            }
+            if (!selected.isEmpty() && sendRouteRequest(() -> CombatPackets.stop(List.copyOf(selected))) >= 0) {
                 cancelPendingRoute();
             }
-        } else if (!CombatPackets.release(List.copyOf(selected))) {
-            fail("folkways.rts.syncing");
+        } else {
+            Set<UUID> all = new LinkedHashSet<>(selected);
+            all.addAll(vehicles);
+            if (!CombatPackets.release(List.copyOf(all))) {
+                fail("folkways.rts.syncing");
+            }
         }
     }
 
@@ -644,7 +1009,9 @@ final class CombatController implements OverheadTools.Handler {
             fail("folkways.rts.selection_limit", CombatPackets.MAX_MEMBERS);
             return;
         }
-        if (!CombatPackets.select(List.copyOf(next))) {
+        Set<UUID> all = new LinkedHashSet<>(next);
+        all.addAll(vehicles);
+        if (all.size() > CombatPackets.MAX_MEMBERS || !CombatPackets.select(List.copyOf(all))) {
             fail("folkways.rts.syncing");
             return;
         }
@@ -665,11 +1032,12 @@ final class CombatController implements OverheadTools.Handler {
         }
         if (!bind) {
             clearRoute();
+            vehicles.clear();
         }
         heartbeatIn = 40;
     }
 
-    private Optional<Mob> target(double x, double y) {
+    private Optional<Entity> target(double x, double y) {
         Minecraft minecraft = Minecraft.getInstance();
         return Overhead.screenRay(x, y)
             .flatMap(
@@ -684,26 +1052,27 @@ final class CombatController implements OverheadTools.Handler {
                     ClipContext.Fluid.NONE,
                     minecraft.player));
                 double nearest = obstruction.getLocation().distanceToSqr(ray.origin());
-                Mob aimed = null;
+                Entity aimed = null;
                 for (Entity entity : minecraft.level.entitiesForRendering()) {
-                    if (!(entity instanceof Mob mob)
-                        || !mob.isAlive()
-                        || mob.isRemoved()
-                        || !mob.isPickable()
-                        || Bodies.of(mob).isPresent()
-                        || mob.isAlliedTo(minecraft.player)
-                        || minecraft.player.isAlliedTo(mob)
+                    if (!(entity instanceof Mob) && Vehicles.of(entity).isEmpty()
+                        || listedVehicle(entity)
+                        || !entity.isAlive()
+                        || entity.isRemoved()
+                        || !entity.isPickable()
+                        || Bodies.of(entity).isPresent()
+                        || entity.isAlliedTo(minecraft.player)
+                        || minecraft.player.isAlliedTo(entity)
                         || selected.stream()
                         .map(residents::get)
                         .filter(Objects::nonNull)
-                        .anyMatch(friend -> mob.isAlliedTo(friend) || friend.isAlliedTo(mob))
-                        || mob instanceof TamableAnimal pet && pet.isOwnedBy(minecraft.player)) {
+                        .anyMatch(friend -> entity.isAlliedTo(friend) || friend.isAlliedTo(entity))
+                        || entity instanceof TamableAnimal pet && pet.isOwnedBy(minecraft.player)) {
                         continue;
                     }
-                    Optional<Vec3> hit = mob.getBoundingBox().inflate(.15).clip(ray.origin(), end);
+                    Optional<Vec3> hit = entity.getBoundingBox().inflate(.15).clip(ray.origin(), end);
                     if (hit.isPresent() && hit.get().distanceToSqr(ray.origin()) < nearest) {
                         nearest = hit.get().distanceToSqr(ray.origin());
-                        aimed = mob;
+                        aimed = entity;
                     }
                 }
                 return Optional.ofNullable(aimed);
@@ -781,6 +1150,7 @@ final class CombatController implements OverheadTools.Handler {
             outline(graphics, area, SELECTED);
         }
         drawRoute(graphics, projection, mouseX, mouseY, partialTick);
+        drawVehicleRoutes(graphics, projection, mouseX, mouseY);
         if (moveMarker != null && Util.getMillis() <= markerUntil) {
             WorldSpaces.world(minecraft.level, moveMarker)
                 .flatMap(projection::point)
@@ -798,36 +1168,15 @@ final class CombatController implements OverheadTools.Handler {
                     }
                 });
         }
-        var state = CombatPackets.state();
-        boolean routeFailure =
-            state.phase().contains("failed")
-            || switch (state.result()) {
-                case "failed",
-                    "partial_failure",
-                    "no_survivors",
-                    "no_safe_anchor",
-                    "regroup_timed_out",
-                    "route_no_path",
-                    "route_member_blocked",
-                    "route_timed_out",
-                    "timed_out",
-                    "authority_lost",
-                    "out_of_range" ->
-                    true;
-                default -> false;
-            };
-        cards.render(
-            graphics,
-            mouseX,
-            mouseY,
-            selected,
-            residents,
-            shortcuts,
-            route.size(),
-            movementMode(),
-            routeStatus(),
-            visibleFailure(),
-            routeFailure);
+        cards.render(graphics, mouseX, mouseY, selected, residents, shortcuts, visibleFailure());
+        if (armed != Command.NONE) {
+            // The armed command rides the pointer until a click completes or cancels it.
+            Component label = Component.translatable("folkways.rts.armed." + armed.name().toLowerCase(java.util.Locale.ROOT));
+            int width = minecraft.font.width(label);
+            graphics.fill(mouseX + 10, mouseY + 8, mouseX + 14 + width, mouseY + 20, 0xB0000000);
+            graphics.drawString(minecraft.font, label, mouseX + 12, mouseY + 10,
+                armed == Command.ATTACK ? 0xFFFF776E : 0xFFFFE29A, false);
+        }
     }
 
     @Override
@@ -841,12 +1190,43 @@ final class CombatController implements OverheadTools.Handler {
         drawSelectedHealth(graphics, projection, partialTick);
         if (!active()) {
             drawRoute(graphics, projection, -1000, -1000, partialTick);
+            drawVehicleRoutes(graphics, projection, -1000, -1000);
         }
     }
 
     private void drawSelectedHealth(GuiGraphics graphics, CombatProjection projection, float partialTick) {
         int screenWidth = Minecraft.getInstance().getWindow().getGuiScaledWidth();
         int screenHeight = Minecraft.getInstance().getWindow().getGuiScaledHeight();
+        for (UUID id : vehicles) {
+            Entity vehicle = SEEN.get(id);
+            Optional<UnitSnapshot.Unit> unit = unit(id);
+            if (vehicle == null || unit.isEmpty()) {
+                continue;
+            }
+            projection.bounds(vehicle.getBoundingBox()).ifPresent(bounds -> corners(graphics, bounds));
+            Vec3 top = vehicle.getPosition(partialTick).add(0, vehicle.getBbHeight() + 0.3, 0);
+            projection.point(top).ifPresent(pixel -> {
+                int centerX = Mth.floor(pixel.x()), y = Mth.floor(pixel.y());
+                if (centerX < -20 || centerX > screenWidth + 20 || y < -6 || y > screenHeight + 6) {
+                    return;
+                }
+                var status = unit.get().status();
+                float ratio = status.maxHealth() <= 0 ? 0 : (float) Mth.clamp(status.health() / status.maxHealth(), 0, 1);
+                int left = centerX - 15;
+                int color = ratio > .5F ? SELECTED : 0xFFFF776E;
+                graphics.fill(left - 1, y - 1, left + 31, y + 4, ModeOverlays.color(CombatContent.MODE, 0xB0000000));
+                graphics.fill(left, y, left + 30, y + 3, ModeOverlays.color(CombatContent.MODE, 0xFF592F2D));
+                graphics.fill(left, y, left + Math.round(30 * ratio), y + 3,
+                    ModeOverlays.color(CombatContent.MODE, color));
+                if (status.maxEnergy() > 0) {
+                    float energy = (float) Mth.clamp((double) status.energy() / status.maxEnergy(), 0, 1);
+                    graphics.fill(left - 1, y + 4, left + 31, y + 7, ModeOverlays.color(CombatContent.MODE, 0xB0000000));
+                    graphics.fill(left, y + 4, left + 30, y + 6, ModeOverlays.color(CombatContent.MODE, 0xFF243848));
+                    graphics.fill(left, y + 4, left + Math.round(30 * energy), y + 6,
+                        ModeOverlays.color(CombatContent.MODE, 0xFF6FB7E8));
+                }
+            });
+        }
         for (UUID id : selected) {
             LivingEntity resident = residents.get(id);
             if (resident == null) {
@@ -867,6 +1247,49 @@ final class CombatController implements OverheadTools.Handler {
             graphics.fill(left - 1, y - 1, left + 19, y + 4, ModeOverlays.color(CombatContent.MODE, 0xB0000000));
             graphics.fill(left, y, left + 18, y + 3, ModeOverlays.color(CombatContent.MODE, 0xFF592F2D));
             graphics.fill(left, y, left + fill, y + 3, ModeOverlays.color(CombatContent.MODE, color));
+        }
+    }
+
+    private void drawVehicleRoutes(GuiGraphics graphics, CombatProjection projection, int mouseX, int mouseY) {
+        var minecraft = Minecraft.getInstance();
+        int[] budget = {MAX_ROUTE_SAMPLES};
+        for (UUID id : vehicles) {
+            var unit = unit(id);
+            if (unit.isEmpty()) {
+                continue;
+            }
+            var route = unit.get().status().route();
+            boolean reviewing = active() && Screen.hasControlDown();
+            if (route.current() < 0 && !reviewing) {
+                continue;
+            }
+            CombatProjection.Pixel previous = WorldSpaces.world(minecraft.level, unit.get().position())
+                .flatMap(projection::point).orElse(null);
+            int closing = reviewing ? nearWaypoint(mouseX, mouseY, route.points(), route.cycleStart() < 0) : -1;
+            for (int index = reviewing ? 0 : Math.max(0, route.current()); index < route.points().size(); index++) {
+                var pixel = WorldSpaces.world(minecraft.level, route.points().get(index))
+                    .flatMap(at -> projection.point(at.add(0, .12, 0)));
+                if (pixel.isEmpty()) {
+                    previous = null;
+                    continue;
+                }
+                var at = pixel.get();
+                if (previous != null) {
+                    segment(graphics, previous.x(), previous.y(), at.x(), at.y(), SELECTED, budget);
+                }
+                outline(graphics, new CombatProjection.Rect(at.x() - 6, at.y() - 6, at.x() + 6, at.y() + 6),
+                    closing == index ? DRAFT : SELECTED);
+                graphics.drawString(minecraft.font, Integer.toString(index + 1), (int) at.x() + 6,
+                    (int) at.y() - 4, SELECTED, true);
+                previous = at;
+            }
+            if (previous != null && route.cycleStart() >= 0) {
+                var first = WorldSpaces.world(minecraft.level, route.points().get(route.cycleStart()))
+                    .flatMap(projection::point);
+                if (first.isPresent()) {
+                    segment(graphics, previous.x(), previous.y(), first.get().x(), first.get().y(), SELECTED, budget);
+                }
+            }
         }
     }
 
@@ -991,6 +1414,22 @@ final class CombatController implements OverheadTools.Handler {
         return count == 0 ? Optional.empty() : projection.point(center.scale(1.0 / count).add(0, 0.12, 0));
     }
 
+    /** Corner brackets around a selected vehicle's screen bounds. */
+    private static void corners(GuiGraphics graphics, CombatProjection.Rect rect) {
+        int color = ModeOverlays.color(CombatContent.MODE, SELECTED);
+        int left = (int) rect.left(), top = (int) rect.top();
+        int right = (int) Math.ceil(rect.right()), bottom = (int) Math.ceil(rect.bottom());
+        int arm = Math.max(3, Math.min(10, Math.min(right - left, bottom - top) / 4));
+        graphics.fill(left, top, left + arm, top + 1, color);
+        graphics.fill(left, top, left + 1, top + arm, color);
+        graphics.fill(right - arm, top, right + 1, top + 1, color);
+        graphics.fill(right, top, right + 1, top + arm, color);
+        graphics.fill(left, bottom, left + arm, bottom + 1, color);
+        graphics.fill(left, bottom - arm, left + 1, bottom + 1, color);
+        graphics.fill(right - arm, bottom, right + 1, bottom + 1, color);
+        graphics.fill(right, bottom - arm, right + 1, bottom + 1, color);
+    }
+
     private static void outline(GuiGraphics graphics, CombatProjection.Rect rect, int color) {
         color = ModeOverlays.color(CombatContent.MODE, color);
         int left = (int) rect.left(),
@@ -1080,7 +1519,8 @@ final class CombatController implements OverheadTools.Handler {
         pendingReplacement = null;
     }
 
-    private Component routeStatus() {
+    @Override
+    public Component orders() {
         var state = CombatPackets.state();
         Component command = Component.translatable("folkways.rts.command." + state.command());
         Component phase = Component.translatable("folkways.rts.phase." + state.phase());
@@ -1105,6 +1545,7 @@ final class CombatController implements OverheadTools.Handler {
         dragging = false;
         clearFailure();
         attackMoveMode = false;
+        armed = Command.NONE;
         cancelPendingRoute();
         CombatPackets.clearRoute();
         moveMarker = null;
@@ -1131,6 +1572,7 @@ final class CombatController implements OverheadTools.Handler {
     }
 
     void reset() {
+        SEEN.clear();
         clearFailure();
         if (Minecraft.getInstance().getConnection() != null) {
             CombatPackets.releaseControl();
@@ -1138,6 +1580,7 @@ final class CombatController implements OverheadTools.Handler {
         dragging = false;
         clearRoute();
         selected.clear();
+        vehicles.clear();
         shortcuts.clear();
         residents.clear();
         cards.reset();
@@ -1150,6 +1593,7 @@ final class CombatController implements OverheadTools.Handler {
         moveMarker = null;
         markerUntil = 0;
         attackMoveMode = false;
+        armed = Command.NONE;
         routeAttackMove = false;
     }
 }

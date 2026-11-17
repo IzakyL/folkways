@@ -40,6 +40,8 @@ configurations {
     warfareTestRuntimeOnly.extendsFrom gametestRuntimeOnly
 }
 dependencies {
+    warfareTestCompileOnly lib("sable"), lib("sable-companion")
+    warfareTestImplementation project(":airline")
     warfareTestImplementation sourceSets.main.output
     warfareTestImplementation project(":vanilla").sourceSets.warfareTest.output
 }

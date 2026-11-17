@@ -443,82 +443,86 @@ public final class SentryGameTests {
     public static void delayedStationTransactionsRefundExactRoundsAndRejectReplayedEmission(GameTestHelper helper) {
         Fixture fixture = new Fixture(helper);
         Zombie target = fixture.zombie(new BlockPos(11, 1, 2));
-        SpottedTargets spots = SpottedTargets.of(fixture.colony);
-        helper.assertTrue(spots.report(fixture.sentry, target), "the defender reports a real"
-            + " hostile");
-        ItemStack arrows = fixture.sentry.pack().getItem(1);
-        arrows.set(DataComponents.CUSTOM_NAME, Component.literal("physical station rounds"));
-        ItemSpec exact = ItemSpec.exact(arrows);
-        WeaponStations.Discharge[] pending = {null};
-        WeaponStations.Station station =
-            new WeaponStations.Station() {
-                public WorldPos at() {
-                    return WorldPos.of(fixture.level, fixture.sentry.blockPosition());
-                }
+        helper.startSequence().thenWaitUntil(() -> helper.assertTrue(
+            fixture.level.getBrightness(net.minecraft.world.level.LightLayer.SKY, target.blockPosition()) >= 12,
+            "the native target skylight has propagated before reporting visibility"))
+            .thenExecute(() -> {
+                SpottedTargets spots = SpottedTargets.of(fixture.colony);
+                helper.assertTrue(spots.report(fixture.sentry, target), "the defender reports a real"
+                    + " hostile");
+                ItemStack arrows = fixture.sentry.pack().getItem(1);
+                arrows.set(DataComponents.CUSTOM_NAME, Component.literal("physical station rounds"));
+                ItemSpec exact = ItemSpec.exact(arrows);
+                WeaponStations.Discharge[] pending = {null};
+                WeaponStations.Station station =
+                    new WeaponStations.Station() {
+                        public WorldPos at() {
+                            return WorldPos.of(fixture.level, fixture.sentry.blockPosition());
+                        }
 
-                public double range() {
-                    return 32;
-                }
+                        public double range() {
+                            return 32;
+                        }
 
-                public boolean indirect() {
-                    return true;
-                }
+                        public boolean indirect() {
+                            return true;
+                        }
 
-                public ItemSpec ammunition() {
-                    return exact;
-                }
+                        public ItemSpec ammunition() {
+                            return exact;
+                        }
 
-                public boolean operate(Worker worker, SpottedTargets.Spot observation) {
-                    return false;
-                }
+                        public boolean operate(Worker worker, SpottedTargets.Spot observation) {
+                            return false;
+                        }
 
-                public WeaponStations.Shot engage(
-                    Worker worker, SpottedTargets.Spot observation, WeaponStations.Discharge discharge) {
-                    pending[0] = discharge;
-                    return WeaponStations.Shot.COOLDOWN;
-                }
+                        public WeaponStations.Shot engage(
+                            Worker worker, SpottedTargets.Spot observation, WeaponStations.Discharge discharge) {
+                            pending[0] = discharge;
+                            return WeaponStations.Shot.COOLDOWN;
+                        }
 
-                public void release(Worker worker) {
-                }
-            };
-        try (WeaponStations.Lease lease =
-                WeaponStations.acquire(station, worker(fixture.sentry, List.of())).orElseThrow()) {
-            SpottedTargets.Spot observation = spots.get(fixture.sentry, target.getUUID()).orElseThrow();
-            helper.assertValueEqual(
-                lease.fire(spots, observation, () -> true),
-                WeaponStations.Shot.COOLDOWN,
-                "preparation does not report a fired shot");
-            helper.assertValueEqual(
-                pending[0].fire(
-                round -> {
-                    helper.assertTrue(
-                        Goods.matches(round, exact),
-                        "the native callback receives the reserved physical"
-                        + " component variant");
+                        public void release(Worker worker) {
+                        }
+                    };
+                try (WeaponStations.Lease lease =
+                        WeaponStations.acquire(station, worker(fixture.sentry, List.of())).orElseThrow()) {
+                    SpottedTargets.Spot observation = spots.get(fixture.sentry, target.getUUID()).orElseThrow();
                     helper.assertValueEqual(
-                        fixture.sentry.pack().count(Items.ARROW),
-                        31,
-                        "reservation precedes native callbacks");
-                    return false;
-                }),
-                WeaponStations.Shot.REFUSED,
-                "failed insertion refuses discharge");
-            helper.assertValueEqual(fixture.sentry.pack().count(Items.ARROW), 32, "the exact round"
-                + " is refunded");
-            lease.fire(spots, observation, () -> true);
-            helper.assertValueEqual(
-                pending[0].fire(round -> true),
-                WeaponStations.Shot.FIRED,
-                "successful insertion settles one physical round");
-            helper.assertValueEqual(
-                pending[0].fire(round -> true),
-                WeaponStations.Shot.COOLDOWN,
-                "the same native transaction cannot emit twice");
-            helper.assertValueEqual(
-                fixture.sentry.pack().count(Items.ARROW), 31, "replay spends no second round");
-        }
-        fixture.close();
-        helper.succeed();
+                        lease.fire(spots, observation, () -> true),
+                        WeaponStations.Shot.COOLDOWN,
+                        "preparation does not report a fired shot");
+                    helper.assertValueEqual(
+                        pending[0].fire(
+                        round -> {
+                            helper.assertTrue(
+                                Goods.matches(round, exact),
+                                "the native callback receives the reserved physical"
+                                + " component variant");
+                            helper.assertValueEqual(
+                                fixture.sentry.pack().count(Items.ARROW),
+                                31,
+                                "reservation precedes native callbacks");
+                            return false;
+                        }),
+                        WeaponStations.Shot.REFUSED,
+                        "failed insertion refuses discharge");
+                    helper.assertValueEqual(fixture.sentry.pack().count(Items.ARROW), 32, "the exact round"
+                        + " is refunded");
+                    lease.fire(spots, observation, () -> true);
+                    helper.assertValueEqual(
+                        pending[0].fire(round -> true),
+                        WeaponStations.Shot.FIRED,
+                        "successful insertion settles one physical round");
+                    helper.assertValueEqual(
+                        pending[0].fire(round -> true),
+                        WeaponStations.Shot.COOLDOWN,
+                        "the same native transaction cannot emit twice");
+                    helper.assertValueEqual(
+                        fixture.sentry.pack().count(Items.ARROW), 31, "replay spends no second round");
+                }
+                fixture.close();
+            }).thenSucceed();
     }
 
     @GameTest(template = "empty_large", templateNamespace = "folkways_core")

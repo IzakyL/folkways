@@ -108,8 +108,7 @@ public final class ColonyLabor implements WorkListener {
     private final Map<UUID, Personal> personalRequests = new LinkedHashMap<>();
     private final Set<UUID> reportedFailures = new LinkedHashSet<>();
     private final Inbox inbox = new Inbox();
-    private final Pipeline pipeline = new Pipeline(inbox, new Planner(new Claims(), new Cooldowns()), new Scheduler(),
-        this::planningProblem);
+    private final Pipeline pipeline;
     private final HoldingRegistry holdings = new HoldingRegistry();
     private final WorkExecution execution;
     private final Runners runners;
@@ -154,6 +153,8 @@ public final class ColonyLabor implements WorkListener {
 
     public ColonyLabor(ColonyData colony, ResourceKey<Level> dimension) {
         this.colony = colony;
+        pipeline = new Pipeline(inbox, new Planner(new Claims(), new Cooldowns(), colony.colonyId()), new Scheduler(),
+            this::planningProblem);
         this.works = colony.works();
         this.dimension = dimension;
         execution = new WorkExecution(works, phases, personal, holdings, this::hands,

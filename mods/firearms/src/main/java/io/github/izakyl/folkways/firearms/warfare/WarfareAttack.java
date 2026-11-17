@@ -1,14 +1,17 @@
 package io.github.izakyl.folkways.firearms.warfare;
 
 import io.github.izakyl.folkways.core.colony.api.Colonies;
+import io.github.izakyl.folkways.core.combat.api.WeaponAttack;
+import io.github.izakyl.folkways.core.combat.api.WeaponRules;
 import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.vanilla.combat.Threats;
-import io.github.izakyl.folkways.core.combat.api.WeaponAttack;
 import io.github.izakyl.folkways.vanilla.person.ResidentEntity;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.BooleanSupplier;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.phys.Vec3;
@@ -21,8 +24,8 @@ final class WarfareAttack implements WeaponAttack {
     private final Optional<UUID> colony;
     private BooleanSupplier lease = () -> true;
     private State state = State.READY;
-    private LivingEntity target;
-    private LivingEntity observedTarget;
+    private Entity target;
+    private Entity observedTarget;
     private BooleanSupplier authorized;
     private long lastTick = Long.MIN_VALUE;
 
@@ -35,7 +38,7 @@ final class WarfareAttack implements WeaponAttack {
 
     @Override
     public void leasedBy(BooleanSupplier lease) {
-        this.lease = java.util.Objects.requireNonNull(lease);
+        this.lease = Objects.requireNonNull(lease);
     }
 
     public State state() {
@@ -47,6 +50,11 @@ final class WarfareAttack implements WeaponAttack {
     }
 
     public boolean fire(LivingEntity target) {
+        return fireEntity(target);
+    }
+
+    @Override
+    public boolean fireEntity(Entity target) {
         if (state != State.READY || !valid() || !permitted(target) || !adapter.usable(worker, body.getMainHandItem())) {
             return false;
         }
@@ -92,11 +100,25 @@ final class WarfareAttack implements WeaponAttack {
         return valid() && permitted(target);
     }
 
-    private boolean permitted(LivingEntity target) {
-        return lease.getAsBoolean() && target instanceof Mob mob
+    @Override
+    public boolean explicitEntityTarget(Entity target, BooleanSupplier authorized) {
+        this.observedTarget = target;
+        this.authorized = authorized;
+        return valid() && permitted(target);
+    }
+
+    @Override
+    public boolean explicitTarget(LivingEntity target, BooleanSupplier authorized) {
+        return explicitEntityTarget(target, authorized);
+    }
+
+    private boolean permitted(Entity target) {
+        return lease.getAsBoolean() && target != null && target.isAlive()
             && target.level() == body.level()
-            && Threats.hostile(mob, body)
+            && (authorized != null && target == observedTarget && authorized.getAsBoolean()
+                || target instanceof Mob mob && Threats.hostile(mob, body))
             && (authorized == null || target == observedTarget && authorized.getAsBoolean())
+            && WeaponRules.permits(worker, target, body.getMainHandItem())
             && body.distanceToSqr(target) <= adapter.range() * adapter.range()
             && body.hasLineOfSight(target)
             && WarfareSafety.segment(

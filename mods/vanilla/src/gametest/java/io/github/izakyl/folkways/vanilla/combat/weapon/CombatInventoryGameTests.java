@@ -48,6 +48,87 @@ public final class CombatInventoryGameTests {
     }
 
     @GameTest(template = "empty_large", templateNamespace = "folkways_core")
+    public static void unchangedNearbyObstaclesKeepTheCurrentWalkingPath(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        for (int x = 0; x < 12; x++) {
+            for (int z = 0; z < 8; z++) {
+                helper.setBlock(new BlockPos(x, 0, z), Blocks.STONE);
+            }
+        }
+        var body = PersonBody.RESIDENT.get().create(level);
+        BlockPos feet = helper.absolutePos(new BlockPos(2, 1, 2));
+        body.moveTo(feet.getX() + .5, feet.getY(), feet.getZ() + .5);
+        body.setNoAi(true);
+        body.setOnGround(true);
+        level.addFreshEntity(body);
+        var boxes = new java.util.ArrayList<net.minecraft.world.phys.AABB>();
+        boxes.add(new net.minecraft.world.phys.AABB(feet.offset(0, 0, 3)));
+        Runnable remove = io.github.izakyl.folkways.core.world.api.Structures.install(
+            (world, area) -> world == level ? List.copyOf(boxes) : List.of());
+        io.github.izakyl.folkways.core.testing.Cleanup.on(helper, () -> {
+            remove.run();
+            body.discard();
+        });
+        var walk = new io.github.izakyl.folkways.vanilla.person.walk.OnFoot(1,
+            () -> "folkways.refusal.unreachable");
+        var goals = java.util.Set.of(WorldPos.of(level, feet.offset(7, 0, 0)));
+        walk.setOut(level, body, goals);
+        var original = body.getNavigation().getPath();
+        helper.assertTrue(original != null, "the initial route exists");
+        for (int tick = 0; tick < 10; tick++) {
+            walk.step(level, body, goals);
+        }
+        helper.assertTrue(body.getNavigation().getPath() == original,
+            "an unchanged nearby obstacle does not restart the route");
+        boxes.clear();
+        for (int tick = 0; tick < 10; tick++) {
+            walk.step(level, body, goals);
+        }
+        helper.assertTrue(body.getNavigation().getPath() != original,
+            "removing the nearby obstacle recomputes the route");
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty_large", templateNamespace = "folkways_core", timeoutTicks = 1200)
+    public static void realChunkUnloadDetachesResidentStockAfterTrackingStops(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        var colony = Colonies.mint(level.getServer());
+        BlockPos feet = helper.absolutePos(new BlockPos(2, 1, 2)).offset(100000, 0, 100000);
+        var chunk = new net.minecraft.world.level.ChunkPos(feet);
+        level.setChunkForced(chunk.x, chunk.z, true);
+        level.getChunk(chunk.x, chunk.z);
+        level.setBlockAndUpdate(feet.below(), Blocks.STONE.defaultBlockState());
+        var body = PersonBody.RESIDENT.get().create(level);
+        body.setNoAi(true);
+        BlockPos start = helper.absolutePos(new BlockPos(2, 1, 2));
+        body.moveTo(start.getX() + .5, start.getY(), start.getZ() + .5);
+        level.addFreshEntity(body);
+        colony.hold(PersonContent.ID, Claimed.Entity.of(body)).orElseThrow();
+        body.joinColony(colony.id());
+        body.pack().setItem(0, new ItemStack(Items.ARROW, 32));
+        InventoryObservations.publish(colony, level);
+        body.onRemovedFromLevel();
+        helper.assertTrue(colony.inventory().snapshot().residents().get(body.id()).state()
+            != InventorySnapshot.State.UNLOADED, "a tracking-only exit keeps colony stock online");
+        body.moveTo(feet.getX() + .5, feet.getY(), feet.getZ() + .5);
+        io.github.izakyl.folkways.core.testing.Cleanup.on(helper, () -> {
+            level.setChunkForced(chunk.x, chunk.z, false);
+            if (!body.isRemoved()) {
+                body.discard();
+            }
+        });
+        helper.runAfterDelay(5, () -> level.setChunkForced(chunk.x, chunk.z, false));
+        helper.startSequence().thenWaitUntil(() -> {
+            helper.assertTrue(body.getRemovalReason()
+                == net.minecraft.world.entity.Entity.RemovalReason.UNLOADED_TO_CHUNK,
+                "the real chunk system must unload the resident");
+            helper.assertValueEqual(colony.inventory().snapshot().residents().get(body.id()).state(),
+                InventorySnapshot.State.UNLOADED, "unloaded resident stock is no longer online");
+            helper.assertTrue(level.getEntity(body.id()) == null, "the old entity leaves the level index");
+        }).thenSucceed();
+    }
+
+    @GameTest(template = "empty_large", templateNamespace = "folkways_core")
     public static void planningUsesObservationsAndDefersIncompleteStock(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         var colony = Colonies.mint(level.getServer());

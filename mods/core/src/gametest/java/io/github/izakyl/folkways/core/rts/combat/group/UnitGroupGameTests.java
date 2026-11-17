@@ -60,6 +60,62 @@ public final class UnitGroupGameTests {
     }
 
     @GameTest(template = "empty_large", templateNamespace = "folkways_core")
+    public static void malformedCombatEntriesDoNotHideHealthyEntries(GameTestHelper helper) {
+        var colony = Colonies.mint(helper.getLevel().getServer());
+        var type = ResourceLocation.fromNamespaceAndPath("minecraft", "boat");
+        var profiles = new io.github.izakyl.folkways.core.combat.api.VehicleProfiles(
+            colony, helper.getLevel().registryAccess());
+        var profile = new io.github.izakyl.folkways.core.combat.api.VehicleProfile(UUID.randomUUID(),
+            "block.minecraft.stone %s", type, Set.of(), Optional.empty(), List.of(), 0, Map.of());
+        profiles.replace(profile);
+        helper.assertTrue(profile.displayName().getContents()
+            instanceof net.minecraft.network.chat.contents.PlainTextContents,
+            "player names are literal, including translation keys and format placeholders");
+        helper.assertValueEqual(profile.displayName().getString(), profile.name(), "name stays exact");
+        var tag = colony.kept(io.github.izakyl.folkways.core.combat.api.VehicleProfiles.ID);
+        var bad = profile.save(helper.getLevel().registryAccess());
+        bad.putString("type", "bad resource id");
+        tag.getList("profiles", net.minecraft.nbt.Tag.TAG_COMPOUND).add(0, bad);
+        colony.keep(io.github.izakyl.folkways.core.combat.api.VehicleProfiles.ID, tag);
+        helper.assertValueEqual(profiles.all(), List.of(profile), "bad profiles are skipped independently");
+        var rules = new CompoundTag();
+        var invalid = new CompoundTag();
+        invalid.putString("mode", "INVALID");
+        rules.put("broken", invalid);
+        rules.put("healthy", io.github.izakyl.folkways.core.combat.api.WeaponRules
+            .write(Map.of("healthy", io.github.izakyl.folkways.core.combat.api.WeaponRules.DEFAULT))
+            .getCompound("healthy"));
+        helper.assertValueEqual(io.github.izakyl.folkways.core.combat.api.WeaponRules.read(rules),
+            Map.of("healthy", io.github.izakyl.folkways.core.combat.api.WeaponRules.DEFAULT),
+            "bad rules do not prevent reading healthy rules");
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty_large", templateNamespace = "folkways_core")
+    public static void weaponRulesSurviveSplittingRegroupingAndReload(GameTestHelper helper) {
+        Scene scene = new Scene(helper);
+        List<Body> people = scene.people(4);
+        UnitGroup first = scene.groups.commandSelection(people, List.of(scene.line(12)), false);
+        var disabled = new io.github.izakyl.folkways.core.combat.api.WeaponRules.Rule(
+            io.github.izakyl.folkways.core.combat.api.WeaponRules.Mode.DISABLED, 30, false);
+        first.weaponRule("minecraft:melee", disabled);
+        UnitGroup split = scene.groups.commandSelection(people.subList(0, 2), List.of(scene.line(14)), false);
+        helper.assertValueEqual(split.weaponRules().get("minecraft:melee"), disabled,
+            "a replacement squad keeps its residents' policy");
+        scene.groups.releaseSelection(people.subList(0, 2));
+        UnitGroup regrouped = scene.groups.commandSelection(people, List.of(scene.line(16)), false);
+        helper.assertValueEqual(regrouped.weaponRules().get("minecraft:melee"), disabled,
+            "individual release and regrouping cannot reset fire policy");
+        UnitGroups loaded = new UnitGroups(scene.colony, scene.level.getServer());
+        for (Body body : people) {
+            helper.assertValueEqual(loaded.weaponRules(body.id()).get("minecraft:melee"), disabled,
+                "resident policy survives saving and loading");
+        }
+        loaded.clear();
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty_large", templateNamespace = "folkways_core")
     public static void groupWithoutControlRestoresExactIdsAndMemberOrder(GameTestHelper helper) {
         Scene scene = new Scene(helper);
         List<Body> people = scene.people(4);

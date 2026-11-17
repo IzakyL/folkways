@@ -1,19 +1,20 @@
 package io.github.izakyl.folkways.core.rts.combat.control;
 
-import io.github.izakyl.folkways.core.combat.api.Commands;
 import io.github.izakyl.folkways.core.colony.api.Colonies;
 import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.combat.api.Commands;
+import io.github.izakyl.folkways.core.combat.api.Vehicles;
 import io.github.izakyl.folkways.core.resident.api.Bodies;
 import io.github.izakyl.folkways.core.resident.api.Body;
-import io.github.izakyl.folkways.core.work.api.Urge;
-import io.github.izakyl.folkways.core.work.api.Worker;
-import io.github.izakyl.folkways.core.world.api.Realm;
-import io.github.izakyl.folkways.core.world.api.WorldSpaces;
 import io.github.izakyl.folkways.core.rts.combat.command.ResidentCommands;
 import io.github.izakyl.folkways.core.rts.combat.group.UnitGroup;
 import io.github.izakyl.folkways.core.rts.combat.group.UnitGroups;
 import io.github.izakyl.folkways.core.rts.combat.net.CombatPackets;
 import io.github.izakyl.folkways.core.rts.combat.net.SelectionOrders;
+import io.github.izakyl.folkways.core.work.api.Urge;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.world.api.Realm;
+import io.github.izakyl.folkways.core.world.api.WorldSpaces;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -27,6 +28,7 @@ import java.util.UUID;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.Entity;
 
 /** Transient, server-authoritative selection and shortcut ownership. All access belongs to the server thread. */
 public final class CombatSelectionOwnership {
@@ -90,6 +92,7 @@ public final class CombatSelectionOwnership {
         final Realm realm;
         final LinkedHashSet<UUID> selection = new LinkedHashSet<>();
         final List<LinkedHashSet<UUID>> groups = new ArrayList<>();
+        final Map<UUID, Entity> vehicles = new LinkedHashMap<>();
         final Map<UUID, Body> bodies = new LinkedHashMap<>();
         final Map<UUID, TrackedControl> controls = new LinkedHashMap<>();
         long until;
@@ -139,6 +142,10 @@ public final class CombatSelectionOwnership {
         Context context = context(player);
         Set<UUID> accepted = new LinkedHashSet<>();
         for (UUID id : members) {
+            vehicle(player, id).filter(candidate -> available(player, id)).ifPresent(candidate -> {
+                accepted.add(id);
+                context.vehicles.put(id, candidate);
+            });
             body(player, id)
                 .filter(candidate -> claimable(player, candidate))
                 .ifPresent(
@@ -387,9 +394,49 @@ public final class CombatSelectionOwnership {
             .filter(
             body ->
                 Commands.commandable(body)
+                    && (!body.mob().isPassenger()
+                        || Vehicles.of(body.mob().getVehicle()).isEmpty())
                     && colony.claimOf(id).isPresent()
                     && body.colonyId().filter(colony.id()::equals).isPresent()
                     && WorldSpaces.at(body.mob()).sameRealm(WorldSpaces.at(player)));
+    }
+
+    private Optional<Entity> vehicle(ServerPlayer player, UUID id) {
+        return Optional.ofNullable(player.serverLevel().getEntity(id))
+            .filter(Entity::isAlive)
+            .filter(entity -> WorldSpaces.at(entity).sameRealm(WorldSpaces.at(player)))
+            .filter(entity -> Vehicles.availableTo(player, colony.id(), entity))
+            .filter(entity -> entity.getPassengers().stream().allMatch(passenger -> Bodies.of(passenger)
+                .filter(body -> body.colonyId().filter(colony.id()::equals).isPresent()).isPresent()));
+    }
+
+    public boolean selectedVehicle(ServerPlayer player, Entity entity) {
+        requireThread();
+        prune();
+        Context context = contexts.get(player.getUUID());
+        return context != null && valid(context) && context.selection.contains(entity.getUUID())
+            && context.vehicles.get(entity.getUUID()) == entity
+            && player.getUUID().equals(owners.get(entity.getUUID()))
+            && vehicle(player, entity.getUUID()).filter(found -> found == entity).isPresent();
+    }
+
+    public void trackVehicle(ServerPlayer player, Entity entity, Vehicles.Order order) {
+        if (!selectedVehicle(player, entity)) {
+            return;
+        }
+        contexts.get(player.getUUID()).controls.put(entity.getUUID(), new TrackedControl() {
+            public boolean current(UUID id) {
+                return vehicle(player, id).filter(found -> found == entity).isPresent()
+                    && Vehicles.of(entity).orElseThrow().status(entity).route().points().equals(order.points());
+            }
+
+            public void release(UUID id) {
+                if (current(id)) {
+                    Vehicles.of(entity).orElseThrow().order(entity, new Vehicles.Order(Vehicles.Action.STOP,
+                        List.of(), -1, Optional.empty(), Optional.empty()));
+                }
+            }
+        });
     }
 
     private void renew(Context context) {
@@ -419,6 +466,7 @@ public final class CombatSelectionOwnership {
         // service again.
         owners.entrySet().removeIf(entry -> entry.getValue().equals(player) && !members.contains(entry.getKey()));
         context.bodies.keySet().retainAll(members);
+        context.vehicles.keySet().retainAll(members);
         members.forEach(id -> owners.put(id, player));
         for (UUID id : List.copyOf(context.controls.keySet())) {
             if (!members.contains(id)) {
@@ -436,6 +484,11 @@ public final class CombatSelectionOwnership {
         }
     }
 
+    /** Transfer a resident out of individual selection, including shortcut and old command reservations. */
+    public void releaseResident(UUID resident) {
+        removed(resident);
+    }
+
     void removed(UUID resident) {
         requireThread();
         UUID player = owners.remove(resident);
@@ -447,6 +500,7 @@ public final class CombatSelectionOwnership {
         context.selection.remove(resident);
         context.groups.forEach(group -> group.remove(resident));
         context.bodies.remove(resident);
+        context.vehicles.remove(resident);
         changed(player);
         if (control != null) {
             control.release(resident);
@@ -493,7 +547,8 @@ public final class CombatSelectionOwnership {
                     suspend(context);
                 }
                 for (UUID id : List.copyOf(context.members())) {
-                    if (body(player, id).filter(found -> found == context.bodies.get(id)).isEmpty()) {
+                    if (body(player, id).filter(found -> found == context.bodies.get(id)).isEmpty()
+                        && vehicle(player, id).filter(found -> found == context.vehicles.get(id)).isEmpty()) {
                         removed(id);
                     }
                 }

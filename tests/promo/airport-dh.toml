@@ -1,0 +1,52 @@
+# DH 3.3.3 uses schema 5; an older/missing version resets the supplied settings.
+_version = 5
+
+[client.advanced.graphics.quality]
+# 1280 blocks leaves a 256-block margin for camera movement around the 1024-block airport radius.
+lodChunkRenderDistanceRadius = 80
+horizontalQuality = "HIGH"
+verticalQuality = "HIGH"
+maxHorizontalResolution = "BLOCK"
+# Keep both sides of the vanilla/LOD boundary opaque for the moving capture camera.
+vanillaFadeMode = "NONE"
+ditherDhFade = false
+
+[client.advanced.graphics.culling]
+# Do not clip away LODs based on the nominal vanilla radius: the moving camera can see beyond
+# the chunks Sodium actually draws, leaving sky-coloured holes inside DH's automatic clip radius.
+overdrawPrevention = "0.0"
+
+[client.advanced.graphics.fog]
+enableDhFog = false
+enableVanillaFog = false
+
+[common.worldGenerator]
+# The airport is superflat: generate actual chunks rather than approximate noise surfaces.
+generatorPlan = "CHUNKS_ONLY"
+chunkGeneratorMode = "FEATURES"
+
+[server]
+# Accept client requests for distant generation and stream both new and cached LODs.
+maxGenerationRequestDistance = 1024
+maxSyncOnLoadRequestDistance = 1024
+synchronizeOnLoad = true
+enableRealTimeUpdates = true
+
+[client.advanced.autoUpdater]
+enableAutoUpdater = false
+
+# Keep diagnostics in the file, never in the film (including generation progress and GL errors).
+[common.logging]
+globalChatMaxLevel = "DISABLED"
+logRendererGLEventToChat = "DISABLED"
+
+[common.logging.warning]
+showLowMemoryWarningOnStartup = false
+showPoolInsufficientMemoryWarning = false
+showHighVanillaRenderDistanceWarning = false
+showReplayWarningOnStartup = false
+showUpdateQueueOverloadedChatWarning = false
+showSlowWorldGenSettingWarnings = false
+showModCompatibilityWarningsOnStartup = false
+showGarbageCollectorWarning = false
+showExplicitGcDisabledWarning = false

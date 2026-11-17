@@ -1,12 +1,13 @@
 package io.github.izakyl.folkways.core.rts.combat.group;
 
+import io.github.izakyl.folkways.core.combat.api.WeaponRules;
 import io.github.izakyl.folkways.core.resident.api.Body;
+import io.github.izakyl.folkways.core.rts.combat.command.ResidentCommands;
 import io.github.izakyl.folkways.core.work.api.Stances;
 import io.github.izakyl.folkways.core.work.support.WorkStances;
 import io.github.izakyl.folkways.core.world.api.Footing;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.core.world.api.WorldSpaces;
-import io.github.izakyl.folkways.core.rts.combat.command.ResidentCommands;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -116,6 +117,27 @@ public final class UnitGroup {
 
     public UUID id() {
         return id;
+    }
+
+    public Map<String, WeaponRules.Rule> weaponRules() {
+        var rules = new LinkedHashMap<String, WeaponRules.Rule>();
+        members.forEach(member -> owner.weaponRules(member).forEach((weapon, rule) ->
+            rules.merge(weapon, rule, (left, right) -> {
+                var mode = left.mode().ordinal() >= right.mode().ordinal() ? left.mode() : right.mode();
+                double range = left.range() == 0 ? right.range()
+                    : right.range() == 0 ? left.range() : Math.min(left.range(), right.range());
+                return new WeaponRules.Rule(mode, range, left.indirect() && right.indirect());
+            })));
+        return Map.copyOf(rules);
+    }
+
+    public void weaponRule(String weapon, WeaponRules.Rule rule) {
+        owner.requireGroup(this);
+        if (weapon.isBlank() || weapon.length() > 256 || weaponRules().size() >= 256 && !weaponRules().containsKey(weapon)) {
+            throw new IllegalArgumentException("invalid weapon rule category");
+        }
+        members.forEach(member -> owner.weaponRule(member, weapon, rule));
+        owner.save();
     }
 
     public Set<UUID> members() {

@@ -127,6 +127,13 @@ public final class Overhead {
         return eye != null;
     }
 
+    /** Keeps vanilla body position updates running only while this view owns the local player's camera. */
+    public static boolean sendsPlayerPosition(LocalPlayer player) {
+        Minecraft minecraft = Minecraft.getInstance();
+        return eye != null && minecraft.player == player && minecraft.getCameraEntity() == eye
+            && minecraft.level == eye.level();
+    }
+
     /** Whether a screen stands between the player and the world: any but the one this view is worked through. */
     static boolean screened(Minecraft minecraft) {
         return minecraft.screen != null && !(minecraft.screen instanceof OverheadScreen);

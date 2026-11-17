@@ -149,6 +149,9 @@ export class LayoutProbe {
             + "a lint over a partial tree would miss whatever was cut",
         );
       }
+      if (read.holder === "widget") {
+        throw new Error("layout lint reads panels held by a screen or a menu, not a ModularUI widget");
+      }
       const nodes = await this.wraps(read.holder);
       mismatch = misaligned(read.elements, nodes);
       if (!mismatch) {

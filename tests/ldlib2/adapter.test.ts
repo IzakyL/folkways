@@ -320,6 +320,34 @@ test("a hover that never lands on the target sends no click, and says what kept 
   assert.deepEqual(instance.args("Mouse.buttonTask").map((args) => args.action), ["press"]);
 });
 
+test("a detached target is resolved again before any press, using the replacement's geometry and handles", async () => {
+  let replaced = false;
+  const replacement = { ...TARGET, aim: { x: 60, y: 40 }, subtree: ["h17"], owned: ["h17"] };
+  const { instance, mc } = fake((task) => {
+    if (task.source.includes("Ldlib2.check")) {
+      return answered({ value: replaced ? replacement : TARGET, ticks: 0, elapsedMs: 1 });
+    }
+    if (task.source.includes("Ldlib2.attached")) {
+      return answered(false);
+    }
+    if (task.source.includes("Mouse.buttonTask")) {
+      const args = task.args as Record<string, any>;
+      if (args.action === "press" && !replaced) {
+        replaced = true;
+        return failed("hover-mismatch", { hovered: { class: `${PKG}Button`, handle: "h17" } });
+      }
+      return args.action === "press" ? pressed("h17") : answered({ action: "release" });
+    }
+    return answered({});
+  });
+  const done = await clickElement(mc, { id: "confirm" });
+  assert.deepEqual({ x: done.x, y: done.y }, replacement.aim);
+  assert.deepEqual(instance.args("Ldlib2.hover").map(({ x, y }) => ({ x, y })), [TARGET.aim, replacement.aim]);
+  assert.deepEqual(instance.args("Mouse.buttonTask").filter(args => args.action === "press")
+    .map(args => args.hovered.within), [TARGET.subtree, replacement.subtree]);
+  assert.deepEqual(instance.args("Ldlib2.release"), [{ handles: ["h8"] }, { handles: ["h17"] }]);
+});
+
 test("a mouse-down LDLib2 hands to something outside the target fails the click, after releasing", async () => {
   const outside = pointer((args) => (args.action === "press" ? pressed("h42") : answered({})));
   await assert.rejects(clickElement(outside.mc, { id: "confirm" }), /handed the click to .*handle=h42, which is outside/);

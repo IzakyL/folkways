@@ -602,6 +602,10 @@ public final class InventoryIndex implements ColonyInventory, InventoryFeedback 
     }
 
     private void dirty(Entry entry) {
+        if (entry instanceof StoreEntry store && store.approach.declared()) {
+            Approach old = store.approach;
+            store.approach = new Approach(old.revision(), State.DIRTY, old.stands(), old.taking(), old.putting(), true);
+        }
         entry.state(State.DIRTY);
         entry.generation++;
         enqueue(entry);
@@ -1305,8 +1309,13 @@ public final class InventoryIndex implements ColonyInventory, InventoryFeedback 
                 Set<Stand> stands = new LinkedHashSet<>();
                 Set<Stand> taking = new LinkedHashSet<>();
                 Set<Stand> putting = new LinkedHashSet<>();
+                boolean declared = false;
                 for (WorldPos alias : approachesAt()) {
-                    Set<Stand> cells = StandGeometry.footingsOf(level, alias);
+                    var port = WorldSpaces.resolve(level.getServer(), alias)
+                        .flatMap(at -> StorePorts.at(at.level(), at.cell()));
+                    var supplied = port.flatMap(value -> value.approach(level));
+                    declared |= supplied.isPresent();
+                    Set<Stand> cells = supplied.orElseGet(() -> StandGeometry.footingsOf(level, alias));
                     stands.addAll(cells);
                     Set<Operation> allowed = operations.getOrDefault(alias, Set.of());
                     if (allowed.contains(Operation.TAKE)) {
@@ -1317,11 +1326,11 @@ public final class InventoryIndex implements ColonyInventory, InventoryFeedback 
                     }
                 }
                 if (!approach.stands().equals(stands) || !approach.taking().equals(taking)
-                    || !approach.putting().equals(putting) || approaches == 0) {
+                    || !approach.putting().equals(putting) || approach.declared() != declared || approaches == 0) {
                     approaches++;
                     InventoryIndex.this.approaches++;
                 }
-                approach = new Approach(approaches, State.OBSERVED, stands, taking, putting);
+                approach = new Approach(approaches, State.OBSERVED, stands, taking, putting, declared);
             }
         }
     }

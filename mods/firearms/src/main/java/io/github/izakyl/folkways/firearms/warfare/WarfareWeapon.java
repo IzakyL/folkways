@@ -6,12 +6,12 @@ import com.atsuishio.superbwarfare.data.gun.GunData;
 import com.atsuishio.superbwarfare.data.gun.GunProp;
 import com.atsuishio.superbwarfare.data.gun.ShootParameters;
 import com.atsuishio.superbwarfare.item.gun.GunItem;
+import io.github.izakyl.folkways.core.combat.api.WeaponAttack;
 import io.github.izakyl.folkways.core.item.api.Containers;
 import io.github.izakyl.folkways.core.item.api.Goods;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.vanilla.combat.weapon.WeaponAdapter;
-import io.github.izakyl.folkways.core.combat.api.WeaponAttack;
 import io.github.izakyl.folkways.vanilla.person.ResidentEntity;
 import java.util.HashMap;
 import java.util.Map;
@@ -20,7 +20,7 @@ import java.util.WeakHashMap;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.Vec3;
 
@@ -106,7 +106,6 @@ public final class WarfareWeapon implements WeaponAdapter {
         return accepts(stack) && (GunData.from(stack).ammo.get() > 0 || Goods.countIn(worker.pack(), ammunition()) > 0);
     }
 
-
     @Override
     public Optional<WeaponAttack> open(Worker worker) {
         if (!(worker.body() instanceof ResidentEntity resident)
@@ -158,7 +157,7 @@ public final class WarfareWeapon implements WeaponAdapter {
     }
 
     // The native magazine consumes loaded rounds first; loose supplies lend one round when empty.
-    boolean shoot(ServerLevel level, Worker who, LivingEntity target, ItemStack weapon) {
+    boolean shoot(ServerLevel level, Worker who, Entity target, ItemStack weapon) {
         if (!accepts(weapon) || !ready(level, (ResidentEntity) who.body())) {
             return false;
         }

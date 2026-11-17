@@ -1,19 +1,20 @@
 package io.github.izakyl.folkways.core.rts.combat.net;
 
-import io.github.izakyl.folkways.core.combat.api.Targets;
-import io.github.izakyl.folkways.core.combat.api.Commands;
 import io.github.izakyl.folkways.core.colony.api.Colony;
-import io.github.izakyl.folkways.core.resident.api.Bodies;
-import io.github.izakyl.folkways.core.resident.api.Body;
-import io.github.izakyl.folkways.core.world.api.Footing;
-import io.github.izakyl.folkways.core.world.api.WorldPos;
-import io.github.izakyl.folkways.core.world.api.WorldSpaces;
+import io.github.izakyl.folkways.core.combat.api.Commands;
+import io.github.izakyl.folkways.core.combat.api.Targets;
+import io.github.izakyl.folkways.core.combat.api.Vehicles;
 import io.github.izakyl.folkways.core.front.api.Books;
 import io.github.izakyl.folkways.core.front.api.ui.Pages;
 import io.github.izakyl.folkways.core.front.engine.charter.CurrentColony;
+import io.github.izakyl.folkways.core.resident.api.Bodies;
+import io.github.izakyl.folkways.core.resident.api.Body;
 import io.github.izakyl.folkways.core.rts.combat.control.CombatSelectionOwnership;
 import io.github.izakyl.folkways.core.rts.combat.group.UnitGroup;
 import io.github.izakyl.folkways.core.rts.combat.group.UnitGroups;
+import io.github.izakyl.folkways.core.world.api.Footing;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
+import io.github.izakyl.folkways.core.world.api.WorldSpaces;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
@@ -21,6 +22,7 @@ import java.util.Set;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.Mob;
 
 /** Authoritative selection commands; clients submit intent, never navigation or membership edits. */
@@ -140,10 +142,10 @@ public final class SelectionOrders {
                 authorized(player, colonyId).orElseThrow(() -> new IllegalArgumentException("unauthorized"));
             if (residents.isEmpty()
                 || residents.size() > CombatPackets.MAX_MEMBERS
-                || !(player.serverLevel().getEntity(targetId) instanceof Mob target)
-                || player.distanceToSqr(target) > 128 * 128) {
+                || player.serverLevel().getEntity(targetId) == null) {
                 return false;
             }
+            Entity target = player.serverLevel().getEntity(targetId);
             List<Body> people =
                 new LinkedHashSet<>(residents).stream().map(id -> selectedBody(player, colony, id)).toList();
             if (people.stream().anyMatch(body -> !Targets.explicitlyAttackable(target, body.mob(), player))) {
@@ -184,6 +186,8 @@ public final class SelectionOrders {
         Set<UUID> result = new LinkedHashSet<>();
         for (var resident : colony.residents()) {
             body(player, colony, resident.id())
+                .filter(body -> !body.mob().isPassenger()
+                    || Vehicles.of(body.mob().getVehicle()).isEmpty())
                 .filter(body -> CombatSelectionOwnership.of(colony).canSelect(player, body))
                 .ifPresent(body -> result.add(body.id()));
         }
@@ -216,11 +220,8 @@ public final class SelectionOrders {
         if (!level.hasChunksAt(feet.offset(-1, -1, -1), feet.offset(1, 2, 1))
             || !Footing.withFeetAt(level, feet)
             || !level.getFluidState(feet).isEmpty()
-            || !level.getFluidState(feet.above()).isEmpty()
-            || WorldSpaces.world(level, point)
-            .filter(at -> at.distanceToSqr(player.position()) <= 128 * 128)
-            .isEmpty()) {
-            throw new IllegalArgumentException("unsafe or distant destination");
+            || !level.getFluidState(feet.above()).isEmpty()) {
+            throw new IllegalArgumentException("unsafe destination");
         }
     }
 }

@@ -41,9 +41,13 @@ public final class Planner {
     }
 
     public Planner(Claims claims, Cooldowns cooldowns) {
+        this(claims, cooldowns, new UUID(0, 0));
+    }
+
+    public Planner(Claims claims, Cooldowns cooldowns, UUID colony) {
         this.claims = claims;
         this.cooldowns = cooldowns;
-        this.weaver = new Weaver(claims, cooldowns);
+        this.weaver = new Weaver(claims, cooldowns, colony);
     }
 
     // `tours` are the routes the schedule last laid, as far as this stage has heard: work that finishes on one is
@@ -105,6 +109,11 @@ public final class Planner {
 
         long digested = System.nanoTime();
         WeaveDelta delta = weaver.grow(retry);
+        // A committed node can leave the plan before its settlement is reported. Its runner has already
+        // let go, so no later Released message is guaranteed to clear the planner's old holding.
+        if (inHand.values().removeIf(delta.removed()::contains)) {
+            crew = crewOf(known);
+        }
         long woven = System.nanoTime();
         List<Shortfall> shortfalls = weaver.shortfalls();
         return new Woven(delta, crew, known.world().ways(), retry, shortfalls, weaver.refused(),

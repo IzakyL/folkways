@@ -1,12 +1,14 @@
 package io.github.izakyl.folkways.core.rts.combat.command;
 
-import io.github.izakyl.folkways.core.combat.api.Targets;
-import io.github.izakyl.folkways.core.combat.api.Supplies;
-import io.github.izakyl.folkways.core.combat.api.Commands;
-import io.github.izakyl.folkways.core.combat.api.Combatant;
 import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.combat.api.Combatant;
+import io.github.izakyl.folkways.core.combat.api.Commands;
+import io.github.izakyl.folkways.core.combat.api.DefenseControl;
+import io.github.izakyl.folkways.core.combat.api.Supplies;
+import io.github.izakyl.folkways.core.combat.api.Targets;
 import io.github.izakyl.folkways.core.resident.api.Body;
 import io.github.izakyl.folkways.core.resident.api.RefusalKind;
+import io.github.izakyl.folkways.core.rts.combat.net.SelectionOrders;
 import io.github.izakyl.folkways.core.work.api.Ending;
 import io.github.izakyl.folkways.core.work.api.Stances;
 import io.github.izakyl.folkways.core.work.api.Urge;
@@ -14,8 +16,6 @@ import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.core.work.support.WorkStances;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.core.world.api.WorldSpaces;
-import io.github.izakyl.folkways.core.combat.api.DefenseControl;
-import io.github.izakyl.folkways.core.rts.combat.net.SelectionOrders;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -28,6 +28,7 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.tags.DamageTypeTags;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.phys.Vec3;
 
@@ -104,6 +105,10 @@ public final class ResidentCommands {
 
         public WorldPos destination() {
             return destination;
+        }
+
+        public Optional<UUID> targetId() {
+            return Optional.ofNullable(target);
         }
 
         public Mode mode() {
@@ -223,7 +228,7 @@ public final class ResidentCommands {
     }
 
     /** One explicit mob target, bound to this commander's continuing book authority and each actual body. */
-    public List<Order> attack(List<Body> bodies, Mob target, ServerPlayer commander) {
+    public List<Order> attack(List<Body> bodies, Entity target, ServerPlayer commander) {
         requireServerThread();
         if (SelectionOrders.authorized(commander, colony.id()).isEmpty() || bodies.isEmpty()) {
             throw new IllegalArgumentException("unauthorized attack");
@@ -530,7 +535,7 @@ public final class ResidentCommands {
             } else if (order.mode == Mode.ATTACK) {
                 // A moving target replaces only this runner's short approach step, never starts
                 // another navigator.
-                Mob target = attackTarget(order).orElseThrow();
+                Entity target = attackTarget(order).orElseThrow();
                 long now = server.overworld().getGameTime();
                 WorldPos at = WorldSpaces.at(target);
                 if (now >= order.retargetAt
@@ -579,15 +584,13 @@ public final class ResidentCommands {
             && colony.claimOf(body.id()).isPresent();
     }
 
-    Optional<Mob> attackTarget(Order order) {
+    Optional<Entity> attackTarget(Order order) {
         if (order.mode != Mode.ATTACK
             || active.get(order.resident()) != order
             || attackInvalidation(order) != AttackEnd.NONE) {
             return Optional.empty();
         }
-        return Optional.ofNullable(((ServerLevel) order.body.mob().level()).getEntity(order.target))
-            .filter(Mob.class::isInstance)
-            .map(Mob.class::cast);
+        return Optional.ofNullable(((ServerLevel) order.body.mob().level()).getEntity(order.target));
     }
 
     private AttackEnd attackInvalidation(Order order) {
@@ -607,7 +610,8 @@ public final class ResidentCommands {
             return AttackEnd.AUTHORITY_LOST;
         }
         ServerLevel level = (ServerLevel) order.body.mob().level();
-        if (!(level.getEntity(order.target) instanceof Mob target)) {
+        Entity target = level.getEntity(order.target);
+        if (target == null) {
             return AttackEnd.TARGET_LOST;
         }
         if (!target.isAlive()) {
@@ -619,14 +623,13 @@ public final class ResidentCommands {
         }
         if (!WorldSpaces.at(target).sameRealm(order.destination)
             || WorldSpaces.at(target).cell().distSqr(order.destination.cell()) > 64 * 64
-            || order.body.mob().distanceToSqr(target) > 128 * 128
-            || commander.distanceToSqr(target) > 128 * 128) {
+            || order.body.mob().distanceToSqr(target) > 128 * 128) {
             return AttackEnd.OUT_OF_RANGE;
         }
         return AttackEnd.NONE;
     }
 
-    boolean permitsAttack(Order order, UUID step, Worker worker, Mob target) {
+    boolean permitsAttack(Order order, UUID step, Worker worker, Entity target) {
         return order.step.equals(step)
             && worker.body() == order.body.mob()
             && worker.resident().id().equals(order.resident())

@@ -31,7 +31,7 @@ public final class RawUpgrades {
     public static boolean ownNamespace(String namespace) {
         return java.util.Set.of("folkways_core", "folkways_vanilla", "folkways_create", "folkways_cookery",
             "folkways_firearms", "folkways_carts", "folkways_carving", "folkways_chiselsandbits", "folkways_golems",
-            "folkways_epicfight").contains(namespace);
+            "folkways_epicfight", "folkways_airline").contains(namespace);
     }
 
     public static int storedVersion(CompoundTag raw, int fallback) {

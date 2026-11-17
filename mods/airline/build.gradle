@@ -1,0 +1,20 @@
+plugins {
+    id "net.neoforged.moddev"
+    id "java-library"
+    id "maven-publish"
+}
+
+ext.modId = "folkways_airline"
+ext.modName = "folkways-airline"
+apply from: rootProject.file("gradle/mod.gradle")
+evaluationDependsOn(":core")
+evaluationDependsOn(":vanilla")
+evaluationDependsOn(":create")
+
+dependencies {
+    api project(":vanilla")
+    implementation project(":create")
+    compileOnly lib("create")
+    compileOnly lib("sable"), lib("sable-companion")
+    gametestImplementation project(":core").sourceSets.gameTestFixtures.output
+}

@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.OptionalLong;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
+import io.github.izakyl.folkways.core.world.api.Stand;
 import java.util.Set;
 import net.minecraft.server.level.ServerLevel;
 
@@ -65,6 +66,14 @@ public interface StorePort {
      * independent, non-proxy stores in the same realm. Resolve again to observe network changes.
      */
     default Optional<List<WorldPos>> proxyMembers() {
+        return Optional.empty();
+    }
+
+    /**
+     * Exactly where residents reach this port, possibly in another realm. Empty Optional uses ordinary footings;
+     * a present empty set admits no approach. Signal changes through StorePorts.changed.
+     */
+    default Optional<Set<Stand>> approach(ServerLevel level) {
         return Optional.empty();
     }
 

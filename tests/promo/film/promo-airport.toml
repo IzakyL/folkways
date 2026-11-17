@@ -1,0 +1,33 @@
+# 机场与载具宣传片的字幕。改完在仓库根目录运行：npm run promo:airport:film
+# 镜头顺序：机场全景 → 塔台界面 → 地面载具（登乘、攻击、移动）→ 直升机起降 → 固定翼起飞 → 弹射起飞 → 降落
+# → 航母全景 → 直升机上舰 → 舰载弹射 → 着舰（成功才剪入）→ 结尾。
+# captions = 这一段显示的文字，一项一行；tag = 金色小标签；删掉某段 = 那一段不出字。
+
+[scenes.airfield]
+tag = "新结构：机场"
+captions = ["包含跑道、滑行道、停机坪、直升机坪"]
+
+[scenes.tower]
+tag = "塔台"
+captions = ["需要塔台视野覆盖机场", "一个机场可以具有多个塔台"]
+
+[scenes.armour]
+captions = ["地面载具控制：一键登乘、攻击、移动"]
+
+[scenes.helicopters]
+captions = ["直升机控制"]
+
+[scenes.takeoff]
+captions = ["固定翼控制"]
+
+[scenes.catapult]
+captions = ["支持：卓越前线 弹射器"]
+
+[scenes.carrier]
+captions = ["机场同样可以位于航空学结构上"]
+
+[scenes.deck-helicopter]
+
+[scenes.deck-catapult]
+
+[scenes.deck-landing]

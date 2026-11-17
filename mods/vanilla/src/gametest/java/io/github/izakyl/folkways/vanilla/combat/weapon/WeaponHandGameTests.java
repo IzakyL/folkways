@@ -83,6 +83,32 @@ public final class WeaponHandGameTests {
         event.register(WeaponHandGameTests.class);
     }
 
+    @GameTest(template = "empty_large", templateNamespace = "folkways_core")
+    public static void distantTargetUsesWeaponRuleRangeForApproach(GameTestHelper helper) {
+        Fixture fixture = fixture(helper, Items.BOW, 0);
+        var colony = Colonies.mint(helper.getLevel().getServer());
+        var body = fixture.body();
+        colony.hold(PersonContent.ID, Claimed.Entity.of(body)).orElseThrow();
+        body.joinColony(colony.id());
+        arm(colony, body, "Ranged", ItemSpec.of(Items.BOW));
+        body.pack().insert(new ItemStack(Items.ARROW, 16));
+        var group = io.github.izakyl.folkways.core.rts.combat.group.UnitGroups.of(colony)
+            .commandSelectionPoints(List.of(body), List.of(io.github.izakyl.folkways.core.world.api.WorldPos.of(helper.getLevel(), body.blockPosition())),
+                -1, false);
+        var squad = io.github.izakyl.folkways.core.rts.combat.group.UnitGroups.of(colony)
+            .ofResident(body.id()).orElseThrow();
+        squad.weaponRule("folkways_vanilla:bow", new io.github.izakyl.folkways.core.combat.api.WeaponRules.Rule(
+            io.github.izakyl.folkways.core.combat.api.WeaponRules.Mode.FREE, 10, false));
+        fixture.target().setPos(body.position().add(50, 0, 0));
+        helper.assertValueEqual(Weapons.range(worker(body), fixture.target()), 10.0,
+            "a distant target approaches to the weapon's policy range instead of melee range");
+        squad.weaponRule("folkways_vanilla:bow", new io.github.izakyl.folkways.core.combat.api.WeaponRules.Rule(
+            io.github.izakyl.folkways.core.combat.api.WeaponRules.Mode.DISABLED, 10, false));
+        helper.assertValueEqual(Weapons.rangedRange(worker(body), fixture.target()), 0.0,
+            "disabled weapons remain excluded from approach selection");
+        helper.succeed();
+    }
+
     @GameTest(batch = "vanilla_weapons", template = "empty_large", templateNamespace = "folkways_core")
     public static void temporaryKitchenHandPreservesPresentationWithoutDuplicatingItems(GameTestHelper helper) {
         Fixture fixture = fixture(helper, Items.IRON_SWORD, 7);

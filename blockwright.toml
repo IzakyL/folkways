@@ -166,6 +166,12 @@ url = "https://cdn.modrinth.com/data/AANobbMI/versions/uMOpc5uV/sodium-neoforge-
 sha512 = "4f537696af95411e9daf15795fb5fcbc49913d488a96fa912fa8f1d7db408710995e8a1461190f3cd0f8217bf9e35e9539176592428ed587ca2d7aa84450a390"
 target = []
 
+# Stable release published 2026-09-29; DH generates and streams LODs on the dedicated server.
+[mods.distanthorizons]
+url = "https://cdn.modrinth.com/data/uCdwusMi/versions/9w34y8ai/DistantHorizons-3.3.3-1.21.1-fabric-neoforge.jar"
+sha512 = "d14b32d3fd143a06514d6ad388eee11e9d657c84e1a937aaf8d033b1137fb43ef8b05cff1011a994cc42f3106823c51234f8bc18d72bb05bc317a20ea83c50ed"
+target = []
+
 # 1.8.14-beta.1 is the NeoForge 1.21.1 release supporting Sodium 0.8.
 [mods.iris]
 url = "https://cdn.modrinth.com/data/YL57xq9U/versions/KduFYu4t/iris-neoforge-1.8.14-beta.1%2Bmc1.21.1.jar"
@@ -512,6 +518,9 @@ height = 720
 
 [profile.weapon_poses.mods]
 folkways_capture = { target = ["client"] }
+# The tower page is filmed: the recipe viewers' item lists would crowd the screen beside it.
+emi = { target = [] }
+jei = { target = [] }
 folkways_firearms = { target = ["server", "client"] }
 superbwarfare = { target = ["server", "client"] }
 kotlinforforge = { target = ["server", "client"] }
@@ -616,6 +625,9 @@ tacz = { target = ["server", "client"] }
 folkways_create = { target = ["server", "client"] }
 createfirefightingadd = { target = ["server", "client"] }
 folkways_capture = { target = ["client"] }
+# The tower page is filmed: the recipe viewers' item lists would crowd the screen beside it.
+emi = { target = [] }
+jei = { target = [] }
 
 # Review the RTS cards at both physical sizes on a GPU display large enough for the full-size shot.
 [profile.visual-rts.mods]
@@ -629,6 +641,23 @@ options = { guiScale = "2", overrideWidth = "1920", overrideHeight = "1080", tut
 device = "gpu"
 width = 1920
 height = 1080
+
+# The RTS vehicle and squad windows over Superb Warfare, which needs a real GL context to load.
+[profile.warfare-rts.mods]
+# NeoForge must query the active EGL context instead of the GLFW NO_API placeholder.
+folkways_capture = { target = ["client"] }
+folkways_firearms = { target = ["client", "server"] }
+superbwarfare = { target = ["client", "server"] }
+kotlinforforge = { target = ["client", "server"] }
+
+[profile.warfare-rts.neoforge.client]
+game_args = ["--width", "1600", "--height", "900"]
+options = { guiScale = "2", overrideWidth = "1600", overrideHeight = "900", tutorialStep = "none", pauseOnLostFocus = "false" }
+
+[profile.warfare-rts.neoforge.client.display]
+device = "gpu"
+width = 1600
+height = 900
 
 [profile.carving.mods]
 folkways_carving = { target = ["server", "client"] }
@@ -910,5 +939,58 @@ guideme = { target = ["server", "client"] }
 refinedstorage = { target = ["server", "client"] }
 curios = { target = ["client", "server"] }
 # The terminal and the panel are filmed: the recipe viewers' item lists would crowd the screen beside them.
+emi = { target = [] }
+jei = { target = [] }
+
+# The diagram's native Simulated screen and the Folkways envelope sheet.
+[mods.folkways_airline]
+path = "build/libs/folkways-airline-*.jar"
+target = []
+
+[profile.airline.mods]
+createfirefightingadd = { target = ["server", "client"] }
+folkways_airline = { target = ["server", "client"] }
+sable = { target = ["server", "client"] }
+
+[profile.airline.neoforge.client]
+options = { guiScale = "2", overrideWidth = "1280", overrideHeight = "900", lang = "zh_cn", tutorialStep = "none", pauseOnLostFocus = "false" }
+
+[profile.airline.neoforge.client.display]
+device = "auto"
+width = 1280
+height = 900
+
+# Diesel flight verification only; excluded from default instances.
+
+# The airport and Superb Warfare vehicle promo: Airline's patterns and tower, Firearms' vehicle units, and Distant Horizons.
+[profile.promo-airport.neoforge]
+jvm_args = ["-Xmx6G"]
+
+[profile.promo-airport.neoforge.server]
+world = "vanilla"
+properties = { "level-seed" = "folkways-airport", "view-distance" = "16", "simulation-distance" = "12", "max-tick-time" = "-1", "spawn-monsters" = "false", "level-type" = "minecraft:flat", "generator-settings" = '{"biome":"minecraft:plains","features":false,"lakes":false,"layers":[{"block":"minecraft:bedrock","height":1},{"block":"minecraft:dirt","height":3},{"block":"minecraft:grass_block","height":1}],"structure_overrides":[]}' }
+
+[profile.promo-airport.neoforge.client]
+game_args = ["--width", "1920", "--height", "1080"]
+options = { lang = "zh_cn", guiScale = "2", overrideWidth = "1920", overrideHeight = "1080", maxFps = "260", renderDistance = "16", graphicsMode = "1", entityShadows = "true", entityDistanceScaling = "5.0", biomeBlendRadius = "3", ao = "true", tutorialStep = "none", pauseOnLostFocus = "false", bobView = "false", fovEffectScale = "0.0", soundCategory_music = "0.0", soundCategory_record = "0.0", soundCategory_ambient = "0.0" }
+
+[profile.promo-airport.neoforge.client.display]
+device = "gpu"
+width = 1920
+height = 1080
+
+[profile.promo-airport.mods]
+sodium = { target = ["client"] }
+distanthorizons = { target = ["client", "server"] }
+sable = { target = ["server", "client"] }
+# The carrier floats on a levitite keel.
+create-aeronautics = { target = ["server", "client"] }
+folkways_create = { target = ["server", "client"] }
+folkways_airline = { target = ["server", "client"] }
+folkways_firearms = { target = ["server", "client"] }
+superbwarfare = { target = ["server", "client"] }
+kotlinforforge = { target = ["server", "client"] }
+folkways_capture = { target = ["client"] }
+# The tower page is filmed: the recipe viewers' item lists would crowd the screen beside it.
 emi = { target = [] }
 jei = { target = [] }

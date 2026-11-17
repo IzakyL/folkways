@@ -13,13 +13,13 @@ import com.atsuishio.superbwarfare.entity.vehicle.base.VehicleEntity;
 import com.atsuishio.superbwarfare.init.ModEntities;
 import com.atsuishio.superbwarfare.init.ModItems;
 import io.github.izakyl.folkways.core.extension.api.Declaring;
-import io.github.izakyl.folkways.core.item.api.ItemSpec;
-import io.github.izakyl.folkways.core.world.api.WorldSpaces;
 import io.github.izakyl.folkways.core.front.api.Delegation;
 import io.github.izakyl.folkways.core.front.api.Enrollment;
 import io.github.izakyl.folkways.core.front.api.Registering;
 import io.github.izakyl.folkways.core.front.api.Schema;
 import io.github.izakyl.folkways.core.front.api.Shape;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
+import io.github.izakyl.folkways.core.world.api.WorldSpaces;
 import io.github.izakyl.folkways.vanilla.combat.WeaponStations;
 import io.github.izakyl.folkways.vanilla.patrol.SentryPosts;
 import io.github.izakyl.folkways.vanilla.person.ResidentEntity;
@@ -134,7 +134,12 @@ public final class WarfareStations {
     /** Capture the exact queued engagement; an old callback cannot borrow a replacement lease. */
     public static Runnable queued(VehicleEntity vehicle, Runnable nativeShot) {
         WarfareStation station = STATIONS.get(vehicle);
-        return station == null ? nativeShot : station.queued(nativeShot);
+        return station == null ? VehicleGuns.queued(vehicle, nativeShot) : station.queued(nativeShot);
+    }
+
+    public static java.util.Optional<net.minecraft.world.phys.Vec3> mobileDirection(
+            VehicleEntity vehicle, String weapon, float partial) {
+        return VehicleGuns.direction(vehicle, weapon, partial);
     }
 
     public static boolean permits(ShootParameters parameters) {
@@ -143,7 +148,7 @@ public final class WarfareStations {
             return true;
         }
         WarfareStation station = STATIONS.get(vehicle);
-        return station != null && station.emitting();
+        return station != null && station.emitting() || VehicleGuns.permits(vehicle, parameters);
     }
 
     public static void tickMortar(MortarEntity mortar, Runnable nativeTick) {
@@ -163,6 +168,8 @@ public final class WarfareStations {
         if (event.getLevel().isClientSide()) {
             return;
         }
+        VehicleGuns.remove(event.getEntity());
+        VehicleController.remove(event.getEntity());
         WarfareStation station = STATIONS.remove(event.getEntity());
         if (station != null) {
             station.cancel();

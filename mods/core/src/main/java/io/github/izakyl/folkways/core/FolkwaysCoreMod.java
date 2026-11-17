@@ -45,6 +45,7 @@ import io.github.izakyl.folkways.core.shell.storage.drawers.DrawersIntegration;
 import io.github.izakyl.folkways.core.shell.storage.functional.FunctionalIntegration;
 import io.github.izakyl.folkways.core.shell.storage.sophisticated.BackpacksIntegration;
 import io.github.izakyl.folkways.core.shell.structure.CreateObstacles;
+import io.github.izakyl.folkways.core.shell.structure.SableObstacles;
 import io.github.izakyl.folkways.core.shell.structure.SablePassage;
 import io.github.izakyl.folkways.core.shell.structure.SableSpaces;
 import io.github.izakyl.folkways.core.shell.toms.TomsIntegration;
@@ -180,6 +181,7 @@ public final class FolkwaysCoreMod {
         }
         if (ModList.get().isLoaded("sable")) {
             WorldSpaces.install(new SableSpaces());
+            Structures.install(new SableObstacles());
             modBus.addListener(Declaring.class, event -> event.passage(new SablePassage()));
         }
         if (net.neoforged.fml.loading.FMLEnvironment.dist.isClient()) {

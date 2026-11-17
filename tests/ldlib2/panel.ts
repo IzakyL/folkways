@@ -23,7 +23,7 @@ export async function missingMembers(client: MinecraftClient, options: CallOptio
 
 /** One read of the open panel. */
 export interface PanelRead {
-  holder: PanelHolder;
+  holder: PanelHolder | "widget";
   /** The open screen's class. */
   screen: string;
   /** A maxNodes / maxDepth limit cut the tree short. */
@@ -147,7 +147,7 @@ interface ElementTarget {
   element: Element;
   label: string;
   aim: { x: number; y: number };
-  holder: PanelHolder;
+  holder: PanelHolder | "widget";
   /** Handle of the ModularUI the element was found in. */
   ui: string;
   /** Handles of the element and its descendants (capped at 512). */
@@ -197,6 +197,13 @@ const RELEASE = defineTask<{ handles: string[] }, { released: number }>({
   side: "client",
   modules: [LDLIB2],
   source: javaTask({ imports: IMPORTS, body: "return Ldlib2.release(ctx, Args.of(ctx));" }),
+});
+
+const ATTACHED = defineTask<{ ui: string; element: string } & Record<string, unknown>, boolean>({
+  name: "ldlib2.attached",
+  side: "client",
+  modules: [LDLIB2],
+  source: javaTask({ imports: IMPORTS, body: "return Ldlib2.attached(ctx, Args.of(ctx));" }),
 });
 
 /** Waits for the element's target, runs `act` on it, then releases the handles the target pinned for itself. */
@@ -469,7 +476,8 @@ export interface ClickElementResult {
 /**
  * Waits (in the game) until the element is actionable, puts the cursor on its centre, then presses only
  * once LDLib2's hovered element is inside the element's subtree (re-checked each frame while an earlier
- * hover lingers, until `timeoutMs`), and checks LDLib2 handed the mouse-down to that subtree. The press and
+ * hover lingers, until `timeoutMs`), and checks LDLib2 handed the mouse-down to that subtree.
+ * A target detached before mouse-down is resolved again within the same budget. The press and
  * the check use the ModularUI pinned by handle, so a button that replaces the screen on mouse-down is still
  * judged by the UI it was aimed at. Handles pinned only for the click are released when it finishes, so a
  * handle in `press.observed` may no longer resolve.
@@ -484,62 +492,82 @@ export async function clickElement(
   }
   const started = Date.now();
   const timeoutMs = options.timeoutMs ?? 10_000;
-  return withTarget(client, selector, options, async (target) => {
-    const { x, y } = target.aim;
-    const button = options.button ?? "left";
-    const modifiers = options.modifiers !== undefined ? { modifiers: options.modifiers } : {};
-    await hoverAt(client, target.aim, options.hoverFrames ?? HOVER_REFRESH_FRAMES, undefined, options.signal);
+  while (true) {
+    const remaining = Math.max(1, timeoutMs - (Date.now() - started));
+    const result = await withTarget(client, selector, { ...options, timeoutMs: remaining }, async (target) => {
+      const { x, y } = target.aim;
+      const button = options.button ?? "left";
+      const modifiers = options.modifiers !== undefined ? { modifiers: options.modifiers } : {};
+      await hoverAt(client, target.aim, options.hoverFrames ?? HOVER_REFRESH_FRAMES, undefined, options.signal);
 
-    // An earlier hover lingers until LDLib2 renders with the cursor here: the press waits (in the game, frame
-    // by frame) for the hovered element to be inside the target's subtree, for what is left of the budget.
-    let press: input.ButtonResult;
-    try {
-      press = await input.button(client, {
-        button,
-        action: "press",
-        ...modifiers,
-        hovered: {
-          root: { kind: "handle", handle: target.ui, path: HOVERED_PATH },
-          within: target.subtree,
-          timeoutMs: Math.max(1, timeoutMs - (Date.now() - started)),
-        },
-        observe: { root: { kind: "handle", handle: target.ui, path: MOUSE_DOWN_PATH }, select: { id: PANEL_ROUTES.select.id! }, handles: true },
-      });
-    } catch (error) {
-      if (!isMinecraftError(error, "hover-mismatch")) {
-        throw error;
+      // An earlier hover lingers until LDLib2 renders with the cursor here: the press waits (in the game, frame
+      // by frame) for the hovered element to be inside the target's subtree, for what is left of the budget.
+      let press: input.ButtonResult;
+      while (true) {
+        try {
+          press = await input.button(client, {
+            button,
+            action: "press",
+            ...modifiers,
+            hovered: {
+              root: { kind: "handle", handle: target.ui, path: HOVERED_PATH },
+              within: target.subtree,
+              timeoutMs: Math.min(500, Math.max(1, timeoutMs - (Date.now() - started))),
+            },
+            observe: { root: { kind: "handle", handle: target.ui, path: MOUSE_DOWN_PATH }, select: { id: PANEL_ROUTES.select.id! }, handles: true },
+          });
+          break;
+        } catch (error) {
+          if (!isMinecraftError(error, "hover-mismatch")) {
+            throw error;
+          }
+          // No press was sent. Re-resolve only a detached target; a live overlap must still fail.
+          const attached = await client.run(ATTACHED, {
+            ...panelArgs(options), ui: target.ui, element: target.subtree[0],
+          });
+          if (Date.now() - started < timeoutMs) {
+            if (!attached) {
+              console.info(`LDLib2 replaced ${target.label} before mouse-down; resolving its selector again`);
+              return undefined;
+            }
+            continue;
+          }
+          const hovered = ((error as { detail?: { hovered?: { class: string; handle?: string } | null } }).detail?.hovered) ?? null;
+          throw new Error(
+            `moved the cursor to (${round(x)}, ${round(y)}) for ${JSON.stringify(selector)} (${target.label}), but LDLib2 `
+              + (hovered ? `kept ${describe(hovered)} hovered, which is outside that element's subtree` : "records no element as hovered")
+              + ` (${target.subtree.length} handle(s)) — no click sent`,
+            { cause: error },
+          );
+        }
       }
-      const hovered = ((error as { detail?: { hovered?: { class: string; handle?: string } | null } }).detail?.hovered) ?? null;
-      throw new Error(
-        `moved the cursor to (${round(x)}, ${round(y)}) for ${JSON.stringify(selector)} (${target.label}), but LDLib2 `
-          + (hovered ? `kept ${describe(hovered)} hovered, which is outside that element's subtree` : "records no element as hovered")
-          + ` (${target.subtree.length} handle(s)) — no click sent`,
-        { cause: error },
-      );
-    }
 
-    let hit: { class: string; id?: string; handle?: string } | undefined;
-    try {
-      const observed = press.observed;
-      if (observed?.found && observed.tree) {
-        const id = observed.tree.values?.id;
-        hit = { class: observed.tree.class, ...(typeof id === "string" ? { id } : {}), ...(observed.tree.handle ? { handle: observed.tree.handle } : {}) };
+      let hit: { class: string; id?: string; handle?: string } | undefined;
+      try {
+        const observed = press.observed;
+        if (observed?.found && observed.tree) {
+          const id = observed.tree.values?.id;
+          hit = { class: observed.tree.class, ...(typeof id === "string" ? { id } : {}), ...(observed.tree.handle ? { handle: observed.tree.handle } : {}) };
+        }
+      } finally {
+        await input.button(client, { button, action: "release", ...modifiers });
       }
-    } finally {
-      await input.button(client, { button, action: "release", ...modifiers });
+      if (!hit) {
+        throw new Error(`clicked (${round(x)}, ${round(y)}) for ${JSON.stringify(selector)}, but LDLib2 recorded no element for this mouse-down`);
+      }
+      if (hit.handle !== undefined && !target.subtree.includes(hit.handle)) {
+        throw new Error(
+          `clicked (${round(x)}, ${round(y)}) aiming at ${JSON.stringify(selector)} (${target.label}), but LDLib2 handed the `
+            + `click to ${describe(hit)}, which is outside that element's subtree (${target.subtree.length} handle(s)) — `
+            + "the target is laid out there but something else is on top",
+        );
+      }
+      return { element: target.element, x, y, press };
+    });
+    if (result) {
+      return result;
     }
-    if (!hit) {
-      throw new Error(`clicked (${round(x)}, ${round(y)}) for ${JSON.stringify(selector)}, but LDLib2 recorded no element for this mouse-down`);
-    }
-    if (hit.handle !== undefined && !target.subtree.includes(hit.handle)) {
-      throw new Error(
-        `clicked (${round(x)}, ${round(y)}) aiming at ${JSON.stringify(selector)} (${target.label}), but LDLib2 handed the `
-          + `click to ${describe(hit)}, which is outside that element's subtree (${target.subtree.length} handle(s)) — `
-          + "the target is laid out there but something else is on top",
-      );
-    }
-    return { element: target.element, x, y, press };
-  });
+  }
 }
 
 export interface TypeIntoElementOptions extends ClickElementOptions {

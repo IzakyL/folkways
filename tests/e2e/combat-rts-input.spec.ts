@@ -3,6 +3,7 @@ import {
   defineTask, input, javaTask, screen, tick,
   type MinecraftClient, type MinecraftServer,
 } from "@izakyl/blockwright-minecraft";
+import { clickElement } from "../ldlib2";
 import { waitForGroundedPlayer } from "../shared/colony/colony-founding";
 import { frames } from "../shared/harness/bw-helpers";
 import { BUDGET } from "../shared/harness/budgets";
@@ -61,8 +62,9 @@ test("RTS real pointer and keyboard inputs select, bind, queue, stop, suspend an
     expectMode(empty, false);
     await input.key(client, { keyCode: 71 });
     const emptyAttack = await client.run(READ_CLIENT);
-    expectMode(emptyAttack, true);
-    expect(emptyAttack.failure).toBe("");
+    expectMode(emptyAttack, false);
+    expect(emptyAttack.armed).toBe("NONE");
+    expect(emptyAttack.failureKey).toBe("folkways.rts.select_first");
     expect(emptyAttack.route.request).toBe(empty.route.request);
     expect(emptyAttack.control.request).toBe(empty.control.request);
     await input.key(client, { keyCode: 71 });
@@ -84,13 +86,15 @@ test("RTS real pointer and keyboard inputs select, bind, queue, stop, suspend an
     await input.drag(client, { from, to, steps: 8, button: "left" });
     await selection(client, server, context, residents, beforeBox);
 
-    // The card frame's top edge belongs to the bar: clicks there neither select nor order.
+    // The group dock's top edge belongs to the dock: clicks there neither select nor order.
     const beforeFrame = await client.run(READ_CLIENT);
     const frameTop = boxes[0].height - beforeFrame.barHeight;
+    const dock = beforeFrame.buttons.filter(hit => hit.kind === "GROUP");
+    const dockX = (dock[0].x + dock[dock.length - 1].x + dock[dock.length - 1].width) / 2;
     for (const button of ["left", "right"] as const) {
-      await input.click(client, { x: boxes[0].width / 2, y: frameTop }, { button });
+      await input.click(client, { x: dockX, y: frameTop }, { button });
       if (button === "right") {
-        await input.click(client, { x: boxes[0].width / 2, y: frameTop }, { button, modifiers: ["ctrl"] });
+        await input.click(client, { x: dockX, y: frameTop }, { button, modifiers: ["ctrl"] });
       }
       await tick.sprint(server, 2);
       await frames(client, 3);
@@ -103,6 +107,15 @@ test("RTS real pointer and keyboard inputs select, bind, queue, stop, suspend an
       expect(same(authoritative.selection, residents)).toBe(true);
       expect(authoritative.command).toBe("");
     }
+
+    const setDefault = async (attack: boolean) => {
+      expect((await client.run(READ_CLIENT)).selected.length).toBeGreaterThan(0);
+      await clickElement(client, { id: `folkways.rts.unit.${attack ? "attack" : "move"}` }, { button: "right" });
+      await expect.poll(async () => {
+        await frames(client, 3);
+        return (await client.run(READ_CLIENT)).attackMode;
+      }, { message: "command card sets the right-click default" }).toBe(attack);
+    };
 
     const third = residents[2];
     const shiftClickThird = async () => {
@@ -200,7 +213,12 @@ test("RTS real pointer and keyboard inputs select, bind, queue, stop, suspend an
       await input.click(client, at, { button: "right", modifiers: control ? ["ctrl"] : [] });
     };
     let routeRequest = (await client.run(READ_CLIENT)).route.request;
-    await groundClick(a);
+    await input.key(client, { keyCode: 77 });
+    expect((await client.run(READ_CLIENT)).armed).toBe("MOVE");
+    const movePixel = await project(client, a);
+    visible(movePixel);
+    await input.click(client, movePixel, { button: "left" });
+    expect((await client.run(READ_CLIENT)).armed).toBe("NONE");
     const moving = await routeAck(client, server, context, routeRequest, "MOVE", [a], -1, false);
     expect(moving.server.kind).toBe("DIRECT");
     expect(moving.server.complete).toBe(false);
@@ -261,9 +279,9 @@ test("RTS real pointer and keyboard inputs select, bind, queue, stop, suspend an
     expect(loop.server.command, "append/closure keeps the accepted generation").toBe(generation);
 
     const keys = await client.run(KEY_SETTINGS, { stop: 72 });
-    expect(keys.codes).toEqual([71, 72, 74]);
-    expect(keys.categories).toEqual(Array(3).fill("key.categories.folkways_core.rts"));
-    expect(keys.hintBindings).toContain("key.folkways.rts.attack_move");
+    expect(keys.codes).toEqual([71, 77, 72, 66, 78, 76, 79, 67, 88, 73, 74]);
+    expect(keys.categories).toEqual(Array(11).fill("key.categories.folkways_core.rts"));
+    expect(keys.hintBindings.filter(Boolean)).toEqual(["key.folkways.rts.release_control"]);
     expect((await client.run(READ_CLIENT)).buttons.some(hit =>
       ["ATTACK_MOVE", "STOP", "RELEASE"].includes(hit.kind))).toBe(false);
     routeRequest = (await client.run(READ_CLIENT)).route.request;
@@ -279,12 +297,14 @@ test("RTS real pointer and keyboard inputs select, bind, queue, stop, suspend an
     expect(stopped.client.failure).toBe("");
 
     await input.key(client, { keyCode: 71, action: "press" });
+    expect((await client.run(READ_CLIENT)).armed).toBe("ATTACK");
     await input.key(client, { keyCode: 71, action: "repeat" });
-    expect((await client.run(READ_CLIENT)).attackMode, "holding G toggles once without repeat toggling").toBe(true);
+    expect((await client.run(READ_CLIENT)).armed, "holding G keeps Attack armed").toBe("ATTACK");
     await input.key(client, { keyCode: 71, action: "release" });
-    await input.key(client, { keyCode: 71, modifiers: ["shift"] });
-    expect((await client.run(READ_CLIENT)).attackMode, "Shift keeps its selection modifier ownership").toBe(true);
-    expectMode(await client.run(READ_CLIENT), true);
+    await input.key(client, { keyCode: 256 });
+    expect((await client.run(READ_CLIENT)).armed).toBe("NONE");
+    expect(same((await client.run(READ_CLIENT)).selected, residents)).toBe(true);
+    await setDefault(true);
     await bindOne(residents);
     before = (await client.run(READ_CLIENT)).control.request;
     const selectedPixel = await project(client, origin, third);
@@ -356,7 +376,7 @@ test("RTS real pointer and keyboard inputs select, bind, queue, stop, suspend an
     const attackAppend = await routeAck(client, server, context, routeRequest, "WAYPOINT", [attackPoint, b], -1, true);
     expectMode(attackAppend.client, true);
     expect(attackAppend.server.command).toBe(attackMove.server.command);
-    await input.key(client, { keyCode: 71 });
+    await setDefault(false);
     expectMode(await client.run(READ_CLIENT), false);
     routeRequest = (await client.run(READ_CLIENT)).route.request;
     await groundClick(c, true);
@@ -368,7 +388,7 @@ test("RTS real pointer and keyboard inputs select, bind, queue, stop, suspend an
     await groundClick(a);
     const moveAgain = await routeAck(client, server, context, routeRequest, "MOVE", [a], -1, false);
     expectMode(moveAgain.client, false);
-    await input.key(client, { keyCode: 71 });
+    await setDefault(true);
     await groundClick(c, true);
     expect((await client.run(READ_CLIENT)).failureKey).toBe("folkways.rts.route_mode_mismatch");
     expect((await client.run(READ_CLIENT)).route.request).toBe(moveAgain.client.route.request);
@@ -376,10 +396,10 @@ test("RTS real pointer and keyboard inputs select, bind, queue, stop, suspend an
     routeRequest = moveAgain.client.route.request;
     await groundClick(attackPoint);
     // A new preference must survive the previous mode's acknowledgement without mutating that order.
-    await input.key(client, { keyCode: 71 });
+    await setDefault(false);
     const inFlight = await routeAck(client, server, context, routeRequest, "MOVE", [attackPoint], -1, true);
     expectMode(inFlight.client, false);
-    await input.key(client, { keyCode: 71 });
+    await setDefault(true);
     expectMode(await client.run(READ_CLIENT), true);
     await bindOne([]);
     await checkModeLayers(client, server, { colony, ...origin });
@@ -389,8 +409,8 @@ test("RTS real pointer and keyboard inputs select, bind, queue, stop, suspend an
     expectMode(modeReturn.client, false);
     routeRequest = (await client.run(READ_CLIENT)).route.request;
     const rebound = await client.run(KEY_SETTINGS, { stop: 75 });
-    expect(rebound.codes).toEqual([71, 75, 74]);
-    expect(rebound.hintBindings).toContain("key.folkways.rts.stop");
+    expect(rebound.codes).toEqual([71, 77, 75, 66, 78, 76, 79, 67, 88, 73, 74]);
+    expect(rebound.hintBindings.filter(Boolean)).toEqual(["key.folkways.rts.release_control"]);
     await input.key(client, { keyCode: 72 });
     expect((await client.run(READ_CLIENT)).route.request, "old H binding must stop issuing commands").toBe(routeRequest);
     await input.key(client, { keyCode: 75 });
@@ -405,7 +425,7 @@ test("RTS real pointer and keyboard inputs select, bind, queue, stop, suspend an
     await frames(client, 4);
     expect((await client.run(READ_CLIENT)).combat, "Tab must leave the combat tool").toBe(false);
     await input.key(client, { keyCode: 71 });
-    expect((await client.run(READ_CLIENT)).attackMode, "G is inactive after leaving the RTS tool").toBe(false);
+    expect((await client.run(READ_CLIENT)).armed, "G after leaving the RTS tool keeps commands unarmed").toBe("NONE");
     await tick.sprint(server, 2);
     let returned = false;
     for (let step = 0; step < 12; step++) {
@@ -427,7 +447,7 @@ test("RTS real pointer and keyboard inputs select, bind, queue, stop, suspend an
     await bindOne(residents);
     before = (await client.run(READ_CLIENT)).control.request;
     // Leaving the tool resets the preference; repeated RMB orders keep the new mode.
-    await input.key(client, { keyCode: 71 });
+    await setDefault(true);
     routeRequest = (await client.run(READ_CLIENT)).route.request;
     await groundClick(attackPoint, true);
     const rightAttack = await routeAck(client, server, context, routeRequest, "WAYPOINT", [attackPoint], -1, true);
@@ -461,7 +481,7 @@ test("RTS real pointer and keyboard inputs select, bind, queue, stop, suspend an
     await shiftClickThird();
     await selection(client, server, context, members, before);
     await server.run(SET_RESIDENT_AI, { residents: members, enabled: true });
-    await input.key(client, { keyCode: 71 });
+    await setDefault(false);
     expectMode(await client.run(READ_CLIENT), false);
     routeRequest = (await client.run(READ_CLIENT)).route.request;
     await groundClick(a);
@@ -582,8 +602,6 @@ return true;`,
 
 function expectMode(state: ClientState, attack: boolean) {
   expect(state.attackMode).toBe(attack);
-  expect(state.modeLabel).toBe(attack ? "Attack move" : "Move");
-  expect(state.modeHint).toContain("Move / Attack move");
 }
 
 function same(actual: string[], expected: string[]) {
@@ -710,7 +728,7 @@ const KEY_SETTINGS = defineTask<{ stop: number }, {
     body: `
 CombatKeys.STOP.setKey(InputConstants.Type.KEYSYM.getOrCreate((int) Args.of(ctx).integer("stop")));
 KeyMapping.resetMapping();
-var keys = List.of(CombatKeys.MOVE_MODE, CombatKeys.STOP, CombatKeys.RELEASE);
+var keys = CombatKeys.ALL;
 var conflicts = Arrays.stream(Minecraft.getInstance().options.keyMappings)
     .filter(k -> !keys.contains(k) && keys.stream().anyMatch(r -> r.getKey().equals(k.getKey())))
     .map(k -> k.getName() + ":" + k.getKey().getName()).toList();

@@ -4,5 +4,7 @@
   "folkways.tacz.gun": "枪械：%s",
   "folkways.tacz.missing_pack": "缺少枪械或枪包",
   "folkways.tacz.reloading": " · 换弹中",
-  "folkways.tacz.unsupported": "这把枪暂不可用"
+  "folkways.tacz.unsupported": "这把枪暂不可用",
+  "folkways.vocation.folkways_firearms.vehicle_crew": "载具乘员",
+  "folkways.vocation.folkways_firearms.vehicle_crew.about": "登乘并操作殖民地载具"
 }

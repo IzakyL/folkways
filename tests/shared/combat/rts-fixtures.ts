@@ -7,7 +7,7 @@ export type Button = {
 };
 export type ClientState = {
   combat: boolean; roster: number; selected: string[]; cachedPoints: number; cachedCommand: string;
-  attackMode: boolean; replacementPending: boolean; routePending: boolean; controlPending: boolean;
+  armed: string; attackMode: boolean; replacementPending: boolean; routePending: boolean; controlPending: boolean;
   control: { request: number; accepted: boolean; operation: string; selection: string[]; groups: string[][] };
   route: { request: number; accepted: boolean; intent: string; points: Vec[]; cycleStart: number; command: string };
   state: { command: string; complete: boolean; stop: number; attackMove: boolean; phase: string; result: string };
@@ -64,7 +64,7 @@ var handler=OverheadTools.selectedHandler().orElse(null);boolean combat=handler!
 out.put("modeLabel", "");out.put("modeHint", "");out.put("modeColors", List.of());out.put("modeBold", List.of());
 out.put("failure", "");out.put("failureKey", "");out.put("failureUntil", 0L);out.put("failureRemaining", 0L);
 out.put("barHeight", combat ? handler.bottomInset() : 0);
-out.put("selected",List.of());out.put("cachedPoints",0);out.put("cachedCommand","");out.put("attackMode",false);out.put("replacementPending",false);out.put("buttons",List.of());
+out.put("armed","NONE");out.put("selected",List.of());out.put("cachedPoints",0);out.put("cachedCommand","");out.put("attackMode",false);out.put("replacementPending",false);out.put("buttons",List.of());
 if(combat){
   var type=handler.getClass();
   var visibleFailure = type.getDeclaredMethod("visibleFailure");
@@ -82,23 +82,16 @@ if(combat){
   var points=type.getDeclaredField("route");points.setAccessible(true);out.put("cachedPoints",((List<?>)points.get(handler)).size());
   var command=type.getDeclaredField("routeCommandId");command.setAccessible(true);out.put("cachedCommand",String.valueOf(command.get(handler)));
   var attackMode=type.getDeclaredField("attackMoveMode");attackMode.setAccessible(true);out.put("attackMode",attackMode.getBoolean(handler));
-  var mode = type.getDeclaredMethod("movementMode");mode.setAccessible(true);
-  out.put("modeLabel", ((net.minecraft.network.chat.Component) mode.invoke(handler)).getString());
-  var hint = handler.cues().get(1).does();out.put("modeHint", hint.getString());
-  var options = ((net.minecraft.network.chat.contents.TranslatableContents) hint.getContents()).getArgs();
-  out.put("modeColors", java.util.Arrays.stream(options).map(option -> ((net.minecraft.network.chat.Component) option).getStyle().getColor().getValue()).toList());
-  out.put("modeBold", java.util.Arrays.stream(options).map(option -> ((net.minecraft.network.chat.Component) option).getStyle().isBold()).toList());
+  var armed=type.getDeclaredField("armed");armed.setAccessible(true);out.put("armed",armed.get(handler).toString());
   var pending=type.getDeclaredField("pendingReplacement");pending.setAccessible(true);out.put("replacementPending",pending.get(handler)!=null);
   var cardsField=type.getDeclaredField("cards");cardsField.setAccessible(true);var cards=cardsField.get(handler);
   var hitsField=cards.getClass().getDeclaredField("hits");hitsField.setAccessible(true);var buttons=new ArrayList<Map<String,Object>>();
   var pressed = cards.getClass().getDeclaredField("PRESSED");pressed.setAccessible(true);
   var normal = cards.getClass().getDeclaredField("BUTTON");normal.setAccessible(true);
   for(var hit:(List<?>)hitsField.get(cards)){
-    var actionMethod=hit.getClass().getDeclaredMethod("action");actionMethod.setAccessible(true);var action=actionMethod.invoke(hit);
-    var kindMethod=action.getClass().getDeclaredMethod("kind");kindMethod.setAccessible(true);var row=new LinkedHashMap<String,Object>();row.put("kind",kindMethod.invoke(action).toString());
-    var slot = action.getClass().getDeclaredMethod("slot");slot.setAccessible(true);row.put("slot",slot.invoke(action));
-    var resident = action.getClass().getDeclaredMethod("resident");resident.setAccessible(true);
-    row.put("resident", String.valueOf(resident.invoke(action)));
+    var row=new LinkedHashMap<String,Object>();row.put("kind","GROUP");
+    var slot = hit.getClass().getDeclaredMethod("slot");slot.setAccessible(true);row.put("slot",slot.invoke(hit));
+    row.put("resident", "null");
     var texture = hit.getClass().getDeclaredMethod("texture");texture.setAccessible(true);
     var drawn = texture.invoke(hit);row.put("texture",drawn == pressed.get(null) ? "pressed" : drawn == normal.get(null) ? "normal" : "hover");
     for(var field:List.of("x","y","width","height")){var accessor=hit.getClass().getDeclaredMethod(field);accessor.setAccessible(true);row.put(field,accessor.invoke(hit));}buttons.add(row);

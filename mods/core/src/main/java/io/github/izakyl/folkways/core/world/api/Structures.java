@@ -18,6 +18,10 @@ public final class Structures {
 
     public interface Obstacles {
         List<AABB> in(ServerLevel level, AABB area);
+
+        default List<AABB> in(ServerLevel level, AABB area, java.util.UUID excluded) {
+            return in(level, area);
+        }
     }
 
     private static final List<Obstacles> SOURCES = new CopyOnWriteArrayList<>();
@@ -31,9 +35,13 @@ public final class Structures {
     }
 
     public static List<AABB> obstacles(ServerLevel level, AABB area) {
+        return obstacles(level, area, null);
+    }
+
+    public static List<AABB> obstacles(ServerLevel level, AABB area, java.util.UUID excluded) {
         List<AABB> found = new ArrayList<>();
         for (Obstacles source : SOURCES) {
-            found.addAll(source.in(level, area));
+            found.addAll(source.in(level, area, excluded));
         }
         return List.copyOf(found);
     }

@@ -18,6 +18,7 @@ import io.github.izakyl.folkways.vanilla.build.SiteTravel;
 import io.github.izakyl.folkways.vanilla.damagecontrol.DamageControlContent;
 import io.github.izakyl.folkways.vanilla.patrol.PatrolContent;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import net.minecraft.core.BlockPos;
@@ -26,6 +27,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.level.pathfinder.Path;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.phys.AABB;
 
 public final class OnFoot implements Conveyance {
 
@@ -42,6 +44,7 @@ public final class OnFoot implements Conveyance {
     private final SiteTravel siteTravel = new SiteTravel();
     private int settling;
     private int walkingTicks;
+    private List<AABB> obstacles = List.of();
     private double closest = Double.MAX_VALUE;
     private int sinceProgress;
     private Float walked;
@@ -75,10 +78,12 @@ public final class OnFoot implements Conveyance {
         if (!closingIn(body, to)) {
             return new Going.Failed(lost);
         }
-        if (++walkingTicks % 10 == 0 && to.stream().anyMatch(cell -> cell.realm() instanceof Realm.Dimension)
-                && !Structures.obstacles(level,
-                    body.getBoundingBox().inflate(4.0D)).isEmpty()) {
-            repath(body, cells);
+        if (++walkingTicks % 10 == 0 && to.stream().anyMatch(cell -> cell.realm() instanceof Realm.Dimension)) {
+            var current = Structures.obstacles(level, body.getBoundingBox().inflate(4.0D));
+            if (!current.equals(obstacles)) {
+                obstacles = current;
+                repath(body, cells);
+            }
         }
         if (!body.getNavigation().isDone()) {
             settling = 0;
@@ -102,6 +107,7 @@ public final class OnFoot implements Conveyance {
         distanceWalked = 0;
         settling = 0;
         walkingTicks = 0;
+        obstacles = Structures.obstacles(level, body.getBoundingBox().inflate(4.0D));
         activeWalkingTicks = 0;
         closest = Double.MAX_VALUE;
         sinceProgress = 0;

@@ -194,7 +194,12 @@ public abstract class SeatedConveyance<S> implements Conveyance {
     }
 
     private BlockPos platformLanding(ServerLevel level) {
-        return PassengerLanding.at(level, landing, onward).orElse(null);
+        return landingPlatform(level)
+            .flatMap(platform -> PassengerLanding.at(level, platform, onward)).orElse(null);
+    }
+
+    protected Optional<Stances.Cells> landingPlatform(ServerLevel level) {
+        return Optional.of(landing);
     }
 
     private static double towards(Set<BlockPos> goals, BlockPos cell) {

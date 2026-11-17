@@ -39,10 +39,15 @@ public record InventorySnapshot(UUID colony, Version version, Map<Stash, Store> 
     public record Version(UUID epoch, long contents, long policy, long topology, long approaches, long coverage) {
     }
 
-    public record Approach(long revision, State state, Set<Stand> stands, Set<Stand> taking, Set<Stand> putting) {
+    public record Approach(long revision, State state, Set<Stand> stands, Set<Stand> taking, Set<Stand> putting,
+                           boolean declared) {
 
         public Approach(long revision, State state, Set<Stand> stands) {
-            this(revision, state, stands, stands, stands);
+            this(revision, state, stands, stands, stands, false);
+        }
+
+        public Approach(long revision, State state, Set<Stand> stands, Set<Stand> taking, Set<Stand> putting) {
+            this(revision, state, stands, taking, putting, false);
         }
 
         public Approach {

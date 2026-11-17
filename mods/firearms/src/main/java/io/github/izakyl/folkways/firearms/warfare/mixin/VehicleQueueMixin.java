@@ -7,9 +7,19 @@ import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import io.github.izakyl.folkways.firearms.warfare.WarfareStations;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+import net.minecraft.world.phys.Vec3;
 
 @Mixin(VehicleEntity.class)
 public abstract class VehicleQueueMixin {
+
+    @Inject(method = "getShootVec(Ljava/lang/String;F)Lnet/minecraft/world/phys/Vec3;",
+        at = @At("HEAD"), cancellable = true)
+    private void folkways$mobileDirection(String weapon, float partial, CallbackInfoReturnable<Vec3> callback) {
+        WarfareStations.mobileDirection((VehicleEntity) (Object) this, weapon, partial)
+            .ifPresent(callback::setReturnValue);
+    }
 
     @WrapOperation(
         method =

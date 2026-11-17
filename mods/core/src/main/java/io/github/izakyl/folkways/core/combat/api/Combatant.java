@@ -2,7 +2,11 @@ package io.github.izakyl.folkways.core.combat.api;
 
 import io.github.izakyl.folkways.core.resident.api.Body;
 import io.github.izakyl.folkways.core.work.api.Worker;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.monster.Enemy;
@@ -58,6 +62,30 @@ public interface Combatant {
     /** The weapon to use against this target; reuse {@code current} while it still fits. Null means none. */
     default WeaponAttack select(Worker who, LivingEntity target, WeaponAttack current) {
         return current;
+    }
+
+    default double range(Worker who, Entity target) {
+        return target instanceof LivingEntity living ? range(who, living) : range(who);
+    }
+
+    default boolean ranged(Worker who, Entity target) {
+        return target instanceof LivingEntity living && ranged(who, living);
+    }
+
+    default WeaponAttack select(Worker who, Entity target, WeaponAttack current) {
+        return target instanceof LivingEntity living ? select(who, living, current) : null;
+    }
+
+    /** Rule categories and localized weapon names offered by this body's current loadout. */
+    default Map<String, Component> weapons(Body body) {
+        var weapons = new LinkedHashMap<String, Component>();
+        for (int slot = 0; slot < body.pack().getContainerSize(); slot++) {
+            var stack = body.pack().getItem(slot);
+            if (Loadouts.using(stack).isPresent()) {
+                weapons.putIfAbsent(WeaponRules.category(stack), stack.getHoverName());
+            }
+        }
+        return Map.copyOf(weapons);
     }
 
     /** Hostility that lets a holding squad defend itself without an explicit attack order. */

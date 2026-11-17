@@ -1,12 +1,12 @@
 package io.github.izakyl.folkways.core.rts.combat.net;
 
 import io.github.izakyl.folkways.core.FolkwaysCoreMod;
-import io.github.izakyl.folkways.core.world.api.WorldPos;
-import io.github.izakyl.folkways.core.world.api.WorldSpaces;
+import io.github.izakyl.folkways.core.combat.api.Vehicles;
 import io.github.izakyl.folkways.core.front.engine.charter.CurrentColony;
-import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.rts.combat.control.CombatSelectionOwnership;
 import io.github.izakyl.folkways.core.rts.combat.group.UnitGroup;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
+import io.github.izakyl.folkways.core.world.api.WorldSpaces;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -28,7 +28,7 @@ import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 @EventBusSubscriber(modid = FolkwaysCoreMod.CORE_ID, bus = EventBusSubscriber.Bus.MOD)
 public final class CombatPackets {
     public static final int MAX_MEMBERS = 256;
-    public static final int MAX_POINTS = 16;
+    public static final int MAX_POINTS = Vehicles.MAX_POINTS;
     // Selection leases, shortcut operations and immediate waypoint acknowledgements must match on
     // both sides.
     private static final String NETWORK_VERSION = FolkwaysCoreMod.NETWORK_VERSION;

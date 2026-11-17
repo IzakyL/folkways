@@ -42,7 +42,7 @@ export interface Ldlib2AdapterOptions {
 }
 
 export interface Ldlib2UiState {
-  holder: PanelHolder;
+  holder: PanelHolder | "widget";
   elements: Element[];
   /** UiNode of each element, by Element.index. */
   nodes: UiNode[];

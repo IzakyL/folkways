@@ -1,6 +1,8 @@
 package io.github.izakyl.folkways.core.rts.combat.command;
 
 import io.github.izakyl.folkways.core.combat.api.Combatant;
+import io.github.izakyl.folkways.core.combat.api.WeaponAttack;
+import io.github.izakyl.folkways.core.resident.api.Bodies;
 import io.github.izakyl.folkways.core.resident.api.RefusalKind;
 import io.github.izakyl.folkways.core.work.api.Ending;
 import io.github.izakyl.folkways.core.work.api.LaborRefusal;
@@ -14,13 +16,13 @@ import io.github.izakyl.folkways.core.work.api.Workload;
 import io.github.izakyl.folkways.core.world.api.Footing;
 import io.github.izakyl.folkways.core.world.api.Reach;
 import io.github.izakyl.folkways.core.world.api.WorldSpaces;
-import io.github.izakyl.folkways.core.combat.api.WeaponAttack;
 import java.util.LinkedHashSet;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.phys.Vec3;
 
@@ -39,7 +41,7 @@ final class AttackNode implements Node {
         this.commands = commands;
         this.order = order;
         step = order.step();
-        Mob target = commands.attackTarget(order).orElseThrow();
+        Entity target = commands.attackTarget(order).orElseThrow();
         ServerLevel level = (ServerLevel) who.body().level();
         Optional<Stances> stances = approach(level, who, target);
         reachable = stances.isPresent();
@@ -74,7 +76,7 @@ final class AttackNode implements Node {
             failure = LaborRefusal.NO_WAY_THERE;
             return false;
         }
-        Mob target = commands.attackTarget(order).orElse(null);
+        Entity target = commands.attackTarget(order).orElse(null);
         if (target == null || !commands.permitsAttack(order, step, who, target)) {
             return false;
         }
@@ -83,14 +85,14 @@ final class AttackNode implements Node {
         attack = Combatant.get().select(who, target, attack);
         if (attack != previous || attack == null) {
             if (attack == null
-                || !attack.explicitTarget(target, () -> commands.permitsAttack(order, step, who, target))) {
+                || !attack.explicitEntityTarget(target, () -> commands.permitsAttack(order, step, who, target))) {
                 failure = LaborRefusal.GOODS_GONE;
                 return false;
             }
             // Labor runs after the entity tick, so the lease spans the one tick between two advances.
             attack.leasedBy(() -> level.getGameTime() - advancedAt <= 1);
         }
-        if (attack.state() == WeaponAttack.State.READY && !attack.fire(target)) {
+        if (attack.state() == WeaponAttack.State.READY && !attack.fireEntity(target)) {
             return false;
         }
         attack.tick();
@@ -101,13 +103,13 @@ final class AttackNode implements Node {
     public void released(ServerLevel level, Worker who, Ending how) {
         if (attack != null) {
             attack.stop();
-            io.github.izakyl.folkways.core.resident.api.Bodies.of(who.body())
+            Bodies.of(who.body())
                 .ifPresent(body -> Combatant.get().stand(body));
         }
         commands.ended(order, how);
     }
 
-    private static Optional<Stances> approach(ServerLevel level, Worker who, Mob target) {
+    private static Optional<Stances> approach(ServerLevel level, Worker who, Entity target) {
         Mob body = who.body();
         double range = Combatant.get().range(who, target);
         if (body.distanceTo(target) <= range && body.hasLineOfSight(target)) {
