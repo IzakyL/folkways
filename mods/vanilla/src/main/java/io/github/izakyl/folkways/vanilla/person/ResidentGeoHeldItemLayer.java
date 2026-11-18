@@ -21,6 +21,8 @@ final class ResidentGeoHeldItemLayer extends GeoRenderLayer<ResidentGeoBackend.C
     private final ResidentGeoBackend backend;
     private final ItemInHandRenderer items;
     private boolean drawn;
+    private GeoBone hand;
+    private float gripOffset;
 
     ResidentGeoHeldItemLayer(ResidentGeoBackend backend, EntityRendererProvider.Context context) {
         super(backend);
@@ -32,25 +34,46 @@ final class ResidentGeoHeldItemLayer extends GeoRenderLayer<ResidentGeoBackend.C
     public void preRender(PoseStack pose, ResidentGeoBackend.Crew crew, BakedGeoModel baked, RenderType type,
         MultiBufferSource buffers, VertexConsumer buffer, float partialTick, int light, int overlay) {
         drawn = false;
+        hand = null;
+        int best = Integer.MAX_VALUE;
+        ResidentEntity body = backend.getCurrentEntity();
+        boolean weapon = body != null && ResidentWeaponPoses.of(body).isPresent();
+        for (GeoBone bone : backend.getGeoModel().getAnimationProcessor().getRegisteredBones()) {
+            String name = bone.getName().replace("_", "").toLowerCase(Locale.ROOT);
+            int rank = switch (name) {
+                case "righthandlocator", "rightitem", "itemright" -> weapon ? 4 : 0;
+                case "righthand", "handright" -> 1;
+                case "rightforearm", "forearmright" -> 2;
+                case "rightarm", "armright", "rarm" -> weapon ? 0 : 3;
+                default -> Integer.MAX_VALUE;
+            };
+            if (!bone.isHidden() && rank < best) {
+                hand = bone;
+                best = rank;
+                gripOffset = switch (name) {
+                    case "rightarm", "armright", "rarm" -> 10;
+                    case "rightforearm", "forearmright" -> 5;
+                    default -> 0;
+                };
+            }
+        }
     }
 
     @Override
     public void renderForBone(PoseStack pose, ResidentGeoBackend.Crew crew, GeoBone bone, RenderType type,
         MultiBufferSource buffers, VertexConsumer buffer, float partialTick, int light, int overlay) {
         ResidentEntity body = backend.getCurrentEntity();
-        String name = bone.getName().replace("_", "").toLowerCase(Locale.ROOT);
         if (drawn
             || body == null
             || bone.isHidden()
             || body.getMainHandItem().isEmpty()
-            || ResidentWeaponPoses.of(body).isEmpty()
-            || !(name.equals("rightarm") || name.equals("armright"))) {
+            || bone != hand) {
             return;
         }
         drawn = true;
         pose.pushPose();
         try {
-            pose.translate(bone.getPivotX() / 16F, (bone.getPivotY() - 10) / 16F, bone.getPivotZ() / 16F);
+            pose.translate(bone.getPivotX() / 16F, (bone.getPivotY() - gripOffset) / 16F, bone.getPivotZ() / 16F);
             pose.scale(-1, -1, 1);
             pose.mulPose(Axis.XP.rotationDegrees(-90));
             pose.mulPose(Axis.YP.rotationDegrees(180));

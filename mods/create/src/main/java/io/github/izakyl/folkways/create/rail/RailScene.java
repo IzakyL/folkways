@@ -44,7 +44,7 @@ public final class RailScene {
     }
 
     public static void declare(FMLClientSetupEvent event) {
-        event.enqueueWork(() -> Scenes.folder(RailContent.ID, "folkways.page.rail",
+        event.enqueueWork(() -> Scenes.folder(Scenes.Category.LOGISTICS, RailContent.ID, "folkways.page.rail",
             ResourceLocation.withDefaultNamespace("minecart"),
             Scenes.scene("folkways_create", "rail", RailScene::program)));
     }

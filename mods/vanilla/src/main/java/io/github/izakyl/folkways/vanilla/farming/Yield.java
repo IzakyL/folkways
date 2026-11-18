@@ -14,12 +14,16 @@ final class Yield {
     }
 
     static List<ItemStack> take(ServerLevel level, LivingEntity body, BlockPos cell, BlockState state) {
+        return take(level, body, cell, state, ItemStack.EMPTY);
+    }
+
+    static List<ItemStack> take(ServerLevel level, LivingEntity body, BlockPos cell, BlockState state, ItemStack tool) {
         List<ItemStack> drops = Block.getDrops(state, level, cell,
-            level.getBlockEntity(cell), body, ItemStack.EMPTY);
+            level.getBlockEntity(cell), body, tool);
         if (!level.removeBlock(cell, false)) {
             return List.of();
         }
-        state.spawnAfterBreak(level, cell, ItemStack.EMPTY, true);
+        state.spawnAfterBreak(level, cell, tool, true);
         return drops;
     }
 }

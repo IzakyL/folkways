@@ -16,6 +16,7 @@ import io.github.izakyl.folkways.core.work.api.NodeSpec;
 import io.github.izakyl.folkways.core.work.api.Outcome;
 import io.github.izakyl.folkways.core.work.api.Recourse;
 import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.work.api.WorkGesture;
 import io.github.izakyl.folkways.core.work.api.WorkSite;
 import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.core.work.api.Workload;
@@ -80,6 +81,7 @@ final class LineWork {
             this.at = at;
             this.spec = work(UUID.nameUUIDFromBytes(("folkways_carts:carts/place/" + line.id()).getBytes()),
                 new WorkSite.AtBlock(at.at()), at.stances(), Workload.Once.of(reach()))
+                .gesture(WorkGesture.SWING).focus(at.at().cell())
                 .needs(new Need(cartSpec(line.kind()), 1))
                 .done();
         }
@@ -141,7 +143,7 @@ final class LineWork {
         Hitch(UUID id, ServerLevel level, LineState state, AbstractCargoCart cart) {
             this.state = state;
             this.spec = work(id, new WorkSite.AtEntity(cart.getUUID(), WorldPos.of(level, cart.blockPosition())),
-                around(level, cart), Workload.Once.of(reach())).done();
+                around(level, cart), Workload.Once.of(reach())).gesture(WorkGesture.SWING).done();
         }
 
         @Override
@@ -229,7 +231,7 @@ final class LineWork {
             this.line = line;
             this.sent = sent;
             this.spec = work(UUID.randomUUID(), new WorkSite.AtBlock(at.at()), at.stances(),
-                Workload.Once.of(reach())).needs(new Need(sent.goods, sent.count)).done();
+                Workload.Once.of(reach())).gesture(WorkGesture.SWING).needs(new Need(sent.goods, sent.count)).done();
         }
 
         @Override
@@ -283,7 +285,7 @@ final class LineWork {
             this.line = line;
             this.sent = sent;
             this.spec = work(UUID.randomUUID(), new WorkSite.AtBlock(at.at()), at.stances(),
-                Workload.Once.of(reach())).gives(new Amount(sent.goods, sent.count)).done();
+                Workload.Once.of(reach())).gesture(WorkGesture.SWING).gives(new Amount(sent.goods, sent.count)).done();
         }
 
         @Override
@@ -333,7 +335,7 @@ final class LineWork {
             this.state = state;
             this.line = line;
             this.spec = work(id, new WorkSite.AtEntity(cart.getUUID(), WorldPos.of(level, cart.blockPosition())),
-                around(level, cart), Workload.Once.of(reach())).done();
+                around(level, cart), Workload.Once.of(reach())).gesture(WorkGesture.SWING).done();
         }
 
         @Override

@@ -18,7 +18,7 @@ public final class CartsScene {
     }
 
     public static void declare(FMLClientSetupEvent event) {
-        event.enqueueWork(() -> Scenes.folder(FolkwaysCartsMod.OWNER, "folkways.lessons.carts",
+        event.enqueueWork(() -> Scenes.folder(Scenes.Category.LOGISTICS, FolkwaysCartsMod.OWNER, "folkways.lessons.carts",
             ResourceLocation.fromNamespaceAndPath("astikorcartsredux", "oak_hand_cart"),
             Scenes.scene("folkways_carts", "carts", CartsScene::program)));
     }

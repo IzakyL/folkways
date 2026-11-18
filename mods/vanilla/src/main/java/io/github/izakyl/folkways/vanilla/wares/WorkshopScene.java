@@ -34,7 +34,7 @@ public final class WorkshopScene {
     }
 
     public static void declare(FMLClientSetupEvent event) {
-        event.enqueueWork(() -> Scenes.folder(WaresContent.ID, "folkways.page.wares",
+        event.enqueueWork(() -> Scenes.folder(Scenes.Category.PRODUCTION, WaresContent.ID, "folkways.page.wares",
             ResourceLocation.withDefaultNamespace("crafting_table"),
             Scenes.scene("folkways_vanilla", "workshop", WorkshopScene::program)));
     }

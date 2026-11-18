@@ -33,10 +33,10 @@ const LESSONS = [
   { lesson: "pasture", tab: "folkways.page.pasture" },
 ] as const;
 
-// The Lessons page: a folder per plugin, a row per scene in it.
+// The Lessons page is a tree; farming's folder holds one scene, so it is a row of its own under its open category.
 const SHELF = {
   tab: "folkways.tab.lessons",
-  folder: "folkways.lessons.folder.folkways_vanilla.farming",
+  category: "folkways.lessons.category.folkways_core.production",
   scene: "folkways.lessons.scene.folkways_vanilla.farming",
 } as const;
 
@@ -46,8 +46,7 @@ const CRAFT_TAB = "folkways.page.wares";
 const PASTURE_TAB = "folkways.page.pasture";
 const CRAFT_ROW = `folkways.board.row.${CRAFT_PAGE}.0`;
 const CRAFT_EDIT = `folkways.board.edit.${CRAFT_PAGE}.0.0`;
-const PASTURE_BOARD = /^folkways\.board\.[a-z]+\.folkways\.pasture\./;
-const CITIZENS_BOARD = /^folkways\.board\.[a-z]+\.folkways\.citizens\./;
+const PASTURE_BOARD = /^folkways\.board\.[a-z]+\.folkways_vanilla\.pasture\./;
 const PEN_LINE = /^\d+ total · retain 4 · \d+ grown$/;
 
 test("every colony panel tab draws its own page and opens its own ponder lesson", async ({}, testInfo) => {
@@ -101,7 +100,6 @@ test("every colony panel tab draws its own page and opens its own ponder lesson"
     expect(tokens).toContain(CRAFT_EDIT);
     expect(tokens.filter((token) => PASTURE_BOARD.test(token)).length).toBeGreaterThan(0);
     expect(penLine?.text ?? "").toMatch(PEN_LINE);
-    expect(tokens.filter((token) => CITIZENS_BOARD.test(token))).toEqual([]);
 
     for (const { lesson, tab: token } of LESSONS) {
       await screen.dismiss(client);
@@ -145,14 +143,15 @@ test("every colony panel tab draws its own page and opens its own ponder lesson"
     expect(shelf.some((element) => element.id === "folkways.lessons.folder.folkways_cookery.cookery")).toBe(false);
     expect(shelf.some((element) => element.id === "folkways.page.cookery"),
       "the kitchen page belongs to the optional Folkways extension").toBe(false);
-    await clickElement(client, { id: SHELF.folder }, { scrollIntoView: true });
-    await frames(client, 2);
+    expect(shelf.some((element) => element.id === SHELF.category)).toBe(true);
+    expect(shelf.some((element) => element.id === "folkways.lessons.folder.folkways_vanilla.farming"),
+      "a folder of one scene is no folder to unfold").toBe(false);
     await clickElement(client, { id: SHELF.scene }, { scrollIntoView: true });
     await realWait(2_500);
     await frames(client, 2);
     const opened = screenName(await safeScreen(client));
     expect(opened,
-      `Lessons page: clicking ${SHELF.scene} in the farming folder did not open a lesson (got ${opened}).`)
+      `Lessons page: clicking ${SHELF.scene} in the production category did not open a lesson (got ${opened}).`)
       .toMatch(/LessonScreen/);
   } catch (error) {
     pair?.failing(error);

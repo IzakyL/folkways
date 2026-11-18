@@ -32,7 +32,7 @@ public final class OrdersScene {
     }
 
     public static void declare(FMLClientSetupEvent event) {
-        event.enqueueWork(() -> Scenes.folder(OrdersContent.ID, "folkways.panel.orders",
+        event.enqueueWork(() -> Scenes.folder(Scenes.Category.LOGISTICS, OrdersContent.ID, "folkways.panel.orders",
             ResourceLocation.withDefaultNamespace("writable_book"),
             Scenes.scene("folkways_vanilla", "orders", OrdersScene::program)));
     }

@@ -12,8 +12,13 @@ import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.client.renderer.entity.HumanoidMobRenderer;
 import net.minecraft.client.renderer.entity.layers.HumanoidArmorLayer;
+import net.minecraft.client.renderer.entity.layers.ItemInHandLayer;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.entity.HumanoidArm;
+import net.minecraft.world.item.CrossbowItem;
+import net.minecraft.world.item.ItemStack;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.api.distmarker.OnlyIn;
 
@@ -29,6 +34,7 @@ public final class ResidentSkinRenderer extends HumanoidMobRenderer<ResidentEnti
         addLayer(new HumanoidArmorLayer<>(this,
             new HumanoidModel<>(context.bakeLayer(ModelLayers.PLAYER_INNER_ARMOR)),
             new HumanoidModel<>(context.bakeLayer(ModelLayers.PLAYER_OUTER_ARMOR)), context.getModelManager()));
+        addLayer(new ItemInHandLayer<>(this, context.getItemInHandRenderer()));
         WornGearLayers.of(this).forEach(this::addLayer);
     }
 
@@ -50,9 +56,31 @@ public final class ResidentSkinRenderer extends HumanoidMobRenderer<ResidentEnti
     private static final class LeisureModel extends PlayerModel<ResidentEntity> {
         LeisureModel(ModelPart root, boolean slim) { super(root, slim); }
 
+        private static ArmPose heldPose(ResidentEntity resident, InteractionHand hand) {
+            ItemStack stack = resident.getItemInHand(hand);
+            if (stack.isEmpty()) {
+                return ArmPose.EMPTY;
+            }
+            if (resident.isUsingItem() && resident.getUsedItemHand() == hand) {
+                return switch (stack.getUseAnimation()) {
+                    case BLOCK -> ArmPose.BLOCK;
+                    case BOW -> ArmPose.BOW_AND_ARROW;
+                    case SPEAR -> ArmPose.THROW_SPEAR;
+                    case CROSSBOW -> ArmPose.CROSSBOW_CHARGE;
+                    default -> ArmPose.ITEM;
+                };
+            }
+            return stack.getItem() instanceof CrossbowItem && CrossbowItem.isCharged(stack) && !resident.swinging
+                ? ArmPose.CROSSBOW_HOLD : ArmPose.ITEM;
+        }
+
         @Override
         public void setupAnim(ResidentEntity resident, float stride, float amount, float age, float yaw, float pitch) {
             crouching = resident.leisureMotion().equals("petting");
+            rightArmPose = resident.getMainArm() == HumanoidArm.RIGHT
+                ? heldPose(resident, InteractionHand.MAIN_HAND) : heldPose(resident, InteractionHand.OFF_HAND);
+            leftArmPose = resident.getMainArm() == HumanoidArm.LEFT
+                ? heldPose(resident, InteractionHand.MAIN_HAND) : heldPose(resident, InteractionHand.OFF_HAND);
             super.setupAnim(resident, stride, amount, age, yaw, pitch);
             float wave = Mth.sin(age * 0.09F);
             switch (resident.leisureMotion()) {

@@ -3,11 +3,14 @@ package io.github.izakyl.folkways.vanilla.farming;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import io.github.izakyl.folkways.core.work.api.Amount;
 import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.ToolNeed;
+import io.github.izakyl.folkways.core.work.api.ToolUse;
 import io.github.izakyl.folkways.core.work.api.WorkNoise;
 import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.core.work.api.Workload;
 import io.github.izakyl.folkways.core.work.api.Xp;
 import io.github.izakyl.folkways.core.work.support.Leaves;
+import io.github.izakyl.folkways.core.work.support.BreakingProgress;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -19,10 +22,12 @@ import net.minecraft.tags.ItemTags;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
+import net.neoforged.neoforge.common.ItemAbilities;
 
 final class FellNode extends FarmNode {
 
     private static final int CANOPY_KINDS = 5;
+    private static final ToolNeed AXE = new ToolNeed.Ability(ItemAbilities.AXE_DIG);
     private static final ItemSpec LOGS = ItemSpec.of(ItemTags.LOGS);
 
     private final Crop crop;
@@ -32,7 +37,9 @@ final class FellNode extends FarmNode {
             FarmingContent.ticksFor(FarmingContent.FELL_TICKS_PER_LOG, chore.job().cells().size()
                 + chore.job().canopy().size()
                     * (double) FarmingContent.FELL_TICKS_PER_LEAF / FarmingContent.FELL_TICKS_PER_LOG),
-            FarmingContent::haste)).leaves(leaves(chore)).doing(FarmingContent.FELLING).done(), chore);
+            FarmingContent::haste)).tools(ToolUse.preferred(AXE)).gesture(BreakingProgress.MINING)
+            .focus(chore.job().cells().getFirst())
+            .leaves(leaves(chore)).doing(FarmingContent.FELLING).done(), chore);
         this.crop = chore.crop();
     }
 
@@ -53,7 +60,7 @@ final class FellNode extends FarmNode {
             if (!level.isLoaded(vine)) continue;
             BlockState state = level.getBlockState(vine);
             if (!Felling.attachment(state)) continue;
-            logs.addAll(Yield.take(level, who.body(), vine, state));
+            logs.addAll(Yield.take(level, who.body(), vine, state, who.held(AXE)));
             shed(heard, voiced, vine, state);
         }
         int cut = 0;
@@ -65,7 +72,7 @@ final class FellNode extends FarmNode {
             if (!crop.cuts(state)) {
                 continue;
             }
-            logs.addAll(Yield.take(level, who.body(), cell, state));
+            logs.addAll(Yield.take(level, who.body(), cell, state, who.held(AXE)));
             shed(heard, voiced, cell, state);
             cut++;
         }
@@ -77,7 +84,7 @@ final class FellNode extends FarmNode {
             if (!Habit.Tree.leaf(state)) {
                 continue;
             }
-            logs.addAll(Yield.take(level, who.body(), leaf, state));
+            logs.addAll(Yield.take(level, who.body(), leaf, state, who.held(AXE)));
             shed(heard, voiced, leaf, state);
         }
         return new Outcome.Done(List.copyOf(heard), List.copyOf(logs),

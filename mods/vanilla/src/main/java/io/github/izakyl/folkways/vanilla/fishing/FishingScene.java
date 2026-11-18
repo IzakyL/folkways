@@ -30,7 +30,7 @@ public final class FishingScene {
     }
 
     public static void declare(FMLClientSetupEvent event) {
-        event.enqueueWork(() -> Scenes.folder(FishingContent.ID, "folkways.lessons.fishing",
+        event.enqueueWork(() -> Scenes.folder(Scenes.Category.PRODUCTION, FishingContent.ID, "folkways.lessons.fishing",
             ResourceLocation.withDefaultNamespace("fishing_rod"),
             Scenes.scene("folkways_vanilla", "fishing", FishingScene::program)));
     }

@@ -10,6 +10,7 @@ import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.core.work.api.Workload;
 import io.github.izakyl.folkways.core.work.api.Xp;
 import io.github.izakyl.folkways.core.work.support.Leaves;
+import io.github.izakyl.folkways.core.work.support.BreakingProgress;
 import io.github.izakyl.folkways.vanilla.farming.FarmingContent;
 import java.util.ArrayList;
 import java.util.List;
@@ -63,8 +64,11 @@ final class BreakNode extends GroundNode {
         chore.job().canopy().forEach(cell -> blocks.add(level.getBlockState(cell)));
         var spec = GroundNode.declare(chore, way.by(), Workload.Once.of(ticksFor(way, seen), way.haste(chore)))
             .leaves(Leaves.ofBlocks(blocks));
-        if (way != Way.WEED && seen.requiresCorrectToolForDrops()) {
-            spec.tools(new ToolUse(new ToolNeed.SuitableFor(seen), 1));
+        if (way != Way.WEED) {
+            spec.gesture(BreakingProgress.MINING);
+            spec.tools(seen.requiresCorrectToolForDrops()
+                ? ToolUse.of(new ToolNeed.SuitableFor(seen))
+                : ToolUse.preferred(new ToolNeed.SuitableFor(seen)));
         }
         return spec.doing(way.doing(), seen.getBlock()).done();
     }

@@ -4,6 +4,8 @@ import io.github.izakyl.folkways.core.colony.api.Colony;
 import io.github.izakyl.folkways.core.colony.api.Equipment;
 import io.github.izakyl.folkways.core.colony.api.KitRules;
 import io.github.izakyl.folkways.core.colony.api.PackKeeps;
+import io.github.izakyl.folkways.core.equipment.api.EquipmentProfile;
+import io.github.izakyl.folkways.core.equipment.api.EquipmentProfiles;
 import io.github.izakyl.folkways.core.item.api.Goods;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import io.github.izakyl.folkways.core.resident.api.Body;
@@ -13,6 +15,7 @@ import io.github.izakyl.folkways.core.vocation.api.Vocation;
 import io.github.izakyl.folkways.core.vocation.api.Vocations;
 import io.github.izakyl.folkways.core.work.api.Amount;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
@@ -36,12 +39,17 @@ public final class Kit {
     }
 
     public static Kit of(Colony colony, Body body) {
+        List<EquipmentProfile.Entry> carried = colony.service(EquipmentProfiles.ID, EquipmentProfiles.class)
+            .flatMap(profiles -> profiles.assigned(body.id())).map(EquipmentProfile::carried).orElseGet(List::of);
         Licences can = body.licences();
         Set<ItemSpec> wanted = new LinkedHashSet<>();
         for (Vocation vocation : Vocations.all()) {
             if (can.of(vocation).isPresent() && !body.kind().worksBarehanded(vocation.id())) {
                 for (ItemSpec tool : vocation.kit()) {
-                    allowed(colony, vocation, tool).ifPresent(wanted::add);
+                    if (carried.stream().noneMatch(entry ->
+                        !Collections.disjoint(Goods.members(tool), Goods.members(entry.items())))) {
+                        allowed(colony, vocation, tool).ifPresent(wanted::add);
+                    }
                 }
             }
         }

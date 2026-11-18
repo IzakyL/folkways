@@ -24,7 +24,7 @@ public final class CookeryScenes {
 
     public static void declare(FMLClientSetupEvent event) {
         event.enqueueWork(() -> {
-            Scenes.folder(CookeryContent.ID, "folkways.page.cookery", item("stockpot"),
+            Scenes.folder(Scenes.Category.PRODUCTION, CookeryContent.ID, "folkways.page.cookery", item("stockpot"),
                 Scenes.scene("folkways_cookery", "cookery_orders", CookeryScenes::orders, item("chopping_board"), item("stockpot")),
                 Scenes.scene("folkways_cookery", "cookery_tools", io.github.izakyl.folkways.cookery.tools.SharedToolsScene::program,
                     item("kitchenware_racks"), item("iron_kitchen_knife"), item("kitchen_shovel"), item("sickle")),

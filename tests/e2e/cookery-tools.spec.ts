@@ -28,7 +28,7 @@ const SERVINGS = BATCHES * 3;
 const MAX_TICKS = 14000;
 
 type Tool = { id: string; name: string; damage: number; shape: string; where: string; owner: string };
-type Board = { input: string; cuts: number; maximum: number };
+type Board = { input: string; cuts: number; maximum: number; job: string; worker: string };
 type Sample = { tick: number; phase: string; tools: Tool[]; boards: Board[]; totals: Record<string, number>;
   target: number[]; residents: number };
 type Reading = { current: Sample; rows: Sample[]; observerFailure: string };
@@ -47,7 +47,10 @@ const OBSERVE = defineTask<{ mode: string; player: string; rack: Vec; boards: Ve
       "io.github.izakyl.folkways.core.front.api.Books",
       "io.github.izakyl.folkways.core.colony.api.Colony",
       "io.github.izakyl.folkways.core.resident.api.Bodies",
+      "io.github.izakyl.folkways.core.runtime.Labor",
+      "io.github.izakyl.folkways.core.work.api.NodeState",
       "io.github.izakyl.folkways.core.world.api.WorldPos",
+      "io.github.izakyl.folkways.cookery.CookeryContent",
       "net.minecraft.core.BlockPos",
       "net.minecraft.core.registries.BuiltInRegistries",
       "net.minecraft.server.level.ServerLevel",
@@ -99,14 +102,31 @@ private static Map<String,Object> sample() throws Exception {
             add(store.getItem(slot), at.block(level).equals(rack) ? "rack" : "store", at.toString(), totals, tools, seen);
         }
     }
+    var boardJobs = new HashMap<BlockPos, String>();
+    var boardWorkers = new HashMap<BlockPos, String>();
+    var labor = phase.equals("two") ? Labor.site(colony.id(), level.dimension()).orElseThrow() : null;
     int residents = 0;
     for (var resident : colony.residents()) {
         var entity = level.getEntity(resident.id());
         if (entity == null) throw new IllegalStateException("resident unloaded: " + resident.id());
         var body = Bodies.of(entity).orElseThrow();
         residents++;
+        boolean hasKnife = false;
         for (int slot = 0; slot < body.pack().getContainerSize(); slot++) {
-            add(body.pack().getItem(slot), "resident", resident.id().toString(), totals, tools, seen);
+            var stack = body.pack().getItem(slot);
+            add(stack, "resident", resident.id().toString(), totals, tools, seen);
+            hasKnife |= stack.is(TagMod.KITCHEN_KNIFE);
+        }
+        if (labor != null && hasKnife) {
+            for (var work : labor.debugResident(level, resident.id()).route()) {
+                var spec = work.spec();
+                if (work.phase() == NodeState.WORKING && spec.doing().equals(CookeryContent.CHOPPING)
+                    && labor.holder(spec.id()).filter(resident.id()::equals).isPresent()) {
+                    var at = spec.site().where().block(level);
+                    boardJobs.put(at, spec.id().toString());
+                    boardWorkers.put(at, resident.id().toString());
+                }
+            }
         }
     }
     for (var entity : level.getAllEntities()) if (entity instanceof ItemEntity item) {
@@ -117,7 +137,8 @@ private static Map<String,Object> sample() throws Exception {
         var board = (ChoppingBoardBlockEntity)level.getBlockEntity(at);
         if (board == null) throw new IllegalStateException("board missing: " + at);
         nativeBoards.add(Map.of("input", BuiltInRegistries.ITEM.getKey(board.getCurrentCutStack().getItem()).toString(),
-            "cuts", board.getCurrentCutCount(), "maximum", board.getMaxCutCount()));
+            "cuts", board.getCurrentCutCount(), "maximum", board.getMaxCutCount(),
+            "job", boardJobs.getOrDefault(at, ""), "worker", boardWorkers.getOrDefault(at, "")));
     }
     var targetCounts = new ArrayList<Long>();
     for (int index = 0; index < targets.size(); index++) {
@@ -274,7 +295,8 @@ for (const stage of twins()) test(stage.title("shared cookery tools: one named r
     for (const row of secondRows) expect(row.tools, "a promised physical return satisfies the maintained stock without making spare copies").toHaveLength(2);
     expect(secondRows.some(row => new Set(row.tools.filter(tool => tool.where === "resident").map(tool => tool.owner)).size === 2),
       "the explicit extra tool lets two different residents work at the same time").toBe(true);
-    expect(secondRows.some(row => row.boards.every(board => board.input !== "minecraft:air")), "both native boards are in use concurrently").toBe(true);
+    expect(overlappingBoardWork(secondRows), "different residents work overlapping jobs that advance both native boards")
+      .toBe(true);
     const named = evidence.final.tools.filter((tool: Tool) => tool.name === original.name);
     expect(named).toHaveLength(1); expect(named[0].shape).toBe(original.shape);
     expect(evidence.final.totals["minecraft:iron_ingot"] ?? 0).toBe(6);
@@ -370,6 +392,15 @@ async function waitFor(server: MinecraftServer, read: (mode: string, phase: stri
     await tick.sprint(server, 80);
   }
   throw new Error("cookery-tools phase " + phase + " did not finish in " + MAX_TICKS + " ticks: " + JSON.stringify(last));
+}
+
+function overlappingBoardWork(rows: Sample[]) {
+  // A board job includes fetching its ingredient with a borrowed knife. Require physical cut progress
+  // from each overlapping job, even when their ingredients are loaded on different ticks.
+  const cutJobs = new Set(rows.flatMap(row => row.boards.filter(board => board.job && board.cuts > 0)
+    .map(board => board.job)));
+  return rows.some(({ boards: [first, second] }) => first.worker !== second.worker
+    && cutJobs.has(first.job) && cutJobs.has(second.job));
 }
 
 function returnedBetweenBorrowers(rows: Sample[]) {

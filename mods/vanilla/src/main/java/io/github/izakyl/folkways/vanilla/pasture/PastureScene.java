@@ -38,7 +38,7 @@ public final class PastureScene {
     }
 
     public static void declare(FMLClientSetupEvent event) {
-        event.enqueueWork(() -> Scenes.folder(PastureContent.ID, "folkways.page.pasture",
+        event.enqueueWork(() -> Scenes.folder(Scenes.Category.PRODUCTION, PastureContent.ID, "folkways.page.pasture",
             ResourceLocation.withDefaultNamespace("lead"),
             Scenes.scene("folkways_vanilla", "pasture", PastureScene::program)));
     }

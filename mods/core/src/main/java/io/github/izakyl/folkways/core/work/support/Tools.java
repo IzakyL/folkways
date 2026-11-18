@@ -13,7 +13,10 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.tags.BlockTags;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.state.BlockState;
+import net.neoforged.neoforge.common.ItemAbilities;
 import net.neoforged.neoforge.common.ItemAbility;
 
 public final class Tools {
@@ -57,7 +60,7 @@ public final class Tools {
             return true;
         }
         for (ToolUse use : spec.tools()) {
-            if (from(held, use.need()).isPresent()) {
+            if (!use.required() || from(held, use.need()).isPresent()) {
                 continue;
             }
             var goods = shared(use.need()).orElse(null);
@@ -81,9 +84,19 @@ public final class Tools {
         return switch (need) {
             case ToolNeed.None ignored -> true;
             case ToolNeed.Ability(ItemAbility ability) -> !stack.isEmpty() && stack.canPerformAction(ability);
-            case ToolNeed.SuitableFor(var state) -> !stack.isEmpty() && stack.isCorrectToolForDrops(state);
+            case ToolNeed.SuitableFor(var state) -> !stack.isEmpty() && suitable(stack, state);
             case ToolNeed.Tagged(var tag) -> !stack.isEmpty() && stack.is(tag);
         };
+    }
+
+    private static boolean suitable(ItemStack stack, BlockState state) {
+        if (state.requiresCorrectToolForDrops()) {
+            return stack.isCorrectToolForDrops(state);
+        }
+        return state.is(BlockTags.MINEABLE_WITH_PICKAXE) && stack.canPerformAction(ItemAbilities.PICKAXE_DIG)
+            || state.is(BlockTags.MINEABLE_WITH_AXE) && stack.canPerformAction(ItemAbilities.AXE_DIG)
+            || state.is(BlockTags.MINEABLE_WITH_SHOVEL) && stack.canPerformAction(ItemAbilities.SHOVEL_DIG)
+            || state.is(BlockTags.MINEABLE_WITH_HOE) && stack.canPerformAction(ItemAbilities.HOE_DIG);
     }
 
     // Whether what is held answers every tool the work asks for, or this kind works its trade barehanded.
@@ -92,7 +105,7 @@ public final class Tools {
             return true;
         }
         for (ToolUse use : spec.tools()) {
-            if (from(held, use.need()).isEmpty()) {
+            if (use.required() && from(held, use.need()).isEmpty()) {
                 return false;
             }
         }

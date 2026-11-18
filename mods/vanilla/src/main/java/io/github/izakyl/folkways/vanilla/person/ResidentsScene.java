@@ -38,7 +38,7 @@ public final class ResidentsScene {
     }
 
     public static void declare(FMLClientSetupEvent event) {
-        event.enqueueWork(() -> Scenes.folder(PersonContent.ID, "folkways.page.person",
+        event.enqueueWork(() -> Scenes.folder(Scenes.Category.PEOPLE, PersonContent.ID, "folkways.page.person",
             ResourceLocation.withDefaultNamespace("bell"),
             Scenes.scene("folkways_vanilla", "residents", ResidentsScene::program)));
     }

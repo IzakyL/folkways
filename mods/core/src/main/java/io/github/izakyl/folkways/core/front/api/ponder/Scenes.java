@@ -42,12 +42,34 @@ public final class Scenes {
         }
     }
 
-    public record Folder(ResourceLocation id, String nameKey, ResourceLocation icon, List<Scene> scenes) {
+    // A heading the Lessons page gathers folders under. The built-in ones list first, in this order;
+    // a plugin may name its own, which lists after them. A folder under none sits at the top level.
+    public record Category(ResourceLocation id, String nameKey, ResourceLocation icon) {
+        public static final Category PEOPLE = core("people", "player_head");
+        public static final Category BUILDING = core("building", "bricks");
+        public static final Category PRODUCTION = core("production", "iron_hoe");
+        public static final Category LOGISTICS = core("logistics", "minecart");
+        public static final Category SAFETY = core("safety", "shield");
+
+        public static final List<Category> BUILT_IN = List.of(PEOPLE, BUILDING, PRODUCTION, LOGISTICS, SAFETY);
+
+        private static Category core(String path, String icon) {
+            return new Category(ResourceLocation.fromNamespaceAndPath(FolkwaysCoreMod.MOD_ID, path),
+                "folkways.lessons.category." + path, ResourceLocation.withDefaultNamespace(icon));
+        }
+    }
+
+    public record Folder(ResourceLocation id, String nameKey, ResourceLocation icon, List<Scene> scenes,
+                         java.util.Optional<Category> category) {
         public Folder {
             scenes = List.copyOf(scenes);
             if (scenes.isEmpty()) {
                 throw new IllegalArgumentException(id + " is a lesson folder with nothing in it");
             }
+        }
+
+        public Folder with(List<Scene> shown) {
+            return new Folder(id, nameKey, icon, shown, category);
         }
     }
 
@@ -83,7 +105,12 @@ public final class Scenes {
     }
 
     public static void folder(ResourceLocation id, String nameKey, ResourceLocation icon, Scene... scenes) {
-        FOLDERS.claim(new Folder(id, nameKey, icon, List.of(scenes)));
+        FOLDERS.claim(new Folder(id, nameKey, icon, List.of(scenes), java.util.Optional.empty()));
+    }
+
+    public static void folder(Category category, ResourceLocation id, String nameKey, ResourceLocation icon,
+            Scene... scenes) {
+        FOLDERS.claim(new Folder(id, nameKey, icon, List.of(scenes), java.util.Optional.of(category)));
     }
 
     public static void add(ResourceLocation folder, Scene scene) {
@@ -96,7 +123,7 @@ public final class Scenes {
             List<Scene> scenes = new ArrayList<>(folder.scenes());
             additions.stream().filter(addition -> addition.folder().equals(folder.id()))
                 .forEach(addition -> scenes.add(addition.scene()));
-            return new Folder(folder.id(), folder.nameKey(), folder.icon(), scenes);
+            return folder.with(scenes);
         }).toList();
     }
 }

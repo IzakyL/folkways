@@ -1,6 +1,7 @@
 import { defineTask, javaTask, type MinecraftClient, type MinecraftServer } from "@izakyl/blockwright-minecraft";
 import { clickElement, panelElements } from "../../ldlib2";
 import { frames } from "../harness/bw-helpers";
+import { scrollCellIntoView } from "./site-panel";
 
 /** The vocation group a vocation's column sits in, as a token, or null when it names no group. */
 const GROUP_OF = defineTask<{ vocation: string }, { group: string | null }>({
@@ -39,6 +40,7 @@ export async function showVocationColumn(
     return { opened: null };
   }
   const toggle = `${prefix}.open.${group}`;
+  await scrollCellIntoView(server, client, toggle, toggle, "center");
   await clickElement(client, { id: toggle });
   await frames(client, 2);
   return { opened: toggle };

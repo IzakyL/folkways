@@ -8,6 +8,7 @@ import io.github.izakyl.folkways.core.work.api.Node;
 import io.github.izakyl.folkways.core.work.api.NodeSpec;
 import io.github.izakyl.folkways.core.work.api.Outcome;
 import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.work.api.WorkGesture;
 import io.github.izakyl.folkways.core.work.api.WorkSite;
 import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.core.work.api.Workload;
@@ -63,6 +64,7 @@ final class RefillNode implements Node {
             .leaves(waterSource ? List.of(new Amount(
                 ItemSpec.of(ResourceLocation.withDefaultNamespace("bucket")), 1)) : List.of())
             .vocation(DamageControlContent.trade())
+            .gesture(WorkGesture.SWING).focus(source.cell())
             .doing(DamageControlContent.REFILLING)
             .done();
     }

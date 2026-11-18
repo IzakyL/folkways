@@ -26,6 +26,9 @@ public interface WorkGesture {
     default void perform(LivingEntity body, int windupTick, BlockPos at) {
     }
 
+    default void progress(LivingEntity body, int tick, int duration, BlockPos at) {
+    }
+
     default void release(LivingEntity body) {
     }
 

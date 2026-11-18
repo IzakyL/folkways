@@ -51,7 +51,7 @@ const IMPORTS = [
   "io.github.izakyl.folkways.vanilla.person.look.ResidentLooks", "io.github.izakyl.folkways.vanilla.person.look.MaidLooks",
   "io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutProfiles",
   "io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutProfile",
-  "io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutRegistry",
+  "io.github.izakyl.folkways.core.combat.api.Loadouts",
   "io.github.izakyl.folkways.core.world.api.WorldPos",
   "io.github.izakyl.folkways.vanilla.patrol.SentryPosts",
   "io.github.izakyl.folkways.vanilla.patrol.PatrolStaffing",
@@ -78,7 +78,7 @@ for(int n=0;n<3;n++){
  gun.setCurrentAmmoCount(actual,6);gun.setBulletInBarrel(actual,true);body.pack().insert(actual);
  ItemStack ammo=new ItemStack(ModItems.AMMO.get(),64);((IAmmo)ammo.getItem()).setAmmoId(ammo,ResourceLocation.parse("tacz:45acp"));body.pack().insert(ammo);
  var profiles=LoadoutProfiles.of(colony);var profile=profiles.create("TACZ sentry "+n);
- profiles.add(profile.id(),LoadoutProfile.Entry.weapon(LoadoutRegistry.using(actual).orElseThrow().profileWeapon(actual)));
+ profiles.add(profile.id(),LoadoutProfile.Entry.weapon(Loadouts.using(actual).orElseThrow().profileWeapon(actual)));
  profiles.assign(List.of(body.id()),Optional.of(profile.id()));
  var cells=new LinkedHashSet<WorldPos>();
  for(int x=0;x<2;x++){for(int z=0;z<2;z++){

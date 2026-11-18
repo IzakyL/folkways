@@ -36,7 +36,7 @@ public final class FarmingScene {
     private FarmingScene() {
     }
     public static void declare(FMLClientSetupEvent event) {
-        event.enqueueWork(() -> Scenes.folder(FarmingContent.ID, "folkways.lessons.farming",
+        event.enqueueWork(() -> Scenes.folder(Scenes.Category.PRODUCTION, FarmingContent.ID, "folkways.lessons.farming",
             ResourceLocation.withDefaultNamespace("wheat"),
             Scenes.scene("folkways_vanilla", "farming", FarmingScene::program)));
     }

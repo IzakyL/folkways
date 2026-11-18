@@ -39,7 +39,7 @@ public final class GolemScene {
     }
 
     public static void declare(FMLClientSetupEvent event) {
-        event.enqueueWork(() -> Scenes.folder(GolemContent.ID, "folkways.lessons.golem",
+        event.enqueueWork(() -> Scenes.folder(Scenes.Category.PRODUCTION, GolemContent.ID, "folkways.lessons.golem",
             ResourceLocation.withDefaultNamespace("iron_ingot"),
             Scenes.scene("folkways_golems", "golems", GolemScene::program)));
     }

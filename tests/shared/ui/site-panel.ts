@@ -433,6 +433,7 @@ async function clickTrackAt(
 
 export async function scrollCellIntoView(
   server: MinecraftServer, client: MinecraftClient, anchor: string, token: string,
+  visibility: "full" | "center" = "full",
 ) {
   const elements = await panelElements(client);
   const cell = selectElement(elements, { id: token });
@@ -442,7 +443,11 @@ export async function scrollCellIntoView(
   }
   const view = scrollViewAround(elements, row);
   const evidence: any = { anchor, token, viewport: view, cell: { x: cell.x, width: cell.width } };
-  const inside = (x: number) => x >= view.x && x + cell.width <= view.x + view.width;
+  // Center clicks round to a whole pixel, so keep that point inside the viewport.
+  const center = cell.width / 2;
+  const left = visibility === "center" ? view.x - center + 1 : view.x;
+  const right = view.x + view.width - (visibility === "center" ? center + 1 : cell.width);
+  const inside = (x: number) => x >= left && x <= right;
   if (inside(cell.x)) {
     evidence.settled = "already";
     return evidence;
@@ -458,7 +463,7 @@ export async function scrollCellIntoView(
     throw new Error(`panel: clicking both ends of the track leaves ${token} at ${atLeft} (viewport ${JSON.stringify(view)}): `
       + "the area will not scroll horizontally");
   }
-  const ends = [(view.x - atLeft) / span, (view.x + view.width - cell.width - atLeft) / span]
+  const ends = [(left - atLeft) / span, (right - atLeft) / span]
     .map((fraction) => Math.min(Math.max(fraction, 0), 1))
     .sort((a, b) => a - b);
   let wanted = (ends[0] + ends[1]) / 2;
@@ -466,14 +471,14 @@ export async function scrollCellIntoView(
   let landed = await clickTrackAt(server, client, track, wanted, token);
   evidence.landed = landed;
   for (let nudge = 0; nudge < TRACK_NUDGES && !inside(landed); nudge++) {
-    const off = landed < view.x ? view.x - landed : view.x + view.width - cell.width - landed;
+    const off = landed < left ? left - landed : right - landed;
     const next = Math.min(Math.max(wanted + off / span, 0), 1);
     wanted = next;
     landed = await clickTrackAt(server, client, track, next, token);
     evidence[`nudge_${nudge}`] = { off, fraction: next, landed };
   }
   if (!inside(landed)) {
-    throw new Error(`panel: ${token} scrolled to ${landed} but is still not fully in the viewport (${JSON.stringify(evidence)})`);
+    throw new Error(`panel: ${token} scrolled to ${landed} outside the accepted range [${left}, ${right}] (${JSON.stringify(evidence)})`);
   }
   evidence.settled = true;
   return evidence;

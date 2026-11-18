@@ -1,6 +1,7 @@
 package io.github.izakyl.folkways.core.work.support;
 
 import io.github.izakyl.folkways.core.inventory.api.Stash;
+import io.github.izakyl.folkways.core.item.api.Goods;
 import io.github.izakyl.folkways.core.resident.api.Bodies;
 import io.github.izakyl.folkways.core.resident.api.Body;
 import io.github.izakyl.folkways.core.resident.api.Doing;
@@ -12,6 +13,7 @@ import io.github.izakyl.folkways.core.work.api.ActionSpec;
 import io.github.izakyl.folkways.core.work.api.Disposition;
 import io.github.izakyl.folkways.core.work.api.HoldingContext;
 import io.github.izakyl.folkways.core.work.api.HoldingStep;
+import io.github.izakyl.folkways.core.work.api.Need;
 import io.github.izakyl.folkways.core.work.api.Node;
 import io.github.izakyl.folkways.core.work.api.Outcome;
 import io.github.izakyl.folkways.core.work.api.Placement;
@@ -24,6 +26,7 @@ import io.github.izakyl.folkways.core.work.api.WorkExertion;
 import io.github.izakyl.folkways.core.work.api.WorkNoise;
 import io.github.izakyl.folkways.core.work.api.WorkSite;
 import io.github.izakyl.folkways.core.work.api.WorkYield;
+import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.core.work.api.Workload;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.core.world.api.WorldSpaces;
@@ -34,6 +37,7 @@ import java.util.Optional;
 import java.util.Set;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.Container;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.Vec3;
@@ -141,6 +145,12 @@ public final class ActionExecutor implements ActionHandle {
 
     @Override
     public void suspended(HoldingContext context, PreemptReason reason) {
+        if (!gestureReleased) {
+            current.spec().gesture().release(context.body().mob());
+            gestureReleased = true;
+        }
+        context.body().clearDoing();
+        context.body().clearHandPresentation();
     }
 
     @Override
@@ -158,7 +168,7 @@ public final class ActionExecutor implements ActionHandle {
                 if (joining) {
                     windupTicks = 0;
                 }
-                startWork(context.level(), context.body());
+                startWork(context);
             }
             case HoldingStep.Failed failure -> result = failure;
             default -> { }
@@ -167,17 +177,20 @@ public final class ActionExecutor implements ActionHandle {
 
     private void carry(HoldingContext context) {
         switch (walking.tick(context, services)) {
-            case HoldingStep.Done ignored -> startWork(context.level(), context.body());
+            case HoldingStep.Done ignored -> startWork(context);
             case HoldingStep.Failed failure -> result = failure;
             default -> { }
         }
     }
 
-    private void startWork(ServerLevel level, Body body) {
+    private void startWork(HoldingContext context) {
+        ServerLevel level = context.level();
+        Body body = context.body();
         windup = 0;
         body.mob().getNavigation().stop();
         beats = beatsOf(level, body);
-        present(body);
+        body.clearHandPresentation();
+        present(context);
         ActionSpec spec = current.spec();
         if (ongoing != null) {
             body.setDoing(Doing.open(spec.doing()).about(spec.about()).with(current.wares()));
@@ -189,6 +202,8 @@ public final class ActionExecutor implements ActionHandle {
 
     private void windUp(HoldingContext context) {
         Body body = context.body();
+        current.spec().gesture().progress(body.mob(), windup, windupTicks,
+            focusOf(body).orElseGet(() -> cellOf(body)));
         perform(body);
         if (windup >= windupTicks) {
             commit(context);
@@ -249,7 +264,14 @@ public final class ActionExecutor implements ActionHandle {
     }
 
     private Optional<BlockPos> focusOf(Body body) {
-        return current.spec().focus()
+        if (current.spec().site() instanceof WorkSite.AtEntity target
+                && body.mob().level() instanceof ServerLevel level) {
+            var entity = level.getEntity(target.entity());
+            if (entity != null) {
+                return Optional.of(entity.blockPosition());
+            }
+        }
+        return current.spec().focus().or(() -> Optional.of(current.spec().site().cell()))
             .flatMap(cell -> WorldSpaces.world(body.mob().level(), current.spec().site().where().at(cell)))
             .map(BlockPos::containing);
     }
@@ -308,6 +330,7 @@ public final class ActionExecutor implements ActionHandle {
         } catch (RuntimeException | LinkageError broken) {
             services.failed(current, broken);
             result = new HoldingStep.Failed(services.broken());
+            releaseBody(context);
             return;
         }
         current.spec().gesture().release(body.mob());
@@ -332,17 +355,63 @@ public final class ActionExecutor implements ActionHandle {
         releaseBody(context);
     }
 
-    private void present(Body body) {
+    private void present(HoldingContext context) {
+        Body body = context.body();
         ActionSpec spec = current.spec();
         List<ToolUse> uses = ResidentKinds.barehanded(body.kind().id(), spec.vocation()) ? List.of() : spec.tools();
+        boolean held = false;
         for (ToolUse use : uses) {
-            ItemStack tool = Tools.from(body.pack().contents(), use.need()).orElse(ItemStack.EMPTY);
+            ItemStack tool = context.worker().held(use.need());
             if (!tool.isEmpty()) {
                 body.presentHeldItem(tool.copy());
+                held = true;
                 break;
             }
         }
+        if (!held) {
+            for (var need : spec.needs()) {
+                if (need.count() <= 0) {
+                    continue;
+                }
+                ItemStack input = inputOf(context.worker(), need);
+                if (!input.isEmpty()) {
+                    body.presentHeldItem(input.copyWithCount(1));
+                    break;
+                }
+            }
+        }
         spec.gesture().present(body, spec.focus());
+    }
+
+    private ItemStack inputOf(Worker worker, Need need) {
+        ItemStack carried = matching(worker.pack(), need);
+        if (!carried.isEmpty() || need.carried()) {
+            return carried;
+        }
+        for (Placement.Draw draw : placement.draws()) {
+            if (draw.count() <= 0 || !Goods.overlap(draw.spec(), need.spec()) || draw.from().isEmpty()) {
+                continue;
+            }
+            for (Worker.Store store : worker.within()) {
+                if (store.at().equals(draw.from().get().pos())) {
+                    ItemStack input = matching(store.contents(), need);
+                    if (!input.isEmpty()) {
+                        return input;
+                    }
+                }
+            }
+        }
+        return ItemStack.EMPTY;
+    }
+
+    private static ItemStack matching(Container contents, Need need) {
+        for (int slot = 0; slot < contents.getContainerSize(); slot++) {
+            ItemStack stack = contents.getItem(slot);
+            if (!stack.isEmpty() && Goods.matches(stack, need.spec())) {
+                return stack;
+            }
+        }
+        return ItemStack.EMPTY;
     }
 
     private BlockPos cellOf(Body body) {

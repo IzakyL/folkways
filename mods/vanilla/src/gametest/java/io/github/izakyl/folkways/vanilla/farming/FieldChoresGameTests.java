@@ -490,6 +490,7 @@ public final class FieldChoresGameTests {
         return Proxies.of(Worker.class, (proxy, method, args) -> switch (method.getName()) {
             case "body" -> body.mob();
             case "effects" -> Effects.NONE;
+            case "held" -> ItemStack.EMPTY;
             default -> throw new AssertionError(method.getName());
         });
     }

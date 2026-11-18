@@ -21,7 +21,7 @@ public final class ElevatorScene {
     private ElevatorScene() { }
 
     public static void declare(FMLClientSetupEvent event) {
-        event.enqueueWork(() -> Scenes.folder(ElevatorPlugin.ID, "folkways.lessons.elevator",
+        event.enqueueWork(() -> Scenes.folder(Scenes.Category.LOGISTICS, ElevatorPlugin.ID, "folkways.lessons.elevator",
             ResourceLocation.fromNamespaceAndPath("create", "elevator_pulley"),
             Scenes.scene("folkways_create", "elevator", ElevatorScene::program)));
     }

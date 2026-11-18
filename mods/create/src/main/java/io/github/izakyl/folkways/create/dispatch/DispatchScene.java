@@ -37,7 +37,7 @@ public final class DispatchScene {
     }
 
     public static void declare(FMLClientSetupEvent event) {
-        event.enqueueWork(() -> Scenes.folder(DispatchContent.ID, "folkways.page.dispatch",
+        event.enqueueWork(() -> Scenes.folder(Scenes.Category.LOGISTICS, DispatchContent.ID, "folkways.page.dispatch",
             ResourceLocation.withDefaultNamespace("chest_minecart"),
             Scenes.scene("folkways_create", "dispatch", DispatchScene::program)));
     }

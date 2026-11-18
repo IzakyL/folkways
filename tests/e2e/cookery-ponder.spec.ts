@@ -214,8 +214,10 @@ for (const locale of LOCALES) for (const installation of INSTALLATIONS) test("co
     expect(folders.some(element => element.id === "folkways.lessons.folder.folkways_cookery.cookery")).toBe(installed);
     expect(folders.some(element => element.id === "folkways.page.cookery"), "the kitchen page belongs to the optional Folkways extension").toBe(installed);
     if (!installed) return;
+    // The folder stays unfolded for the session once opened, so it is opened once.
+    await clickElement(client, { id: "folkways.lessons.folder.folkways_cookery.cookery" }, { scrollIntoView: true });
     for (const lesson of SCENES) {
-      await shelf(); await clickElement(client, { id: "folkways.lessons.folder.folkways_cookery.cookery" }, { scrollIntoView: true });
+      await shelf();
       await clickElement(client, { id: "folkways.lessons.scene.folkways_cookery." + lesson }, { scrollIntoView: true });
       await frames(client, 5); expect(screenName(await safeScreen(client))).toMatch(/LessonScreen/);
       const scene = await client.run(READ_SCENE, { seek: -1 });
@@ -255,7 +257,7 @@ for (const locale of LOCALES) for (const installation of INSTALLATIONS) test("co
       }
       await input.key(client, { keyCode: 256, action: "press" }); await input.key(client, { keyCode: 256, action: "release" }); await frames(client, 3);
     }
-    await shelf(); await clickElement(client, { id: "folkways.lessons.folder.folkways_cookery.cookery" }, { scrollIntoView: true });
+    await shelf();
     await clickElement(client, { id: "folkways.lessons.play.folkways_cookery.cookery" }, { scrollIntoView: true }); await frames(client, 5);
     const folderQueue = await client.run(READ_SCENE, { seek: -1 });
     expect(folderQueue.id).toBe("folkways_cookery:cookery_orders"); expect(folderQueue.scenes).toEqual(SCENES.map(scene => "folkways_cookery:" + scene));

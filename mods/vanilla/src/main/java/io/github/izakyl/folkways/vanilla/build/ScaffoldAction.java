@@ -1,6 +1,7 @@
 package io.github.izakyl.folkways.vanilla.build;
 
 import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.WorkNoise;
 import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.vanilla.person.walk.ResidentPathNavigation;
@@ -87,7 +88,8 @@ final class ScaffoldAction extends BuildAction {
         spend(who);
         placed.forEach((cell, state) -> level.setBlock(cell, state, 3));
         temporary.added(column);
-        return Outcome.done();
+        return new Outcome.Done(List.of(WorkNoise.placed(cell(level), level.getBlockState(cell(level)))),
+            List.of(), Optional.empty());
     }
 
     // A mob on the bottom rung may settle the last step when access is removed. The quarter block allows for
@@ -497,9 +499,12 @@ final class ScaffoldAction extends BuildAction {
             return refuse(BuildRefusal.CONTESTED);
         }
         int recovered = 0;
+        List<WorkNoise> heard = new ArrayList<>();
         for (int at = cells.size() - 1; at >= 0; at--) {
-            if (level.getBlockState(cells.get(at)).is(Blocks.SCAFFOLDING)) {
+            BlockState state = level.getBlockState(cells.get(at));
+            if (state.is(Blocks.SCAFFOLDING)) {
                 level.setBlock(cells.get(at), Blocks.AIR.defaultBlockState(), 3);
+                heard.add(WorkNoise.broke(cells.get(at), state));
                 recovered++;
             }
         }
@@ -508,7 +513,7 @@ final class ScaffoldAction extends BuildAction {
         for (int left = recovered; left > 0; left -= Items.SCAFFOLDING.getDefaultMaxStackSize()) {
             returned.add(new ItemStack(Items.SCAFFOLDING, Math.min(left, Items.SCAFFOLDING.getDefaultMaxStackSize())));
         }
-        return new Outcome.Done(List.of(), List.copyOf(returned), Optional.empty());
+        return new Outcome.Done(List.copyOf(heard), List.copyOf(returned), Optional.empty());
     }
 
     // A low resident beside an ordinary tower can already walk away on its own floor. A pit resident cannot:

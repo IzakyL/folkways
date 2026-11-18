@@ -171,8 +171,9 @@ record BuildJob(Kind kind, WorldPos focus, Stances footings,
 
     List<ToolUse> tools() {
         return broken()
-            .filter(BlockState::requiresCorrectToolForDrops)
-            .map(state -> List.of(new ToolUse(new ToolNeed.SuitableFor(state), 1)))
+            .map(state -> List.of(state.requiresCorrectToolForDrops()
+                ? ToolUse.of(new ToolNeed.SuitableFor(state))
+                : ToolUse.preferred(new ToolNeed.SuitableFor(state))))
             .orElse(List.of());
     }
 

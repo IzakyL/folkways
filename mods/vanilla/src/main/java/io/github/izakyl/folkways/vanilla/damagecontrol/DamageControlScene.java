@@ -19,7 +19,7 @@ public final class DamageControlScene {
     }
 
     public static void declare(FMLClientSetupEvent event) {
-        event.enqueueWork(() -> Scenes.folder(DamageControlContent.ID, "folkways.page.damage_control",
+        event.enqueueWork(() -> Scenes.folder(Scenes.Category.SAFETY, DamageControlContent.ID, "folkways.page.damage_control",
             ResourceLocation.withDefaultNamespace("water_bucket"),
             Scenes.scene("folkways_vanilla", "damage_control", DamageControlScene::program)));
     }

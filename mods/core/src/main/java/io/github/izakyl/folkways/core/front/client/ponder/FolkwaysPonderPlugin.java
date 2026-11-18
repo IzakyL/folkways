@@ -1,6 +1,5 @@
 package io.github.izakyl.folkways.core.front.client.ponder;
 
-import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.front.api.ponder.Scenes;
 import io.github.izakyl.folkways.core.front.client.Lessons;
 import io.github.izakyl.folkways.core.front.engine.Enrollments;
@@ -35,9 +34,7 @@ public final class FolkwaysPonderPlugin implements PonderPlugin {
     // Every scene hangs off the colony book, folder after folder, so pondering the book is the whole course.
     @Override
     public void registerScenes(PonderSceneRegistrationHelper<ResourceLocation> helper) {
-        if (namespace.equals(FolkwaysCoreMod.MOD_ID)) {
-            Lessons.clear();
-        }
+        Lessons.clear(namespace);
         List<Scenes.Folder> folders = Lessons.declared();
         ResourceLocation colonyBook = FolkwaysItems.COLONY_BOOK.getId();
 

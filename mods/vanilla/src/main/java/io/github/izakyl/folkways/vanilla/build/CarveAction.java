@@ -137,7 +137,10 @@ final class CarveAction extends BuildAction {
         // Commits run on the server thread: no other worker can spend between this quote and this write.
         cache.accept(quote);
         BuildingPerks.interrupt(who);
-        return new Outcome.Done(List.of(WorkNoise.placed(cell(level), job().goal())), made,
+        List<WorkNoise> heard = new ArrayList<>();
+        rubble.forEach((pos, state) -> heard.add(WorkNoise.broke(pos, state)));
+        heard.add(WorkNoise.placed(cell(level), job().goal()));
+        return new Outcome.Done(List.copyOf(heard), made,
             Optional.of(new Xp(BuildContent.trade(), 1)), unused.stream().filter(stack -> !stack.isEmpty()).toList());
     }
 

@@ -22,7 +22,7 @@ final class SupplyScene {
     }
 
     static void declare(FMLClientSetupEvent event) {
-        event.enqueueWork(() -> Scenes.folder(SupplyContent.ID, "folkways.page.supply", SupplyContent.SOURCE,
+        event.enqueueWork(() -> Scenes.folder(Scenes.Category.PRODUCTION, SupplyContent.ID, "folkways.page.supply", SupplyContent.SOURCE,
             Scenes.scene("folkways_vanilla", "creative_supplies", SupplyScene::program, SupplyContent.SOURCE)));
     }
 

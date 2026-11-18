@@ -11,6 +11,7 @@ import io.github.izakyl.folkways.core.work.api.Node;
 import io.github.izakyl.folkways.core.work.api.NodeSpec;
 import io.github.izakyl.folkways.core.work.api.Outcome;
 import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.work.api.WorkGesture;
 import io.github.izakyl.folkways.core.work.api.WorkSite;
 import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.core.work.api.Workload;
@@ -178,6 +179,7 @@ public final class CompostStation {
             spec =
                 NodeSpec.of(id, CompostContent.ID, new WorkSite.AtBlock(at), stances, Workload.Once.of(10))
                 .vocation(FarmingContent.trade())
+                .gesture(WorkGesture.SWING).focus(at.cell())
                 .leaves(Leaves.room(1))
                 .needs(
                 seed.map(item -> List.of(new Need(ItemSpec.of(item), inputs, true)))

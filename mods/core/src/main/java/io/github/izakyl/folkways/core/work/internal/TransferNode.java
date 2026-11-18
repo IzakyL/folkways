@@ -124,7 +124,7 @@ public final class TransferNode implements Node, Staged {
                 new Stances.Cells(stands.stream().map(Stand::cell).collect(Collectors.toSet())),
                 Workload.Once.of(FolkwaysConfig.haulReachTicks(), HaulWork::haste))
             .needs(new Need(goods.spec(), goods.count(), true)).gives(new Amount(goods.spec(), goods.count()))
-            .vocation(HaulWork.trade()).done();
+            .vocation(HaulWork.trade()).gesture(WorkGesture.SWING).focus(into.pos().cell()).done();
         return new TransferNode(spec, Endpoint.pack(), Endpoint.store(into),
             new Manifest(List.of(), List.of()), true, count -> { });
     }
@@ -140,7 +140,8 @@ public final class TransferNode implements Node, Staged {
         NodeSpec spec = NodeSpec.of(UUID.randomUUID(), HaulWork.DOMAIN, new WorkSite.AtBlock(from.pos()),
                 new Stances.Cells(stands.stream().map(Stand::cell).collect(Collectors.toSet())),
                 Workload.Once.of(FolkwaysConfig.haulReachTicks(), HaulWork::haste))
-            .gives(new Amount(goods.spec(), goods.count())).vocation(HaulWork.trade()).done();
+            .gives(new Amount(goods.spec(), goods.count())).vocation(HaulWork.trade())
+            .gesture(WorkGesture.SWING).focus(from.pos().cell()).done();
         return new TransferNode(spec, Endpoint.store(from), Endpoint.pack(),
             new Manifest(List.of(), List.of(goods)), false, count -> { });
     }

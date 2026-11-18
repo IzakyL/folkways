@@ -47,7 +47,7 @@ public final class BuildScene {
     public static void declare(FMLClientSetupEvent event) {
         event.enqueueWork(() -> GhostRecipes.install(
             new OrderPreviews()));
-        event.enqueueWork(() -> Scenes.folder(BuildContent.ID, "folkways.page.build",
+        event.enqueueWork(() -> Scenes.folder(Scenes.Category.BUILDING, BuildContent.ID, "folkways.page.build",
             ResourceLocation.withDefaultNamespace("bricks"), Scenes.scene("folkways_vanilla", "building", BuildScene::program)));
     }
 

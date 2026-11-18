@@ -16,6 +16,7 @@ import io.github.izakyl.folkways.core.work.api.WorkSite;
 import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.core.work.api.Workload;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
+import io.github.izakyl.folkways.core.work.support.BreakingProgress;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -95,11 +96,17 @@ abstract class BuildAction implements WorkAction {
 
         @Override
         public WorkGesture gesture() {
-            return WorkGesture.SWING;
+            return job.broken().isPresent() || job.kind() == BuildJob.Kind.LOWER
+                ? BreakingProgress.MINING : WorkGesture.SWING;
         }
 
         @Override
         public Optional<BlockPos> focus() {
+            if (job.broken().isPresent()) {
+                return job.before().entrySet().stream()
+                    .filter(entry -> entry.getValue().equals(job.broken().get()))
+                    .map(entry -> entry.getKey().cell()).findFirst();
+            }
             return Optional.of(job.focus().cell());
         }
 

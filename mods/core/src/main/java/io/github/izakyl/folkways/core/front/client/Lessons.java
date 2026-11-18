@@ -26,7 +26,7 @@ public final class Lessons {
         return declared().stream().flatMap(folder -> {
             var scenes = folder.scenes().stream().filter(scene -> scene.available().getAsBoolean()).toList();
             return scenes.isEmpty() ? Stream.empty()
-                : Stream.of(new Scenes.Folder(folder.id(), folder.nameKey(), folder.icon(), scenes));
+                : Stream.of(folder.with(scenes));
         }).toList();
     }
 
@@ -48,13 +48,20 @@ public final class Lessons {
         return at < 0 ? enrolled.size() : at;
     }
 
+    // A folder's only scene often shares the folder's id; binding it under both names must not play it twice.
     public static void bind(ResourceLocation lesson, StoryBoardEntry entry) {
-        ENTRIES.computeIfAbsent(lesson, key -> new ArrayList<>()).add(entry);
+        List<StoryBoardEntry> entries = ENTRIES.computeIfAbsent(lesson, key -> new ArrayList<>());
+        if (!entries.contains(entry)) {
+            entries.add(entry);
+        }
     }
 
-    // Ponder rebuilds its registry on a resource reload; rebuild our matching playback entries as well.
-    public static void clear() {
-        ENTRIES.clear();
+    // Each Ponder plugin rebuilds its own entries, including those in another mod's folder.
+    public static void clear(String namespace) {
+        for (List<StoryBoardEntry> entries : ENTRIES.values()) {
+            entries.removeIf(entry -> entry.getSchematicLocation().getNamespace().equals(namespace));
+        }
+        ENTRIES.values().removeIf(List::isEmpty);
     }
 
     public static List<StoryBoardEntry> scenesFor(ResourceLocation lesson) {

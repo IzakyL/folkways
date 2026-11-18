@@ -2,6 +2,8 @@ package io.github.izakyl.folkways.core.runtime;
 
 import io.github.izakyl.folkways.core.colony.api.Equipment;
 import io.github.izakyl.folkways.core.colony.api.KitRules;
+import io.github.izakyl.folkways.core.equipment.api.EquipmentProfile;
+import io.github.izakyl.folkways.core.equipment.api.EquipmentProfiles;
 import io.github.izakyl.folkways.core.colony.internal.ColonyData;
 import io.github.izakyl.folkways.core.inventory.api.InventorySnapshot;
 import io.github.izakyl.folkways.core.inventory.api.SlotSnapshot;
@@ -28,6 +30,7 @@ import io.github.izakyl.folkways.core.travel.internal.Ways;
 import io.github.izakyl.folkways.core.vocation.api.Vocation;
 import io.github.izakyl.folkways.core.vocation.api.Vocations;
 import io.github.izakyl.folkways.core.work.internal.Kit;
+import io.github.izakyl.folkways.core.work.support.Tools;
 import io.github.izakyl.folkways.core.world.api.WorldSpaces;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -346,7 +349,11 @@ final class Survey {
         InventorySnapshot.Resident observed = inventory.residents().get(resident);
         List<ItemStack> contents = observed.pack().stream().map(SlotSnapshot::stackCopy)
             .filter(stack -> !stack.isEmpty()).toList();
-        int tools = (int) contents.stream().filter(stack -> kit.holds(stack.getItem().getDefaultInstance())).count();
+        List<EquipmentProfile.Entry> carried = colony.works().service(EquipmentProfiles.ID, EquipmentProfiles.class)
+            .flatMap(profiles -> profiles.assigned(resident)).map(EquipmentProfile::carried).orElseGet(List::of);
+        List<ItemStack> tools = contents.stream().filter(stack -> kit.holds(stack)
+            || (!Tools.sharedItem(stack) && carried.stream().anyMatch(entry -> entry.matches(stack))))
+            .map(ItemStack::copy).toList();
         List<Licence> licences = new ArrayList<>();
         for (Vocation vocation : Vocations.all()) {
             body.licences().of(vocation).ifPresent(licences::add);
@@ -359,7 +366,7 @@ final class Survey {
             space.size(),
             pace(body),
             List.copyOf(licences),
-            kit.inPack(contents),
+            tools,
             Optional.empty(),
             kit.cargoIn(contents), KitRules.snapshot(colony.works()), space));
         seen.accept(body, suppliesRead.getOrDefault(resident, true));

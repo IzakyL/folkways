@@ -2,11 +2,14 @@ package io.github.izakyl.folkways.vanilla.groundwork;
 
 import io.github.izakyl.folkways.core.work.api.Amount;
 import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.ToolNeed;
+import io.github.izakyl.folkways.core.work.api.ToolUse;
 import io.github.izakyl.folkways.core.work.api.WorkNoise;
 import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.core.work.api.Workload;
 import io.github.izakyl.folkways.core.work.api.Xp;
 import io.github.izakyl.folkways.core.work.support.Leaves;
+import io.github.izakyl.folkways.core.work.support.BreakingProgress;
 import io.github.izakyl.folkways.vanilla.farming.FarmingContent;
 import io.github.izakyl.folkways.vanilla.farming.Felling;
 import java.util.ArrayList;
@@ -20,18 +23,21 @@ import net.minecraft.tags.BlockTags;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
+import net.neoforged.neoforge.common.ItemAbilities;
 
 // A whole tree felled as a wood lot fells it, logs and the leaves they hold up, and nothing planted back.
 final class FellNode extends GroundNode {
 
     private static final int CANOPY_KINDS = 5;
+    private static final ToolNeed AXE = new ToolNeed.Ability(ItemAbilities.AXE_DIG);
 
     FellNode(ServerLevel level, Chores.Chore chore) {
         super(GroundNode.declare(chore, FarmingContent.trade(), Workload.Once.of(
             GroundworkContent.ticksFor(GroundworkContent.FELL_TICKS_PER_LOG, chore.job().cells().size()
                 + chore.job().canopy().size()
                     * (double) GroundworkContent.FELL_TICKS_PER_LEAF / GroundworkContent.FELL_TICKS_PER_LOG),
-            FarmingContent::haste)).leaves(leaves(level, chore.job())).doing(GroundworkContent.FELLING).done(), chore);
+            FarmingContent::haste)).tools(ToolUse.preferred(AXE)).gesture(BreakingProgress.MINING)
+            .leaves(leaves(level, chore.job())).doing(GroundworkContent.FELLING).done(), chore);
     }
 
     // The logs as they stand, and from the canopy a sapling, sticks and perhaps fruit, none of them told beforehand.
@@ -56,7 +62,7 @@ final class FellNode extends GroundNode {
             if (!level.isLoaded(vine)) continue;
             BlockState state = level.getBlockState(vine);
             if (!Felling.attachment(state)) continue;
-            taken.addAll(take(level, who.body(), vine, state, ItemStack.EMPTY));
+            taken.addAll(take(level, who.body(), vine, state, who.held(AXE)));
             shed(heard, voiced, vine, state);
         }
         int cut = 0;
@@ -65,7 +71,7 @@ final class FellNode extends GroundNode {
             if (state == null || !state.is(BlockTags.LOGS)) {
                 continue;
             }
-            taken.addAll(take(level, who.body(), log, state, ItemStack.EMPTY));
+            taken.addAll(take(level, who.body(), log, state, who.held(AXE)));
             shed(heard, voiced, log, state);
             cut++;
         }
@@ -77,7 +83,7 @@ final class FellNode extends GroundNode {
             if (state == null || !Felling.leaf(state)) {
                 continue;
             }
-            taken.addAll(take(level, who.body(), leaf, state, ItemStack.EMPTY));
+            taken.addAll(take(level, who.body(), leaf, state, who.held(AXE)));
             shed(heard, voiced, leaf, state);
         }
         return new Outcome.Done(List.copyOf(heard), List.copyOf(taken),

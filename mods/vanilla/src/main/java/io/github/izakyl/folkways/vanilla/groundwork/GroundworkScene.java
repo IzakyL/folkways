@@ -27,7 +27,7 @@ public final class GroundworkScene {
     }
 
     public static void declare(FMLClientSetupEvent event) {
-        event.enqueueWork(() -> Scenes.folder(GroundworkContent.ID, "folkways.lessons.groundwork",
+        event.enqueueWork(() -> Scenes.folder(Scenes.Category.BUILDING, GroundworkContent.ID, "folkways.lessons.groundwork",
             ResourceLocation.withDefaultNamespace("iron_shovel"),
             Scenes.scene("folkways_vanilla", "groundwork", GroundworkScene::program)));
     }
