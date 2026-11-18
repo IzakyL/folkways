@@ -33,7 +33,7 @@ Folkways 是面向 **Minecraft 1.21.1 / NeoForge** 的殖民地模组。
 
 ## 模组一览
 
-本仓库构建九个模组，`mods/` 下每个目录对应一个，产物为 `folkways-<目录名>-*.jar`。所有扩展都需要 Core 和 Vanilla。
+本仓库构建十个模组，`mods/` 下每个目录对应一个，产物为 `folkways-<目录名>-*.jar`。所有扩展都需要 Core 和 Vanilla。
 
 | 模组                                      | 目录                 | 额外依赖                                                                              | 作用                                                                   |
 | ----------------------------------------- | -------------------- | ------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
@@ -46,6 +46,7 @@ Folkways 是面向 **Minecraft 1.21.1 / NeoForge** 的殖民地模组。
 | Folkways Firearms | `mods/firearms` | 可选：TACZ 1.1.8+（含 1.2.0）；卓越前线 [0.8.9.2,0.8.9.3) 及 Kotlin for Forge [5.12.0,6) | 装有相应原生模组时，居民使用实体弹药操作枪械和火炮阵地 |
 | Folkways × AstikorCarts Redux | `mods/carts` | AstikorCarts Redux 1.2.2+ | 搬运居民套上手推车或运输车，把仓库间的货物装在车厢里，与背包分开 |
 | Folkways × Epic Fight                     | `mods/epicfight`（jar：`folkways-epicfight`） | Epic Fight 21.17.1+；Core 和 Vanilla 须来自同一次 Folkways 构建 | 居民使用 Epic Fight 原生近战、受击动作和日常移动动画，并以 GEO 模型渲染 |
+| Folkways Airline | `mods/airline` | Folkways × Create；机械动力 [6.0.10,6.1)；Sable 2.0.6 | 机场图纸、勘测、塔台、跑道、直升机坪、滑行道和停机位，机场可建在 Sable 结构上随之移动 |
 
 升级到 Carving 时，先删除旧的 `folkways-chiselsandbits-*.jar`，再安装 `folkways-carving-*.jar`；
 新旧同时安装会重复注册并崩溃。
@@ -69,8 +70,7 @@ RTS 飞机收到移动或盘旋指令时自行起飞，按所选高度档（贴�
 ## 安装
 
 从上游的 [nightly 构建](https://github.com/IzakyL/folkways/releases/tag/nightly)下载预发布文件。
-[Alpha 及以上版本](https://github.com/IzakyL/folkways/releases?q=-tag%3Anightly)与 nightly 分开列出。
-首次发布带版本号的构建之前，Last release 徽章没有可显示的对应日期。
+[正式版本](https://github.com/IzakyL/folkways/releases?q=-tag%3Anightly)与 nightly 分开列出。
 
 | 运行条件                                 | 版本                          |
 | ---------------------------------------- | ----------------------------- |
@@ -138,7 +138,7 @@ npm run setup
 ```
 
 Setup 会下载锁定版本的集成依赖，并生成 Gradle 必需的清单。
-九个模组 jar 汇总到 `build/libs/`。
+十个模组 jar 汇总到 `build/libs/`。
 Blockwright 测试 SDK 对 Windows 的支持仍处于候选阶段，详见[开发环境](CONTRIBUTING.zh-CN.md#开发环境)。
 
 开发与 PR 流程见[贡献指南](CONTRIBUTING.zh-CN.md)。

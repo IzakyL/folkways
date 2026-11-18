@@ -123,12 +123,15 @@ public final class RailPresence implements Facing {
         Map<UUID, List<Cab>> cabs = cabsIn(server, taken);
         Set<UUID> running = new LinkedHashSet<>();
         for (TransitSnapshot.Line line : taken.lines()) {
-            if (platformOf(line).isEmpty()) {
+            List<Cab> found = new ArrayList<>(ConductorSeats.occupiedCabs(server, network, line.train(), colony.id()));
+            if (platformOf(line).isPresent()) {
+                found.addAll(cabs.getOrDefault(line.train(), List.of()));
+            } else if (found.isEmpty()) {
                 continue;
             }
             running.add(line.train());
             conducting.computeIfAbsent(line.train(), train -> new ConductorSeats(train, sweep::nudge))
-                .reconcile(cabs.getOrDefault(line.train(), List.of()));
+                .reconcile(found);
         }
         conducting.keySet().retainAll(running);
     }

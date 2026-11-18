@@ -21,5 +21,10 @@ public interface WorkAction {
         return false;
     }
 
+    // Actions that can resume a finite wind-up keep the ticks already performed when suspended.
+    default boolean resumesWindup() {
+        return false;
+    }
+
     Outcome commit(ServerLevel level, Worker who);
 }

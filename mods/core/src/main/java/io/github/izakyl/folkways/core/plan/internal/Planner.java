@@ -136,7 +136,7 @@ public final class Planner {
             UUID held = inHand.get(hand.id());
             hands.add(new Crew.Hand(hand.who(), hand.at(), hand.packCells(), hand.packCapacity(), hand.pace(),
                 hand.licences(), hand.tools(), Optional.ofNullable(held), hand.cargo(), hand.toolRules(),
-                    hand.space()));
+                    hand.space(), hand.personalOnly()));
         }
         return new Crew(hands);
     }

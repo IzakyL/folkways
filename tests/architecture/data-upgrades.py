@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Keep save migrations independent and published Vn source files immutable."""
+"""Keep save migrations independent and Vn source files on releases and master immutable."""
 
 import re
 import subprocess
@@ -37,6 +37,15 @@ def relocate(text):
 
 def git(*args):
     return subprocess.check_output(["git", *args], text=True)
+
+
+def frozen_refs():
+    """Every release tag, plus the point where this branch left origin/master when that ref exists."""
+    refs = git("tag", "--list", "v*").splitlines()
+    base = subprocess.run(["git", "merge-base", "HEAD", "origin/master"], capture_output=True, text=True)
+    if base.returncode == 0:
+        refs.append(base.stdout.strip())
+    return refs
 
 
 def main():
@@ -84,8 +93,8 @@ def main():
                                           for candidate in (target, bag_target)):
             errors.append(f"{path}: filename target must match literal target() or KeepSteps.bag target")
 
-    # Compare every release, not just the latest: deleted or renamed shipped steps must also fail.
-    for tag in git("tag", "--list", "v*").splitlines():
+    # Compare every release and master, not just the latest: deleted or renamed shipped steps must also fail.
+    for tag in frozen_refs():
         version_path = str(VERSION_PATH)
         released = {relocate(name): name for name in git("ls-tree", "-r", "--name-only", tag, "mods").splitlines()}
         if version_path not in released:
@@ -99,7 +108,7 @@ def main():
                 path = Path(name)
                 if (name not in released or not path.is_file()
                         or path.read_text() != relocate(git("show", f"{tag}:{released[name]}"))):
-                    errors.append(f"{name}: released migration frozen by {tag}")
+                    errors.append(f"{name}: migration frozen by {tag if tag.startswith('v') else 'origin/master'}")
     if errors:
         raise SystemExit("\n".join(sorted(set(errors))))
     print("Save upgrade boundaries and released steps: OK")

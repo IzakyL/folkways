@@ -72,6 +72,7 @@ final class Survey {
         return one.who().routeKind().equals(other.who().routeKind())
             && one.at().realm().equals(other.at().realm()) && one.packCells() == other.packCells()
             && one.packCapacity() == other.packCapacity() && one.pace() == other.pace()
+            && one.personalOnly() == other.personalOnly()
             && one.licences().equals(other.licences()) && sameStacks(one.tools(), other.tools())
             && sameStacks(one.cargo(), other.cargo()) && one.toolRules().equals(other.toolRules());
     }
@@ -86,6 +87,7 @@ final class Survey {
     private boolean waitingForInventory;
     private final Map<UUID, Crew.Hand> hands = new LinkedHashMap<>();
     private Set<UUID> reserved = Set.of();
+    private Set<UUID> personalOnly = Set.of();
     private final Map<UUID, Long> licencesRead = new HashMap<>();
     private final Map<UUID, List<Equipment.Demand>> equipmentRead = new HashMap<>();
     private final Map<UUID, Boolean> suppliesRead = new HashMap<>();
@@ -112,17 +114,26 @@ final class Survey {
     }
 
     void reserved(Set<UUID> next) {
-        for (UUID id : reserved) {
+        rereadChanged(reserved, next);
+        reserved = Set.copyOf(next);
+    }
+
+    void personalOnly(Set<UUID> next) {
+        rereadChanged(personalOnly, next);
+        personalOnly = Set.copyOf(next);
+    }
+
+    private void rereadChanged(Set<UUID> previous, Set<UUID> next) {
+        for (UUID id : previous) {
             if (!next.contains(id)) {
                 handsOf.add(id);
             }
         }
         for (UUID id : next) {
-            if (!reserved.contains(id)) {
+            if (!previous.contains(id)) {
                 handsOf.add(id);
             }
         }
-        reserved = Set.copyOf(next);
     }
 
     void forget(UUID resident) {
@@ -368,7 +379,7 @@ final class Survey {
             List.copyOf(licences),
             tools,
             Optional.empty(),
-            kit.cargoIn(contents), KitRules.snapshot(colony.works()), space));
+            kit.cargoIn(contents), KitRules.snapshot(colony.works()), space, personalOnly.contains(resident)));
         seen.accept(body, suppliesRead.getOrDefault(resident, true));
         return had == null || !sameHand(had, hands.get(resident));
     }

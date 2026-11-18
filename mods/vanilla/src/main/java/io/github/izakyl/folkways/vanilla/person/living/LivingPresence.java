@@ -19,6 +19,7 @@ import io.github.izakyl.folkways.core.resident.api.Body;
 import io.github.izakyl.folkways.core.resident.api.Doings;
 import io.github.izakyl.folkways.core.resident.api.Resident;
 import io.github.izakyl.folkways.core.vocation.api.Vocations;
+import io.github.izakyl.folkways.core.work.api.Disposition;
 import io.github.izakyl.folkways.core.work.api.Stances;
 import io.github.izakyl.folkways.core.work.api.Urge;
 import io.github.izakyl.folkways.core.work.api.WorkExertion;
@@ -448,20 +449,32 @@ final class LivingPresence implements Facing {
         if (directed(who.resident().id())) {
             return Optional.empty();
         }
-        Optional<Integer> alertness = alertnessOf(who.resident().id());
-        if (alertness.isEmpty() || !tiredness.holds(who.resident().id(), alertness.get())) {
+        Rest tired = wear.get(who.resident().id());
+        if (tired == null) {
             return Optional.empty();
         }
         ServerLevel level = colony.level();
         Optional<WorldPos> bed = bedFor(who.resident().id()).filter(where -> where.in(level));
-        if (bed.isEmpty()) {
+        SleepRhythm rhythm = SleepRhythm.of(level);
+        double blocks = walkHome(who.body(), bed, level, rhythm);
+        int lead = SleepRhythm.lead(blocks);
+        if (!tiredness.holds(who.resident().id(), tired.alertnessAfter(lead, blocks), rhythm.holdAt(lead))
+                || bed.isEmpty()) {
             return Optional.empty();
         }
         BlockPos where = bed.get().block(level);
-        boolean urgent = tiredness.urgent(alertness.get());
+        boolean urgent = tiredness.urgent(tired.alertness());
         double weight = urgent ? Urge.NOW : Urge.SPARE;
-        return Optional.of(new Urge(SLEEP, weight, urgent || !who.effects().has(Stats.PATIENT),
-            () -> new SleepAction(this, level, where, ticksToSleepOff(who.resident().id()))));
+        Urge sleep = new Urge(SLEEP, weight, urgent || !who.effects().has(Stats.PATIENT),
+            () -> new SleepAction(this, level, where, rhythm.sleepTicks(lead, tired.ticksToSleepOff())))
+            .withPreemption(Disposition.END);
+        return Optional.of(urgent ? sleep.asUrgent() : sleep);
+    }
+
+    // Without a bed here, or a clock to beat, there is no walk to plan for.
+    private static double walkHome(Entity body, Optional<WorldPos> bed, ServerLevel level, SleepRhythm rhythm) {
+        return body == null || !rhythm.cycles() ? 0.0D : bed.filter(at -> at.in(level))
+            .map(at -> Math.sqrt(body.blockPosition().distSqr(at.block(level)))).orElse(0.0D);
     }
 
     @Override
@@ -478,20 +491,27 @@ final class LivingPresence implements Facing {
             lines.add(marks("hunger_mark", reading.engaged(), reading.holdAt(), reading.urgentAt(),
                 reading.restoreTo()));
         }
+        Optional<WorldPos> bed = bedFor(resident);
+        Entity entity = view.level().getEntity(resident);
+        SleepRhythm rhythm = SleepRhythm.of(view.level());
+        double blocks = walkHome(entity, bed, view.level(), rhythm);
+        int lead = SleepRhythm.lead(blocks);
         if (tired != null) {
             lines.add(debugLine("rest", tired.tiredness(), tired.alertness(), tired.ticksToSleepOff()));
             var reading = tiredness.reading(resident);
-            lines.add(marks("rest_mark", reading.engaged(), reading.holdAt(), reading.urgentAt(),
+            lines.add(marks("rest_mark", reading.engaged(), rhythm.holdAt(lead), reading.urgentAt(),
                 reading.restoreTo()));
+            lines.add(debugLine("sleep_rhythm", rhythm.now(), lead, debugWord(!rhythm.cycles() ? "still_clock"
+                : rhythm.nightAt(lead) ? "night" : "day"), tired.alertnessAfter(lead, blocks)));
         }
-        Optional<WorldPos> bed = bedFor(resident);
+        // Worn enough to sleep at night but not by day: the hour, not the wear, holds the resident up.
         String sleep = directed(resident) ? "directed" : tired == null ? "vitals_unobserved"
-            : !tiredness.reading(resident).engaged() ? "not_tired" : bed.isEmpty() ? "no_bed"
-            : !bed.get().in(view.level()) ? "bed_elsewhere" : "none";
+            : !tiredness.reading(resident).engaged() ? (rhythm.cycles() && !rhythm.nightAt(lead)
+                && tired.alertnessAfter(lead, blocks) <= SleepRhythm.NIGHT_HOLD ? "not_night" : "not_tired")
+            : bed.isEmpty() ? "no_bed" : !bed.get().in(view.level()) ? "bed_elsewhere" : "none";
         lines.add(debugLine("sleep", debugWord(sleep), DebugText.where(bed.map(at -> at.in(view.level().dimension())
             ? at.cell().toShortString() : at.toString()).orElse("-"))));
         var observed = colony.inventory().snapshot().residents().get(resident);
-        Entity entity = view.level().getEntity(resident);
         boolean seen = observed != null && observed.state() == InventorySnapshot.State.OBSERVED;
         boolean meal = seen && entity instanceof LivingEntity living && observed.pack().stream().anyMatch(slot -> {
             ItemStack stack = slot.stackCopy();
@@ -565,11 +585,6 @@ final class LivingPresence implements Facing {
         return tired == null ? Optional.empty() : Optional.of(tired.alertness());
     }
 
-    int ticksToSleepOff(UUID resident) {
-        Rest tired = wear.get(resident);
-        return tired == null ? 1 : tired.ticksToSleepOff();
-    }
-
     boolean wouldEat(UUID resident, ItemStack stack, FoodProperties food) {
         Hunger belly = bellies.get(resident);
         return belly != null && FoodSafety.usable(Fronts.of(colony).settings(LivingContent.ID), stack, food)
@@ -623,21 +638,32 @@ final class LivingPresence implements Facing {
     }
 
     boolean slept(UUID resident, int ticks, ServerLevel level) {
+        return slept(resident, ticks, level, true);
+    }
+
+    boolean slept(UUID resident, int ticks, ServerLevel level, boolean restorative) {
         Rest tired = wear.get(resident);
         if (tired == null) {
             return false;
         }
         tired.sleep(ticks);
-        long now = level.getGameTime();
-        Mood mood = mood(resident);
-        mood.rested = now;
-        bedFor(resident).ifPresent(bed -> {
-            for (ColonyView view : colony.views(level.getServer())) {
-                if (!bed.in(view.level())) { continue; }
-                HousingRooms.Room room = rooms.get(view.level(), bed.block(view.level()));
-                if (room.grade() != HousingRooms.Grade.PENDING) { mood.housing = room.grade().mood; mood.housed = now; }
-            }
-        });
+        if (restorative) {
+            long now = level.getGameTime();
+            Mood mood = mood(resident);
+            mood.rested = now;
+            bedFor(resident).ifPresent(bed -> {
+                for (ColonyView view : colony.views(level.getServer())) {
+                    if (!bed.in(view.level())) {
+                        continue;
+                    }
+                    HousingRooms.Room room = rooms.get(view.level(), bed.block(view.level()));
+                    if (room.grade() != HousingRooms.Grade.PENDING) {
+                        mood.housing = room.grade().mood;
+                        mood.housed = now;
+                    }
+                }
+            });
+        }
         unwritten = true;
         write();
         return true;
@@ -749,7 +775,7 @@ final class LivingPresence implements Facing {
         int alertness = alertnessOf(resident).orElse(Rest.SPENT);
         List<Line> lines = new ArrayList<>();
         lines.add(Line.gauge(LivingContent.FULLNESS, his.foodLevel(), Hunger.MAX_FOOD_LEVEL));
-        lines.add(Line.gauge(LivingContent.ALERTNESS, alertness, Rest.SPENT));
+        lines.add(Line.gauge(LivingContent.ALERTNESS, alertness, Rest.MAX_ALERTNESS));
         return List.copyOf(lines);
     }
 

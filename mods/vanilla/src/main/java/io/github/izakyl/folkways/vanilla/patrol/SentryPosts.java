@@ -6,6 +6,7 @@ import io.github.izakyl.folkways.core.colony.api.Colony;
 import io.github.izakyl.folkways.core.colony.api.ColonyView;
 import io.github.izakyl.folkways.core.vocation.api.Vocations;
 import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.work.api.Disposition;
 import io.github.izakyl.folkways.core.work.api.Urge;
 import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.core.world.api.Footing;
@@ -248,7 +249,7 @@ public final class SentryPosts implements Facing {
                 zone instanceof StationPost post ? Optional.of(post.anchor()) : Optional.empty(), standing);
             active.put(resident, node);
             return node;
-        }));
+        }).withPreemption(Disposition.END));
     }
 
     public void tick(MinecraftServer server) {

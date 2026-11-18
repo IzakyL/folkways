@@ -10,13 +10,13 @@ no extension API stability before 1.0.0. Clients, servers and the Folkways jars 
 all be the same build.
 
 Save formats are tracked separately by `DataVersion`, a single increasing number shared by every
-module. It never decides the release version and is bumped at most once per release cycle, only
-when a persisted format changes.
+module. It never decides the release version. It is bumped by each pull request that changes a
+persisted format when it merges into master; a release does not bump it on its own.
 
 ## Compatibility promise
 
-- Every release opens saves from every earlier release and migrates them forward. Development
-  builds between releases carry no promise.
+- Every release and every master commit, nightly builds included, opens saves from every earlier
+  release and master commit and migrates them forward. Unmerged branches and local builds carry no promise.
 - Downgrades are unsupported. Release notes say when the data version changes.
 - Keep every data-owning module installed while upgrading. Code from a missing module cannot
   migrate its data.
@@ -50,16 +50,17 @@ a new module not yet on master, goes straight to its final shape before merging:
 missing-field fallback, version check or old-format test, and no `DataVersion` increment.
 
 1. Update the writer and reader to the new shape. Fields that can legitimately be missing stay optional.
-2. Increment `DataVersion.CURRENT` once per release cycle. Add a `Vn_Description.java` step in the
+2. Increment `DataVersion.CURRENT` once per pull request. Add a `Vn_Description.java` step in the
    owning module's `upgrade` package, working on raw NBT with literal keys, and register it.
    When several modules change the same surface at one version, register named fragments with
    `Upgrades.part`; keeps-only changes can use `KeepSteps.bag`.
-3. Verify once by loading a save written by the previous release and re-saving it. Do not commit
+3. Verify once by loading a save written by the current `origin/master` and re-saving it. Do not commit
    sample saves or migration regression tests.
 4. Run `./gradlew --offline check` and the affected modules' GameTests.
 
-Released steps are frozen: fix mistakes with a new version and step. `checkDataUpgrades` (part of
-`check`) compares released steps against their tags and limits migration packages to `java.*`,
+Steps on master are frozen: fix mistakes with a new version and step. `checkDataUpgrades` (part of
+`check`) compares them against every release tag and the branch's merge base with `origin/master`,
+and limits migration packages to `java.*`,
 `net.minecraft.nbt.*` and the framework.
 
 ## Known gaps

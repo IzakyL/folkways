@@ -1,27 +1,43 @@
 package io.github.izakyl.folkways.vanilla.person.living;
 
-import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.base.persist.Writer;
 import io.github.izakyl.folkways.core.colony.api.Claimed;
 import io.github.izakyl.folkways.core.colony.api.Colonies;
 import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.colony.internal.ColonyData;
+import io.github.izakyl.folkways.core.effect.perk.PerkPool;
 import io.github.izakyl.folkways.core.inventory.internal.InventoryObservations;
+import io.github.izakyl.folkways.core.plan.internal.PlanningFixture;
+import io.github.izakyl.folkways.core.plan.internal.Shown;
 import io.github.izakyl.folkways.core.resident.api.Body;
+import io.github.izakyl.folkways.core.runtime.ColonyLabor;
 import io.github.izakyl.folkways.core.testing.TestWorker;
+import io.github.izakyl.folkways.core.work.api.Disposition;
+import io.github.izakyl.folkways.core.work.api.Ending;
+import io.github.izakyl.folkways.core.work.api.Node;
+import io.github.izakyl.folkways.core.work.api.NodeSpec;
+import io.github.izakyl.folkways.core.work.api.NodeState;
+import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.PreemptReason;
+import io.github.izakyl.folkways.core.work.api.Stances;
 import io.github.izakyl.folkways.core.work.api.Urge;
 import io.github.izakyl.folkways.core.work.api.WorkExertion;
+import io.github.izakyl.folkways.core.work.api.WorkSite;
 import io.github.izakyl.folkways.core.work.api.Worker;
+import io.github.izakyl.folkways.core.work.api.Workload;
+import io.github.izakyl.folkways.core.work.internal.BodyRunner;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
-import io.github.izakyl.folkways.core.effect.perk.PerkPool;
 import io.github.izakyl.folkways.vanilla.FolkwaysVanillaMod;
 import io.github.izakyl.folkways.vanilla.person.PersonBody;
 import io.github.izakyl.folkways.vanilla.person.PersonContent;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -96,6 +112,9 @@ public final class LivingPreemptionGameTests {
                             id + " preemption policy for stoic=" + stoic + ", urgent=" + urgent);
                         helper.assertTrue(urge.weight() == (urgent ? Urge.NOW : Urge.SPARE),
                             "stoic affects preemption permission, not the weight of " + id);
+                        if (stoic == 0) {
+                            assertTakeover(helper, colony, body, urge, id.equals(LivingPresence.SLEEP), urgent);
+                        }
                     }
                 }
             }
@@ -134,6 +153,79 @@ public final class LivingPreemptionGameTests {
             day.tiredness(), Rest.SLEEPY, "one loaded awake day reaches the existing sleepy"
             + " threshold");
         helper.succeed();
+    }
+
+    private static void assertTakeover(GameTestHelper helper, Colony colony, Body body, Urge urge,
+            boolean sleep, boolean urgent) {
+        ServerLevel level = helper.getLevel();
+        ColonyData data = ColonyData.find(level.getServer(), colony.id()).orElseThrow();
+        ColonyLabor labor = new ColonyLabor(data, level.dimension());
+        BodyRunner runner = new BodyRunner(body.id(), labor.execution());
+        Body other = PersonBody.RESIDENT.get().create(level);
+        BodyRunner next = new BodyRunner(other.id(), labor.execution());
+        List<Ending> releases = new ArrayList<>();
+        NodeSpec spec = NodeSpec.of(UUID.randomUUID(), LivingContent.ID, WorkSite.at(level, body.mob().blockPosition()),
+            Stances.WHEREVER, Workload.Once.of(1000)).done();
+        Node work = new Node() {
+            @Override
+            public NodeSpec spec() {
+                return spec;
+            }
+
+            @Override
+            public Outcome commit(ServerLevel world, Worker who) {
+                return Outcome.done();
+            }
+
+            @Override
+            public void released(ServerLevel world, Worker who, Ending ending) {
+                releases.add(ending);
+            }
+        };
+        try {
+            PlanningFixture.apply(labor, level, List.of(), Shown.delta(work));
+            runner.follow(List.of(work.id()));
+            labor.tick(runner, level, body);
+            helper.assertValueEqual(runner.holding().orElseThrow(), work.id(), "the first resident starts colony work");
+
+            boolean hard = sleep && urgent;
+            helper.assertTrue(urge.urgent() == hard, "only exhausted sleep requests an immediate release");
+            Node doing = urge.take().get();
+            helper.assertTrue(labor.execution().personal().ready(doing, level), "the real need is ready to start");
+            runner.takeover(level, body, urge, doing);
+            if (hard) {
+                helper.assertTrue(runner.softPreempt().isEmpty(), "exhaustion ends the holding immediately");
+            } else {
+                var soft = runner.softPreempt().orElseThrow();
+                helper.assertValueEqual(soft.reason(), PreemptReason.URGE, "the soft preempt records its cause");
+                helper.assertValueEqual(soft.result(), sleep ? Disposition.END : Disposition.SUSPEND,
+                    "sleep and food request different dispositions");
+                labor.tick(runner, level, body);
+            }
+            helper.assertValueEqual(runner.ownUrge().orElseThrow(), urge.id(), "the need takes over the runner");
+            if (sleep) {
+                helper.assertValueEqual(releases, List.of(Ending.DROPPED), "sleep ends the holding exactly once");
+                helper.assertValueEqual(labor.state(work.id()).orElseThrow(), NodeState.PENDING,
+                    "sleep requeues colony work");
+                helper.assertFalse(colony.isHeld(work.id()) || colony.isSuspended(work.id()),
+                    "released work has no holding");
+                helper.assertTrue(runner.suspendedNodes().isEmpty(), "sleep leaves no entry for resuming this job");
+                next.follow(List.of(work.id()));
+                labor.tick(next, level, other);
+                helper.assertValueEqual(next.holding().orElseThrow(), work.id(), "another resident can take the job");
+            } else {
+                helper.assertTrue(colony.isSuspended(work.id()), "eating keeps the colony holding suspended");
+                helper.assertTrue(releases.isEmpty(), "eating does not end the holding");
+                runner.letGo(level, body, "urge-gone");
+                runner.resume(level, body);
+                helper.assertValueEqual(runner.holding().orElseThrow(), work.id(), "the same resident resumes after food");
+            }
+        } finally {
+            runner.letGo(level, body);
+            next.letGo(level, other);
+            labor.close();
+            other.mob().discard();
+        }
     }
 
     private static Worker worker(Body body, int stoic) {

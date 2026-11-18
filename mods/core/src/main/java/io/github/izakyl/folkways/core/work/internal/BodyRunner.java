@@ -40,7 +40,7 @@ public final class BodyRunner {
 
     private static final long SOFT_DEADLINE_TICKS = 20L;
 
-    private record Own(ResourceLocation urge) {
+    private record Own(ResourceLocation urge, Disposition disposition, Urge.Priority priority) {
     }
 
     private final UUID resident;
@@ -101,6 +101,18 @@ public final class BodyRunner {
 
     public Optional<ResourceLocation> ownUrge() {
         return own == null ? Optional.empty() : Optional.ofNullable(own.urge());
+    }
+
+    public boolean runningIdleUrge() {
+        return own != null && own.priority() == Urge.Priority.IDLE;
+    }
+
+    public Optional<ResourceLocation> reservingUrge() {
+        if (pending != null && pending.urge().priority() != Urge.Priority.IDLE
+                && pending.urge().disposition() == Disposition.END) {
+            return Optional.of(pending.urge().id());
+        }
+        return own != null && !runningIdleUrge() && own.disposition() == Disposition.END ? ownUrge() : Optional.empty();
     }
 
     public boolean executing() {
@@ -208,8 +220,14 @@ public final class BodyRunner {
     // Takes up the route as laid, less the work in hand. A route just as it already stands changes nothing: the
     // runner keeps its pace of polling rather than looking again at once.
     public void follow(List<UUID> given) {
+        boolean personalOnly = reservingUrge().isPresent();
         List<UUID> laid = new ArrayList<>(given.size());
         for (UUID node : given) {
+            // A route computed before the urge took over can still arrive.
+            if (personalOnly && (!labor.phases().knows(node)
+                    || labor.phases().node(node).worker().filter(resident::equals).isEmpty())) {
+                continue;
+            }
             if (current == null || own != null || !current.id().equals(node)) {
                 laid.add(node);
             }
@@ -223,7 +241,7 @@ public final class BodyRunner {
     }
 
     public void offer(ServerLevel level, Body body, Urge urge, Node doing) {
-        this.own = new Own(urge.id());
+        this.own = new Own(urge.id(), urge.disposition(), urge.priority());
         begin(level, body, doing, Placement.NOWHERE);
     }
 
@@ -246,8 +264,9 @@ public final class BodyRunner {
         // The same resident may come back as a new entity, as a train's rider does when its carriage is put back.
         activeBody = body;
         busy++;
+        boolean yieldingToWork = soft != null && soft.reason() == PreemptReason.WORK;
         advance(level, body, execution.tick(context(level, body)));
-        return false;
+        return yieldingToWork && current == null;
     }
 
     private HoldingContext context(ServerLevel level, Body body) {
@@ -314,6 +333,9 @@ public final class BodyRunner {
         if (current != null && soft != null && now >= soft.deadlineTick()) {
             SoftPreempt expired = soft;
             finishPreempt(level, body, expired.result(), expired.reason(), true);
+            if (expired.reason() == PreemptReason.WORK) {
+                rerouted = true;
+            }
             if (present) {
                 startPending(level, body);
             }
@@ -394,7 +416,7 @@ public final class BodyRunner {
         drop();
         if (lastBody != null && lastBody.mob().level() instanceof ServerLevel level) {
             for (Suspended work : List.copyOf(suspended)) {
-                endSuspended(level, lastBody, work, Ending.REVOKED, PreemptReason.REVOKED);
+                endSuspended(level, lastBody, work, Ending.REVOKED, false);
             }
         }
         route.clear();
@@ -406,7 +428,7 @@ public final class BodyRunner {
         }
         for (Suspended work : List.copyOf(suspended)) {
             if (nodes.contains(work.node().id())) {
-                endSuspended(level, lastBody, work, Ending.REVOKED, PreemptReason.REVOKED);
+                endSuspended(level, lastBody, work, Ending.REVOKED, false);
             }
         }
         if (holding().filter(nodes::contains).isPresent()) {
@@ -495,6 +517,15 @@ public final class BodyRunner {
 
     public void takeover(ServerLevel level, Body body, Urge urge, Node node) {
         pending = new Pending(urge, node);
+        if (urge.priority() != Urge.Priority.IDLE && urge.disposition() == Disposition.END) {
+            // Queued nodes are unclaimed. Clearing the route leaves their phases alone.
+            route.clear();
+            for (Suspended work : List.copyOf(suspended)) {
+                if (work.own() == null) {
+                    endSuspended(level, body, work, Ending.DROPPED, true);
+                }
+            }
+        }
         if (!executing()) {
             startPending(level, body);
             return;
@@ -506,11 +537,21 @@ public final class BodyRunner {
             return;
         }
         if (urge.urgent()) {
-            preemptHard(level, body, Disposition.SUSPEND, PreemptReason.URGE);
+            preemptHard(level, body, urge.disposition(), PreemptReason.URGE);
         } else {
-            requestSoft(level, body, new SoftPreempt(Disposition.SUSPEND, PreemptReason.URGE,
+            requestSoft(level, body, new SoftPreempt(urge.disposition(), PreemptReason.URGE,
                 level.getGameTime() + SOFT_DEADLINE_TICKS));
         }
+    }
+
+    public void yieldIdleUrge(ServerLevel level, Body body) {
+        if (!runningIdleUrge() || soft != null && soft.reason() == PreemptReason.WORK) {
+            return;
+        }
+        LaborIncident.work(labor.colony().id(), level, body, current, PreemptReason.WORK.name(),
+            () -> net.minecraft.network.chat.Component.translatable("folkways.debug.incident.yield_to_work"));
+        requestSoft(level, body, new SoftPreempt(Disposition.END, PreemptReason.WORK,
+            level.getGameTime() + SOFT_DEADLINE_TICKS));
     }
 
     public void controllerTakeover(ServerLevel level, Body body, boolean ordered) {
@@ -518,7 +559,7 @@ public final class BodyRunner {
         for (Suspended work : List.copyOf(suspended)) {
             if (work.own() == null) {
                 controllerIncident(level, body, work.node());
-                endSuspended(level, body, work, Ending.DROPPED, PreemptReason.CONTROLLER);
+                endSuspended(level, body, work, Ending.DROPPED, true);
             }
         }
         if (inHand().isEmpty()) {
@@ -542,7 +583,7 @@ public final class BodyRunner {
     }
 
     public void requestSoft(ServerLevel level, Body body, SoftPreempt request) {
-        if (soft != null && request.reason() != PreemptReason.CONTROLLER) {
+        if (soft != null && request.reason() != PreemptReason.CONTROLLER && request.reason() != PreemptReason.WORK) {
             return;
         }
         if (execution == null) {
@@ -595,7 +636,7 @@ public final class BodyRunner {
             Ending how = reason == PreemptReason.REVOKED || reason == PreemptReason.REPLACED
                 ? Ending.REVOKED : Ending.DROPPED;
             ended(level, body, node, placement, how);
-            if (own == null && reason == PreemptReason.CONTROLLER) {
+            if (own == null && (reason == PreemptReason.CONTROLLER || reason == PreemptReason.URGE)) {
                 requeue(node);
             } else {
                 phases().cancelled(node.id(), how);
@@ -609,6 +650,10 @@ public final class BodyRunner {
         if (pending == null || execution != null) {
             return;
         }
+        if (pending.urge().priority() == Urge.Priority.IDLE && labor.routedWork().ready(this, level, body)) {
+            discardPending();
+            return;
+        }
         Pending next = pending;
         pending = null;
         offer(level, body, next.urge(), next.node());
@@ -616,6 +661,17 @@ public final class BodyRunner {
 
     public void resume(ServerLevel level, Body body) {
         if (current != null || suspended.isEmpty() || pending != null) {
+            return;
+        }
+        while (!suspended.isEmpty()) {
+            Suspended next = suspended.peek();
+            if (next.own() == null || next.own().priority() != Urge.Priority.IDLE
+                    || !labor.routedWork().ready(this, level, body)) {
+                break;
+            }
+            endSuspended(level, body, next, Ending.DROPPED, false);
+        }
+        if (suspended.isEmpty()) {
             return;
         }
         Suspended work = suspended.pop();
@@ -633,8 +689,7 @@ public final class BodyRunner {
             Phases states = work.own() == null ? labor.phases() : labor.personal();
             if (!states.check(work.node().id()) && !states.waiting(work.node().id())) {
                 endSuspended(level, body, work, states.failure(work.node().id())
-                    .<Ending>map(why -> new Ending.Failed(work.node().id(), why)).orElse(Ending.REVOKED),
-                    PreemptReason.REVOKED);
+                    .<Ending>map(why -> new Ending.Failed(work.node().id(), why)).orElse(Ending.REVOKED), false);
             }
         }
     }
@@ -643,19 +698,18 @@ public final class BodyRunner {
         for (Suspended work : List.copyOf(suspended)) {
             if (work.own() != null
                     && offered.stream().noneMatch(urge -> urge.id().equals(work.own().urge()))) {
-                endSuspended(level, body, work, Ending.REVOKED, PreemptReason.REVOKED);
+                endSuspended(level, body, work, Ending.REVOKED, false);
             }
         }
     }
 
-    private void endSuspended(ServerLevel level, Body body, Suspended work, Ending how,
-            PreemptReason reason) {
+    private void endSuspended(ServerLevel level, Body body, Suspended work, Ending how, boolean retry) {
         if (!suspended.remove(work)) {
             return;
         }
         labor.holdings().forgetSuspended(work.node().id());
         ended(level, body, work.node(), work.placement(), how);
-        finish(work.node(), how, work.own() == null, reason == PreemptReason.CONTROLLER);
+        finish(work.node(), how, work.own() == null, retry);
     }
 
     private void finish(Node node, Ending how, boolean onGraph, boolean retry) {

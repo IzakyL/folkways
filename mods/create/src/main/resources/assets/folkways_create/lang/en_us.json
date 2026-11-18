@@ -75,6 +75,7 @@
   "folkways.refusal.elevator.unavailable": "This elevator or its seat is no longer available",
   "folkways.refusal.rail.another_colony": "Another colony runs this train",
   "folkways.refusal.rail.line_withdrawn": "That train no longer runs between these stops",
+  "folkways.refusal.rail.stranded": "The train could not reach the destination",
   "folkways.refusal.rail.run_missed": "The last train that stops here has left",
   "folkways.refusal.rail.seat_gone": "That seat is not there any more",
   "folkways.refusal.rail.seat_taken": "Somebody else is in that seat",

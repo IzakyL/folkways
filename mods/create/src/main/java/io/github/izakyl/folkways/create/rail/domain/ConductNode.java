@@ -42,8 +42,20 @@ final class ConductNode implements Node, Workload.Continuous {
     }
 
     @Override
+    public Optional<UUID> worker() {
+        return cab.driver();
+    }
+
+    @Override
+    public boolean mountedWork() {
+        return true;
+    }
+
+    @Override
     public boolean ready(ServerLevel level) {
-        return TransitNetworks.get().seatPosition(level.getServer(), cab.seat()).isPresent();
+        TransitNetwork network = TransitNetworks.get();
+        return network.seatPosition(level.getServer(), cab.seat()).isPresent()
+            && (cab.driver().isEmpty() || network.occupant(level.getServer(), cab.seat()).equals(cab.driver()));
     }
 
     @Override
@@ -60,7 +72,9 @@ final class ConductNode implements Node, Workload.Continuous {
 
     @Override
     public void released(ServerLevel level, Worker who, Ending how) {
-        TransitNetworks.get().disembark(level.getServer(), cab.seat(), who.body());
+        if (holds(level, who)) {
+            TransitNetworks.get().disembark(level.getServer(), cab.seat(), who.body());
+        }
     }
 
     @Override

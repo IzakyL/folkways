@@ -208,12 +208,14 @@ jobs:
           cat > notes.md <<EOF
           Built automatically from master at ${GITHUB_SHA::7} (mod version ends in \`-nightly.${GITHUB_SHA::7}\`). Untested pre-release; back up your world before trying it.
 
-          Install **folkways-core** and **folkways-vanilla**, plus LDLib2. Add **folkways-create** only with Create,
-          **folkways-golems** only with Modular Golems, and **folkways-cookery** only with Kaleidoscope Cookery 1.6.0.
+          Install **folkways-core** and **folkways-vanilla**, plus LDLib2. Add each extension only with its target mod:
+          **folkways-create** (Create 6.0.7+), **folkways-golems** (Modular Golems), **folkways-cookery**
+          (Kaleidoscope Cookery 1.6.0+), **folkways-carving** (Chisels & Bits), **folkways-carts** (AstikorCarts Redux),
+          **folkways-epicfight** (Epic Fight) and **folkways-airline** (Folkways × Create, Create and Sable).
           **folkways-firearms** activates TACZ and Superb Warfare support when those mods are installed;
           **folkways-create** activates firefighting support when Create: FireFighting Additions is installed.
-          RTS commands and squads are included in **folkways-vanilla**.
-          All Folkways jars must come from the same build.
+          RTS commands and squads are included in **folkways-core**.
+          All Folkways jars must come from the same build. Saves from releases and earlier nightlies upgrade automatically.
           EOF
           gh release create nightly jars/*.jar --prerelease --target "$GITHUB_SHA" \
             --title "Nightly build" \

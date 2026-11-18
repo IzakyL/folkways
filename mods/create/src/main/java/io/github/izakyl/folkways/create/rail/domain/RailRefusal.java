@@ -15,5 +15,7 @@ public enum RailRefusal implements RefusalKind.Named {
 
     // The train no longer runs between the rider's stops by a timetable: its schedule changed, broke the rules for
     // one, or it lost its driver.
-    LINE_WITHDRAWN;
+    LINE_WITHDRAWN,
+
+    STRANDED;
 }

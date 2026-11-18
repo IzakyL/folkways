@@ -73,6 +73,19 @@ record Timetable(List<String> calls, long[] arrive, long[] leave, long[] departs
         return OptionalLong.empty();
     }
 
+    long departuresUntil(long boarded, String alight) {
+        for (int k = 0; k < departs.length; k++) {
+            if (departs[k] == boarded) {
+                int landing = lands(k, alight);
+                if (landing >= 0) {
+                    return departs[landing] - boarded;
+                }
+                break;
+            }
+        }
+        return 1L;
+    }
+
     private int lands(int board, String alight) {
         for (int k = board + 1; k < arrive.length; k++) {
             if (calls.get(k).equals(alight)) {

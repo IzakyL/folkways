@@ -11,10 +11,13 @@ public record Urge(
     Supplier<Node> take,
     Priority priority,
     boolean reservation,
-    boolean urgent) {
+    boolean urgent,
+    Disposition disposition) {
 
     /** Deliberate control is a separate tier, independent of need-specific numeric weights. */
     public enum Priority {
+        /** Personal activity that yields to ready colony work. */
+        IDLE,
         ORDINARY,
         CONTROL
     }
@@ -27,9 +30,18 @@ public record Urge(
         this(id, weight, preempts, take, priority, false, false);
     }
 
+    public Urge(ResourceLocation id, double weight, boolean preempts, Supplier<Node> take, Priority priority,
+            boolean reservation, boolean urgent) {
+        this(id, weight, preempts, take, priority, reservation, urgent, Disposition.SUSPEND);
+    }
+
+    public Urge withPreemption(Disposition disposition) {
+        return new Urge(id, weight, preempts, take, priority, reservation, urgent, disposition);
+    }
+
     // Urgency controls how the current holding is released, independently of its ranking weight.
     public Urge asUrgent() {
-        return new Urge(id, weight, preempts, take, priority, reservation, true);
+        return new Urge(id, weight, preempts, take, priority, reservation, true, disposition);
     }
 
     /** A passive controller reservation: excludes planned labour, while personal urges still use the runner. */
@@ -48,6 +60,7 @@ public record Urge(
 
     public Urge {
         Objects.requireNonNull(priority);
+        Objects.requireNonNull(disposition);
     }
 
     public boolean outranks(Urge other) {

@@ -54,7 +54,7 @@ versions. Back up your world before trying a nightly build.
 
 ## Mods
 
-This repository builds nine mods, one per directory under `mods/`. Each ships as
+This repository builds ten mods, one per directory under `mods/`. Each ships as
 `folkways-<directory>-*.jar`. Every extension requires Core and Vanilla.
 
 | Mod                                       | Directory            | Also requires                                                                       | What it does                                                                                                                    |
@@ -68,6 +68,7 @@ This repository builds nine mods, one per directory under `mods/`. Each ships as
 | Folkways Firearms | `mods/firearms` | Optional: TACZ 1.1.8+ (including 1.2.0); Superb Warfare [0.8.9.2,0.8.9.3) and Kotlin for Forge [5.12.0,6) | Residents use native firearms and emplacements with physical ammunition when their target mod is installed |
 | Folkways × AstikorCarts Redux | `mods/carts` | AstikorCarts Redux 1.2.2+ | Haulers hitch hand and supply carts and carry store deliveries in the cart storage, separately from their packs |
 | Folkways × Epic Fight                     | `mods/epicfight` (jar: `folkways-epicfight`) | Epic Fight 21.17.1+; Core and Vanilla from the same Folkways build | Residents use native Epic Fight melee, hit reactions, everyday movement and GEO rendering |
+| Folkways Airline | `mods/airline` | Folkways × Create; Create [6.0.10,6.1); Sable 2.0.6 | Airport patterns, surveys, towers, runways, helipads, taxiways and stands, including moving airports on Sable structures |
 
 When updating to Carving, remove the old `folkways-chiselsandbits-*.jar` before installing
 `folkways-carving-*.jar`; keeping both causes duplicate registrations and a crash.
@@ -98,9 +99,8 @@ distance while loaded. Locked vehicles cannot be claimed or commanded.
 
 Get pre-release jars from the upstream
 [nightly build](https://github.com/IzakyL/folkways/releases/tag/nightly).
-[Alpha and later releases](https://github.com/IzakyL/folkways/releases?q=-tag%3Anightly)
-are listed separately from nightly builds. The Last release badge has no matching
-date until the first versioned release is published.
+[Versioned releases](https://github.com/IzakyL/folkways/releases?q=-tag%3Anightly)
+are listed separately from nightly builds.
 
 | Requirement                              | Version                             |
 | ---------------------------------------- | ----------------------------------- |
@@ -183,7 +183,7 @@ npm run setup
 ```
 
 Setup downloads the pinned integration dependencies and writes the manifest
-required by Gradle. The nine mod jars are collected in `build/libs/`.
+required by Gradle. The ten mod jars are collected in `build/libs/`.
 Windows support in the Blockwright test SDK is a candidate; see
 [development setup](CONTRIBUTING.md#development-setup).
 

@@ -41,7 +41,7 @@ npm run setup
 **第一次运行 Gradle 前必须先执行 setup**，调整锁定依赖后也应重新执行。
 Gradle 编译时需要可选集成的 jar，即使某个测试环境并不加载这些模组。
 
-九个模组 jar 汇总到 `build/libs/`，运行时使用的 LDLib2 放在 `build/deps/`。
+十个模组 jar 汇总到 `build/libs/`，运行时使用的 LDLib2 放在 `build/deps/`。
 每个模组是 `mods/` 下的一个 Gradle 子项目，各自的作用见[模组一览](README.zh-CN.md#模组一览)。
 小队编组和直接指挥属于 Core 的 **RTS** 模式（手持殖民书 → **V** → **RTS**）。
 命令测试夹具应使用 RTS API；装备分配使用**装备方案**页。

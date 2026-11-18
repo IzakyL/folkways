@@ -8,8 +8,10 @@ final class Rest {
 
     private static final String TAG_TIRED = "Tired";
 
+    static final int FLOOR = -300;
     static final int RESTED = 0;
     static final int SPENT = 1200;
+    static final int MAX_ALERTNESS = SPENT - FLOOR;
     static final int SLEEPY = 800;
 
     // One loaded day awake reaches the sleep threshold; walking can bring it forward.
@@ -26,6 +28,11 @@ final class Rest {
         return SPENT - tiredness();
     }
 
+    // Alertness left on reaching a bed: the walk there is awake time and distance both.
+    int alertnessAfter(int ticks, double blocks) {
+        return SPENT - (int) Math.round(Math.min(SPENT, tired + ticks * PER_AWAKE_TICK + blocks * PER_BLOCK_WALKED));
+    }
+
     void awake(double ticks) {
         tired = Math.min(SPENT, tired + ticks * PER_AWAKE_TICK);
     }
@@ -35,7 +42,7 @@ final class Rest {
     }
 
     void sleep(int ticks) {
-        tired = Math.max(RESTED, tired - ticks * PER_TICK_ASLEEP);
+        tired = Math.max(FLOOR, tired - ticks * PER_TICK_ASLEEP);
     }
 
     int tiredness() {
@@ -43,7 +50,7 @@ final class Rest {
     }
 
     int ticksToSleepOff() {
-        return (int) Math.max(1, Math.ceil(tired / PER_TICK_ASLEEP));
+        return (int) Math.max(1, Math.ceil((tired - RESTED) / PER_TICK_ASLEEP));
     }
 
     CompoundTag save() {
@@ -51,6 +58,6 @@ final class Rest {
     }
 
     void load(Reader reader) {
-        tired = Math.clamp(reader.decimal(TAG_TIRED).orElseThrow(), RESTED, SPENT);
+        tired = Math.clamp(reader.decimal(TAG_TIRED).orElseThrow(), FLOOR, SPENT);
     }
 }

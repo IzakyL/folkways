@@ -24,12 +24,18 @@ public record Crew(List<Hand> hands) {
 
     public record Hand(Resident who, WorldPos at, int packCells, int packCapacity, double pace,
                        List<Licence> licences, List<ItemStack> tools, Optional<UUID> holding,
-                       List<ItemStack> cargo, ToolPolicy toolRules, PackSpace space) {
+                       List<ItemStack> cargo, ToolPolicy toolRules, PackSpace space, boolean personalOnly) {
 
         public Hand {
             licences = List.copyOf(licences);
             tools = tools.stream().map(ItemStack::copy).toList();
             cargo = cargo.stream().map(ItemStack::copy).toList();
+        }
+
+        public Hand(Resident who, WorldPos at, int packCells, int packCapacity, double pace,
+                    List<Licence> licences, List<ItemStack> tools, Optional<UUID> holding,
+                    List<ItemStack> cargo, ToolPolicy toolRules, PackSpace space) {
+            this(who, at, packCells, packCapacity, pace, licences, tools, holding, cargo, toolRules, space, false);
         }
 
         public Hand(Resident who, WorldPos at, int packCells, int packCapacity, double pace,

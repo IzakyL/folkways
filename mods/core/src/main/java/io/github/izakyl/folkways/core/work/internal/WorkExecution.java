@@ -16,7 +16,18 @@ import net.minecraft.server.level.ServerLevel;
 
 // Bound once by the runtime; sessions share execution state and report changes without consulting the planner.
 public record WorkExecution(Colony colony, Phases phases, Phases personal, HoldingRegistry holdings,
-                            BiFunction<Body, Placement, Worker> hands, HoldingActions actions, Consumer<Event> report) {
+                            BiFunction<Body, Placement, Worker> hands, HoldingActions actions, Consumer<Event> report,
+                            RoutedWork routedWork) {
+
+    @FunctionalInterface
+    public interface RoutedWork {
+        boolean ready(BodyRunner runner, ServerLevel level, Body body);
+    }
+
+    public WorkExecution(Colony colony, Phases phases, Phases personal, HoldingRegistry holdings,
+            BiFunction<Body, Placement, Worker> hands, HoldingActions actions, Consumer<Event> report) {
+        this(colony, phases, personal, holdings, hands, actions, report, (runner, level, body) -> false);
+    }
 
     public sealed interface Event {
         record Started(UUID node, UUID resident) implements Event { }

@@ -7,6 +7,7 @@ import io.github.izakyl.folkways.core.work.api.Node;
 import io.github.izakyl.folkways.core.work.api.NodeSpec;
 import io.github.izakyl.folkways.core.work.api.Outcome;
 import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.work.api.Disposition;
 import io.github.izakyl.folkways.core.work.api.Urge;
 import io.github.izakyl.folkways.core.work.api.WorkSite;
 import io.github.izakyl.folkways.core.work.api.Worker;
@@ -363,6 +364,6 @@ final class PatrolTeams {
             public Outcome commit(ServerLevel level, Worker who) {
                 return Outcome.done();
             }
-        }));
+        }).withPreemption(Disposition.END));
     }
 }

@@ -161,7 +161,7 @@ public final class ColonyLabor implements WorkListener {
             new HoldingActions(level -> Optional.of(ColonyWays.of(colony, level)), (resident, item) -> {
                 readout.broke(item);
                 survey.read(resident);
-            }), this::executionChanged);
+            }), this::executionChanged, this::routedWorkReady);
         runners = new Runners(execution, survey::read);
         UUID colonyId = colony.colonyId();
         // Query the active runtime site even while a listener is being replaced or closed.
@@ -288,6 +288,7 @@ public final class ColonyLabor implements WorkListener {
         runners.away(present.keySet(), colony.claims().carriedOff(), level.getGameTime());
         ColonyView view = present.isEmpty() ? null : ColonySnapshot.of(colony, level);
         Set<UUID> reserved = new LinkedHashSet<>();
+        Set<UUID> personalOnly = new LinkedHashSet<>();
         var equipment = works.service(EquipmentProfiles.ID, EquipmentProfiles.class);
         for (Body body : present.values()) {
             Optional<EquipmentProfile> profile = equipment.flatMap(profiles -> profiles.assigned(body.id()));
@@ -309,8 +310,12 @@ public final class ColonyLabor implements WorkListener {
             if (!controlled || runner.executing()) {
                 tickChecked(runner, level, body);
             }
+            if (runner.reservingUrge().isPresent()) {
+                personalOnly.add(body.id());
+            }
         }
         survey.reserved(reserved);
+        survey.personalOnly(personalOnly);
         answer(level, present);
         for (int round = 0; round < MOST_ROUNDS && !pipeline.weaving() && inbox.any(); round++) {
             if (survey.waitingForInventory()) {
@@ -381,6 +386,20 @@ public final class ColonyLabor implements WorkListener {
                 inbox.raise(new Message.Idle(runner.resident()));
             }
         }
+    }
+
+    private boolean routedWorkReady(BodyRunner runner, ServerLevel level, Body body) {
+        boolean owed = false;
+        for (UUID next : runner.route) {
+            if (owed && onTheGraph(next) && !fitsAhead(body, next, runner.route)) {
+                continue;
+            }
+            if (takeable(next, level).isPresent()) {
+                return true;
+            }
+            owed |= onTheGraph(next);
+        }
+        return false;
     }
 
     // Gather compatible loads sharing a source or nearby destination. Every moved step is ready and its
@@ -511,6 +530,18 @@ public final class ColonyLabor implements WorkListener {
             runner.discardPending();
             pending = Optional.empty();
         }
+        boolean workReady = (runner.runningIdleUrge()
+                || pending.filter(urge -> urge.priority() == Urge.Priority.IDLE).isPresent()
+                || offered.stream().anyMatch(urge -> urge.priority() == Urge.Priority.IDLE
+                    && (!runner.executing() || urge.preempts())))
+            && routedWorkReady(runner, level, body);
+        if (workReady) {
+            runner.yieldIdleUrge(level, body);
+            if (pending.filter(urge -> urge.priority() == Urge.Priority.IDLE).isPresent()) {
+                runner.discardPending();
+                pending = Optional.empty();
+            }
+        }
         Optional<Urge> waiting = pending;
         Optional<Urge> keenest =
             urges.keenest(
@@ -518,7 +549,8 @@ public final class ColonyLabor implements WorkListener {
             offered,
             level.getGameTime(),
             urge ->
-                !personalRequests.containsValue(new Personal(body.id(), urge.id()))
+                (!workReady || urge.priority() != Urge.Priority.IDLE)
+                    && !personalRequests.containsValue(new Personal(body.id(), urge.id()))
                     && (!runner.preempting() || urge.urgent() && waiting.map(urge::outranks).orElse(true))
                     && (runner.executing()
                     ? urge.preempts() && current.map(urge::outranks).orElse(true)

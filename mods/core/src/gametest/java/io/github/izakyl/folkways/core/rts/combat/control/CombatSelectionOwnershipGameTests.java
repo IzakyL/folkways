@@ -116,11 +116,7 @@ public final class CombatSelectionOwnershipGameTests {
     public static void controllerTakeoverLetsAnotherResidentPickUpTheAbandonedNode(GameTestHelper helper) {
         Fixture f = new Fixture(helper);
         Body first = f.resident(2);
-        Body second = f.resident(4);
-        ResidentCommands commands = ResidentCommands.of(f.colony);
-        ResidentCommands.Order firstReady = commands.hold(first, f.at(2));
-        ResidentCommands.Order secondReady = commands.hold(second, f.at(4));
-        AtomicReference<Body> controlled = new AtomicReference<>();
+        AtomicReference<Body> replacement = new AtomicReference<>();
         NodeSpec spec = NodeSpec.of(UUID.randomUUID(), CommandJob.WORK, new WorkSite.AtBlock(f.at(6)), Stances.at(f.at(6)),
             (Workload.Continuous) (level, who) -> true).done();
         Node job = new Node() {
@@ -135,37 +131,24 @@ public final class CombatSelectionOwnershipGameTests {
         f.colony.submit(CommandJob.WORK, f.level.dimension(), Grown.of(job), (id, how) -> {});
         helper.startSequence()
             .thenWaitUntil(() -> helper.assertTrue(
-                f.labour.route(first).contains(job) || f.labour.route(second).contains(job),
-                "the shared job is assigned before either resident leaves its preparatory hold"))
+                f.colony.holder(job.id()).filter(first.id()::equals).isPresent(),
+                "the first resident starts the shared job"))
             .thenExecute(() -> {
-                boolean assignedFirst = f.labour.route(first).contains(job);
-                controlled.set(assignedFirst ? first : second);
-                (assignedFirst ? firstReady : secondReady).close();
-            })
-            .thenWaitUntil(() -> helper.assertTrue(f.colony.isHeld(job.id()),
-                "a resident starts the shared job; stalls=" + f.colony.stallsIn(f.level.dimension())
-                    + "; first=" + first.doing() + "; second=" + second.doing()))
-            .thenExecute(() -> {
-                UUID holder = f.colony.holder(job.id()).orElseThrow();
-                helper.assertValueEqual(holder, controlled.get().id(), "the assigned resident starts the job");
-                f.ownership.select(f.first, List.of(holder));
+                replacement.set(f.resident(4));
+                f.ownership.select(f.first, List.of(first.id()));
             })
             .thenWaitUntil(() -> helper.assertTrue(
-                f.labour.route(controlled.get() == first ? second : first).contains(job),
-                "controller END reassigns the abandoned node before its replacement leaves the preparatory hold"))
-            .thenExecute(() -> (controlled.get() == first ? secondReady : firstReady).close())
-            .thenWaitUntil(() -> helper.assertTrue(
-                f.colony.holder(job.id()).filter(holder -> !holder.equals(controlled.get().id())).isPresent(),
+                f.colony.holder(job.id()).filter(replacement.get().id()::equals).isPresent(),
                 "the planner assigns the same abandoned node to the other resident during takeover"))
             .thenExecute(() -> {
                 helper.assertFalse(f.colony.isSuspended(job.id()), "the node has no retained old holding");
-                helper.assertTrue(f.ownership.reserved(controlled.get().id()),
+                helper.assertTrue(f.ownership.reserved(first.id()),
                     "the original resident stays controlled");
                 f.ownership.select(f.first, List.of());
             })
             .thenIdle(15)
             .thenExecute(() -> helper.assertTrue(
-                f.colony.holder(job.id()).filter(holder -> !holder.equals(controlled.get().id())).isPresent(),
+                f.colony.holder(job.id()).filter(replacement.get().id()::equals).isPresent(),
                 "releasing control does not reclaim the other resident's job"))
             .thenSucceed();
     }

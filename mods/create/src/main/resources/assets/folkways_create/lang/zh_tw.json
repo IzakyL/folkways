@@ -75,6 +75,7 @@
   "folkways.refusal.elevator.unavailable": "這座電梯或座位已無法使用",
   "folkways.refusal.rail.another_colony": "這列列車歸另一個殖民地管理",
   "folkways.refusal.rail.line_withdrawn": "這列車已不再按時刻表往返這兩站",
+  "folkways.refusal.rail.stranded": "列車無法抵達目的站",
   "folkways.refusal.rail.run_missed": "能坐的最後一班車已經開走了",
   "folkways.refusal.rail.seat_gone": "那個駕駛臺已經不在了",
   "folkways.refusal.rail.seat_taken": "那個駕駛臺已經有人了",

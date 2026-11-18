@@ -7,5 +7,6 @@ public enum PreemptReason {
     REVOKED,
     REPLACED,
     DEATH,
-    OTHER
+    OTHER,
+    WORK
 }

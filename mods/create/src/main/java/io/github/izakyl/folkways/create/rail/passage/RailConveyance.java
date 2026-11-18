@@ -8,6 +8,7 @@ import io.github.izakyl.folkways.create.rail.domain.RailRefusal;
 import io.github.izakyl.folkways.create.rail.domain.SeatRef;
 import io.github.izakyl.folkways.create.rail.domain.TransitNetwork;
 import io.github.izakyl.folkways.create.rail.domain.TransitNetworks;
+import io.github.izakyl.folkways.create.transport.ContraptionSeats;
 import io.github.izakyl.folkways.create.transport.SeatedConveyance;
 import java.util.List;
 import java.util.Optional;
@@ -20,10 +21,11 @@ import net.minecraft.world.entity.Mob;
 final class RailConveyance extends SeatedConveyance<SeatRef> {
 
     private final RailLegs.Leg leg;
+    private Long alightingDeparture;
 
     RailConveyance(RailLegs.Leg leg) {
         super(leg.boarding(), leg.landing(), Boarding::seatTicks,
-            RailContent.BOARDING, RailContent.RIDING, RailRefusal.SEAT_GONE);
+            RailContent.BOARDING, RailContent.RIDING, RailRefusal.SEAT_GONE, RailRefusal.STRANDED);
         this.leg = leg;
     }
 
@@ -41,7 +43,7 @@ final class RailConveyance extends SeatedConveyance<SeatRef> {
         List<String> stops = network.scheduledStations(server, train);
         // A withdrawn schedule or a missing driver leaves no service to wait for.
         boolean withdrawn = network.fault(server, train).isPresent()
-            || !network.hasConductor(server, train, true) && !network.hasConductor(server, train, false)
+            || !conducted(network, server, train)
             || !stops.contains(leg.board()) || !stops.contains(leg.alight());
         return withdrawn ? Optional.of(RailRefusal.LINE_WITHDRAWN) : Optional.empty();
     }
@@ -79,6 +81,50 @@ final class RailConveyance extends SeatedConveyance<SeatRef> {
         }
         Ridership.setDestination(body, leg.alight());
         return true;
+    }
+
+    @Override
+    protected void driving(ServerLevel level, Mob body) {
+        Ridership.driven(level, body, this::fallbackLanding);
+    }
+
+    @Override
+    protected boolean rideWithdrawn(ServerLevel level) {
+        TransitNetwork network = TransitNetworks.get();
+        MinecraftServer server = level.getServer();
+        UUID train = leg.train();
+        if (!available(level) || !network.scheduledStations(server, train).contains(leg.alight())
+                || network.fault(server, train).isPresent() || !conducted(network, server, train)) {
+            return true;
+        }
+        long departed = network.departures(server, train);
+        Optional<String> station = network.currentStation(server, train);
+        if (alightingDeparture == null) {
+            long boardingDeparture = station.filter(leg.board()::equals).isPresent() ? departed + 1 : departed;
+            OptionalLong planned = leg.run().isPresent() ? leg.run()
+                : leg.runs().lastDeparture(leg.board(), leg.alight());
+            long stops = planned.isPresent() ? leg.runs().departuresUntil(planned.getAsLong(), leg.alight()) : 1L;
+            alightingDeparture = boardingDeparture + stops;
+        }
+        return departed >= alightingDeparture || departed == alightingDeparture - 1
+            && station.filter(stop -> !stop.equals(leg.alight())).isPresent();
+    }
+
+    private static boolean conducted(TransitNetwork network, MinecraftServer server, UUID train) {
+        return network.hasConductor(server, train, true) || network.hasConductor(server, train, false);
+    }
+
+    @Override
+    protected boolean betweenStops(ServerLevel level) {
+        return TransitNetworks.get().currentStation(level.getServer(), leg.train()).isEmpty();
+    }
+
+    @Override
+    protected void abandonSeat(ServerLevel level, Mob body) {
+        ContraptionSeats.disembark(body);
+        if (!body.isPassenger()) {
+            Ridership.clearDestination(body);
+        }
     }
 
     @Override

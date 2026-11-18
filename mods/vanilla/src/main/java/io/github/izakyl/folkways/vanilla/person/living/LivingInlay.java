@@ -53,12 +53,12 @@ public final class LivingInlay implements Inlay {
                 Rows.value(Component.translatable("folkways.mood.work_speed", String.format(Locale.ROOT, "%.2f", read.getDouble("speed"))))));
         int alertness = read.getInt("alertness");
         UIElement rested = Rows.meter();
-        Rows.meterFill(rested, 100f * alertness / Rest.SPENT, NEUTRAL);
+        Rows.meterFill(rested, 100f * alertness / Rest.MAX_ALERTNESS, NEUTRAL);
         Tokens.name(rested, "folkways.resident.alertness");
         rested.layout(layout -> layout.width(METER_WIDTH).flexGrow(0).flexShrink(0));
-        rested.style(style -> style.tooltips(Component.literal(alertness + "/" + Rest.SPENT)));
+        rested.style(style -> style.tooltips(Component.literal(alertness + "/" + Rest.MAX_ALERTNESS)));
         page.addChildren(Rows.strip().addChildren(caption("folkways.mood.alertness"), rested,
-            Rows.value(Component.literal(Long.toString(Math.round(100.0 * alertness / Rest.SPENT))))));
+            Rows.value(Component.literal(Long.toString(Math.round(100.0 * alertness / Rest.MAX_ALERTNESS))))));
 
         UIElement reasons = Rows.strip();
         reasons.layout(layout -> layout.flexWrap(FlexWrap.WRAP));

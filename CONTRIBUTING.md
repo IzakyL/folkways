@@ -49,7 +49,7 @@ pinned in [`blockwright.toml`](blockwright.toml) and writes `.blockwright/mods.j
 fixtures. Gradle compiles against optional integration jars even when a particular
 test profile does not load them.
 
-The build gathers the nine mod jars in `build/libs/` and runtime LDLib2 in `build/deps/`.
+The build gathers the ten mod jars in `build/libs/` and runtime LDLib2 in `build/deps/`.
 Each mod is a Gradle project under `mods/`; see [Mods](README.md#mods) for what each one does.
 Squad grouping and direct commands belong to Core’s **RTS** mode (Colony Book → **V** → **RTS**).
 Keep command fixtures on the RTS APIs; equipment assignment uses the **Equipment profiles** page.

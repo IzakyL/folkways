@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Exercise migration boundaries and release freezing in isolated disposable git repositories."""
+"""Exercise migration boundaries and release/master freezing in isolated disposable git repositories."""
 
 import shutil
 import subprocess
@@ -137,6 +137,15 @@ public final class V3_Rename implements Step {
         self.check()
         moved = old / "core/upgrade/V3_Rename.java"
         moved.write_text(moved.read_text() + "// changed\n")
+        self.check(False)
+
+    def test_master_steps_are_frozen_without_a_release(self):
+        path = self.step()
+        self.git("add", ".")
+        self.git("commit", "-qm", "fixture")
+        self.git("update-ref", "refs/remotes/origin/master", "HEAD")
+        self.check()
+        path.write_text(path.read_text() + "// changed\n")
         self.check(False)
 
     def test_retroactive_steps_are_rejected(self):

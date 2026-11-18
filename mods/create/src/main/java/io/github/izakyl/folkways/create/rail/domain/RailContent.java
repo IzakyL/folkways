@@ -10,6 +10,7 @@ import io.github.izakyl.folkways.core.vocation.api.Vocations;
 import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.core.work.api.Workload;
 import io.github.izakyl.folkways.create.FolkwaysCreateConfig;
+import io.github.izakyl.folkways.create.rail.passage.Ridership;
 import io.github.izakyl.folkways.core.effect.perk.Perk;
 import io.github.izakyl.folkways.core.front.api.Enrollment;
 import io.github.izakyl.folkways.core.front.api.Registering;
@@ -58,6 +59,7 @@ public final class RailContent {
         CreateTransitNetwork network = new CreateTransitNetwork();
         TransitNetworks.install(network);
         NeoForge.EVENT_BUS.addListener(network::tick);
+        NeoForge.EVENT_BUS.addListener(Ridership::recoverPassengers);
         NeoForge.EVENT_BUS.addListener(ServerStoppedEvent.class, event -> network.forgetServer());
         declaring.vocation(SPEC.ordered(200).grouped(VocationGroup.TRANSPORT));
         declaring.colony(ID, scope -> {

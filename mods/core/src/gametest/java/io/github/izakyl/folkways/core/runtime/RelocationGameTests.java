@@ -126,7 +126,11 @@ public final class RelocationGameTests {
                 BodyRunner runner = ((Runners) runnersField.get(labor)).of(body.id());
                 Node active = node(old, new AtomicInteger());
                 labor.execution().personal().ready(active, level);
+                // Start from an idle runner: ambient urges such as leisure, or the old plan's own node, may hold it.
+                runner.abandon();
                 runner.offer(level, body, new Urge(OWNER, 1, false, () -> active), active);
+                // One tick sets the work's presentation, which migration must then clear.
+                labor.tick(runner, level, body);
                 helper.assertTrue(body.doing().isPresent(), "the resident must have active work to retire");
 
                 aboard.set(intoFrame);

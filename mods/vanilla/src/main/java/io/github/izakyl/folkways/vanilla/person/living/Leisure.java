@@ -56,25 +56,22 @@ final class Leisure {
         UUID id = who.resident().id();
         Session active = sessions.get(id);
         if (active != null) {
-            boolean invitedToWork = id.equals(active.peer) && !who.route().isEmpty()
-                && Bodies.of(who.body()).flatMap(body -> body.doing())
-                    .filter(doing -> doing.what().getPath().equals("chatting")).isEmpty();
-            if (active.cancelled || invitedToWork || unsafe(who, view.level(), true)
+            if (active.cancelled || unsafe(who, view.level(), true)
                     || view.level().getGameTime() > active.expires) {
                 cancel(id); return Optional.empty();
             }
-            return Optional.of(new Urge(URGE, active.restBreak && !id.equals(active.peer) ? Urge.SPARE : Urge.IDLE, false,
-                () -> new Activity(id, active, view.level())));
+            boolean restBreak = active.restBreak && !id.equals(active.peer);
+            return Optional.of(new Urge(URGE, restBreak ? Urge.SPARE : Urge.IDLE, false,
+                () -> new Activity(id, active, view.level()), restBreak ? Urge.Priority.ORDINARY : Urge.Priority.IDLE));
         }
         long now = view.level().getGameTime();
         Mood mood = living.mood(id);
         boolean restBreak = mood.leisure < 20 && now >= mood.nextBreak;
-        if ((!who.route().isEmpty() && !restBreak) || now < nextTry.getOrDefault(id, 0L)
-                || unsafe(who, view.level(), false)) {
+        if (now < nextTry.getOrDefault(id, 0L) || unsafe(who, view.level(), false)) {
             return Optional.empty();
         }
         return Optional.of(new Urge(URGE, restBreak ? Urge.SPARE : Urge.IDLE, false,
-            () -> choose(who, view, restBreak)));
+            () -> choose(who, view, restBreak), restBreak ? Urge.Priority.ORDINARY : Urge.Priority.IDLE));
     }
 
     private static boolean unsafe(Worker who, ServerLevel level, boolean underway) {
@@ -230,11 +227,15 @@ final class Leisure {
         @Override public NodeSpec spec() { return spec; }
         @Override public boolean holds(ServerLevel level, Worker who) {
             if (session.cancelled || level.getGameTime() > session.expires) { return false; }
-            if ((!session.restBreak || resident.equals(session.peer)) && elapsed + waiting >= 40 && !who.route().isEmpty()) { return false; }
             Entity target = target(level);
             if ((session.pet != null || session.peer != null) && (target == null || !target.isAlive())) { return false; }
             if (session.peer != null && target instanceof ResidentEntity peer) {
-                boolean chatting = peer.doing().filter(doing -> doing.what().getPath().equals("chatting")).isPresent();
+                var doing = peer.doing();
+                boolean chatting = doing.filter(activity -> activity.what().getPath().equals("chatting")).isPresent();
+                if (doing.filter(activity -> !activity.toward().orElse(activity.what()).getPath().equals("chatting"))
+                        .isPresent()) {
+                    return false;
+                }
                 if (!chatting || target.distanceToSqr(who.body()) > 9) {
                     // The invited partner waits while the initiator walks to the meeting point.
                     return elapsed == 0 && ++waiting < 200;

@@ -6,6 +6,7 @@ import io.github.izakyl.folkways.core.resident.api.RefusalKind;
 import io.github.izakyl.folkways.core.work.api.Stances;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.create.FolkwaysCreateMod;
+import io.github.izakyl.folkways.create.rail.domain.RailRefusal;
 import io.github.izakyl.folkways.vanilla.person.PersonBody;
 import java.util.Optional;
 import java.util.Set;
@@ -128,6 +129,67 @@ public final class SeatedConveyanceGameTests {
         helper.succeed();
     }
 
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 650)
+    public static void aStalledRideAlightsNearbyAndFails(GameTestHelper helper) {
+        Fixture fixture = fixture(helper);
+        BlockPos stranded = betweenStops(helper, fixture);
+        helper.assertTrue(tick(fixture, helper.getLevel()) == Going.UNDERWAY,
+            "a brief pause between stations does not strand the rider");
+        helper.runAfterDelay(SeatedConveyance.STALLED_TICKS - 1, () -> {
+            helper.assertTrue(tick(fixture, helper.getLevel()) == Going.UNDERWAY && fixture.body().isPassenger(),
+                "the rider waits until the stall timeout");
+            helper.runAfterDelay(1, () -> assertStranded(helper, fixture, stranded));
+        });
+    }
+
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
+    public static void aWithdrawnDestinationAlightsNearbyAndFails(GameTestHelper helper) {
+        Fixture fixture = fixture(helper);
+        BlockPos stranded = betweenStops(helper, fixture);
+        fixture.ride().destinationWithdrawn = true;
+        assertStranded(helper, fixture, stranded);
+    }
+
+    @GameTest(template = "empty", templateNamespace = "folkways_core", timeoutTicks = 100)
+    public static void aCompletedRideAlightsOnTheDestinationPlatform(GameTestHelper helper) {
+        Fixture fixture = fixture(helper);
+        betweenStops(helper, fixture);
+        fixture.ride().destination = true;
+        tick(fixture, helper.getLevel());
+        helper.assertTrue(!fixture.body().isPassenger()
+                && fixture.body().blockPosition().equals(fixture.landing().iterator().next().cell()),
+            "the normal ride lands at its destination platform");
+        helper.assertTrue(tick(fixture, helper.getLevel()) == Going.ARRIVED, "the normal ride reports arrival");
+        helper.succeed();
+    }
+
+    private static BlockPos betweenStops(GameTestHelper helper, Fixture fixture) {
+        ServerLevel level = helper.getLevel();
+        step(fixture, level, 3);
+        helper.assertTrue(fixture.body().isPassenger(), "the rider boarded");
+        BlockPos origin = helper.absolutePos(new BlockPos(1, 1, 5));
+        BlockPos safe = helper.absolutePos(new BlockPos(1, 1, 4));
+        level.setBlockAndUpdate(safe.below(), Blocks.STONE.defaultBlockState());
+        fixture.ride().vehicle.setPos(origin.getX() + 0.5D, origin.getY(), origin.getZ() + 0.5D);
+        fixture.body().setPos(origin.getX() + 0.5D, origin.getY(), origin.getZ() + 0.5D);
+        fixture.ride().stopped = false;
+        return origin;
+    }
+
+    private static void assertStranded(GameTestHelper helper, Fixture fixture, BlockPos origin) {
+        helper.assertTrue(tick(fixture, helper.getLevel()).equals(new Going.Failed(RailRefusal.STRANDED)),
+            "the ride reports that it was stranded");
+        BlockPos feet = fixture.body().blockPosition();
+        helper.assertTrue(!fixture.body().isPassenger() && feet.distSqr(origin) <= 1.0D
+                && !feet.equals(fixture.landing().iterator().next().cell()),
+            "the rider is set down safely by the stalled vehicle");
+        helper.succeed();
+    }
+
+    private static Going tick(Fixture fixture, ServerLevel level) {
+        return fixture.ride().step(level, fixture.body(), fixture.landing());
+    }
+
     private static Fixture fixture(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         BlockPos boarding = helper.absolutePos(new BlockPos(1, 1, 1));
@@ -158,6 +220,7 @@ public final class SeatedConveyanceGameTests {
         private boolean reject;
         private boolean stopped = true;
         private boolean destination;
+        private boolean destinationWithdrawn;
         private boolean serviceAvailable = true;
         private boolean releaseAllowed;
         private int attempts;
@@ -165,7 +228,7 @@ public final class SeatedConveyanceGameTests {
 
         private StubRide(Stances.Cells boarding, Stances.Cells landing, Entity vehicle) {
             super(boarding, landing, () -> 3, ResourceLocation.fromNamespaceAndPath("folkways_create", "boarding"),
-                ResourceLocation.fromNamespaceAndPath("folkways_vanilla", "riding"), () -> "test.seat_gone");
+                ResourceLocation.fromNamespaceAndPath("folkways_vanilla", "riding"), () -> "test.seat_gone", RailRefusal.STRANDED);
             this.vehicle = vehicle;
         }
 
@@ -192,6 +255,16 @@ public final class SeatedConveyanceGameTests {
 
         @Override
         protected boolean atDestination(ServerLevel level) { return destination; }
+
+        @Override
+        protected boolean rideWithdrawn(ServerLevel level) {
+            return destinationWithdrawn || super.rideWithdrawn(level);
+        }
+
+        @Override
+        protected boolean betweenStops(ServerLevel level) {
+            return !stopped && !destination;
+        }
 
         @Override
         protected Optional<Integer> seatOf(ServerLevel level, Mob body) {

@@ -18,10 +18,13 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.level.pathfinder.Path;
+import net.minecraft.world.phys.Vec3;
 
 // The passenger's part of a seated ride. Services supply stop and availability checks; this class never
 // chooses where the vehicle goes or assumes that it follows a timetable.
 public abstract class SeatedConveyance<S> implements Conveyance {
+
+    protected static final int STALLED_TICKS = 30 * 20;
 
     private final Stances.Cells boarding;
     private final Stances.Cells landing;
@@ -29,6 +32,7 @@ public abstract class SeatedConveyance<S> implements Conveyance {
     private final ResourceLocation boardingActivity;
     private final ResourceLocation ridingActivity;
     private final RefusalKind seatGone;
+    private final RefusalKind stranded;
 
     private Set<WorldPos> onward = Set.of();
 
@@ -40,15 +44,20 @@ public abstract class SeatedConveyance<S> implements Conveyance {
     private boolean boarded;
     private boolean alighted;
     private S taking;
+    private Vec3 lastProgress;
+    private long progressAt;
+    private Long strandedAt;
 
     protected SeatedConveyance(Stances.Cells boarding, Stances.Cells landing, IntSupplier seatTicks,
-            ResourceLocation boardingActivity, ResourceLocation ridingActivity, RefusalKind seatGone) {
+            ResourceLocation boardingActivity, ResourceLocation ridingActivity, RefusalKind seatGone,
+            RefusalKind stranded) {
         this.boarding = boarding;
         this.landing = landing;
         this.seatTicks = seatTicks;
         this.boardingActivity = boardingActivity;
         this.ridingActivity = ridingActivity;
         this.seatGone = seatGone;
+        this.stranded = stranded;
     }
 
     protected abstract boolean available(ServerLevel level);
@@ -75,19 +84,34 @@ public abstract class SeatedConveyance<S> implements Conveyance {
         return available(level);
     }
 
+    protected void driving(ServerLevel level, Mob body) {
+    }
+
+    protected boolean rideWithdrawn(ServerLevel level) {
+        return !available(level);
+    }
+
+    protected boolean betweenStops(ServerLevel level) {
+        return false;
+    }
+
+    protected void abandonSeat(ServerLevel level, Mob body) {
+        seatOf(level, body).ifPresent(seat -> disembark(level, seat, body));
+    }
+
     @Override
     public Going step(ServerLevel level, Mob body, Set<WorldPos> to) {
         if (alighted) {
             return Going.ARRIVED;
         }
         onward = to;
-        if (!available(level)) {
-            return new Going.Failed(seatGone);
+        if (strandedAt != null && body.getVehicle() == null) {
+            return new Going.Failed(stranded);
         }
-        if (body.getVehicle() != null) {
+        if (boarded && body.getVehicle() != null) {
             return riding(level, body);
         }
-        if (boarded) {
+        if (boarded || body.getVehicle() != null || !available(level)) {
             return new Going.Failed(seatGone);
         }
         return boarding(level, body);
@@ -128,6 +152,7 @@ public abstract class SeatedConveyance<S> implements Conveyance {
         }
         if (board(level, taking, body)) {
             boarded = true;
+            driving(level, body);
         } else {
             taking = null;
             seating = 0;
@@ -148,12 +173,47 @@ public abstract class SeatedConveyance<S> implements Conveyance {
     }
 
     private Going riding(ServerLevel level, Mob body) {
-        boarded = true;
+        driving(level, body);
         carried(level, body);
-        if (atDestination(level)) {
-            alight(level, body);
+        if (strandedAt == null) {
+            if (atDestination(level)) {
+                alight(level, body);
+                if (alighted) {
+                    return Going.UNDERWAY;
+                }
+            }
+            if (!rideWithdrawn(level) && !stalled(level, body)) {
+                return Going.UNDERWAY;
+            }
+            strandedAt = level.getGameTime();
+        }
+        Optional<BlockPos> safe = PassengerLanding.nearby(level, body);
+        if (safe.isEmpty() && level.getGameTime() - strandedAt >= PassengerLanding.PLATFORM_FALLBACK_TICKS) {
+            safe = fallbackLanding(level, body).or(() -> PassengerLanding.widerSearch(level, body));
+        }
+        if (safe.isPresent()) {
+            abandonSeat(level, body);
+            if (body.getVehicle() == null) {
+                PassengerLanding.place(body, safe.get());
+                return new Going.Failed(stranded);
+            }
         }
         return Going.UNDERWAY;
+    }
+
+    private boolean stalled(ServerLevel level, Mob body) {
+        Vec3 position = body.getVehicle().position();
+        long now = level.getGameTime();
+        if (lastProgress == null || !betweenStops(level) || lastProgress.distanceToSqr(position) >= 0.01D) {
+            lastProgress = position;
+            progressAt = now;
+        }
+        return now - progressAt >= STALLED_TICKS;
+    }
+
+    protected Optional<BlockPos> fallbackLanding(ServerLevel level, Mob body) {
+        return landingPlatform(level).flatMap(platform -> PassengerLanding.localPlatform(level, body, platform))
+            .or(() -> PassengerLanding.localPlatform(level, body, boarding));
     }
 
     private void carried(ServerLevel level, Mob body) {
@@ -188,7 +248,7 @@ public abstract class SeatedConveyance<S> implements Conveyance {
             if (body.getVehicle() != null) {
                 return;
             }
-            body.teleportTo(landing.getX() + 0.5D, landing.getY(), landing.getZ() + 0.5D);
+            PassengerLanding.place(body, landing);
             alighted = true;
         });
     }
@@ -225,7 +285,7 @@ public abstract class SeatedConveyance<S> implements Conveyance {
         if (body.getVehicle() == null) {
             return;
         }
-        if (canRelease(level)) {
+        if (boarded && strandedAt == null && canRelease(level) && atDestination(level)) {
             alight(level, body);
         }
     }

@@ -106,6 +106,9 @@ public final class LaborIncident extends Event {
         if (reason.equals(PreemptReason.CONTROLLER.name())) {
             return DebugText.tone(DebugText.text("incident.controller"), DebugText.WAIT);
         }
+        if (reason.equals(PreemptReason.WORK.name())) {
+            return DebugText.tone(DebugText.text("incident.yield_to_work"), DebugText.MUTED);
+        }
         if (reason.startsWith("folkways.")) {
             return DebugText.tone(Component.translatable(reason), DebugText.BAD);
         }

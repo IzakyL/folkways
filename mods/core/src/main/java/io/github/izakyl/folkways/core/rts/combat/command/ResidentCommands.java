@@ -11,6 +11,7 @@ import io.github.izakyl.folkways.core.resident.api.RefusalKind;
 import io.github.izakyl.folkways.core.rts.combat.net.SelectionOrders;
 import io.github.izakyl.folkways.core.work.api.Ending;
 import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.work.api.Disposition;
 import io.github.izakyl.folkways.core.work.api.Urge;
 import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.core.work.support.WorkStances;
@@ -409,7 +410,7 @@ public final class ResidentCommands {
                 order.mode == Mode.ATTACK
                     ? new AttackNode(this, order, who)
                     : new CommandNode(this, order),
-            priority(order)));
+            priority(order)).withPreemption(Disposition.END));
     }
 
     Urge.Priority priority(Order order) {

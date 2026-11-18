@@ -96,7 +96,7 @@ public final class ActionExecutor implements ActionHandle {
             return result;
         }
         if (softPreempt) {
-            // Abort an unfinished wind-up; resumption starts it again without committing partial work.
+            // Yield without committing an unfinished wind-up.
             releaseBody(context);
             return new HoldingStep.Yielded();
         }
@@ -158,11 +158,13 @@ public final class ActionExecutor implements ActionHandle {
         released = false;
         softPreempt = false;
         gestureReleased = false;
+        if (ongoing != null || !current.resumesWindup()) {
+            windup = 0;
+        }
         setOff(context);
     }
 
     private void setOff(HoldingContext context) {
-        windup = 0;
         switch (walking.start(context, services)) {
             case HoldingStep.Done ignored -> {
                 if (joining) {
@@ -186,7 +188,6 @@ public final class ActionExecutor implements ActionHandle {
     private void startWork(HoldingContext context) {
         ServerLevel level = context.level();
         Body body = context.body();
-        windup = 0;
         body.mob().getNavigation().stop();
         beats = beatsOf(level, body);
         body.clearHandPresentation();
@@ -197,7 +198,8 @@ public final class ActionExecutor implements ActionHandle {
             return;
         }
         long from = level.getGameTime();
-        body.setDoing(Doing.over(spec.doing(), from, from + windupTicks).about(spec.about()).with(current.wares()));
+        long until = from + windupTicks - windup;
+        body.setDoing(Doing.over(spec.doing(), from, until).about(spec.about()).with(current.wares()));
     }
 
     private void windUp(HoldingContext context) {
@@ -216,6 +218,7 @@ public final class ActionExecutor implements ActionHandle {
         ServerLevel level = context.level();
         Body body = context.body();
         if (current.staysAtWorkSite() && !walking.standing(body)) {
+            windup = 0;
             setOff(context);
             return;
         }

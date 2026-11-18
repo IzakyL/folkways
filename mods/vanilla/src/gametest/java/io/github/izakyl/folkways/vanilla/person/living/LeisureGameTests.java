@@ -1,12 +1,18 @@
 package io.github.izakyl.folkways.vanilla.person.living;
 
-import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.colony.api.Claim;
+import io.github.izakyl.folkways.core.colony.api.Claimed;
 import io.github.izakyl.folkways.core.colony.api.Colonies;
 import io.github.izakyl.folkways.core.colony.api.Colony;
 import io.github.izakyl.folkways.core.colony.api.ColonyView;
+import io.github.izakyl.folkways.core.colony.internal.ColonyData;
+import io.github.izakyl.folkways.core.colony.internal.ColonySnapshot;
+import io.github.izakyl.folkways.core.plan.internal.PlanningFixture;
+import io.github.izakyl.folkways.core.plan.internal.Shown;
+import io.github.izakyl.folkways.core.resident.api.Body;
 import io.github.izakyl.folkways.core.resident.api.Doing;
 import io.github.izakyl.folkways.core.resident.api.Resident;
+import io.github.izakyl.folkways.core.runtime.ColonyLabor;
 import io.github.izakyl.folkways.core.testing.TestWorker;
 import io.github.izakyl.folkways.core.work.api.Ending;
 import io.github.izakyl.folkways.core.work.api.Node;
@@ -17,13 +23,16 @@ import io.github.izakyl.folkways.core.work.api.Urge;
 import io.github.izakyl.folkways.core.work.api.WorkSite;
 import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.core.work.api.Workload;
+import io.github.izakyl.folkways.core.work.internal.BodyRunner;
 import io.github.izakyl.folkways.core.effect.Effects;
 import io.github.izakyl.folkways.core.front.engine.charter.Charter;
 import io.github.izakyl.folkways.core.front.engine.charter.Charters;
 import io.github.izakyl.folkways.vanilla.FolkwaysVanillaMod;
 import io.github.izakyl.folkways.vanilla.person.PersonBody;
+import io.github.izakyl.folkways.vanilla.person.PersonContent;
 import io.github.izakyl.folkways.vanilla.person.ResidentEntity;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
@@ -139,27 +148,51 @@ public final class LeisureGameTests {
     }
 
     @GameTest(template = "empty", templateNamespace = "folkways_core")
-    public static void recreationYieldsToWorkButAnExhaustedResidentCanTakeABreak(GameTestHelper helper) {
-        ServerLevel level = helper.getLevel();
-        Colony colony = Colonies.mint(level.getServer());
-        LivingPresence living = new LivingPresence(colony);
-        Leisure leisure = new Leisure(colony, living);
-        ResidentEntity actor = person(level, helper.absolutePos(new BlockPos(3, 2, 3)));
-        try {
-            TestWorker who = TestWorker.of(actor).effects(Effects.NONE);
-            Node queued = new Node() {
-                final NodeSpec spec = NodeSpec.of(UUID.randomUUID(), LivingContent.ID, WorkSite.on(actor), Stances.WHEREVER, Workload.Once.of(20)).done();
-                public NodeSpec spec() { return spec; }
-                public Outcome commit(ServerLevel level, Worker worker) { return Outcome.done(); }
-            };
-            who.route(List.of(queued));
-            helper.assertTrue(leisure.urge(who, colony.view(level)).isEmpty(), "normal leisure cannot take queued work's place");
-            living.mood(actor.getUUID()).leisure = 10;
-            living.mood(actor.getUUID()).nextBreak = level.getGameTime();
-            Urge urge = leisure.urge(who, colony.view(level)).orElseThrow();
-            helper.assertFalse(urge.preempts(), "short break waits for a work boundary");
-            helper.assertTrue(urge.weight() == Urge.SPARE, "low recreation may request a short break");
-        } finally { actor.discard(); leisure.clear(); colony.raze(); }
+    public static void routedWorkEndsOrdinaryLeisureForBothChatPartners(GameTestHelper helper) throws Exception {
+        for (boolean routeInitiator : List.of(true, false)) {
+            try (RoutedLeisure h = new RoutedLeisure(helper, true)) {
+                seedChoice(h.level, 0);
+                h.interrupt(h.actor, h.runner);
+                h.interrupt(h.peer, h.partner);
+                helper.assertValueEqual(h.runner.interruptedWork().orElseThrow().spec().doing().getPath(),
+                    "chatting", "the first resident starts a conversation");
+                helper.assertValueEqual(h.partner.interruptedWork().orElseThrow().spec().doing().getPath(),
+                    "chatting", "the invited resident joins the same conversation");
+
+                ResidentEntity leaving = routeInitiator ? h.actor : h.peer;
+                ResidentEntity staying = routeInitiator ? h.peer : h.actor;
+                BodyRunner worker = routeInitiator ? h.runner : h.partner;
+                BodyRunner other = routeInitiator ? h.partner : h.runner;
+                Node job = h.queue(leaving, worker);
+                h.interrupt(leaving, worker);
+                helper.assertTrue(worker.softPreempt().isPresent(), "leisure has a chance to yield softly");
+                h.labor.tick(worker, h.level, leaving);
+                helper.assertValueEqual(worker.holding().orElseThrow(), job.id(), "the resident leaves for work");
+                h.interrupt(staying, other);
+                helper.assertTrue(other.ownUrge().isEmpty(), "the shared chat ends for the other resident too");
+            }
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty", templateNamespace = "folkways_core")
+    public static void routedWorkDoesNotInterruptARestBreak(GameTestHelper helper) throws Exception {
+        try (RoutedLeisure h = new RoutedLeisure(helper, false)) {
+            LivingPresence living = h.colony.service(LivingContent.ID, LivingPresence.class).orElseThrow();
+            living.mood(h.actor.id()).leisure = 10;
+            living.mood(h.actor.id()).nextBreak = h.level.getGameTime();
+            Node job = h.queue(h.actor, h.runner);
+            h.interrupt(h.actor, h.runner);
+            helper.assertValueEqual(h.runner.ownUrge().orElseThrow(), Leisure.URGE,
+                "the exhausted resident takes a break with ready work on the route");
+            Node breakActivity = h.runner.interruptedWork().orElseThrow();
+            h.interrupt(h.actor, h.runner);
+            h.labor.tick(h.runner, h.level, h.actor);
+            helper.assertTrue(h.runner.softPreempt().isEmpty(), "routed work does not preempt the break");
+            helper.assertValueEqual(h.runner.interruptedWork().orElseThrow().id(), breakActivity.id(),
+                "the same break is still running");
+            helper.assertValueEqual(h.runner.queued(), List.of(job.id()), "work stays queued for after the break");
+        }
         helper.succeed();
     }
 
@@ -188,6 +221,7 @@ public final class LeisureGameTests {
             Node initiating = leisure.urge(one, view).orElseThrow().take().get();
             Node invited = leisure.urge(two, view).orElseThrow().take().get();
             helper.assertTrue(initiating.spec().doing().getPath().equals("chatting"), "conversation chosen");
+            first.setDoing(Doing.heading(initiating.spec().doing(), Optional.empty(), Doing.Wares.NONE));
             double before = living.mood(second.getUUID()).leisure;
             helper.assertTrue(((Workload.Continuous) invited.spec().workload()).holds(level, two), "invited partner waits for approach from six blocks away");
             helper.assertTrue(living.mood(second.getUUID()).leisure == before, "waiting alone gives no social reward");
@@ -207,6 +241,68 @@ public final class LeisureGameTests {
             first.clearDoing(); second.clearDoing();
         } finally { first.discard(); second.discard(); leisure.clear(); colony.raze(); }
         helper.succeed();
+    }
+
+    private static final class RoutedLeisure implements AutoCloseable {
+        final ServerLevel level;
+        final Colony colony;
+        final ColonyLabor labor;
+        final ColonyView view;
+        final ResidentEntity actor, peer;
+        final BodyRunner runner, partner;
+
+        RoutedLeisure(GameTestHelper helper, boolean chat) {
+            level = helper.getLevel();
+            colony = Colonies.mint(level.getServer());
+            ColonyData data = ColonyData.find(level.getServer(), colony.id()).orElseThrow();
+            labor = new ColonyLabor(data, level.dimension());
+            BlockPos at = helper.absolutePos(new BlockPos(3, 2, 3));
+            for (BlockPos floor : BlockPos.betweenClosed(at.offset(-2, -1, -2), at.offset(4, -1, 2))) {
+                level.setBlockAndUpdate(floor, Blocks.STONE.defaultBlockState());
+            }
+            actor = person(level, at);
+            runner = enroll(actor);
+            peer = chat ? person(level, at.east(2)) : null;
+            partner = chat ? enroll(peer) : null;
+            view = ColonySnapshot.of(data, level);
+        }
+
+        BodyRunner enroll(ResidentEntity person) {
+            colony.hold(PersonContent.ID, Claimed.Entity.of(person)).orElseThrow();
+            person.joinColony(colony.id());
+            return new BodyRunner(person.id(), labor.execution());
+        }
+
+        void interrupt(ResidentEntity person, BodyRunner runner) throws ReflectiveOperationException {
+            var method = ColonyLabor.class.getDeclaredMethod("interrupt", ServerLevel.class, ColonyView.class,
+                Body.class, BodyRunner.class);
+            method.setAccessible(true);
+            method.invoke(labor, level, view, person, runner);
+        }
+
+        Node queue(ResidentEntity person, BodyRunner runner) {
+            Node job = new Node() {
+                final NodeSpec spec = NodeSpec.of(UUID.randomUUID(), LivingContent.ID, WorkSite.on(person),
+                    Stances.WHEREVER, Workload.Once.of(1000)).done();
+                public NodeSpec spec() { return spec; }
+                public Outcome commit(ServerLevel level, Worker worker) { return Outcome.done(); }
+            };
+            PlanningFixture.apply(labor, level, List.of(), Shown.delta(job));
+            runner.follow(List.of(job.id()));
+            return job;
+        }
+
+        @Override
+        public void close() {
+            runner.letGo(level, actor);
+            actor.discard();
+            if (partner != null) {
+                partner.letGo(level, peer);
+                peer.discard();
+            }
+            labor.close();
+            colony.raze();
+        }
     }
 
     private static void seedChoice(ServerLevel level, int choice) {

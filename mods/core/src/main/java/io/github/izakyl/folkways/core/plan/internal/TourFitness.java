@@ -71,6 +71,9 @@ final class TourFitness {
         Set<UUID> bound = new LinkedHashSet<>();
         List<NodeSpec> steps = new ArrayList<>();
         for (UUID member : weave.group(id)) {
+            if (hand.personalOnly() && weave.vertex(member).node().worker().filter(hand.id()::equals).isEmpty()) {
+                return Unassigned.Reason.NO_FREE_HAND;
+            }
             UUID pinned = requiredWorker(member);
             if (pinned != null) {
                 bound.add(pinned);

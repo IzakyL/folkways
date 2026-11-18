@@ -17,6 +17,7 @@ import io.github.izakyl.folkways.core.resident.api.Body;
 import io.github.izakyl.folkways.core.rts.api.VehicleCrewCommands;
 import io.github.izakyl.folkways.core.vocation.api.VocationSpec;
 import io.github.izakyl.folkways.core.vocation.api.Vocations;
+import io.github.izakyl.folkways.core.work.api.Disposition;
 import io.github.izakyl.folkways.core.work.api.Urge;
 import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
@@ -99,7 +100,7 @@ public final class WarfareVehicles implements Vehicles.Provider {
         ResourceLocation intent = ID.withPath(ID.getPath() + "/" + vehicle.getUUID() + "/" + seat + "/" + aboard);
         // Crew cannot run ordinary routes while their seat duty keeps preempting them.
         return List.of(new Urge(intent, Urge.DIRE, true,
-            () -> new VehicleSeatDuty(vehicle, who, seat, aboard), Urge.Priority.CONTROL).asUrgent(), Urge.reserve(ID));
+            () -> new VehicleSeatDuty(vehicle, who, seat, aboard), Urge.Priority.CONTROL).withPreemption(Disposition.END).asUrgent(), Urge.reserve(ID));
     }
 
     @Override

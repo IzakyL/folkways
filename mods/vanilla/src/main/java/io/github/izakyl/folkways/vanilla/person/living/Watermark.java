@@ -34,11 +34,20 @@ final class Watermark {
     }
 
     boolean holds(UUID who, int reserve) {
+        return holds(who, reserve, holdAt);
+    }
+
+    // A mark that moves with the hour; once engaged, only restoration lets go.
+    boolean holds(UUID who, int reserve, int hold) {
+        if (hold < urgentAt || hold >= restoreTo) {
+            throw new IllegalArgumentException("a moving hold reads " + urgentAt + " <= hold < " + restoreTo
+                + ", not " + hold);
+        }
         if (reserve >= restoreTo) {
             engaged.remove(who);
             return false;
         }
-        if (reserve <= holdAt) {
+        if (reserve <= hold) {
             engaged.add(who);
             return true;
         }
