@@ -184,7 +184,7 @@ jobs:
           path: tests/out/
           if-no-files-found: warn
   nightly:
-    # Every push to master replaces the "nightly" prerelease with that commit's jars.
+    # Every push to master replaces the "nightly" release (marked Latest so it leads the repo page) with that commit's jars.
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     needs: [build, game-tests, client-smoke]
     runs-on: ubuntu-24.04
@@ -217,6 +217,6 @@ jobs:
           RTS commands and squads are included in **folkways-core**.
           All Folkways jars must come from the same build. Saves from releases and earlier nightlies upgrade automatically.
           EOF
-          gh release create nightly jars/*.jar --prerelease --target "$GITHUB_SHA" \
+          gh release create nightly jars/*.jar --latest --target "$GITHUB_SHA" \
             --title "Nightly build" \
             --notes-file notes.md
