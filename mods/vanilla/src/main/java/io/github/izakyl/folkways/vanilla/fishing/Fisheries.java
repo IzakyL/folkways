@@ -1,7 +1,7 @@
 package io.github.izakyl.folkways.vanilla.fishing;
 
 import io.github.izakyl.folkways.core.colony.api.ColonyView;
-import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.world.api.Stances;
 import io.github.izakyl.folkways.core.world.api.Footing;
 import io.github.izakyl.folkways.core.world.api.Reach;
 import io.github.izakyl.folkways.core.world.api.WorldPos;

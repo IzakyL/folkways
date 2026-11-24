@@ -2,6 +2,7 @@
 /mods/*/.gradle/
 /build/
 /mods/*/build/
+/libs/*/build/
 /out/
 /classes/
 
@@ -44,3 +45,6 @@ tests/promo/models/.prepare-*/
 javac.*.args
 
 test-results/
+
+# Local secrets for opt-in live tests
+.env

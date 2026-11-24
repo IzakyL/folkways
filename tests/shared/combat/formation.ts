@@ -29,8 +29,8 @@ const IMPORTS = [
   "io.github.izakyl.folkways.vanilla.person.PersonContent", "io.github.izakyl.folkways.vanilla.person.ResidentEntity",
   "io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutProfiles", "io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutProfile",
   "io.github.izakyl.folkways.core.item.api.ItemSpec", "net.neoforged.neoforge.common.Tags",
-  "io.github.izakyl.folkways.core.rts.combat.command.ResidentCommands",
-  "io.github.izakyl.folkways.core.rts.combat.group.UnitGroups", "io.github.izakyl.folkways.core.rts.combat.group.Deployment",
+  "io.github.izakyl.folkways.core.command.combat.command.ResidentCommands",
+  "io.github.izakyl.folkways.core.command.combat.group.UnitGroups", "io.github.izakyl.folkways.core.command.combat.group.Deployment",
 ];
 
 /**

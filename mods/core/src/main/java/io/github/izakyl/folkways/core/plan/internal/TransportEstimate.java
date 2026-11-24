@@ -108,7 +108,7 @@ public final class TransportEstimate {
             var offering = entry.offering();
             complete &= offering.complete();
             for (TransportLink link : offering.mode().links(query, offering.snapshot())) {
-                if (excluded.contains(new Connection(offering.mode().id(), link)) || !handsOver(link)) {
+                if (excluded.contains(new Connection(offering.mode().id(), link)) || !handsOver(link, query.from())) {
                     continue;
                 }
                 if (!link.accepts().isEmpty() && link.accepts().stream()
@@ -169,8 +169,9 @@ public final class TransportEstimate {
     }
 
     // A trunk hands goods over through its own nodes. Only a request may end with goods kept in a store.
-    private static boolean handsOver(TransportLink link) {
-        return link.from().handover().form() == TransportEndpoint.Form.PACK
+    private static boolean handsOver(TransportLink link, TransportEndpoint source) {
+        return (link.from().handover().form() == TransportEndpoint.Form.PACK
+                || !link.loading() && link.from().equals(source))
             && link.to().handover().form() == TransportEndpoint.Form.PACK;
     }
 

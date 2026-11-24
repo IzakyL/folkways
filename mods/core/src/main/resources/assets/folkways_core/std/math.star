@@ -1,0 +1,12 @@
+math = _math
+pi = math.pi
+sqrt = math.sqrt
+sin = math.sin
+cos = math.cos
+tan = math.tan
+atan2 = math.atan2
+floor = math.floor
+ceil = math.ceil
+round = math.round
+clamp = math.clamp
+dist = math.dist

@@ -9,7 +9,7 @@ import io.github.izakyl.folkways.core.travel.internal.PathfindingLoad;
 import io.github.izakyl.folkways.core.travel.internal.TickBudget;
 import io.github.izakyl.folkways.core.travel.internal.Urgency;
 import io.github.izakyl.folkways.core.travel.internal.Ways;
-import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.world.api.Stances;
 import io.github.izakyl.folkways.core.world.api.Closures;
 import io.github.izakyl.folkways.core.world.api.Realm;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
@@ -823,9 +823,7 @@ public final class Roaming {
     private Waypoints net(Sort sort, Realm realm) {
         return nets.computeIfAbsent(new Tract(sort, realm), tract -> {
             Waypoints fresh = new Waypoints();
-            if (realm.equals(home)) {
-                closed.forEach(one -> fresh.closeOff(one.box()));
-            }
+            closed.stream().filter(one -> one.realm().equals(realm)).forEach(one -> fresh.closeOff(one.box()));
             return fresh;
         });
     }
@@ -844,7 +842,7 @@ public final class Roaming {
         for (Closures.Closed one : now) {
             if (absent(closed, one)) {
                 nets.forEach((tract, net) -> {
-                    if (tract.realm().equals(home)) {
+                    if (tract.realm().equals(one.realm())) {
                         net.closeOff(one.box());
                     }
                 });
@@ -853,7 +851,7 @@ public final class Roaming {
         for (Closures.Closed one : closed) {
             if (absent(now, one)) {
                 nets.forEach((tract, net) -> {
-                    if (tract.realm().equals(home)) {
+                    if (tract.realm().equals(one.realm())) {
                         net.reopen(one.box());
                     }
                 });

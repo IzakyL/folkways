@@ -4,7 +4,7 @@ import com.lowdragmc.lowdraglib2.gui.LDLibFonts;
 import com.lowdragmc.lowdraglib2.gui.texture.IGuiTexture;
 import com.lowdragmc.lowdraglib2.gui.texture.TransformTexture;
 import com.lowdragmc.lowdraglib2.gui.ui.UIElement;
-import io.github.izakyl.folkways.core.front.api.notice.Sentence;
+import io.github.izakyl.folkways.core.card.api.notice.Sentence;
 import java.util.List;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;

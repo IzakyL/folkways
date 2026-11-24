@@ -18,8 +18,8 @@ dependencyResolutionManagement {
 rootProject.name = "folkways"
 
 // Each Folkways mod is a project of its own under mods/; the root runs them together for the game tests.
-["core", "vanilla", "create", "golems", "cookery", "firearms",
-    "carving", "carts", "airline", "epicfight"].each { name ->
+["core", "vanilla",
+    "airline", "assistant"].each { name ->
     include ":${name}"
     project(":${name}").projectDir = file("mods/${name}")
 }
@@ -27,3 +27,11 @@ rootProject.name = "folkways"
 // Client fixture used only by the offscreen combat promo profile.
 include ":capture"
 project(":capture").projectDir = file("tests/promo/capture")
+
+// Pure Java facility solvers.
+include ":solve"
+project(":solve").projectDir = file("libs/solve")
+
+// The pinned Starlark evaluator with allocation checks at its interpreter boundary.
+include ":starlarkRuntime"
+project(":starlarkRuntime").projectDir = file("libs/starlark-runtime")

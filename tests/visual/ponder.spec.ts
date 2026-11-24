@@ -41,14 +41,14 @@ for (const capture of [
     expect(folders.flatMap(folder => folder.scenes).includes("folkways_vanilla:dining")).toBe(dining);
     expect(await client.run(PONDER_DINING)).toEqual({ lesson: dining, indexed: dining, playback: dining });
     const scenes = folders.flatMap(folder => folder.scenes.filter(id =>
-      profile === "base" || folder.id === "folkways_cookery:cookery" || id === "folkways_vanilla:dining"));
+      profile === "base" || folder.id === "folkways_vanilla:cookery" || id === "folkways_vanilla:dining"));
     expect(scenes.length).toBeGreaterThan(0);
     if (profile !== "base") {
-      expect(scenes).toEqual(expect.arrayContaining(["folkways_cookery:tavern", "folkways_cookery:cookery_pots", "folkways_vanilla:dining"]));
+      expect(scenes).toEqual(expect.arrayContaining(["folkways_vanilla:tavern", "folkways_vanilla:cookery_pots", "folkways_vanilla:dining"]));
     }
     const selected = scenes.filter(id => scale === 3 ? id === "folkways_vanilla:farming"
       : locale === "zh_cn" ? ["folkways_vanilla:housing", "folkways_vanilla:dining", "folkways_vanilla:household"].includes(id) : true)
-      .filter(id => !only || only.includes(id.replace(/^folkways_vanilla:/, "")));
+      .filter(id => !only || only.includes(id.split(":")[1]));
     test.skip(only !== undefined && selected.length === 0, `none of ${process.env.PONDER_SCENES} in this capture`);
     expect(selected.length).toBeGreaterThan(0);
     if (locale === "zh_cn" && !only) {
@@ -63,8 +63,9 @@ for (const capture of [
     }
     const english = ponderCatalog("en_us");
     const translated = ponderCatalog(locale);
+    const lessons: Array<{ run: VisualRun; id: string; name: string; total: number; shots: string[] }> = [];
     for (const id of selected) {
-      const name = id.split(":")[1];
+      const [namespace, name] = id.split(":");
       const run = new VisualRun(`${scope}-${name}`);
       run.note("declared_folders", folders);
       await client.run(OPEN_PONDER, { id });
@@ -73,35 +74,40 @@ for (const capture of [
       expect(scene.id).toBe(id);
       expect(scene.keyframes.length).toBeGreaterThan(0);
       await input.move(client, { x: 0, y: 0 });
-      await run.clip(client, server, name, {
-        subject: `Ponder ${id}: the complete lesson (${locale}, GUI scale ${scale})`,
-        worldState: { id, locale, scale, total: scene.total }, seconds: Math.max(75, scene.total / 20 + 3), fps: 20,
-        during: async () => {
-          await client.run(OPEN_PONDER, { id });
-          await frames(client, 5);
-          expect((await client.run(READ_PONDER, { seek: -1 })).id).toBe(id);
-        },
-      });
       const keyframes = [];
       for (const [index, time] of scene.keyframes.entries()) {
         await client.run(READ_PONDER, { seek: Math.min(time + 35, scene.total - 1) });
         await frames(client, 5);
         const shown = await client.run(READ_PONDER, { seek: -1 });
         expect(shown.id).toBe(id);
-        expect(shown.text.join("\n")).not.toMatch(/Format error|folkways\.ponder\./);
-        const textKeys = Object.keys(translated).filter(key => key.startsWith(`folkways.ponder.${name}.text_`)
-          && shown.text.includes(translated[key]));
+        expect(shown.text.join("\n")).not.toMatch(/Format error|folkways(?:_\w+)?\.ponder\./);
+        const textKeys = Object.keys(translated).filter(key => key.startsWith(`${namespace}.ponder.${name}.text_`)
+          && typeof english[key] === "string" && shown.text.includes(translated[key].replaceAll("%%", "%")));
         expect(shown.text.length, `${id} keyframe ${index + 1} must show its text`).toBeGreaterThan(0);
         expect(textKeys.length, `${id} keyframe ${index + 1} needs matching English text`).toBeGreaterThan(0);
         const filename = `${String(index + 1).padStart(2, "0")}-keyframe`;
         const frame = { keyframe: index + 1, time, capturedTime: shown.time, text: shown.text,
-          english: textKeys.map(key => english[key]), textKeys };
+          english: textKeys.map(key => english[key].replaceAll("%%", "%")), textKeys };
         keyframes.push(frame);
         await run.shot(client, filename, { subject: frame.english.join("\n"),
           worldState: frame, hard: true });
         run.note("frames", keyframes);
       }
-      run.expectTaken([name, ...scene.keyframes.map((_, index) => `${String(index + 1).padStart(2, "0")}-keyframe`)]);
+      lessons.push({ run, id, name, total: scene.total, shots: keyframes.map(frame =>
+        `${String(frame.keyframe).padStart(2, "0")}-keyframe`) });
+    }
+    // Check every caption before starting the real-time recordings.
+    for (const { run, id, name, total, shots } of lessons) {
+      await run.clip(client, server, name, {
+        subject: `Ponder ${id}: the complete lesson (${locale}, GUI scale ${scale})`,
+        worldState: { id, locale, scale, total }, seconds: Math.max(75, total / 20 + 3), fps: 20,
+        during: async () => {
+          await client.run(OPEN_PONDER, { id });
+          await frames(client, 5);
+          expect((await client.run(READ_PONDER, { seek: -1 })).id).toBe(id);
+        },
+      });
+      run.expectTaken([name, ...shots]);
     }
   } catch (error) {
     pair?.failing(error); throw error;

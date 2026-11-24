@@ -1,0 +1,38 @@
+plugins {
+    id "net.neoforged.moddev"
+    id "java-library"
+    id "maven-publish"
+}
+
+ext.modId = "folkways_assistant"
+ext.modName = "folkways-assistant"
+apply from: rootProject.file("gradle/mod.gradle")
+evaluationDependsOn(":vanilla")
+evaluationDependsOn(":core")
+
+repositories {
+    maven {
+        url = "https://jitpack.io"
+        content {
+            includeGroup "com.github.IzakyL.jpi-mini"
+        }
+    }
+}
+
+dependencies {
+    api project(":core")
+    jarJar(implementation("com.github.IzakyL.jpi-mini:jpi-mini-mc")) {
+        version {
+            strictly "[0.1.0,0.2.0)"
+            prefer "0.1.0"
+        }
+        transitive = false
+    }
+    gametestCompileOnly lib("create")
+    gametestCompileOnly("net.createmod.ponder:ponder-neoforge:${project.ponder_version}") {
+        transitive = false
+    }
+    gametestImplementation project(":vanilla")
+    gametestImplementation project(":vanilla").sourceSets.gameTestFixtures.output
+    gametestImplementation project(":vanilla").sourceSets.vanillaGameTestFixtures.output
+}

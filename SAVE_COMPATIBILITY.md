@@ -54,8 +54,9 @@ missing-field fallback, version check or old-format test, and no `DataVersion` i
    owning module's `upgrade` package, working on raw NBT with literal keys, and register it.
    When several modules change the same surface at one version, register named fragments with
    `Upgrades.part`; keeps-only changes can use `KeepSteps.bag`.
-3. Verify once by loading a save written by the current `origin/master` and re-saving it. Do not commit
-   sample saves or migration regression tests.
+3. Verify once by loading a save written by the current `origin/master` and re-saving it. The dedicated
+   [release upgrade fixture](CONTRIBUTING.md#validation) is the exception to keeping sample saves
+   and migration regression tests out of the repository.
 4. Run `./gradlew --offline check` and the affected modules' GameTests.
 
 Steps on master are frozen: fix mistakes with a new version and step. `checkDataUpgrades` (part of

@@ -206,6 +206,40 @@ public final class ColonySettings implements Settings {
         };
     }
 
+    /** The settings as facility parameters: a flag a bool, a count a number, a choice its id as text. */
+    public Map<String, io.github.izakyl.folkways.core.facility.api.control.Value> parameters() {
+        Map<String, io.github.izakyl.folkways.core.facility.api.control.Value> parameters = new LinkedHashMap<>();
+        byKey.forEach((key, value) -> parameters.put(key, switch (value) {
+            case Value.Flag flag -> io.github.izakyl.folkways.core.facility.api.control.Value.of(flag.value());
+            case Value.Count count -> io.github.izakyl.folkways.core.facility.api.control.Value.of(count.value());
+            case Value.Choice choice ->
+                new io.github.izakyl.folkways.core.facility.api.control.Value.Text(choice.value().toString());
+            case Value.Items items -> new io.github.izakyl.folkways.core.facility.api.control.Value.Items(items.value());
+        }));
+        return parameters;
+    }
+
+    /** Settings from facility parameters; a value no setting can hold is left out. */
+    public static ColonySettings ofParameters(Map<String, io.github.izakyl.folkways.core.facility.api.control.Value> parameters) {
+        Map<String, Value> values = new LinkedHashMap<>();
+        parameters.forEach((key, value) -> {
+            switch (value) {
+                case io.github.izakyl.folkways.core.facility.api.control.Value.Bool bool ->
+                    values.put(key, new Value.Flag(bool.on()));
+                case io.github.izakyl.folkways.core.facility.api.control.Value.Real real ->
+                    values.put(key, new Value.Count((int) Math.round(real.value())));
+                case io.github.izakyl.folkways.core.facility.api.control.Value.Text text ->
+                    Optional.ofNullable(ResourceLocation.tryParse(text.value()))
+                        .ifPresent(id -> values.put(key, new Value.Choice(id)));
+                case io.github.izakyl.folkways.core.facility.api.control.Value.Items items ->
+                    values.put(key, new Value.Items(items.filters()));
+                default -> {
+                }
+            }
+        });
+        return new ColonySettings(values);
+    }
+
     @Override
     public boolean equals(Object other) {
         return other instanceof ColonySettings settings && byKey.equals(settings.byKey);

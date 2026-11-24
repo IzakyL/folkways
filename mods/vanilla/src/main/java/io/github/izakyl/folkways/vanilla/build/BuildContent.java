@@ -1,6 +1,14 @@
 package io.github.izakyl.folkways.vanilla.build;
 
+import io.github.izakyl.folkways.core.effect.Modifier;
+import io.github.izakyl.folkways.core.effect.Scope;
+import io.github.izakyl.folkways.core.effect.Stats;
+import io.github.izakyl.folkways.core.effect.perk.Perk;
 import io.github.izakyl.folkways.core.extension.api.Declaring;
+import io.github.izakyl.folkways.core.facility.api.Operations;
+import io.github.izakyl.folkways.core.front.api.Enrollment;
+import io.github.izakyl.folkways.core.front.api.Registering;
+import io.github.izakyl.folkways.core.front.api.Schema;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import io.github.izakyl.folkways.core.vocation.api.Vocation;
 import io.github.izakyl.folkways.core.vocation.api.VocationGroup;
@@ -8,15 +16,6 @@ import io.github.izakyl.folkways.core.vocation.api.VocationSpec;
 import io.github.izakyl.folkways.core.vocation.api.Vocations;
 import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.core.work.api.Workload;
-import io.github.izakyl.folkways.core.effect.Modifier;
-import io.github.izakyl.folkways.core.effect.Scope;
-import io.github.izakyl.folkways.core.effect.Stats;
-import io.github.izakyl.folkways.core.effect.perk.Perk;
-import io.github.izakyl.folkways.core.front.api.Enrollment;
-import io.github.izakyl.folkways.core.front.api.Facing;
-import io.github.izakyl.folkways.core.front.api.Registering;
-import io.github.izakyl.folkways.core.front.api.Schema;
-import io.github.izakyl.folkways.core.front.api.panel.PageKind;
 import io.github.izakyl.folkways.vanilla.FolkwaysVanillaConfig;
 import java.util.List;
 import java.util.Optional;
@@ -36,13 +35,6 @@ public final class BuildContent {
         ResourceLocation.fromNamespaceAndPath("folkways_vanilla", "building");
 
     public static final String QUICK_HANDS = "building_quick_hands";
-
-    static final PageKind PAGE = PageKind.boarded(ID, "folkways.page.build",
-        ResourceLocation.withDefaultNamespace("bricks")).tools(VOCATION);
-
-    static final PageKind BLUEPRINTS = PageKind.boarded(
-        ResourceLocation.fromNamespaceAndPath("folkways_vanilla", "blueprints"),
-        "folkways.tab.blueprints", ResourceLocation.withDefaultNamespace("map"));
 
     private static final VocationSpec SPEC =
         new VocationSpec(VOCATION, List.of(
@@ -75,9 +67,12 @@ public final class BuildContent {
     }
 
     public static void enroll(Registering registering) {
-        registering.facing(ID, colony -> colony.service(ID, BuildPresence.class)
-            .map(value -> (Facing) value));
-        registering.enrollment(ID, new Enrollment(List.of(), Schema.none(), List.of(PAGE, BLUEPRINTS)));
+        registering.ghostSource(ID, colony -> colony.service(ID, BuildPresence.class).map(value -> value));
+        Operations.register((colony, id) -> colony.service(ID, BuildPresence.class)
+            .flatMap(presence -> presence.operation(id)));
+        Operations.listing(colony -> colony.service(ID, BuildPresence.class)
+            .map(BuildPresence::operations).orElseGet(List::of));
+        registering.enrollment(ID, new Enrollment(List.of(), Schema.none()));
     }
 
     public static Vocation trade() {

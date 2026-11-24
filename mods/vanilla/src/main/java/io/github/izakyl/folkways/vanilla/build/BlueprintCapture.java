@@ -1,5 +1,6 @@
 package io.github.izakyl.folkways.vanilla.build;
 
+import io.github.izakyl.folkways.core.work.api.SchematicPrinter;
 import io.github.izakyl.folkways.core.work.api.StructureCompat;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -48,7 +49,7 @@ public final class BlueprintCapture {
                 BlockEntity entity = level.getBlockEntity(pos);
                 if (entity != null) {
                     CompoundTag data = StructureCompat.of(state).map(handler -> handler.capture(entity))
-                        .orElseGet(() -> SchematicPlacement.adapter().prepare(level, state, entity));
+                        .orElseGet(() -> SchematicPrinter.adapter().prepare(level, state, entity));
                     if (data != null && !data.isEmpty()) {
                         cell.put("nbt", StructureCompat.tagged(state, data).tag());
                     }

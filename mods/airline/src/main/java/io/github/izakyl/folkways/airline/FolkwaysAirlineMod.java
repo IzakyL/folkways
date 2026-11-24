@@ -3,7 +3,6 @@ package io.github.izakyl.folkways.airline;
 import io.github.izakyl.folkways.core.combat.api.AirportTraffic;
 import io.github.izakyl.folkways.core.combat.api.LandingSites;
 import io.github.izakyl.folkways.core.front.api.Registering;
-import io.github.izakyl.folkways.core.front.api.ui.RegisteringUi;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
@@ -21,7 +20,6 @@ public final class FolkwaysAirlineMod {
         NeoForge.EVENT_BUS.addListener(AirTraffic::unload);
         NeoForge.EVENT_BUS.addListener(AirTraffic::stop);
         bus.addListener(Registering.class, AirportColony::enroll);
-        bus.addListener(RegisteringUi.class, event -> event.page(AirportColony.ID, AirportPage::new));
         NeoForge.EVENT_BUS.addListener(Airports::tick);
         NeoForge.EVENT_BUS.addListener(Airports::stopped);
     }

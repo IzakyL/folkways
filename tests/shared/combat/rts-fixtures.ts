@@ -42,7 +42,7 @@ export const READ_CLIENT = defineTask<void, ClientState>({
   name: "folkways.combat-rts-input.observe-client-and-rendered-hits", side: "client",
   source: javaTask({
     imports: ["java.util.List", "java.util.Map", "java.util.Set", "java.util.LinkedHashMap", "java.util.ArrayList",
-      "io.github.izakyl.folkways.core.front.api.ui.OverheadTools", "io.github.izakyl.folkways.core.rts.combat.net.CombatPackets"],
+      "io.github.izakyl.folkways.core.front.api.ui.OverheadTools", "io.github.izakyl.folkways.core.command.combat.net.CombatPackets"],
     body: `
 var out=new LinkedHashMap<String,Object>();var control=CombatPackets.controls().orElse(null);var route=CombatPackets.route().orElse(null);var state=CombatPackets.state();
 var gui = net.minecraft.client.Minecraft.getInstance().gui;
@@ -86,14 +86,13 @@ if(combat){
   var pending=type.getDeclaredField("pendingReplacement");pending.setAccessible(true);out.put("replacementPending",pending.get(handler)!=null);
   var cardsField=type.getDeclaredField("cards");cardsField.setAccessible(true);var cards=cardsField.get(handler);
   var hitsField=cards.getClass().getDeclaredField("hits");hitsField.setAccessible(true);var buttons=new ArrayList<Map<String,Object>>();
-  var pressed = cards.getClass().getDeclaredField("PRESSED");pressed.setAccessible(true);
-  var normal = cards.getClass().getDeclaredField("BUTTON");normal.setAccessible(true);
   for(var hit:(List<?>)hitsField.get(cards)){
-    var row=new LinkedHashMap<String,Object>();row.put("kind","GROUP");
+    var row=new LinkedHashMap<String,Object>();
+    var bind = hit.getClass().getDeclaredMethod("bind");bind.setAccessible(true);
+    row.put("kind",(Boolean) bind.invoke(hit) ? "BIND" : "GROUP");
     var slot = hit.getClass().getDeclaredMethod("slot");slot.setAccessible(true);row.put("slot",slot.invoke(hit));
     row.put("resident", "null");
-    var texture = hit.getClass().getDeclaredMethod("texture");texture.setAccessible(true);
-    var drawn = texture.invoke(hit);row.put("texture",drawn == pressed.get(null) ? "pressed" : drawn == normal.get(null) ? "normal" : "hover");
+    var texture = hit.getClass().getDeclaredMethod("state");texture.setAccessible(true);row.put("texture",texture.invoke(hit));
     for(var field:List.of("x","y","width","height")){var accessor=hit.getClass().getDeclaredMethod(field);accessor.setAccessible(true);row.put(field,accessor.invoke(hit));}buttons.add(row);
   }out.put("buttons",buttons);
 }return out;`,
@@ -105,7 +104,7 @@ export const PROJECT = defineTask<Vec & { entity: string }, Pixel>({
   source: javaTask({
     imports: ["java.util.Map", "java.util.Optional", "java.util.UUID", "net.minecraft.client.Minecraft", "net.minecraft.world.phys.Vec3", "net.minecraft.world.phys.AABB"],
     body: `
-var a=Args.of(ctx);var mc=Minecraft.getInstance();var type=Class.forName("io.github.izakyl.folkways.core.rts.client.CombatProjection");
+var a=Args.of(ctx);var mc=Minecraft.getInstance();var type=Class.forName("io.github.izakyl.folkways.core.command.client.CombatProjection");
 var constructor=type.getDeclaredConstructor(Minecraft.class);constructor.setAccessible(true);var projection=constructor.newInstance(mc);
 double left,top,right,bottom;
 if(!a.string("entity").isEmpty()){

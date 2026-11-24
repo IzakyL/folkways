@@ -7,15 +7,21 @@ plugins {
 def modProjects = [
     folkways_core: ":core",
     folkways_vanilla: ":vanilla",
-    folkways_create: ":create",
-    folkways_golems: ":golems",
-    folkways_cookery: ":cookery",
-    folkways_carving: ":carving",
-    folkways_firearms: ":firearms",
-    folkways_carts: ":carts",
     folkways_airline: ":airline",
-    folkways_epicfight: ":epicfight",
+    folkways_assistant: ":assistant",
 ]
+modProjects.values().each { path ->
+    project(path).plugins.withId("java") {
+        def mod = project(path)
+        mod.sourceSets.configureEach { sources ->
+            if (sources.name != "main") {
+                def directory = rootProject.file("tests/gametest/${mod.name}/${sources.name}")
+                sources.java.setSrcDirs([new File(directory, "java")])
+                sources.resources.setSrcDirs([new File(directory, "resources")])
+            }
+        }
+    }
+}
 modProjects.values().each { evaluationDependsOn(it) }
 
 // Optional integrations enter the test server only when their fixtures are requested.
@@ -24,15 +30,26 @@ def gameTestMod = providers.gradleProperty("gameTestMod").getOrElse("")
 def testSwitch = { String name, String owner = null ->
     providers.gradleProperty(name).map { it.toBoolean() }.getOrElse(owner != null && gameTestMod == owner)
 }
-def modularGolemsTests = testSwitch("modularGolemsTests", "golems")
-def cartsTests = testSwitch("cartsTests", "carts")
+def saveUpgradeTests = testSwitch("saveUpgradeTests")
+def modularGolemsTests = testSwitch("modularGolemsTests")
+def cartsTests = testSwitch("cartsTests")
+def cbcTests = testSwitch("cbcTests")
+if (cbcTests && gameTestMod != "core") {
+    throw new GradleException("CBC GameTests require -PgameTestMod=core")
+}
+def letItWalkTests = testSwitch("letItWalkTests")
+if (letItWalkTests && gameTestMod != "core") {
+    throw new GradleException("Let it Walk! GameTests require -PgameTestMod=core")
+}
+def createTests = testSwitch("createTests")
 def firefightingTests = testSwitch("firefightingTests")
 def airlineTests = testSwitch("airlineTests", "airline")
-def epicfightTests = testSwitch("epicfightTests", "epicfight")
-def cookeryTests = testSwitch("cookeryTests", "cookery")
+def epicfightTests = testSwitch("epicfightTests")
+def cookeryTests = testSwitch("cookeryTests")
+def sableTests = testSwitch("sableTests")
 def warfareTests = testSwitch("warfareTests")
 def taczTests = testSwitch("taczTests")
-def chiselsTests = testSwitch("chiselsTests", "carving")
+def chiselsTests = testSwitch("chiselsTests")
 def createPlacementTests = testSwitch("createPlacementTests")
 def tavernTests = testSwitch("tavernTests")
 if (tavernTests && !cookeryTests) {
@@ -74,22 +91,22 @@ def storageProfiles = [sophisticatedStorage: ["sophisticatedstorage", "sophistic
 if (storageProfile && !storageProfiles.containsKey(storageProfile)) {
     throw new GradleException("Unknown storage profile '${storageProfile}'; choose ${storageProfiles.keySet()}")
 }
-if (createPlacementTests && (gameTestMod != "carving" || !chiselsTests)) {
-    throw new GradleException("Create placement GameTests require -PgameTestMod=carving")
+def shellTests = modularGolemsTests || chiselsTests
+if (shellTests && gameTestMod != "core") {
+    throw new GradleException("Golem and Chisels & Bits GameTests require -PgameTestMod=core")
 }
-def testedMods = modProjects.findAll { id, path -> (path != ":golems" || modularGolemsTests)
-    && (path != ":create" || gameTestMod != "carving" || createPlacementTests)
-    && (path != ":cookery" || cookeryTests)
-    && (path != ":carving" || chiselsTests)
-    && (path != ":carts" || cartsTests)
-    && (path != ":airline" || airlineTests || warfareTests)
-    && (path != ":epicfight" || epicfightTests)
+if (epicfightTests && gameTestMod != "vanilla") {
+    throw new GradleException("Epic Fight GameTests require -PgameTestMod=vanilla")
+}
+if (createPlacementTests && !chiselsTests) {
+    throw new GradleException("Create placement GameTests require -PchiselsTests=true")
+}
+def testedMods = modProjects.findAll { id, path -> (path != ":airline" || airlineTests || warfareTests || saveUpgradeTests)
     && (!(storageProfile || accessoryProfile || ae2Tests || rs2Tests) || path == ":core"
         || path == ":vanilla" && (accessoryProfile ? true : storageProfile ? storageVanilla : rs2Tests ? rs2Vanilla : ae2Vanilla)) }
-if (gameTestMod && !(gameTestMod in ["core", "vanilla", "create", "cookery", "golems",
-    "firearms", "carving", "carts", "airline", "epicfight"])) {
+if (gameTestMod && !modProjects.containsValue(":${gameTestMod}".toString())) {
     throw new GradleException("Unknown GameTest mod '${gameTestMod}'; "
-        + "choose core, vanilla, create, cookery, golems, firearms, carving, carts, airline or epicfight")
+        + "choose core, vanilla, airline or assistant")
 }
 if ((ae2Tests || rs2Tests || storageProfile || accessoryProfile) && gameTestMod != "core") {
     throw new GradleException("Optional storage, AE2 and RS2 GameTests require -PgameTestMod=core")
@@ -97,14 +114,31 @@ if ((ae2Tests || rs2Tests || storageProfile || accessoryProfile) && gameTestMod 
 if ((ae2Tests ? 1 : 0) + (rs2Tests ? 1 : 0) + (storageProfile ? 1 : 0) > 1) {
     throw new GradleException("Choose AE2, RS2 or one storage profile per run")
 }
-def integrationTests = ae2Tests || rs2Tests || storageProfile || accessoryProfile
+def nativePortTests = ae2Tests || rs2Tests || storageProfile || accessoryProfile
+def integrationTests = nativePortTests || shellTests || epicfightTests || cbcTests || letItWalkTests
 // Each native fixture is a separate source set, never scanned by the base Core run.
+def vanillaKitchenTests = cookeryTests && (!gameTestMod || gameTestMod == "vanilla")
+def vanillaCartTests = cartsTests && (!gameTestMod || gameTestMod == "vanilla")
+def vanillaBaseTests = testSwitch("vanillaBaseTests")
+def vanillaIntegrationTests = gameTestMod == "vanilla" && (taczTests || warfareTests || sableTests
+    || createTests || firefightingTests
+    || (vanillaKitchenTests || vanillaCartTests) && !vanillaBaseTests)
+def optionalGameTestSets = [
+    ":vanilla": (saveUpgradeTests ? ["saveUpgradeTest"] : [])
+        + (vanillaKitchenTests ? ["cookeryIntegrationTest"] : [])
+        + (vanillaKitchenTests && !vanillaIntegrationTests ? ["cookeryTest"] : [])
+        + (vanillaCartTests ? ["cartsIntegrationTest"] : [])
+        + (taczTests ? ["taczTest"] : [])
+        + (warfareTests ? ["warfareTest"] : [])
+        + (sableTests && gameTestMod == "vanilla" ? ["sableTest"] : [])
+        + (createTests || firefightingTests ? ["createTest"] : [])
+        + (firefightingTests ? ["firefightingTest"] : []),
+]
 def coreIntegrationSets = accessoryProfile ? ["${accessoryProfile}Test"] : storageProfile
     ? ["storageTest", "${storageProfile}Test"]
     : ae2Tests ? ["ae2Test"] : rs2Tests ? ["rs2Test"] : []
 if (storageLaborTests) {
-    coreIntegrationSets.add(storageProfile in ["createStorage", "toms", "colossal", "qio"]
-        ? "portsLaborTest" : "storageLaborTest")
+    coreIntegrationSets.add("storageLaborTest")
 }
 if (ae2LaborTests) {
     coreIntegrationSets.add("ae2LaborTest")
@@ -112,10 +146,23 @@ if (ae2LaborTests) {
 if (rs2LaborTests) {
     coreIntegrationSets.add("rs2LaborTest")
 }
-def suiteMods = testedMods.findAll { id, path -> !gameTestMod || path == ":${gameTestMod}" }
+if (ae2LaborTests || rs2LaborTests) {
+    coreIntegrationSets.add("networkLaborTest")
+}
+if (cbcTests) {
+    coreIntegrationSets.add("cbcTest")
+}
+if (letItWalkTests) {
+    coreIntegrationSets.add("letItWalkTest")
+}
+if (modularGolemsTests) {
+    coreIntegrationSets.add("golemsTest")
+}
+def suiteMods = testedMods.findAll { id, path -> !saveUpgradeTests && (!gameTestMod || path == ":${gameTestMod}") }
+def vanillaFixtures = suiteMods.values().any { it in [":vanilla", ":assistant"] }
 // Every installed-mod combination owns its world, including Tavern's extra registries.
-def gameTestSuites = [cookery: cookeryTests, golems: modularGolemsTests, tavern: tavernTests,
-    warfare: warfareTests, tacz: taczTests, firefighting: firefightingTests,
+def gameTestSuites = [cbc: cbcTests, letitwalk: letItWalkTests, create: createTests, cookery: cookeryTests, golems: modularGolemsTests, tavern: tavernTests,
+    sable: sableTests, warfare: warfareTests, tacz: taczTests, firefighting: firefightingTests,
     ae2: ae2Tests, ae2Labor: ae2LaborTests, rs2: rs2Tests, rs2Labor: rs2LaborTests,
     carving: chiselsTests, createPlacement: createPlacementTests, carts: cartsTests, airline: airlineTests,
     epicfight: epicfightTests,
@@ -125,10 +172,14 @@ def gameTestSuites = [cookery: cookeryTests, golems: modularGolemsTests, tavern:
     .findAll { suite, enabled -> enabled }.keySet().join("-") + (storageProfile ? "-${storageProfile}" : "") +
     (accessoryProfile ? "-${accessoryProfile}" : "") ?: "base"
 def integrationVanilla = storageProfile ? storageVanilla : rs2Tests ? rs2Vanilla : ae2Vanilla
-def gameTestDirectory = providers.gradleProperty("gameTestDirectory")
+def gameTestDirectory = saveUpgradeTests ? "build/save-upgrade" : providers.gradleProperty("gameTestDirectory")
     .getOrElse("run/gametest/${gameTestMod ?: 'all'}/${gameTestSuites}${integrationVanilla ? '' : '-no-vanilla'}")
 
 repositories {
+    maven {
+        url = "https://jitpack.io"
+        content { includeGroup "com.github.IzakyL.jpi-mini" }
+    }
     mavenCentral()
     maven { url = "https://libraries.minecraft.net/" }
     maven { url = "https://maven.createmod.net" }
@@ -143,6 +194,7 @@ java {
 
 def ldlib2Coordinate = "com.lowdragmc.ldlib2:ldlib2-neoforge-${project.minecraft_version}:${project.ldlib_version}:all"
 def core = project(":core")
+def vanilla = project(":vanilla")
 
 neoForge {
     version = project.neoforge_version
@@ -153,30 +205,33 @@ neoForge {
             create(id) {
                 sourceSet mod.sourceSets.main
                 if (path == ":core") {
-                    sourceSet mod.sourceSets.gameTestFixtures
+                    sourceSet vanilla.sourceSets.gameTestFixtures
+                    if ((createTests || firefightingTests) && (!providers.gradleProperty("vanillaGameTestClasses").isPresent()
+                        || providers.gradleProperty("coreGameTestClasses").isPresent())) {
+                        sourceSet vanilla.sourceSets.coreCreateTest
+                    }
                 }
-                if (warfareTests && path == ":vanilla") { sourceSet mod.sourceSets.warfareTest }
+                if (path == ":vanilla" && vanillaFixtures) {
+                    sourceSet vanilla.sourceSets.vanillaGameTestFixtures
+                }
                 // Same-package construction tests belong to Vanilla's Java module.
-                if (path == ":vanilla" && chiselsTests && (!gameTestMod || gameTestMod == "carving")) {
-                    sourceSet project(":carving").sourceSets.gametest
+                if (path == ":vanilla" && chiselsTests) {
+                    sourceSet vanilla.sourceSets.chiselsandbitsTest
                 }
-                if (suiteMods.containsKey(id) && path != ":carving") {
+                if (path == ":vanilla" && epicfightTests) {
+                    sourceSet vanilla.sourceSets.epicfightTest
+                }
+                optionalGameTestSets.getOrDefault(path, []).each { sourceSet mod.sourceSets[it] }
+                if (suiteMods.containsKey(id)) {
                     if (path == ":core" && integrationTests) {
-                        coreIntegrationSets.each { sourceSet mod.sourceSets[it] }
-                    } else {
+                        coreIntegrationSets.each { sourceSet vanilla.sourceSets[it] }
+                    } else if (path == ":core") {
+                        sourceSet vanilla.sourceSets.coreGametest
+                    } else if (path != ":vanilla" || !(epicfightTests || vanillaIntegrationTests)) {
                         sourceSet mod.sourceSets.gametest
                     }
-                    if (path == ":create" && firefightingTests) {
-                        sourceSet mod.sourceSets.firefightingTest
-                    }
-                    if (path == ":firearms" && taczTests) {
-                        sourceSet mod.sourceSets.taczTest
-                    }
-                    if (path == ":firearms" && warfareTests) {
-                        sourceSet mod.sourceSets.warfareTest
-                    }
-                    if (cookeryTests && path in [":core", ":vanilla"]) {
-                        sourceSet mod.sourceSets.cookeryTest
+                    if (cookeryTests && path == ":core") {
+                        sourceSet vanilla.sourceSets.coreCookeryTest
                     }
                 }
             }
@@ -186,14 +241,25 @@ neoForge {
     runs {
         gameTestServer {
             type = "gameTestServer"
+            if (warfareTests || taczTests) {
+                systemProperty "folkways.testClasses", providers.gradleProperty("vanillaGameTestClasses").getOrElse("")
+            }
             systemProperty "folkways.testMethods", providers.gradleProperty("gameTestMethods").getOrElse("")
+            if (gameTestMod == "assistant" || cbcTests) {
+                systemProperty "folkways.filterGameTestMethods", "true"
+            }
             systemProperty "folkways.airline.testFilter", providers.gradleProperty("gameTestFilter").getOrElse(".*")
             systemProperty "folkways.airline.testShard", providers.gradleProperty("gameTestShard").getOrElse("")
             gameDirectory = layout.projectDirectory.dir(gameTestDirectory)
             programArgument "--nogui"
+            if (saveUpgradeTests) {
+                programArgument "--world"
+                programArgument "world"
+            }
             programArgument "--mixin"
             programArgument "folkways-core-tests.mixins.json"
             systemProperty "folkways.core.integrationTests", integrationTests.toString()
+            systemProperty "folkways.chiselsandbits.createPlacementTests", createPlacementTests.toString()
             systemProperty "folkways.ae2.laborTests",
                 ae2LaborTests.toString()
             systemProperty "folkways.rs2.laborTests", rs2LaborTests.toString()
@@ -208,8 +274,7 @@ neoForge {
             // Keep the existing dependency tests with Core, without repeating them in every mod's check.
             systemProperty "neoforge.enabledGameTestNamespaces",
                 providers.gradleProperty("gameTestNamespaces").getOrElse(
-                    integrationTests ? "folkways_core"
-                        : createPlacementTests ? "folkways_carving"
+                    saveUpgradeTests ? "folkways_save_upgrade" : integrationTests ? "folkways_core"
                         : !gameTestMod || gameTestMod == "core"
                             ? "folkways_core,ldlib2"
                             : testedMods.keySet().join(","))
@@ -228,29 +293,36 @@ dependencies {
     testedMods.values().each { path ->
         runtimeOnly project(path).sourceSets.main.output
     }
-    if (warfareTests) { runtimeOnly project(":vanilla").sourceSets.warfareTest.output }
-    runtimeOnly core.sourceSets.gameTestFixtures.output
-    suiteMods.values().each { path ->
-        if (path == ":core" && integrationTests) {
-            coreIntegrationSets.each { runtimeOnly core.sourceSets[it].output }
-        } else {
-            runtimeOnly project(path).sourceSets.gametest.output
-        }
-        if (path == ":create" && firefightingTests) {
-            runtimeOnly project(path).sourceSets.firefightingTest.output
-        }
-        if (path == ":firearms" && taczTests) {
-            runtimeOnly project(path).sourceSets.taczTest.output
-        }
-        if (path == ":firearms" && warfareTests) {
-            runtimeOnly project(path).sourceSets.warfareTest.output
-        }
-        if (cookeryTests && path in [":core", ":vanilla"]) {
-            runtimeOnly project(path).sourceSets.cookeryTest.output
+    runtimeOnly vanilla.sourceSets.gameTestFixtures.output
+    if (vanillaFixtures) {
+        runtimeOnly vanilla.sourceSets.vanillaGameTestFixtures.output
+    }
+    if (createTests || firefightingTests) {
+        runtimeOnly vanilla.sourceSets.coreCreateTest.output
+    }
+    if (epicfightTests) { runtimeOnly vanilla.sourceSets.epicfightTest.output }
+    if (chiselsTests) { runtimeOnly vanilla.sourceSets.chiselsandbitsTest.output }
+    if (chiselsTests || saveUpgradeTests) { runtimeOnly files(core.tasks.named("saeculariaRuntime")) }
+    optionalGameTestSets.each { path, sets ->
+        if (testedMods.containsValue(path)) {
+            sets.each { runtimeOnly project(path).sourceSets[it].output }
         }
     }
+    suiteMods.values().each { path ->
+        if (path == ":core" && integrationTests) {
+            coreIntegrationSets.each { runtimeOnly vanilla.sourceSets[it].output }
+        } else if (path == ":core") {
+            runtimeOnly vanilla.sourceSets.coreGametest.output
+        } else if (path != ":vanilla" || !(epicfightTests || vanillaIntegrationTests)) {
+            runtimeOnly project(path).sourceSets.gametest.output
+        }
+        if (cookeryTests && path == ":core") {
+            runtimeOnly vanilla.sourceSets.coreCookeryTest.output
+        }
+    }
+    runtimeOnly("com.github.IzakyL.jpi-mini:jpi-mini-mc:0.1.0") { transitive = false }
     runtimeOnly ldlib2Coordinate
-    if (!integrationTests && (gameTestMod != "carving" || createPlacementTests)) { runtimeOnly core.lib("create") }
+    if (cbcTests || !nativePortTests && (!chiselsTests || createPlacementTests)) { runtimeOnly core.lib("create") }
     // Maid expression regressions bake and evaluate the converted clips with the real GeckoLib parser.
     if (!gameTestMod || gameTestMod == "vanilla") { runtimeOnly core.lib("geckolib") }
     if (storageProfile) {
@@ -268,23 +340,27 @@ dependencies {
             runtimeOnly core.lib("cclayer")
         }
     }
-    if (taczTests) { runtimeOnly core.lib("tacz") }
-    if (chiselsTests) { runtimeOnly core.lib("chiselsandbits") }
-    if (cookeryTests) { runtimeOnly core.lib("kaleidoscope_cookery") }
+    if (taczTests || saveUpgradeTests) { runtimeOnly core.lib("tacz") }
+    if (chiselsTests || saveUpgradeTests) { runtimeOnly core.lib("chiselsandbits") }
+    if (cookeryTests || saveUpgradeTests) { runtimeOnly core.lib("kaleidoscope_cookery") }
+    if (cbcTests) { runtimeOnly core.lib("createbigcannons"), core.lib("ritchiesprojectilelib") }
     if (firefightingTests) { runtimeOnly core.lib("createfirefightingadd") }
     if (ae2Tests) { runtimeOnly core.lib("ae2"), core.lib("guideme") }
     if (rs2Tests) { runtimeOnly core.lib("refinedstorage") }
-    if (cartsTests) { runtimeOnly core.lib("astikorcartsredux") }
-    if (airlineTests) { runtimeOnly core.lib("sable"), core.lib("sable-companion") }
-    if (epicfightTests) { runtimeOnly core.lib("epicfight"), core.lib("geckolib") }
-    if (tavernTests) { runtimeOnly core.lib("kaleidoscope_tavern") }
-    if (warfareTests) { runtimeOnly core.lib("superbwarfare"), core.lib("kotlinforforge"), core.lib("geckolib"), core.lib("sable"), core.lib("sable-companion") }
-    if (modularGolemsTests) {
+    if (cartsTests || saveUpgradeTests) { runtimeOnly core.lib("astikorcartsredux") }
+    if (airlineTests || sableTests || letItWalkTests) { runtimeOnly core.lib("sable"), core.lib("sable-companion") }
+    if (letItWalkTests) { runtimeOnly core.lib("let_it_walk") }
+    if (epicfightTests || saveUpgradeTests) { runtimeOnly core.lib("epicfight"), core.lib("geckolib") }
+    if (tavernTests || saveUpgradeTests) { runtimeOnly core.lib("kaleidoscope_tavern") }
+    if (warfareTests || saveUpgradeTests) {
+        runtimeOnly core.lib("superbwarfare"), core.lib("kotlinforforge"), core.lib("geckolib"),
+            core.lib("sable"), core.lib("sable-companion")
+    }
+    if (modularGolemsTests || saveUpgradeTests) {
         runtimeOnly core.lib("modulargolems"), core.lib("l2library"), core.lib("l2core"), core.lib("l2serial")
     }
-    additionalRuntimeClasspath("com.eed3si9n.starlark:starlark:${project.starlark_version}") {
-        transitive = false
-    }
+    additionalRuntimeClasspath project(":solve")
+    additionalRuntimeClasspath project(":starlarkRuntime")
 
     instanceMod(ldlib2Coordinate) {
         transitive = false
@@ -325,7 +401,9 @@ tasks.register("lintScaffold") {
                 "**/node_modules/**", "**/.blockwright/**", "**/.blockwright-store/**",
                 "tests/out/**",
                 "**/.claude/**", "tests/shared/assets/resident-models/**",
-                "tests/promo/models/*/**"
+                "tests/promo/models/*/**",
+                // Released saves are kept byte for byte as the game wrote them.
+                "tests/fixtures/saves/**"
     })
     doLast {
         inputs.files.files.each { file ->
@@ -366,22 +444,68 @@ tasks.register("checkNamespaces", Exec) {
     commandLine "python3", "tests/architecture/namespaces.py"
 }
 
-tasks.named("check") {
-    dependsOn "checkNamespaces"
-    dependsOn "lintScaffold", "checkCorePackages", "checkDataUpgrades"
-    modProjects.values().each { dependsOn "${it}:check", "${it}:compileGametestJava" }
-    dependsOn ":create:compileFirefightingTestJava", ":firearms:compileTaczTestJava",
-        ":firearms:compileWarfareTestJava"
-    dependsOn ":core:compileStorageLaborTestJava", ":core:compileAe2TestJava", ":core:compileAe2LaborTestJava"
-    dependsOn ":core:compileRs2TestJava", ":core:compileRs2LaborTestJava", ":core:compilePortsLaborTestJava"
-    ["sophisticatedStorage", "sophisticatedBackpacks", "drawers", "functional", "createStorage", "toms", "colossal", "qio"].each { suite ->
-        dependsOn ":core:compile${suite.capitalize()}TestJava"
-    }
-    if (warfareTests) { dependsOn ":vanilla:compileWarfareTestJava" }
-    if (cookeryTests) { dependsOn ":core:compileCookeryTestJava", ":vanilla:compileCookeryTestJava" }
+tasks.register("checkV5Namespaces", Exec) {
+    group = "verification"
+    description = "Checks that the frozen V5 table maps every published legacy id to an id that exists."
+    commandLine "python3", "tests/architecture/v5-namespaces.py"
 }
 
-if (firefightingTests || airlineTests || ae2Tests || rs2Tests || storageProfile || accessoryProfile) {
+tasks.named("check") {
+    dependsOn "checkNamespaces", "checkV5Namespaces"
+    dependsOn "lintScaffold", "checkCorePackages", "checkDataUpgrades"
+    modProjects.values().each { dependsOn "${it}:check" }
+    dependsOn ":solve:check"
+    (modProjects.values() - ":core").each { dependsOn "${it}:compileGametestJava" }
+    dependsOn ":vanilla:compileCoreGametestJava", ":vanilla:compileSaveUpgradeTestJava"
+    dependsOn ":vanilla:compileCreateTestJava", ":vanilla:compileCoreCreateTestJava",
+        ":vanilla:compileFirefightingTestJava", ":vanilla:compileTaczTestJava", ":vanilla:compileWarfareTestJava"
+    dependsOn ":vanilla:compileStorageLaborTestJava", ":vanilla:compileAe2TestJava", ":vanilla:compileAe2LaborTestJava"
+    dependsOn ":vanilla:compileRs2TestJava", ":vanilla:compileRs2LaborTestJava", ":vanilla:compileNetworkLaborTestJava"
+    ["sophisticatedStorage", "sophisticatedBackpacks", "drawers", "functional", "createStorage", "toms", "colossal", "qio"].each { suite ->
+        dependsOn ":vanilla:compile${suite.capitalize()}TestJava"
+    }
+    dependsOn ":vanilla:compileSableTestJava"
+    dependsOn ":vanilla:compileCookeryIntegrationTestJava", ":vanilla:compileCartsIntegrationTestJava",
+        ":vanilla:compileCbcTestJava", ":vanilla:compileLetItWalkTestJava"
+    if (cookeryTests) { dependsOn ":vanilla:compileCoreCookeryTestJava", ":vanilla:compileCookeryTestJava" }
+}
+
+if (saveUpgradeTests) {
+    def stageSaveUpgrade = tasks.register("stageSaveUpgrade", Sync) {
+        from("tests/fixtures/saves/v4") {
+            include "world/**", "config/**"
+        }
+        from("tests/fixtures/saves/v4/world/entities") {
+            into "released-entities"
+        }
+        into gameTestDirectory
+        // The server rewrites the world and configuration after every run.
+        outputs.upToDateWhen { false }
+        doLast {
+            file("${gameTestDirectory}/eula.txt").text = "eula=true\n"
+        }
+    }
+    tasks.named("runGameTestServer") {
+        dependsOn stageSaveUpgrade
+        doLast {
+            def log = file("${gameTestDirectory}/logs/latest.log")
+            if (!log.isFile() || !log.text.contains("All 1 required tests passed")) {
+                throw new GradleException("The save upgrade GameTest did not pass; see ${log}")
+            }
+            if (log.text.contains("Unknown legacy Folkways id")) {
+                throw new GradleException("The save upgrade left unknown legacy ids; see ${log}")
+            }
+        }
+    }
+}
+
+// ModDev writes the legacy classpath as paths without building the project artifacts on it.
+tasks.named("prepareGameTestServerRun") {
+    dependsOn configurations.additionalRuntimeClasspath
+}
+
+if (cbcTests || letItWalkTests || createTests || firefightingTests || airlineTests || ae2Tests || rs2Tests || storageProfile || accessoryProfile
+        || vanillaKitchenTests || vanillaCartTests || taczTests || warfareTests || sableTests) {
     tasks.named("runGameTestServer") {
         doLast {
             def log = file("${gameTestDirectory}/logs/latest.log")

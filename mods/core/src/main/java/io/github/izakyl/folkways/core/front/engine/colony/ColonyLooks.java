@@ -1,21 +1,18 @@
 package io.github.izakyl.folkways.core.front.engine.colony;
 
+import io.github.izakyl.folkways.core.card.api.notice.Line;
+import io.github.izakyl.folkways.core.card.api.notice.Meter;
+import io.github.izakyl.folkways.core.card.api.notice.Sentence;
 import io.github.izakyl.folkways.core.colony.api.Colony;
 import io.github.izakyl.folkways.core.colony.api.ColonyView;
-import io.github.izakyl.folkways.core.resident.api.Balk;
+import io.github.izakyl.folkways.core.front.api.ResidentLines;
+import io.github.izakyl.folkways.core.front.engine.Enrollments;
 import io.github.izakyl.folkways.core.resident.api.Body;
 import io.github.izakyl.folkways.core.resident.api.Doing;
 import io.github.izakyl.folkways.core.resident.api.Doings;
-import io.github.izakyl.folkways.core.resident.api.RefusalKind;
-import io.github.izakyl.folkways.core.front.api.Facing;
-import io.github.izakyl.folkways.core.front.api.notice.Line;
-import io.github.izakyl.folkways.core.front.api.notice.Meter;
-import io.github.izakyl.folkways.core.front.api.notice.Notice;
-import io.github.izakyl.folkways.core.front.api.notice.Sentence;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Mob;
@@ -23,7 +20,7 @@ import net.minecraft.world.entity.player.Player;
 
 public final class ColonyLooks {
 
-    private static final double RANGE_SQR = 32.0D * 32.0D;
+    private static final double RANGE_SQR = 96.0D * 96.0D;
 
     private ColonyLooks() {
     }
@@ -43,50 +40,27 @@ public final class ColonyLooks {
     public static List<Line> of(Colony colony, Body resident, List<ColonyView> views) {
         List<Line> lines = new ArrayList<>();
         Mob mob = resident.mob();
+        var sources = Enrollments.residentLines(colony).values();
         Sentence marks = Sentence.EMPTY;
         for (ColonyView view : views) {
-            for (Facing facing : Facing.all(colony)) {
-                marks = marks.then(facing.nameMarks(resident.id(), view));
+            for (ResidentLines linesSource : sources) {
+                marks = marks.then(linesSource.nameMarks(resident.id(), view));
             }
         }
         lines.add(new Line.Text(mob.getDisplayName(), marks));
         lines.add(Line.gauge(Meter.HEALTH, Mth.ceil(mob.getHealth()), Mth.ceil(mob.getMaxHealth())));
         for (ColonyView view : views) {
-            for (Facing facing : Facing.all(colony)) {
-                lines.addAll(facing.lookLines(resident.id(), view));
+            for (ResidentLines linesSource : sources) {
+                lines.addAll(linesSource.lookLines(resident.id(), view));
             }
         }
         lines.add(Line.busy(resident.doing().orElseGet(() -> Doing.open(Doings.IDLE))));
-        resident.balk().map(ColonyLooks::balked).ifPresent(lines::add);
         for (ColonyView view : views) {
-            for (Facing facing : Facing.all(colony)) {
-                lines.addAll(facing.doingLines(resident.id(), view));
+            for (ResidentLines linesSource : sources) {
+                lines.addAll(linesSource.doingLines(resident.id(), view));
             }
         }
+        lines.removeIf(Line.Blocked.class::isInstance);
         return List.copyOf(lines);
-    }
-
-    // Goods that were missing, or had nowhere to go, are told in pictures after the doing's glyph: "Missing: [eating]
-    // ✗", "No room: [stowing] ⊘ cobblestone". Any other refusal is said in its own words, filled with what the work
-    // was done to.
-    private static Line balked(Balk balk) {
-        Doing doing = balk.doing();
-        RefusalKind why = balk.why();
-        return switch (why.shortfall()) {
-            case LACKING -> Line.blocked(Notice.of(LookNotice.LACKING), goods(doing, "lacks"));
-            case NO_ROOM -> Line.blocked(Notice.of(LookNotice.NO_ROOM), goods(doing, "refuses"));
-            case NONE -> Line.blocked(Notice.of(why, doing.about().map(Notice::named).orElseGet(() -> Notice.text(""))));
-        };
-    }
-
-    private static Sentence goods(Doing doing, String mark) {
-        List<Doing.Ware> named = doing.wares().used().isEmpty() ? doing.wares().made() : doing.wares().used();
-        List<Sentence.Token.Ware> wares = new ArrayList<>();
-        for (Doing.Ware ware : named) {
-            if (BuiltInRegistries.ITEM.containsKey(ware.item())) {
-                wares.add(new Sentence.Token.Ware(ware.item(), ware.count()));
-            }
-        }
-        return Sentence.of(Sentence.doing(doing.what())).then(Sentence.wares(Sentence.glyph(mark), wares));
     }
 }

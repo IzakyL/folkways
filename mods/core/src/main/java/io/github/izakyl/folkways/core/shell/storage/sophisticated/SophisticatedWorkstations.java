@@ -23,7 +23,7 @@ final class SophisticatedWorkstations {
     }
 
     private static Set<StoreWorkstations.Capability> capabilities(IStorageWrapper wrapper) {
-        if (!SophisticatedPort.usability(wrapper).usable()) {
+        if (!SophisticatedPort.traits(wrapper).transforms().isEmpty()) {
             return Set.of();
         }
         Set<StoreWorkstations.Capability> found = EnumSet.noneOf(StoreWorkstations.Capability.class);

@@ -1,6 +1,8 @@
+import { createHash } from "node:crypto";
 import { expect, test } from "@playwright/test";
-import { defineTask, javaTask } from "@izakyl/blockwright-minecraft";
-import { clickElement, panelElements } from "../ldlib2";
+import { defineTask, javaTask, tick } from "@izakyl/blockwright-minecraft";
+import { ancestorsOf, clickElement, panelElements, typeIntoElement } from "../ldlib2";
+import { anchorOf } from "../ldlib2/rules";
 import { foundColonyFast, foundingBox, openColonyPanelViaBook, waitForGroundedPlayer } from "../shared/colony/colony-founding";
 import { launchPair, type E2EPair } from "../shared/harness/pair";
 import { ensureOut, tracePath } from "../shared/harness/out-paths";
@@ -9,6 +11,7 @@ import { BUDGET } from "../shared/harness/budgets";
 import { waitForElement } from "../shared/harness/bw-helpers";
 import { newRunId } from "../shared/harness/run-id";
 import { GROUND } from "../shared/harness/stage";
+import { BOOK_TABS, waitForPresent } from "../shared/ui/book-cards";
 import { clickTab } from "../shared/ui/colony-pages";
 
 type State = { building: boolean; farming: boolean; crafting: boolean; buildingRules: number; farmingRules: number };
@@ -50,10 +53,33 @@ test("vocation tool editors isolate lists and persist empty", async ({}, testInf
     const founded = await foundColonyFast(server, client, grounded.name, { origin, residentCount: 1 });
     const colony = String(founded.evidence.colonyId);
     await openColonyPanelViaBook(server, client, grounded.name, founded.standBlock);
-    await clickTab(client, "folkways.page.build");
+    await clickTab(client, BOOK_TABS.settings);
+    const openTools = async (trade: string) => {
+      const hash = createHash("md5").update(`folkways_core:colony_settings/folkways_vanilla:${trade}`).digest();
+      hash[6] = (hash[6] & 0x0f) | 0x30;
+      hash[8] = (hash[8] & 0x3f) | 0x80;
+      const id = hash.toString("hex").replace(/^(........)(....)(....)(....)/, "$1-$2-$3-$4-");
+      const head = `folkways.book.scope.${id}`;
+      await waitForPresent(server, client, head);
+      const scope = `folkways.book.scope.card.${id}`;
+      if (!(await panelElements(client)).some(element => element.id === scope && element.displayed)) {
+        await clickElement(client, { id: head });
+      }
+      const control = async () => {
+        const elements = await panelElements(client);
+        const tool = elements.find(element => element.id === "folkways.card.items.tool"
+          && ancestorsOf(elements, element).some(ancestor => ancestor.id === scope));
+        return tool && anchorOf(elements, tool);
+      };
+      await expect.poll(async () => {
+        await tick.sprint(server, 3);
+        return control();
+      }).toBeDefined();
+      await clickElement(client, (await control())!, { scrollIntoView: true });
+    };
     const state = (reload = false) => server.run(STATE, { colony, reload });
     expect(await state()).toMatchObject({ building: false, farming: false, crafting: false });
-    await clickElement(client, { id: "folkways.settings.open.tool.folkways_vanilla.building.folkways_vanilla.build" }, { scrollIntoView: true });
+    await openTools("building");
     await waitForElement(client, { id: "folkways.selector.rule_drop.0" });
     for (let rule = 0; rule < 3; rule++) {
       await clickElement(client, { id: "folkways.selector.rule_drop.0" }, { scrollIntoView: true });
@@ -61,24 +87,21 @@ test("vocation tool editors isolate lists and persist empty", async ({}, testInf
     await clickElement(client, { id: "folkways.selector.confirm" });
     await expect.poll(state).toMatchObject({ building: true, buildingRules: 0, farming: false });
     expect(await state(true)).toMatchObject({ building: true, buildingRules: 0, farming: false });
-    await clickTab(client, "folkways.page.farm");
-    await clickElement(client, { id: "folkways.settings.open.tool.folkways_vanilla.farming.folkways_vanilla.farming" }, { scrollIntoView: true });
+    await openTools("farming");
     await waitForElement(client, { id: "folkways.selector.rule_drop.0" });
+    await typeIntoElement(client, { id: "folkways.selector.search" }, "minecraft:diamond_hoe");
+    await clickElement(client, { id: "folkways.selector.result.minecraft.diamond_hoe" }, { scrollIntoView: true });
     await clickElement(client, { id: "folkways.selector.confirm" });
-    await expect.poll(state).toMatchObject({ buildingRules: 0, farming: true, farmingRules: 1 });
-    await clickTab(client, "folkways.page.wares");
-    await clickElement(client, { id: "folkways.settings.open.tool.folkways_vanilla.crafting.folkways_vanilla.wares" }, { scrollIntoView: true });
-    await waitForElement(client, { id: "folkways.selector.confirm" });
+    await expect.poll(state).toMatchObject({ buildingRules: 0, farming: true, farmingRules: 2, crafting: false });
+    await openTools("crafting");
+    await waitForElement(client, { id: "folkways.selector.close" });
     expect((await panelElements(client)).some(e => e.id === "folkways.selector.rule_drop.0" && e.displayed)).toBe(false);
-    await clickElement(client, { id: "folkways.selector.confirm" });
-    await expect.poll(state).toMatchObject({ crafting: true });
-    await clickTab(client, "folkways.page.build");
-    await waitForElement(client, { id: "folkways.settings.open.tool.folkways_vanilla.building.folkways_vanilla.build" });
-    await clickElement(client, { id: "folkways.settings.open.tool.folkways_vanilla.building.folkways_vanilla.build" }, { scrollIntoView: true });
-    await waitForElement(client, { id: "folkways.selector.confirm" });
+    await clickElement(client, { id: "folkways.selector.close" });
+    await openTools("building");
+    await waitForElement(client, { id: "folkways.selector.close" });
     expect((await panelElements(client)).some(e => e.id === "folkways.selector.rule_drop.0" && e.displayed)).toBe(false);
-    await clickElement(client, { id: "folkways.selector.confirm" });
-    expect(await state(true)).toMatchObject({ building: true, buildingRules: 0, farming: true, farmingRules: 1, crafting: true });
+    await clickElement(client, { id: "folkways.selector.close" });
+    expect(await state(true)).toMatchObject({ building: true, buildingRules: 0, farming: true, farmingRules: 2, crafting: false });
   } catch (error) {
     pair?.failing(error);
     throw error;

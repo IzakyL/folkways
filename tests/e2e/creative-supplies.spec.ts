@@ -3,7 +3,7 @@ import { writeFileSync } from "node:fs";
 import { player, screen, tick, world, type MinecraftServer } from "@izakyl/blockwright-minecraft";
 import { clickElement, waitForElement } from "../ldlib2";
 import { foundColonyFast, foundingBox, optInViaBook, pickViaSelector, waitForGroundedPlayer } from "../shared/colony/colony-founding";
-import { deliverOrderViaSitePanel } from "../shared/colony/membership-optin";
+import { deliverOrderViaCard } from "../shared/colony/membership-optin";
 import { launchPair, type E2EPair } from "../shared/harness/pair";
 import { tracePath } from "../shared/harness/out-paths";
 import { seededServer } from "../shared/harness/mod-settings";
@@ -76,7 +76,7 @@ for (const stage of twins()) test(stage.title("creative supplies: configure a re
       await optInViaBook(server, client, name, cell, "worksite", stage);
     }
     await world.command(server, "gamemode survival " + name);
-    evidence.order = await deliverOrderViaSitePanel(server, client, name, target, "minecraft:bread", 4, stage);
+    evidence.order = await deliverOrderViaCard(server, client, name, target, "minecraft:bread", 4, stage);
     await screen.dismiss(client);
     let bread = 0;
     for (let elapsed = 0; elapsed <= 4000; elapsed += 20) {

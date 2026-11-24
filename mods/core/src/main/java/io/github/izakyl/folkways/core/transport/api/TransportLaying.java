@@ -11,6 +11,10 @@ public interface TransportLaying {
 
     void add(Node node);
 
+    default Node delivery(Node intent) {
+        throw new UnsupportedOperationException("this plan does not lay deliveries");
+    }
+
     // Supplies a declared need from the preceding leg, never by looking for another source of goods.
     boolean feed(UUID consumer);
 

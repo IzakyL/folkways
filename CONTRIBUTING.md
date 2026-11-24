@@ -49,10 +49,10 @@ pinned in [`blockwright.toml`](blockwright.toml) and writes `.blockwright/mods.j
 fixtures. Gradle compiles against optional integration jars even when a particular
 test profile does not load them.
 
-The build gathers the ten mod jars in `build/libs/` and runtime LDLib2 in `build/deps/`.
+The build gathers the four mod jars in `build/libs/` and runtime LDLib2 in `build/deps/`.
 Each mod is a Gradle project under `mods/`; see [Mods](README.md#mods) for what each one does.
-Squad grouping and direct commands belong to Core’s **RTS** mode (Colony Book → **V** → **RTS**).
-Keep command fixtures on the RTS APIs; equipment assignment uses the **Equipment profiles** page.
+Squad grouping and direct commands belong to Core’s **Control** mode (Colony Book → **V** → **Control**).
+Keep command fixtures on the RTS APIs; equipment assignment uses the equipment APIs.
 
 Windows 11 x64 is a Blockwright development candidate; see its
 [Windows requirements](https://github.com/IzakyL/blockwright/blob/master/docs/environment.md#windows-development-candidate).
@@ -87,26 +87,47 @@ Run GameTests with one template, adding switches from the table below:
 | Property | Enables | Constraints |
 |---|---|---|
 | `gameTestMod` | One mod's suite: a directory under `mods/`. An extension's target mod is loaded automatically | Without it, only Core's base suite is enabled |
-| `cookeryTests`, `modularGolemsTests`, `cartsTests`, `epicfightTests`, `chiselsTests` | The native mod and its extension's fixtures; `cookeryTests` also adds Core and Vanilla Cookery fixtures | On by default when `gameTestMod` is `cookery`, `golems`, `carts`, `epicfight` or `carving` respectively |
-| `taczTests`, `warfareTests` | TACZ or Superb Warfare fixtures (Firearms) | Off by default |
-| `firefightingTests` | FireFighting Additions fixtures (Create) | Off by default |
+| `cookeryTests` | Kaleidoscope Cookery and its integration fixtures | Use `gameTestMod=vanilla` for the kitchen gameplay suite or `gameTestMod=core` to add Core's kitchen fixtures. Off by default |
+| `cartsTests` | AstikorCarts Redux and the cargo and cart line fixtures | Use `gameTestMod=vanilla` for the suite. Off by default |
+| `modularGolemsTests`, `chiselsTests` | Modular Golems or Chisels & Bits and the corresponding Core integration fixtures | Require `gameTestMod=core`; off by default; run only the selected integration fixtures |
+| `epicfightTests` | Epic Fight and the resident integration fixtures | Use `gameTestMod=vanilla`; off by default |
+| `sableTests` | Sable facility fixtures | Use `gameTestMod=vanilla` for the gate or pair with `gameTestMod=core` and `cbcTests=true` for the cannon mount. Off by default |
+| `taczTests`, `warfareTests` | TACZ or Superb Warfare integration fixtures | Use `gameTestMod=vanilla`. Off by default. `warfareTests` also loads Airline |
+| `cbcTests` | Create Big Cannons cannon mount fixtures, with Create and Ritchie’s Projectile Library | Use `gameTestMod=core`. Off by default |
+| `letItWalkTests` | Let it Walk! walker fixtures (drive, park, a resident crew aboard), with Create and Sable | Use `gameTestMod=core`. Off by default |
+| `createTests` | Create integration suite | Use `gameTestMod=vanilla`. Off by default |
+| `firefightingTests` | Create integration suite and FireFighting Additions fixtures | Use `gameTestMod=vanilla`. Off by default |
+| `vanillaBaseTests` | Adds the existing Vanilla Cookery fixtures and the Vanilla base suite | Pair with `gameTestMod=vanilla` and `cookeryTests=true` |
 | `tavernTests` | Kaleidoscope Tavern fixtures (Cookery) | Requires `cookeryTests` |
-| `createPlacementTests` | Create placement fixtures (Carving) | Requires `gameTestMod=carving` |
+| `createPlacementTests` | Adds Create and its printing fixture to the Chisels & Bits suite | Requires `gameTestMod=core` and `chiselsTests=true` |
 | `storageProfile` | One storage mod: `sophisticatedStorage`, `sophisticatedBackpacks`, `drawers`, `functional`, `createStorage`, `toms`, `colossal` or `qio` | Core only; AE2, RS2 and storage profiles are mutually exclusive |
 | `ae2Tests`, `rs2Tests` | Applied Energistics 2 or Refined Storage 2 fixtures | Core only; mutually exclusive with each other and storage profiles |
 | `storageLaborTests`, `ae2LaborTests`, `rs2LaborTests` | Resident labour tests on top of the native port tests | Require the matching profile or suite, and Vanilla |
 | `storageVanilla`, `ae2Vanilla`, `rs2Vanilla` | `false` runs the native ports without Folkways Vanilla | Not with labour tests |
 | `accessoryProfile` | `curios` or `accessories`, with Sophisticated Backpacks | Core only; does not load the base Core suite |
 | `accessoryCoexistence`, `accessoryCompat` | Adds genuine Accessories beside Curios, or the old cclayer beside Accessories | Enabled by being set, whatever the value; pair with `accessoryProfile=curios` or `accessories` |
-| `coreGameTestClasses`, `vanillaGameTestClasses` | Compile and register only the listed GameTest classes (comma-separated) | — |
+| `coreGameTestClasses`, `vanillaGameTestClasses` | Compile and register only the listed GameTest classes (comma-separated) | With `gameTestMod=vanilla` and `createTests=true`, use the Core selector for adapter tests and the Vanilla selector for gameplay tests |
 | `gameTestFilter` | Case-insensitive full-name regex for Airline tests (method names without class prefixes) | Applied before sharding, together with `gameTestMethods` |
 | `gameTestShard` | Airline batch shard `i/n`, with zero-based `i` | Requires `0 <= i < n`; filters run first |
 | `gameTestMethods` | Rerun only the listed methods of fixtures that support it | — |
 | `gameTestNamespaces`, `gameTestDirectory` | Override the enabled namespaces or the run directory | Each switch combination otherwise gets its own world under `run/gametest/` |
+| `saveUpgradeTests` | Reopens and resaves the published V4 integration fixture | Run on its own with `-PsaveUpgradeTests=true` |
 
-Run `npm run setup` once to download the pinned fixtures, then keep Gradle `--offline`. Native-mod suites
-have matching Blockwright profiles in [`blockwright.toml`](blockwright.toml) (`ae2`, `rs2`, `storage_<name>`,
+Run `npm run setup` once to download the pinned fixtures. Run `./gradlew build` online to resolve dependencies,
+including Assistant’s jpi-mini from JitPack, then keep Gradle `--offline`. Native-mod suites have matching
+Blockwright profiles in [`blockwright.toml`](blockwright.toml) (`ae2`, `rs2`, `storage_<name>`,
 `curios`, `accessories`). Run GameTest profiles serially to keep memory usage bounded.
+
+The Assistant Blockwright profiles can use the JVM properties `folkways.assistant.provider`,
+`folkways.assistant.baseUrl` and `folkways.assistant.model` to override the client settings,
+with one warning listing the overridden fields.
+
+Run the V4 → V5 world upgrade with `./gradlew --offline -PsaveUpgradeTests=true runGameTestServer`.
+The profile stages a fresh copy from `tests/fixtures/saves/v4/` in `build/save-upgrade/`.
+The fixture was written by the GameTest server at `20680d4b87a28940bb1ac6853320b7dde3737d8d`
+(`origin/master`, Folkways data version 4) and retains the occupied chunk, colony registry,
+and the old Create, TACZ and Chisels & Bits server configs. Keep binary save fixtures in
+`tests/fixtures/saves/` and retain only the files and chunks the test needs.
 
 Airline GameTests: `./gradlew --offline -PgameTestMod=airline runGameTestServer`.
 
@@ -161,24 +182,106 @@ feat(draft): add a dock pattern
 
 Changing persisted data? Follow [save compatibility](SAVE_COMPATIBILITY.md).
 
+### Mod layout
+
+- **Core holds the engine.** It includes the engine (colonies, residents, planning, world, inventory, travel),
+  facilities, cards, the Starlark runtime and the command UI, plus every third-party adapter under
+  `core.shell.<mod>`. Adapters answer *how*: ports, controls, operating protocols, conveyances, how a weapon
+  fires, how a structure is encoded. They do not register trades, zones or work.
+- **Vanilla holds resident gameplay**: trades, work, prefab facilities and routines that make gameplay decisions,
+  including the gameplay half of each integration under `vanilla.<mod>`, initialized only when the target mod loads. Modules extend held facilities with `HoldingKind` and supply
+  colony-wide rows through `ColonyPanel` on **Overview**, **Workforce** and **Stock & orders**, or under their own
+  settings card on **Settings**. An editor too large for a card opens from a **Workforce** button (`RegisteringUi.editor`).
+- AE2 and RS2 are a layout exception. Both directions of the integration, including **Network service**,
+  belong in Core with the adapters. Network service connects networks to Workshop recipes for any resident
+  kind, at the same abstraction level as the planner and ports.
+- Everything the book can draw names a `Category` for what it serves (`Delegation.in`, `BoxOffers.Offer.in`,
+  `PathOffers.Offer.in`, `Placing.Shelf.in`); the view from above groups its tools by it and the shape picker lists
+  candidates under it. Use a built-in category, or register one with `Category.register`; unset falls under **Other**.
+- An adapter lives on the layer of the thing it adapts. Core cannot depend on Vanilla, so adapters for human
+  residents (such as Epic Fight resident animation) stay in Vanilla. Golems are a resident kind without needs and
+  live entirely in Core; human residents and their needs belong to Vanilla.
+- Only independent gameplay gets its own mod (Airline, Assistant). Integrating a third-party mod is not a reason:
+  that mod being installed is already the switch. Integrations are optional dependencies; Core checks versions at
+  startup and disables both halves of an unsupported one.
+
+### Facilities
+
+- A **Control** describes where an action happens and what it can do. A **Signal** sets a value,
+  and a **Port** transfers items, fluids or energy. Controls carry no ownership or facility semantics.
+- A **Facility** owns everything in its extent and gives its controls meaning. An extent comprises
+  blocks, boxes and entities, including blocks and boxes in a moving structure's local coordinates.
+  A colony store is a **Container** facility. Storage controllers extend the stances of the individual
+  stores they proxy. A workshop is a projection of a facility.
+- A **Facility** exposes its parameters, routines and readings through `Operating`. Its declarative `Card`
+  serves the Colony Book and other controls. Held zones, paths and blocks, build orders, trains, networks and
+  colony settings scopes all use this interface. A holding kind adds controls and status to the card of a holding.
+- A `FacilityDefinition` can describe controls
+  (`Rig`), an extent, triggers and projections. Built-in facilities can come from blocks or loaded entities.
+  Players can define their own facilities through the assistant, using Starlark to express the intended behavior.
+  Standard modules and the primitive library routines (`write_all`, `write_stages`, `write_sequence`, `move_to`,
+  `deposit`) are optional helpers; gameplay decisions such as what to load and when to fire live in the script.
+- Shell adapters name parts after native elements. Carried controls move with their carrier's reading, and staged
+  writes sequence changes across controls. Local controls need a resident at their stance. Remote controls can
+  support direct runs without resident work.
+- A **Post** covers signals and ports in reach of its footing or seat, plus named controls and any additions
+  supplied by adapters. Facilities and integrations contribute posts to `Posts`. Standing demand and requests can
+  offer planned duty, while integrations can use urges for assigned crew. The generic duty handles arrival, native
+  boarding, presence and leases. The runtime uses the occupant to write signals
+  and move items between covered ports or the occupant's pack. Ordinary plan work supplies distant stock before
+  the direct transfer. Timed sequences can mix transfers and writes. They can also run as one resident's
+  continuous work if all steps share a stance.
+- Cards include parameter fields, routine buttons and readouts. Facilities can also offer target picks and
+  path overlays tied to their routines or readings.
+- A **Routine** defines a run; the planner assigns any resident work it expands into a plan subgraph.
+  After a failure the caller resubmits and the routine replans from fresh readings, since facility state is the world.
+- **Triggers** are manual, standing, on demand (pulled through a projected `Workshop`), condition or schedule.
+  **Projections** contribute hops, keep-outs, closures, obstacles, workshops, protection and lanes;
+  they are derived data rebuilt from the world and facility data. Lanes come only from facilities, never from block layout.
+  Gates and card actions accept reading comparisons or Starlark predicates. Gates publish walking links from
+  the cached predicate result, and ride projections publish links between their stops while `available_when`
+  holds, which takes the same predicates. Keep-outs can come from moving parts or a script. Control writes belong
+  to routine runs.
+- Player-defined facility workshops use Starlark routines for recipes and action batches. When the planner chooses
+  a workshop, Core reserves the recipe inputs for the run. Any work produced by a script step draws from that
+  reservation when its needs match. Individual actions can attach failure handlers. Scripts can filter native
+  recipes with `recipes_of`, or the definition can provide a fixed batch list.
+- Script readings derive values from probes and parameters. Routines can publish readings and paths and
+  check arguments and readiness. `@std//position` is an optional helper for calibrated axes built on `@std//ik`, and
+  `@std//ballistics` lays, loads and fires a gun from its aim part's `ballistics` reading. Keep engine arithmetic
+  that Starlark would run too slowly, such as flight solving, in Java builtins, and pass world data the script needs
+  as readings or snapshots taken on the main thread. A routine that publishes an `engagement` reading takes part in
+  colony fire control.
+- On the main thread, take a snapshot at most once every 10 ticks per sample. Evaluate Starlark on a worker
+  within step, time and memory budgets, then cache the result on a later tick. A fault pauses the sample and appears
+  in the latest result.
+
 ### Code and test ownership
 
 - Match the surrounding naming, comment density and idiom.
 - Use no tabs or trailing whitespace; `./gradlew check` checks scaffold formatting.
-- Keep GameTests in the module owning the behavior, including package-private
-  scenarios. Shared setup belongs in Core's `src/gameTestFixtures`, without test
-  registration.
+- Put mod test sources in `tests/gametest/<mod>/<set>/java` and their resources in
+  `tests/gametest/<mod>/<set>/resources`. Use the mod that owns the behavior.
+  Core fixtures that use Vanilla residents or gameplay can live in Vanilla's matching
+  directory. Vanilla compiles the cross-mod fixtures and the launcher loads them with
+  Core for package-private access. Put reusable setup in the `gameTestFixtures` set.
+- Assistant owns the tool registries under `assistant/tool`, including permission checks,
+  previews, confirmation tokens and the assistant's Starlark bindings. It reads domain data
+  and invokes operations through Core interfaces. Core owns the Starlark runtime and
+  the facility and card APIs.
 - Shared TypeScript helpers belong in `tests/shared/`. A suite can import from
   there and `tests/ldlib2/`, but not from another suite.
+- `tests/promo/` holds footage takes for promotional videos. They are kept for reference only and are not
+  maintained alongside gameplay changes: they are not part of validation, and a broken take does not block a change.
 
-Container whitelists, blacklists and `StoreRule.Access.store` govern ordinary resident storage only.
+Container allowlists, denylists and `StoreRule.Access.store` govern ordinary resident storage only.
 Directed orders bypass them in planning and execution, and never prevent configuration changes.
 Keep native container and slot restrictions intact; player insertion is unaffected.
 
 ### Translations and patterns
 
-- Add mod-owned player-facing strings to all four shared catalogs in
-  `mods/core/src/main/resources/assets/folkways_core/lang/`: `en_us.json`, `zh_cn.json`,
+- Add mod-owned player-facing strings to all four catalogs of the owning mod, under
+  `mods/<dir>/src/main/resources/assets/<namespace>/lang/`: `en_us.json`, `zh_cn.json`,
   `zh_hk.json` (Hong Kong) and `zh_tw.json` (Taiwan). Use each region's Minecraft
   terminology, rather than converting characters alone.
 - Keep translated text as a `Component` until it reaches the client. Use
@@ -188,6 +291,8 @@ Keep native container and slot restrictions intact; player insertion is unaffect
 - Pattern-owned titles, controls, materials and refusal messages belong in the
   pattern's `lang` dictionary. Built-in patterns and shared libraries provide all
   four locales; matching mod catalog entries are not needed.
+- Add an optional `marking` entry to each locale in `lang` for the marking
+  instructions shown by the assistant in `patterns()` under `anchors`.
 - Custom patterns fall back per word to another Chinese locale, then `en_us`.
   `zh_hk` and `zh_tw` prefer each other before `zh_cn`.
 - Use `reject("error.key", ...)` for expected refusals, with at most four text

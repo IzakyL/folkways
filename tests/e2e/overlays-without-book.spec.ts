@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { defineTask, input, javaTask, media, screen, tick } from "@izakyl/blockwright-minecraft";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
-import { clickElement, panelElements } from "../ldlib2";
+import { clickElement, panelElements, scrollElementIntoView } from "../ldlib2";
 import {
   foundColonyFast, foundingBox, openColonyPanelViaBook, waitForGroundedPlayer,
 } from "../shared/colony/colony-founding";
@@ -11,7 +11,7 @@ import { outAbs } from "../shared/harness/out-paths";
 import { seededServer } from "../shared/harness/mod-settings";
 import { newRunId } from "../shared/harness/run-id";
 import { GROUND } from "../shared/harness/stage";
-import { frames, tryCommand, waitForElement } from "../shared/harness/bw-helpers";
+import { frames, tryCommand } from "../shared/harness/bw-helpers";
 import { clickTab } from "../shared/ui/colony-pages";
 
 const BOOK_ITEM = "folkways_core:colony_book";
@@ -45,7 +45,7 @@ const ZONE = defineTask<{ player: string }, string>({
   source: javaTask({ imports: [
     "io.github.izakyl.folkways.core.front.engine.colony.ZoneDrafts",
     "io.github.izakyl.folkways.core.front.engine.colony.ColonySettings",
-    "io.github.izakyl.folkways.core.front.engine.charter.CurrentColony",
+    "io.github.izakyl.folkways.core.colony.charter.CurrentColony",
     "net.minecraft.resources.ResourceLocation",
   ], body: `
 var player = ctx.server().getPlayerList().getPlayerByName(Args.of(ctx).string("player"));
@@ -112,7 +112,7 @@ test("overlays without the book: hidden by default, shown with empty hands or an
     await hold(BOOK_ITEM);
     await openColonyPanelViaBook(server, client, player.name, founded.standBlock);
     await clickTab(client, "folkways.tab.settings");
-    await waitForElement(client, { id: SETTING }, { timeoutMs: 8_000 });
+    await scrollElementIntoView(client, { id: SETTING });
     await shoot("03-settings-unticked");
     await clickElement(client, { id: SETTING });
     await frames(client, 3);
@@ -134,8 +134,7 @@ test("overlays without the book: hidden by default, shown with empty hands or an
     await hold(BOOK_ITEM);
     await openColonyPanelViaBook(server, client, player.name, founded.standBlock);
     await clickTab(client, "folkways.tab.settings");
-    await waitForElement(client, { id: SETTING }, { timeoutMs: 8_000 });
-    await clickElement(client, { id: SETTING });
+    await clickElement(client, { id: SETTING }, { scrollIntoView: true });
     await frames(client, 3);
     expect((await client.run(DRAWN)).option).toBe(false);
     await screen.dismiss(client);

@@ -1,9 +1,10 @@
 import { expect, test } from "@playwright/test";
-import { defineTask, javaTask, input, screen, tick, world } from "@izakyl/blockwright-minecraft";
-import { clickElement, panelElements, scrollElementIntoView, ancestorsOf, type Element } from "../ldlib2";
-import { boardAct, boardActs, openSite, settlePanel } from "../shared/ui/site-panel";
-import { setMaintainDemandViaUI } from "../shared/colony/membership-optin";
-import { foundColonyFast, foundingBox, optInViaBook, waitForGroundedPlayer,
+import { defineTask, javaTask, screen, tick, world } from "@izakyl/blockwright-minecraft";
+import { clickElement, panelElements, visibleBox } from "../ldlib2";
+import { BOOK_TABS, cardRows, openBlockCard, openSection, panelSection, textUnder, waitForPresent } from "../shared/ui/book-cards";
+import { typeCell } from "../shared/ui/site-panel";
+import { ORDER_COUNT, ORDER_DELIVER, ORDER_ITEM, ORDER_LOW, ORDER_MAINTAIN, ORDERS_HERE, filedOrdersAt, setMaintainDemandViaUI } from "../shared/colony/membership-optin";
+import { foundColonyFast, foundingBox, openColonyPanelViaBook, optInViaBook, waitForGroundedPlayer,
   entityTypeMatches,
 } from "../shared/colony/colony-founding";
 import { prepareSafeWalkwayOn, safeWalkwayBox } from "../shared/ui/world-ui";
@@ -21,6 +22,10 @@ const ITEM_TYPE = "minecraft:item";
 const DEMAND_ITEM = "minecraft:cobblestone";
 const MAINTAIN_COUNT = 1;
 const SOURCE_STOCK = 16;
+const FILTER = "folkways.card.items.filter";
+const TAKE = "folkways.card.flag.orders_take";
+const STORE = "folkways.card.flag.orders_store";
+const FILTER_CHIP = "folkways.card.choice.orders_filter_mode.folkways_core:filter/";
 
 const CONTAINER_LANGUAGE = defineTask<{ code: string }, { ok: true }>({
   name: "folkways.container-preview.language",
@@ -59,7 +64,7 @@ return Map.of("settled", settled, "width", mc.getWindow().getGuiScaledWidth(), "
   }),
 });
 
-for (const stage of twins()) test(stage.title("container panel carry-set MAINTAIN stock replenishes the bound chest"), async ({}, testInfo) => {
+for (const stage of twins()) test(stage.title("container card Maintain order replenishes the bound chest"), async ({}, testInfo) => {
   test.setTimeout(BUDGET.quick);
   ensureOut("e2e");
 
@@ -87,7 +92,7 @@ for (const stage of twins()) test(stage.title("container panel carry-set MAINTAI
     targetChest = { x: origin.x + 5, y: origin.y, z: origin.z - 2 };
     sourceChest = { x: origin.x - 5, y: origin.y, z: origin.z + 5 };
     await stage.lay(server, cover(foundingBox(origin), safeWalkwayBox(origin, targetChest, sourceChest)));
-    await foundColonyFast(server, client, playerName, { origin, residentCount: 3, stage });
+    const founded = await foundColonyFast(server, client, playerName, { origin, residentCount: 3, stage });
     await tryCommand(server, "gamerule doDaylightCycle false");
     await tryCommand(server, "time set day");
 
@@ -115,23 +120,21 @@ for (const stage of twins()) test(stage.title("container panel carry-set MAINTAI
     await containerAccess(server, client, playerName, targetChest, stage, "store");
     await exerciseFilterPicker(server, client, playerName, targetChest, sourceChest, stage);
     await setMaintainDemandViaUI(server, client, playerName, targetChest, DEMAND_ITEM, 1, stage);
-    const orderedRules = await openContainerRules(server, client, playerName, targetChest, stage);
-    await assertFilterState(client, orderedRules, "white", 1);
-    for (const mode of ["black", "white"] as const) {
-      await clickBoardAction(client, (await boardAct(client, "do", "folkways_vanilla.orders", orderedRules.admission, 0)).id);
-      await settlePanel(server, client);
-      await assertFilterState(client, orderedRules, mode, 1);
+    await openBlockCard(server, client, playerName, targetChest, stage);
+    await assertFilterState(server, client, "only", 1);
+    for (const mode of ["except", "only"] as const) {
+      await pressCard(server, client, FILTER_CHIP + mode);
+      await assertFilterState(server, client, mode, 1);
     }
-    await clickBoardAction(client, (await boardAct(client, "edit", "folkways_vanilla.orders", orderedRules.filter)).id);
-    await waitForElement(client, { id: "folkways.selector.close" });
+    expect(await cardRows(client, ORDERS_HERE)).toHaveLength(1);
+    await pressCard(server, client, FILTER);
     await filterSearch(server, client, "*minecraft:dirt");
     await waitForElement(client, { id: "folkways.selector.result.minecraft.dirt" });
     await clickElement(client, { id: "folkways.selector.result.minecraft.dirt" });
-    await clickElement(client, { id: "folkways.selector.confirm" });
-    await waitForElement(client, { id: "folkways.selector.close" }, { state: "absent" });
-    await settlePanel(server, client);
-    await assertFilterState(client, orderedRules, "white", 0);
+    await finishPicker(server, client, "confirm");
+    await assertFilterState(server, client, "only", 0);
     await screen.dismiss(client);
+
     await tick.sprint(server, 200);
     expect(await chestItemCount(server, stage.at(targetChest), DEMAND_ITEM),
       "a protected container must not supply an order").toBe(0);
@@ -141,6 +144,23 @@ for (const stage of twins()) test(stage.title("container panel carry-set MAINTAI
     const final = await pollReplenish(server, stage.at(targetChest), stage.at(sourceChest));
     expect(final.targetHasStock).toBe(true);
     expect(final.sourceHasRemainder).toBe(true);
+    expect(await filedOrdersAt(server, playerName, targetChest, DEMAND_ITEM, stage))
+      .toEqual([{ high: MAINTAIN_COUNT, standing: true }]);
+    await openColonyPanelViaBook(server, client, playerName, founded.standBlock, stage);
+    const orders = await openSection(server, client, BOOK_TABS.stock, "folkways_vanilla:orders", "STOCK")
+      .catch(async error => {
+        const section = panelSection("folkways_vanilla:orders", "STOCK");
+        const relevant = new Set(["folkways.metrics.search", "folkways.book.sections.stock", section]);
+        const tree = await panelElements(client);
+        const controls = tree.filter(element => relevant.has(element.id ?? ""))
+          .map(({ id, displayed }) => ({ id, displayed }));
+        throw new Error(`${error.message} (Stock & orders controls: ${JSON.stringify(controls)})`, { cause: error });
+      });
+    const stock = await panelElements(client);
+    expect(orders.map(row => textUnder(stock, row.id))).toEqual(expect.arrayContaining([
+      expect.stringContaining("Cobblestone"),
+    ]));
+    await screen.dismiss(client);
     // How the form is drawn does not depend on where the chest stands: its geometry is checked on the ground.
     if (stage.kind === "ground") {
       await setMaintainDemandViaUI(server, client, playerName, targetChest, "minecraft:iron_ingot", 8, stage);
@@ -190,42 +210,35 @@ async function chestHasAtLeast(server: any, chest: any, itemId: string, count: n
   return (await chestItemCount(server, chest, itemId)) >= count;
 }
 
-// Resolve controls by their role in the form, independently of the number of existing orders.
-async function openContainerRules(server: any, client: any, playerName: string, chest: any, stage: any) {
-  await screen.dismiss(client);
-  const seen = stage.stand(chest);
-  await tryCommand(server, `tp ${playerName} ${seen.x + 0.5} ${seen.y} ${seen.z + 1.5} 180 30`);
-  await openSite(server, client, chest, stage);
-  const edits = await boardActs(client, "edit", "folkways_vanilla.orders");
-  expect(edits.length, "only filter and the three order draft fields are editable").toBe(4);
-  const byRow = new Map<number, number>();
-  for (const edit of edits) byRow.set(edit.row, (byRow.get(edit.row) ?? 0) + 1);
-  const filter = [...byRow].find(([, count]) => count === 1)?.[0];
-  const draft = [...byRow].find(([, count]) => count === 3)?.[0];
-  expect(filter, "the filter has its own picker").toBeDefined();
-  expect(draft, "the order draft has item, threshold, and target fields").toBeDefined();
-  const actions = await boardActs(client, "do", "folkways_vanilla.orders");
-  const admission = actions.find(act => act.row > filter! && act.row < draft!)?.row;
-  expect(admission, "filter actions belong between the filter picker and order form").toBeDefined();
-  return { first: 1, filter: filter!, admission: admission!, draft: draft! };
+async function pressCard(server: any, client: any, id: string) {
+  await waitForPresent(server, client, id);
+  await clickElement(client, { id });
+  await tick.sprint(server, 5);
+  await frames(client, 3);
+}
+
+async function finishPicker(server: any, client: any, action: "close" | "confirm") {
+  await clickElement(client, { id: `folkways.selector.${action}` });
+  await waitForElement(client, { id: "folkways.selector.close" }, { state: "absent" });
+  await tick.sprint(server, 5);
+  await frames(client, 3);
 }
 
 async function containerAccess(server: any, client: any, playerName: string, chest: any, stage: any,
   mode: "take" | "store") {
-  const rules = await openContainerRules(server, client, playerName, chest, stage);
-  const row = rules.first + ["take", "store"].indexOf(mode);
-  await clickBoardAction(client, (await boardAct(client, "do", "folkways_vanilla.orders", row)).id);
-  await settlePanel(server, client);
+  await openBlockCard(server, client, playerName, chest, stage);
+  await pressCard(server, client, mode === "take" ? TAKE : STORE);
   await screen.dismiss(client);
 }
 
 async function exerciseFilterPicker(server: any, client: any, playerName: string, chest: any, source: any, stage: any) {
-  const rules = await openContainerRules(server, client, playerName, chest, stage);
-  if (stage.kind === "ground") await assertContainerForm(client, rules);
-  const opener = (await boardAct(client, "edit", "folkways_vanilla.orders", rules.filter)).id;
+  await openBlockCard(server, client, playerName, chest, stage);
+  if (stage.kind === "ground") {
+    await assertContainerForm(server, client, 0);
+  }
   const result = (item: string) => `folkways.selector.result.minecraft.${item}`;
-  await assertFilterState(client, rules, "black", 0);
-  await clickBoardAction(client, opener);
+  await assertFilterState(server, client, "except", 0);
+  await pressCard(server, client, FILTER);
   await waitForElement(client, { id: "folkways.selector.close" });
   for (const item of ["cobblestone", "dirt"]) {
     await filterSearch(server, client, `*minecraft:${item}`);
@@ -233,185 +246,75 @@ async function exerciseFilterPicker(server: any, client: any, playerName: string
     await clickElement(client, { id: result(item) });
     expect(await selectedFilterRules(client)).toContain(`minecraft:${item}`);
   }
-  await clickElement(client, { id: "folkways.selector.confirm" });
-  await waitForElement(client, { id: "folkways.selector.close" }, { state: "absent" });
-  await settlePanel(server, client);
-  await assertFilterState(client, rules, "black", 2);
-  await clickBoardAction(client, (await boardAct(client, "do", "folkways_vanilla.orders", rules.admission, 0)).id);
-  await settlePanel(server, client);
-  await assertFilterState(client, rules, "white", 2);
+  await finishPicker(server, client, "confirm");
+  await assertFilterState(server, client, "except", 2);
+  await pressCard(server, client, FILTER_CHIP + "only");
+  await assertFilterState(server, client, "only", 2);
   // Reopen to prove the common picker keeps a multi-selection; cancel a staged removal.
-  await clickBoardAction(client, opener);
+  await pressCard(server, client, FILTER);
   await waitForElement(client, { id: "folkways.selector.close" });
   await filterSearch(server, client, "*minecraft:cobblestone");
   await waitForElement(client, { id: result("cobblestone") });
   expect(await selectedFilterRules(client)).toEqual(["minecraft:cobblestone", "minecraft:dirt"]);
   await clickElement(client, { id: result("cobblestone") });
-  await clickElement(client, { id: "folkways.selector.close" });
-  await settlePanel(server, client);
-  await clickBoardAction(client, opener);
+  await finishPicker(server, client, "close");
+  await pressCard(server, client, FILTER);
   await waitForElement(client, { id: "folkways.selector.close" });
   await filterSearch(server, client, "*minecraft:cobblestone");
   await waitForElement(client, { id: result("cobblestone") });
   expect(await selectedFilterRules(client), "cancel must keep the previous multi-selection")
     .toEqual(["minecraft:cobblestone", "minecraft:dirt"]);
   await clickElement(client, { id: result("cobblestone") });
-  await clickElement(client, { id: "folkways.selector.confirm" });
-  await waitForElement(client, { id: "folkways.selector.close" }, { state: "absent" });
-  await settlePanel(server, client);
-  await assertFilterState(client, rules, "white", 1);
+  await finishPicker(server, client, "confirm");
+  await assertFilterState(server, client, "only", 1);
   // Changing mode keeps dirt selected; cobblestone must still enter for the order.
-  await clickBoardAction(client, (await boardAct(client, "do", "folkways_vanilla.orders", rules.admission, 0)).id);
-  await settlePanel(server, client);
-  await assertFilterState(client, rules, "black", 1);
+  await pressCard(server, client, FILTER_CHIP + "except");
+  await assertFilterState(server, client, "except", 1);
   // Filters belong to a container, rather than the shared settings page.
-  const sourceRules = await openContainerRules(server, client, playerName, source, stage);
-  await assertFilterState(client, sourceRules, "black", 0);
-  await clickBoardAction(client, (await boardAct(client, "edit", "folkways_vanilla.orders", sourceRules.filter)).id);
+  await openBlockCard(server, client, playerName, source, stage);
+  await assertFilterState(server, client, "except", 0);
+  await pressCard(server, client, FILTER);
   await waitForElement(client, { id: "folkways.selector.close" });
   expect(await selectedFilterRules(client), "the source does not inherit the target's filter").toEqual([]);
-  await clickElement(client, { id: "folkways.selector.close" });
-  const reopened = await openContainerRules(server, client, playerName, chest, stage);
-  await assertFilterState(client, reopened, "black", 1);
-  await clickBoardAction(client, (await boardAct(client, "edit", "folkways_vanilla.orders", reopened.filter)).id);
+  await finishPicker(server, client, "close");
+  await openBlockCard(server, client, playerName, chest, stage);
+  await assertFilterState(server, client, "except", 1);
+  await pressCard(server, client, FILTER);
   await waitForElement(client, { id: "folkways.selector.close" });
   expect(await selectedFilterRules(client), "reopening the target keeps its own filter").toEqual(["minecraft:dirt"]);
-  await clickElement(client, { id: "folkways.selector.close" });
-  await clickBoardAction(client, (await boardAct(client, "do", "folkways_vanilla.orders", reopened.admission, 0)).id);
-  await settlePanel(server, client);
-  await assertFilterState(client, reopened, "white", 1);
+  await finishPicker(server, client, "close");
+  await pressCard(server, client, FILTER_CHIP + "only");
+  await assertFilterState(server, client, "only", 1);
 
   await screen.dismiss(client);
 }
 
-async function assertFilterState(client: any, rules: { filter: number; admission: number }, mode: "black" | "white", count: number) {
-  const actions = (await boardActs(client, "do", "folkways_vanilla.orders")).filter(action => action.row === rules.admission);
-  expect(actions.length, "blacklist and whitelist share one mutually exclusive mode button").toBe(1);
-  await scrollElementIntoView(client, { id: actions[0].id });
+async function assertFilterState(server: any, client: any, mode: "except" | "only", count: number) {
+  await expect.poll(async () => {
+    await tick.sprint(server, 3);
+    const tree = await panelElements(client);
+    const selected = tree.find(element => element.id === FILTER_CHIP + mode)?.classes?.includes("folkways_chosen");
+    const summary = textUnder(tree, FILTER);
+    return { selected, summary };
+  }).toMatchObject({ selected: true, summary: count === 0 ? /none/i : count === 1 ? /dirt/i : /cobblestone.*1/i });
+}
+
+async function assertContainerForm(server: any, client: any, expectedOrders: number) {
+  const rows = await cardRows(client, ORDERS_HERE);
+  expect(rows).toHaveLength(expectedOrders);
+  for (const id of [TAKE, STORE, FILTER, ORDER_ITEM, ORDER_LOW, ORDER_COUNT, ORDER_MAINTAIN, ORDER_DELIVER,
+    ...rows.flatMap(row => row.acts)]) {
+    await assertControlFits(server, client, id);
+  }
+}
+
+async function assertControlFits(server: any, client: any, id: string) {
+  await waitForPresent(server, client, id);
   const tree = await panelElements(client);
-  const summary = descendantsText(tree, `folkways.board.row.folkways_vanilla.orders.${rules.filter}`);
-  expect(summary, "filter summary names the current mode").toMatch(mode === "black" ? /blacklist/i : /whitelist/i);
-  expect(summary.match(/[0-9]+/g), "filter summary counts selected items").toContain(String(count));
-}
-
-async function assertContainerForm(client: any, rules: { first: number; filter: number; admission: number; draft: number }, expectedOrders = 0) {
-  const accessHeading = `folkways.board.row.folkways_vanilla.orders.${rules.first - 1}`;
-  const filterHeading = `folkways.board.row.folkways_vanilla.orders.${rules.filter - 1}`;
-  await scrollElementIntoView(client, { id: accessHeading });
-  const elements = await panelElements(client);
-  const access = elements.find(element => element.id === accessHeading)!;
-  const filter = elements.find(element => element.id === filterHeading)!;
-  expect(Math.abs(access.y - filter.y), "access and filter sections should share the top row").toBeLessThanOrEqual(1);
-  expect(filter.x, "the filter section belongs beside access controls").toBeGreaterThan(access.x);
-  for (const row of [rules.first, rules.first + 1]) {
-    const toggle = await boardAct(client, "do", "folkways_vanilla.orders", row);
-    await scrollElementIntoView(client, { id: toggle.id });
-    assertDrawnText(await panelElements(client), toggle.id, "access status button");
-  }
-  const filterActions = (await boardActs(client, "do", "folkways_vanilla.orders"))
-    .filter(act => act.row === rules.admission);
-  for (const action of filterActions) {
-    await scrollElementIntoView(client, { id: action.id });
-    const tree = await panelElements(client);
-    assertDrawnText(tree, action.id, "filter action button");
-    expect(tree.find(element => element.id === action.id)!.width,
-      "mode button should fit its short content, rather than stretching across the form").toBeLessThanOrEqual(110);
-  }
-  const fields = (await boardActs(client, "edit", "folkways_vanilla.orders"))
-    .filter(act => act.row === rules.draft);
-  for (const field of fields) {
-    await scrollElementIntoView(client, { id: field.id });
-    const tree = await panelElements(client);
-    const control = tree.find(element => element.id === field.id)!;
-    if (control.className.endsWith(".TextField")) {
-      const parent = tree.slice(0, control.index).reverse().find(element => element.depth === control.depth - 1)!;
-      // A number alone is ambiguous: its containing field must also paint a readable caption.
-      expect(control.width, "order number inputs need usable horizontal space").toBeGreaterThanOrEqual(48);
-      const captions = assertDrawnText(tree, parent, "order number field caption");
-      for (const caption of captions) {
-        expect(caption.height, "numeric captions should fit in at most two lines").toBeLessThanOrEqual(36);
-      }
-    } else {
-      assertDrawnText(tree, field.id, "order item button");
-    }
-  }
-  const laidOut = await panelElements(client);
-  const numbers = fields.map(field => laidOut.find(element => element.id === field.id)!)
-    .filter(element => element.className.endsWith(".TextField"));
-  expect(numbers.length, "the order form needs threshold and target inputs").toBe(2);
-  expect(Math.abs(numbers[0].y - numbers[1].y), "threshold and target inputs should align horizontally")
-    .toBeLessThanOrEqual(1);
-  const actions = await boardActs(client, "do", "folkways_vanilla.orders");
-  const submit = actions.find(action => action.row > rules.draft)!.row;
-  const picker = await boardAct(client, "edit", "folkways_vanilla.orders", rules.filter);
-  for (const button of [picker, ...actions.filter(action => action.row === submit)]) {
-    await scrollElementIntoView(client, { id: button.id });
-    const tree = await panelElements(client);
-    assertDrawnText(tree, button.id, "filter picker or order submission button");
-  }
-  const orderRows = [...new Set(actions.filter(action => action.row > submit).map(action => action.row))];
-  expect(orderRows.length, "filing another item must preserve each independent order").toBe(expectedOrders);
-  for (const row of orderRows) {
-    const token = `folkways.board.row.folkways_vanilla.orders.${row}`;
-    await scrollElementIntoView(client, { id: token });
-    const tree = await panelElements(client);
-    const entry = tree.find(element => element.id === token)!;
-    const heading = tree.find(element => element.id === `folkways.board.row.folkways_vanilla.orders.${submit + 1}`)!;
-    expect(entry.visible, "existing order must be visible after scrolling to it").toBe(true);
-    expect(entry.height, "existing order must occupy a nonempty row").toBeGreaterThan(0);
-    expect(entry.width, "each existing order needs the full section width").toBeGreaterThanOrEqual(heading.width - 2);
-    expect(entry.width, "existing orders need enough space for item, stock and action").toBeGreaterThanOrEqual(240);
-  }
-}
-
-function assertDrawnText(elements: Element[], target: string | Element, purpose: string) {
-  const parent = typeof target === "string" ? elements.find(element => element.id === target)! : target;
-  expect(parent, `${purpose} must exist`).toBeDefined();
-  if (/^folkways[.]board[.](do|edit)[.]/.test(parent.id ?? "")) assertUnclippedButton(elements, parent, purpose);
-  const labels: Element[] = [];
-  for (let at = parent.index + 1; at < elements.length && elements[at].depth > parent.depth; at++) {
-    const element = elements[at];
-    if (!element.text?.trim() || !/(^|\.)(Label|TextElement)$/.test(element.className) || !element.displayed) continue;
-    let depth = element.depth;
-    let shown = true;
-    for (let ancestor = at - 1; ancestor >= parent.index && depth > parent.depth; ancestor--) {
-      if (elements[ancestor].depth < depth) {
-        depth = elements[ancestor].depth;
-        if (!elements[ancestor].displayed) shown = false;
-      }
-    }
-    if (shown) labels.push(element);
-  }
-  expect(labels.length, `${purpose} must draw text`).toBeGreaterThan(0);
-  for (const label of labels) {
-    const message = `${purpose}: ${JSON.stringify(label.text)} needs a painted box inside its control`;
-    expect(label.visible, message).toBe(true);
-    expect(label.opacity, message).toBeGreaterThan(0);
-    expect(label.width, message).toBeGreaterThan(0);
-    expect(label.height, message).toBeGreaterThan(0);
-    expect(label.x, message).toBeGreaterThanOrEqual(parent.x - 1);
-    expect(label.y, message).toBeGreaterThanOrEqual(parent.y - 1);
-    expect(label.x + label.width, message).toBeLessThanOrEqual(parent.x + parent.width + 1);
-    expect(label.y + label.height, message).toBeLessThanOrEqual(parent.y + parent.height + 1);
-  }
-  return labels;
-}
-
-function assertUnclippedButton(elements: Element[], button: Element, purpose: string) {
-  expect(button.visible, `${purpose} must be visible`).toBe(true);
-  expect(button.displayed, `${purpose} must be displayed`).toBe(true);
-  expect(button.width, `${purpose} needs a full painted button box`).toBeGreaterThan(0);
-  expect(button.height, `${purpose} needs a full painted button box`).toBeGreaterThan(0);
-  for (const ancestor of ancestorsOf(elements, button)) {
-    const context = `${purpose} ${button.id} clipped by ${ancestor.id ?? ancestor.className} at depth ${ancestor.depth}`;
-    expect(ancestor.displayed, context).toBe(true);
-    expect(ancestor.visible, context).toBe(true);
-    if (ancestor.overflowVisible) continue;
-    expect(button.x, context).toBeGreaterThanOrEqual(ancestor.contentX - 1);
-    expect(button.x + button.width, context).toBeLessThanOrEqual(ancestor.contentX + ancestor.contentWidth + 1);
-    expect(button.y, context).toBeGreaterThanOrEqual(ancestor.contentY - 1);
-    expect(button.y + button.height, context).toBeLessThanOrEqual(ancestor.contentY + ancestor.contentHeight + 1);
-  }
+  const control = tree.find(element => element.id === id)!;
+  expect(control.width, id).toBeGreaterThan(0);
+  expect(control.height, id).toBeGreaterThan(0);
+  expect(visibleBox(tree, control), id).toMatchObject({ width: control.width, height: control.height });
 }
 
 async function previewChineseContainer(server: any, client: any, playerName: string, chest: any, stage: any) {
@@ -427,55 +330,27 @@ async function previewChineseContainer(server: any, client: any, playerName: str
       await frames(client, 5);
     }
     expect(viewport?.settled, `Chinese resource reload must finish at GUI scale ${scale}`).toBe(true);
-    const rules = await openContainerRules(server, client, playerName, chest, stage);
-    if (scale === 1) await assertContainerForm(client, rules, 2);
-    for (const row of [rules.first, rules.first + 1]) {
-      const action = await boardAct(client, "do", "folkways_vanilla.orders", row);
-      await scrollElementIntoView(client, { id: action.id });
-      const elements = await panelElements(client);
-      const control = elements.find(element => element.id === action.id)!;
-      expect(control.width).toBeGreaterThan(0);
-      expect(control.height).toBeGreaterThan(0);
+    await openBlockCard(server, client, playerName, chest, stage);
+    if (scale === 1) {
+      await assertContainerForm(server, client, 2);
+    }
+    for (const flag of [TAKE, STORE]) {
+      await assertControlFits(server, client, flag);
+      const tree = await panelElements(client);
+      // A setting's name is drawn rather than held as text; the card's own words show the language.
+      expect(textUnder(tree, "folkways.card.card")).toMatch(/[\u3400-\u9fff]/);
+      const control = tree.find(element => element.id === flag)!;
       expect(control.x).toBeGreaterThanOrEqual(0);
       expect(control.y).toBeGreaterThanOrEqual(0);
       expect(control.x + control.width).toBeLessThanOrEqual(viewport!.width);
       expect(control.y + control.height).toBeLessThanOrEqual(viewport!.height);
-      assertDrawnText(elements, action.id, `Chinese access button at GUI scale ${scale}`);
-    }
-    if (scale === 3) {
-      const token = (await boardAct(client, "do", "folkways_vanilla.orders", rules.first + 1)).id;
-      const initial = await panelElements(client);
-      const originalText = descendantsText(initial, token);
-      await clickBoardAction(client, token);
-      await settlePanel(server, client);
-      expect(descendantsText(await panelElements(client), token), "compact store toggle responds to a click")
-        .not.toEqual(originalText);
-      await clickBoardAction(client, token);
-      await settlePanel(server, client);
-      expect(descendantsText(await panelElements(client), token), "second click restores original permission")
-        .toEqual(originalText);
     }
   }
   await screen.dismiss(client);
 }
 
-function descendantsText(elements: Element[], token: string): string {
-  const parent = elements.find(element => element.id === token)!;
-  const words: string[] = [];
-  for (let at = parent.index + 1; at < elements.length && elements[at].depth > parent.depth; at++) {
-    if (elements[at].displayed && elements[at].text?.trim()) words.push(elements[at].text!);
-  }
-  return words.join(" ");
-}
-
 async function filterSearch(server: any, client: any, query: string) {
-  await clickElement(client, { id: "folkways.selector.search" });
-  await input.key(client, { keyCode: 269 });
-  for (let stroke = 0; stroke < 64; stroke++) {
-    await input.key(client, { keyCode: 259 });
-  }
-  await input.key(client, { text: query });
-  await settlePanel(server, client);
+  await typeCell(server, client, "folkways.selector.search", query);
 }
 
 async function selectedFilterRules(client: any): Promise<string[]> {
@@ -489,11 +364,4 @@ async function selectedFilterRules(client: any): Promise<string[]> {
       }
       return labels.join("");
     }).sort();
-}
-
-async function clickBoardAction(client: any, token: string) {
-  const match = /^folkways\.board\.(?:do|edit)\.(.+)\.(\d+)\.\d+$/.exec(token);
-  if (!match) throw new Error(`not a board action: ${token}`);
-  await scrollElementIntoView(client, { id: `folkways.board.row.${match[1]}.${match[2]}` });
-  await clickElement(client, { id: token }, { scrollIntoView: true });
 }

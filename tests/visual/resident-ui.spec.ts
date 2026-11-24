@@ -2,15 +2,15 @@ import { expect, test } from "@playwright/test";
 import { input, reflect, screen, tick, world } from "@izakyl/blockwright-minecraft";
 import { launchPair, type E2EPair } from "../shared/harness/pair";
 import { foundColonyFast, optInViaBook, waitForGroundedPlayer } from "../shared/colony/colony-founding";
-import { enterSitePanel, openContainerScreen } from "../shared/ui/site-panel";
-import { openOrderDraft, setMaintainDemandViaUI } from "../shared/colony/membership-optin";
-import { panelElements, scrollElementIntoView, visibleBox } from "../ldlib2";
+import { CARD_WINDOW, openBlockCard, waitForPresent } from "../shared/ui/book-cards";
+import { ORDER_MAINTAIN, setMaintainDemandViaUI } from "../shared/colony/membership-optin";
+import { panelElements, visibleBox } from "../ldlib2";
 import { CONFIG_PATH, VisualRun } from "../shared/capture/visual-kit";
 import { tracePath } from "../shared/harness/out-paths";
 import { seededOffThreadServer } from "../shared/harness/mod-settings";
 import { BUDGET } from "../shared/harness/budgets";
-import { frames, safeScreen, screenName, waitForElement } from "../shared/harness/bw-helpers";
-import { createMarkedZone, setBookGesture } from "../shared/ui/zone-tools";
+import { frames, waitForElement } from "../shared/harness/bw-helpers";
+import { chooseBookTool, createMarkedZone, zoneKindKey } from "../shared/ui/zone-tools";
 import { aimAndWorldLeftClick } from "../shared/ui/world-ui";
 
 test("resident names and cards, and a chest window that fits every GUI scale", async ({}, testInfo) => {
@@ -44,7 +44,7 @@ test("resident names and cards, and a chest window that fits every GUI scale", a
     const zoneMin = { x: origin.x + 2, y: ground, z: origin.z + 2 };
     const zoneMax = { x: origin.x + 6, y: ground + 6, z: origin.z + 6 };
     await world.command(server, `setblock ${zoneMax.x} ${zoneMax.y} ${zoneMax.z} minecraft:smooth_stone`);
-    await setBookGesture(server, client, player, "box");
+    await chooseBookTool(server, client, zoneKindKey("farm"));
     await aimAndWorldLeftClick(server, client, player, zoneMin);
     await tick.sprint(server, 3);
     await aimAndWorldLeftClick(server, client, player, zoneMax);
@@ -62,12 +62,12 @@ test("resident names and cards, and a chest window that fits every GUI scale", a
 
     const chest = { x: founded.origin.x + 4, y: origin.y, z: origin.z };
     await world.command(server, `setblock ${chest.x} ${chest.y} ${chest.z} minecraft:chest`);
+    // Counts of one, two and three digits, so each GUI scale shows how the contents line sets them.
+    for (const [slot, stack] of [[0, "cooked_beef 64"], [1, "cooked_beef 64"], [2, "bread 32"], [3, "apple 7"], [4, "carrot 1"]]) {
+      await world.command(server, `item replace block ${chest.x} ${chest.y} ${chest.z} container.${slot} with minecraft:${stack}`);
+    }
     await optInViaBook(server, client, player, chest, "chest");
-    await world.command(server, `tp ${player} ${chest.x + 0.5} ${chest.y} ${chest.z + 1.5} 180 30`);
-    await tick.sprint(server, 5);
-    await openContainerScreen(client, chest);
-    await enterSitePanel(server, client);
-    expect(screenName(await safeScreen(client))).toMatch(/ModularUI/);
+    await openBlockCard(server, client, player, chest);
     for (const scale of [1, 2, 3]) {
       const integer = await reflect.invoke(client, {
         target: { kind: "static", className: "java.lang.Integer" },
@@ -78,23 +78,22 @@ test("resident names and cards, and a chest window that fits every GUI scale", a
       await reflect.invoke(client, { target: { kind: "static", className: "net.minecraft.client.Minecraft" },
         path: "getInstance()", method: "resizeDisplay" });
       await frames(client, 8);
-      const panel = await waitForElement(client, { id: "folkways.site.panel" });
+      const panel = await waitForElement(client, { id: CARD_WINDOW });
       expect(panel.x).toBeGreaterThanOrEqual(0);
       expect(panel.y).toBeGreaterThanOrEqual(0);
       expect(panel.x + panel.width).toBeLessThanOrEqual(Math.ceil(1280 / scale));
       expect(panel.y + panel.height).toBeLessThanOrEqual(Math.ceil(720 / scale));
       await input.move(client, { x: 0, y: 0 });
       await run.shot(client, `02-chest-scale-${scale}`, {
-        subject: `The chest's own window, GUI scale ${scale}: the board stays inside the screen`,
+        subject: `The chest's own window, GUI scale ${scale}: the card stays inside the screen`,
         worldState: { chest, scale, panel }, hard: true,
       });
     }
     await screen.dismiss(client);
     await setMaintainDemandViaUI(server, client, player, chest, "minecraft:cobblestone", 1);
-    const draft = await openOrderDraft(server, client, chest);
-    const order = await scrollElementIntoView(client, {
-      id: `folkways.board.do.folkways_vanilla.orders.${draft.row + 1}.0`,
-    });
+    await openBlockCard(server, client, player, chest);
+    await waitForPresent(server, client, ORDER_MAINTAIN);
+    const order = await waitForElement(client, { id: ORDER_MAINTAIN });
     const shown = visibleBox(await panelElements(client), order);
     expect(shown?.height).toBe(order.height);
     expect(shown?.width).toBe(order.width);

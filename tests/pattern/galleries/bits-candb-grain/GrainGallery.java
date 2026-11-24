@@ -1,3 +1,34 @@
+import blockwright.minecraft.core.Args;
+import blockwright.minecraft.core.Sync;
+import dev.blockwright.api.Context;
+import io.github.izakyl.folkways.core.front.api.Schema;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
+import io.github.izakyl.folkways.core.shell.chiselsandbits.CandBStructureCodec;
+import io.github.izakyl.folkways.core.work.api.StructureCompat;
+import io.github.izakyl.folkways.core.work.api.Voxelizer;
+import io.github.izakyl.folkways.vanilla.build.draft.Chosen;
+import io.github.izakyl.folkways.vanilla.build.draft.Commission;
+import io.github.izakyl.folkways.vanilla.build.draft.DraftTemplate;
+import io.github.izakyl.folkways.vanilla.build.draft.Drafting;
+import io.github.izakyl.folkways.vanilla.build.draft.Drawn;
+import io.github.izakyl.folkways.vanilla.build.draft.Hint;
+import io.github.izakyl.folkways.vanilla.build.draft.Pattern;
+import io.github.izakyl.folkways.vanilla.build.draft.Patterns;
+import io.github.izakyl.folkways.vanilla.build.draft.World;
+import java.io.ByteArrayOutputStream;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.NbtIo;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.Blocks;
 
 public final class Task {
     private static final List<BlockPos> PLACED = new ArrayList<>();
@@ -13,7 +44,7 @@ public final class Task {
         }
         PLACED.clear();
         String name = Args.of(ctx).string("name");
-        var id = ResourceLocation.parse("folkways_carving:" + name);
+        var id = ResourceLocation.parse("folkways_vanilla:" + name);
         var pattern = Pattern.parse(id, Args.of(ctx).string("source")).orElseThrow(
             () -> new IllegalArgumentException("cannot parse " + name));
         if (Patterns.find(id).isEmpty()) {
@@ -37,7 +68,7 @@ public final class Task {
                     .map(filter -> ItemSpec.of(filter.id())).toList()).save());
             }
         }
-        var commission = new Commission(hint, Chosen.load(pattern.knobs(), defaults),
+        var commission = new Commission(hint, Chosen.normalize(pattern.knobs(), defaults),
             World.NONE, name.equals("curved_gallery") ? Direction.NORTH : Direction.SOUTH, 73);
         long began = System.nanoTime();
         var drawn = Drafting.draw(pattern, commission).join();

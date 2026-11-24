@@ -6,12 +6,13 @@ import { foundColonyFast, openColonyPanelViaBook, waitForGroundedPlayer } from "
 import { launchPair, type E2EPair } from "../shared/harness/pair";
 import { markSeeded } from "../shared/harness/mod-settings";
 import { newRunId } from "../shared/harness/run-id";
-import { clickTab } from "../shared/ui/colony-pages";
 import { typeCell } from "../shared/ui/site-panel";
 import { frames } from "../shared/harness/bw-helpers";
 import { setVisualLanguage } from "../shared/capture/ponder";
+import { openEditor } from "../shared/ui/colony-pages";
 
 const KEY = "folkways.equipment.";
+const EDITOR = "folkways_core.equipment";
 const PROFILE = "Archers of the northern river watch";
 const READ = defineTask<void, { profiles: string[]; assignments: string[]; target: number; threshold: number; spectralFirst: boolean; chestplate: boolean }>({
   name: "folkways.loadout-ux.read", side: "server",
@@ -81,8 +82,8 @@ test("equipment profile panes and immediate assignment work in Chinese and Engli
     const founded = await foundColonyFast(server, client, player.name, { origin, residentCount: 2 });
     await setVisualLanguage(client, "zh_cn");
     await openColonyPanelViaBook(server, client, player.name, founded.standBlock);
-    await clickTab(client, KEY + "title");
     expect(element(await panelElements(client), "folkways.window.colony").width).toBe(1100);
+    await openEditor(client, EDITOR);
     await clickElement(client, { id: KEY + "create" });
     await expect.poll(async () => (await server.run(READ)).profiles.length).toBe(1);
     await typeCell(server, client, KEY + "name", PROFILE);
@@ -130,10 +131,10 @@ test("equipment profile panes and immediate assignment work in Chinese and Engli
     await screen.dismiss(client);
     await setVisualLanguage(client, "en_us");
     await openColonyPanelViaBook(server, client, player.name, founded.standBlock);
-    await clickTab(client, KEY + "title");
+    await openEditor(client, EDITOR);
     await clickElement(client, { id: KEY + "profile.0" });
     await expect.poll(async () => element(await panelElements(client), KEY + "add").text).toBe("+ Add");
-    // The equipment page stacks below 340 GUI units.
+    // The equipment editor stacks below 340 GUI units.
     await resizeWindow(client, 320, 720);
     await expect.poll(async () => {
       const narrow = await panelElements(client);

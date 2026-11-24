@@ -2,8 +2,11 @@ package io.github.izakyl.folkways.vanilla.build;
 
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import io.github.izakyl.folkways.core.work.api.Amount;
+import io.github.izakyl.folkways.core.work.api.BlockData;
+import io.github.izakyl.folkways.core.work.api.Costs;
 import io.github.izakyl.folkways.core.work.api.Need;
-import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.work.api.SchematicPrinter;
+import io.github.izakyl.folkways.core.world.api.Stances;
 import io.github.izakyl.folkways.core.work.api.StructureCompat;
 import io.github.izakyl.folkways.core.work.api.ToolNeed;
 import io.github.izakyl.folkways.core.work.api.ToolUse;
@@ -99,20 +102,20 @@ record BuildJob(Kind kind, WorldPos focus, Stances footings,
         if (anchor.getBlock() instanceof LiquidBlock) {
             return Costs.poured(anchor).orElse(List.of());
         }
-        return SchematicPlacement.adapter().launch(states, focus.cell())
+        return SchematicPrinter.adapter().launch(states, focus.cell())
             .flatMap(launch -> quoted(launch, states))
             .orElse(List.of());
     }
 
     /** A shot's cost reckoned without a level: from the states alone, as for a block entity with no data. */
-    static Optional<List<Need>> quoted(SchematicPlacement.Launch launch, Function<BlockPos, BlockState> states) {
+    static Optional<List<Need>> quoted(SchematicPrinter.Launch launch, Function<BlockPos, BlockState> states) {
         BlockState anchor = states.apply(launch.anchor());
         if (anchor.getBlock() instanceof LiquidBlock) {
             return Costs.poured(anchor);
         }
         List<Need> needs = new ArrayList<>();
         for (BlockPos cell : launch.charged()) {
-            Costs.Quote quote = SchematicPlacement.adapter().requirement(states.apply(cell), null);
+            Costs.Quote quote = SchematicPrinter.adapter().requirement(states.apply(cell), null);
             if (quote.needs().isEmpty()) {
                 return Optional.empty();
             }
@@ -207,8 +210,8 @@ record BuildJob(Kind kind, WorldPos focus, Stances footings,
         for (Map.Entry<WorldPos, BlockState> cell : after.entrySet()) {
             BlockState standing = before.get(cell.getKey());
             if (!standing.is(cell.getValue().getBlock())
-                || !SchematicPlacement.adapter().requirement(standing, null)
-                    .equals(SchematicPlacement.adapter().requirement(cell.getValue(), null))) {
+                || !SchematicPrinter.adapter().requirement(standing, null)
+                    .equals(SchematicPrinter.adapter().requirement(cell.getValue(), null))) {
                 return false;
             }
         }

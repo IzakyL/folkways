@@ -2,7 +2,7 @@ package io.github.izakyl.folkways.vanilla.wares;
 
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import io.github.izakyl.folkways.core.plan.api.Workshop;
-import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.world.api.Stances;
 import java.util.Optional;
 import net.minecraft.server.level.ServerLevel;
 

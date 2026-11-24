@@ -1,7 +1,14 @@
 package io.github.izakyl.folkways.core;
 
+import io.github.izakyl.folkways.core.combat.api.FireControl;
+import io.github.izakyl.folkways.core.combat.api.StdBallistics;
+import io.github.izakyl.folkways.core.shell.create.CreateIntegration;
+import io.github.izakyl.folkways.core.shell.create.firefighting.ResidentSprayPacket;
+import io.github.izakyl.folkways.core.shell.create.upgrade.CreateUpgrades;
+
 import io.github.izakyl.folkways.core.base.FolkwaysMixinPlugin;
 import io.github.izakyl.folkways.core.base.Ledger;
+import io.github.izakyl.folkways.core.base.persist.upgrade.ConfigRenames;
 import io.github.izakyl.folkways.core.base.persist.upgrade.Upgrades;
 import io.github.izakyl.folkways.core.colony.api.Cadence;
 import io.github.izakyl.folkways.core.colony.internal.ColonyLookup;
@@ -9,6 +16,7 @@ import io.github.izakyl.folkways.core.colony.internal.ColonyRegistry;
 import io.github.izakyl.folkways.core.colony.internal.ColonyRuntime;
 import io.github.izakyl.folkways.core.colony.internal.Contributions;
 import io.github.izakyl.folkways.core.colony.internal.WorkDecoratorRegistry;
+import io.github.izakyl.folkways.core.facility.internal.FacilitySetup;
 import io.github.izakyl.folkways.core.effect.perk.GlobalPerks;
 import io.github.izakyl.folkways.core.effect.perk.PerkPool;
 import io.github.izakyl.folkways.core.equipment.internal.EquipmentIntegration;
@@ -16,6 +24,7 @@ import io.github.izakyl.folkways.core.extension.api.Declaring;
 import io.github.izakyl.folkways.core.extension.api.Relating;
 import io.github.izakyl.folkways.core.front.engine.Enrollments;
 import io.github.izakyl.folkways.core.front.engine.Front;
+import io.github.izakyl.folkways.core.colony.charter.Charters;
 import io.github.izakyl.folkways.core.front.engine.colony.ColonyFront;
 import io.github.izakyl.folkways.core.front.engine.net.ColonyOverviews;
 import io.github.izakyl.folkways.core.front.ui.UiRegistrations;
@@ -25,6 +34,7 @@ import io.github.izakyl.folkways.core.item.api.ItemQuery;
 import io.github.izakyl.folkways.core.library.LibraryCommand;
 import io.github.izakyl.folkways.core.library.LooseFolder;
 import io.github.izakyl.folkways.core.library.Shelves;
+import io.github.izakyl.folkways.core.plan.api.WorkshopRecipes;
 import io.github.izakyl.folkways.core.plan.internal.Refinements;
 import io.github.izakyl.folkways.core.resident.api.Participations;
 import io.github.izakyl.folkways.core.resident.api.ResidentKinds;
@@ -32,23 +42,44 @@ import io.github.izakyl.folkways.core.resident.api.Stake;
 import io.github.izakyl.folkways.core.resident.internal.EquipmentCoordinator;
 import io.github.izakyl.folkways.core.resident.internal.PackKeepRegistry;
 import io.github.izakyl.folkways.core.resident.internal.TaskToolLoans;
-import io.github.izakyl.folkways.core.rts.RtsIntegration;
+import io.github.izakyl.folkways.core.command.RtsIntegration;
 import io.github.izakyl.folkways.core.runtime.Labor;
+import io.github.izakyl.folkways.core.runtime.RecentErrors;
 import io.github.izakyl.folkways.core.shell.MobFitting;
 import io.github.izakyl.folkways.core.shell.ae2.Ae2Integration;
+import io.github.izakyl.folkways.core.shell.api.OptionalIntegrations;
+import io.github.izakyl.folkways.core.shell.cbc.CbcIntegration;
+import io.github.izakyl.folkways.core.shell.letitwalk.LetItWalkIntegration;
+import io.github.izakyl.folkways.core.shell.carts.CartIntegration;
+import io.github.izakyl.folkways.core.shell.carts.upgrade.CartsUpgrades;
+import io.github.izakyl.folkways.core.shell.chiselsandbits.CandBIntegration;
+import io.github.izakyl.folkways.core.shell.chiselsandbits.upgrade.CarvingUpgrades;
 import io.github.izakyl.folkways.core.shell.colossalchests.ChestsIntegration;
-import io.github.izakyl.folkways.core.shell.mekanism.QioIntegration;
-import io.github.izakyl.folkways.core.shell.neoforge.FolkwaysAttachments;
-import io.github.izakyl.folkways.core.shell.rs2.Rs2Integration;
+import io.github.izakyl.folkways.core.shell.cookery.api.Appliances;
+import io.github.izakyl.folkways.core.shell.cookery.api.RackPorts;
+import io.github.izakyl.folkways.core.shell.cookery.oil.PlacedOilStore;
+import io.github.izakyl.folkways.core.shell.cookery.tavern.TavernCabinets;
+import io.github.izakyl.folkways.core.shell.cookery.upgrade.CookeryUpgrades;
 import io.github.izakyl.folkways.core.shell.crafting.NetworkPanel;
+import io.github.izakyl.folkways.core.shell.crafting.VanillaRecipes;
+import io.github.izakyl.folkways.core.shell.epicfight.EpicFightIntegration;
+import io.github.izakyl.folkways.core.shell.golems.GolemPlugin;
+import io.github.izakyl.folkways.core.shell.golems.upgrade.GolemsUpgrades;
+import io.github.izakyl.folkways.core.shell.mekanism.QioIntegration;
+import io.github.izakyl.folkways.core.resident.internal.FolkwaysAttachments;
+import io.github.izakyl.folkways.core.shell.rs2.Rs2Integration;
 import io.github.izakyl.folkways.core.shell.storage.drawers.DrawersIntegration;
 import io.github.izakyl.folkways.core.shell.storage.functional.FunctionalIntegration;
 import io.github.izakyl.folkways.core.shell.storage.sophisticated.BackpacksIntegration;
 import io.github.izakyl.folkways.core.shell.structure.CreateObstacles;
+import io.github.izakyl.folkways.core.shell.structure.SableCopies;
 import io.github.izakyl.folkways.core.shell.structure.SableObstacles;
 import io.github.izakyl.folkways.core.shell.structure.SablePassage;
 import io.github.izakyl.folkways.core.shell.structure.SableSpaces;
+import io.github.izakyl.folkways.core.shell.tacz.TaczIntegration;
 import io.github.izakyl.folkways.core.shell.toms.TomsIntegration;
+import io.github.izakyl.folkways.core.shell.warfare.WarfareIntegration;
+import io.github.izakyl.folkways.core.shell.warfare.upgrade.FirearmsUpgrades;
 import io.github.izakyl.folkways.core.travel.api.Passages;
 import io.github.izakyl.folkways.core.travel.internal.PathfindingLoad;
 import io.github.izakyl.folkways.core.travel.internal.TickBudget;
@@ -57,8 +88,10 @@ import io.github.izakyl.folkways.core.vocation.api.VocationGroup;
 import io.github.izakyl.folkways.core.vocation.api.VocationSpec;
 import io.github.izakyl.folkways.core.vocation.api.Vocations;
 import io.github.izakyl.folkways.core.vocation.internal.VocationRegistry;
+import io.github.izakyl.folkways.core.work.api.Seating;
 import io.github.izakyl.folkways.core.work.internal.HaulWork;
 import io.github.izakyl.folkways.core.work.internal.KitRuleRegistry;
+import io.github.izakyl.folkways.core.world.api.FrameCopies;
 import io.github.izakyl.folkways.core.world.api.Structures;
 import io.github.izakyl.folkways.core.world.api.WorldSpaces;
 import io.github.izakyl.folkways.core.world.internal.LocalGrounds;
@@ -89,33 +122,86 @@ public final class FolkwaysCoreMod {
     // The mod this class is: the engine, which the other Folkways mods install their plugins over.
     public static final String CORE_ID = "folkways_core";
 
+    // Every Folkways mod ships in one release, and client and server run the same build, so the release
+    // version is the protocol version of every Folkways payload.
     public static final String NETWORK_VERSION = ModList.get().getModContainerById(CORE_ID)
-        .orElseThrow().getModInfo().getVersion().toString() + "/3";
+        .orElseThrow().getModInfo().getVersion().toString();
 
     private final Labor labor = new Labor();
 
     public FolkwaysCoreMod(IEventBus modBus, ModContainer container) {
         CoreUpgrades.register();
+        CookeryUpgrades.register();
+        CartsUpgrades.register();
+        FirearmsUpgrades.register();
+        CreateUpgrades.register();
+        ConfigRenames.register("folkways_create-server.toml", CreateIntegration.CONFIG);
+        if (ModList.get().isLoaded("createfirefightingadd")) {
+            modBus.addListener(ResidentSprayPacket::register);
+        }
+        if (OptionalIntegrations.CREATE.enabled()) {
+            CreateIntegration.install(modBus, container);
+        }
+        if (OptionalIntegrations.CBC.enabled()) {
+            CbcIntegration.install();
+        }
+        if (OptionalIntegrations.LET_IT_WALK.enabled()) {
+            LetItWalkIntegration.install();
+        }
+        if (OptionalIntegrations.TACZ.enabled()) {
+            TaczIntegration.install(modBus);
+        }
+        if (OptionalIntegrations.SUPERB_WARFARE.enabled()) {
+            WarfareIntegration.install(modBus);
+        }
+        if (OptionalIntegrations.COOKERY.enabled()) {
+            RackPorts.register();
+            Appliances.register();
+            PlacedOilStore.register();
+        }
+        if (OptionalIntegrations.TAVERN.enabled()) {
+            TavernCabinets.register();
+        }
+        if (OptionalIntegrations.CARTS.enabled()) {
+            CartIntegration.install();
+        }
+        GolemsUpgrades.register();
+        CarvingUpgrades.register();
+        ConfigRenames.register("folkways_carving-server.toml", CandBIntegration.CONFIG);
+        ConfigRenames.register("folkways_chiselsandbits-server.toml", CandBIntegration.CONFIG);
+        if (OptionalIntegrations.MODULAR_GOLEMS.enabled()) {
+            GolemPlugin.install(modBus);
+        }
+        if (OptionalIntegrations.EPIC_FIGHT.enabled()) {
+            EpicFightIntegration.install(modBus);
+        }
+        if (OptionalIntegrations.CHISELS_AND_BITS.enabled()) {
+            CandBIntegration.install(modBus, container);
+        }
         PortHooks.install();
         container.registerConfig(ModConfig.Type.SERVER, FolkwaysConfig.SPEC);
         container.registerConfig(ModConfig.Type.CLIENT, FolkwaysClientConfig.SPEC);
         VocationRegistry.install();
         KitRuleRegistry.install();
         WorkDecoratorRegistry.install();
+        WorkshopRecipes.install(Refinements::expand);
         EquipmentCoordinator.install();
         PackKeepRegistry.install();
         TaskToolLoans.install();
+        Seating.install();
         fitTheShell(modBus);
         FolkwaysAttachments.register(modBus);
         Front.install(modBus);
         RtsIntegration.install(modBus);
         EquipmentIntegration.install(modBus);
+        VanillaRecipes.install();
+        FacilitySetup.install(modBus);
+        StdBallistics.install();
+        modBus.addListener(Declaring.class, event -> event.colony(FireControl.ID, FireControl::install));
         modBus.addListener(Declaring.class, event ->
             event.vocation(HaulWork.SPEC.ordered(0).grouped(VocationGroup.TRANSPORT)));
-        modBus.addListener(Declaring.class, event -> event.vocation(
-            VocationSpec.of(
-                Vocations.NETWORK_SERVICE)
-                .grouped(VocationGroup.TRANSPORT).ordered(10).allowedByDefault(false)));
+        modBus.addListener(Declaring.class, event -> event.vocation(VocationSpec.of(Vocations.NETWORK_SERVICE)
+            .grouped(VocationGroup.TRANSPORT).ordered(10).allowedByDefault(false)));
         modBus.addListener(FMLCommonSetupEvent.class, FolkwaysCoreMod::openDeclarations);
         modBus.addListener(FolkwaysCoreMod::reportDegradedMixins);
         modBus.addListener(LooseFolder::addPackFinder);
@@ -130,6 +216,7 @@ public final class FolkwaysCoreMod {
                 }
             });
         NeoForge.EVENT_BUS.addListener(labor::onServerTick);
+        NeoForge.EVENT_BUS.addListener(Charters::tick);
         NeoForge.EVENT_BUS.addListener(net.neoforged.neoforge.event.TagsUpdatedEvent.class, event -> {
             Goods.forgetTags();
             ItemQuery.forget();
@@ -181,7 +268,8 @@ public final class FolkwaysCoreMod {
         }
         if (ModList.get().isLoaded("sable")) {
             WorldSpaces.install(new SableSpaces());
-            Structures.install(new SableObstacles());
+            FrameCopies.install(new SableCopies());
+            Structures.install(SableObstacles.class, new SableObstacles());
             modBus.addListener(Declaring.class, event -> event.passage(new SablePassage()));
         }
         if (net.neoforged.fml.loading.FMLEnvironment.dist.isClient()) {
@@ -192,7 +280,7 @@ public final class FolkwaysCoreMod {
         LocalGrounds.install();
         MobFitting.install();
         if (ModList.get().isLoaded(CreateObstacles.CREATE_MOD_ID)) {
-            Structures.install(new CreateObstacles());
+            Structures.install(CreateObstacles.class, new CreateObstacles());
         }
     }
 
@@ -235,6 +323,7 @@ public final class FolkwaysCoreMod {
     }
 
     private void onServerStarting(ServerStartingEvent event) {
+        RecentErrors.install();
         ColonyRuntime.opened(event.getServer());
         labor.begin(event.getServer());
     }
@@ -245,6 +334,7 @@ public final class FolkwaysCoreMod {
 
     private void onServerStopped(ServerStoppedEvent event) {
         forgetServer(event.getServer());
+        RecentErrors.uninstall();
     }
 
     private void forgetServer(MinecraftServer server) {

@@ -27,7 +27,7 @@ import org.appliedenergistics.yoga.YogaJustify;
 // empty tree; it carries no synced value for the two to disagree on.
 public final class LessonsPage implements Draw {
 
-    private static final int INDENT = 10;
+    static final int INDENT = 10;
     private static final int ARROW_WIDTH = 9;
     private static final String CLOSED = "▸";
     private static final String OPENED = "▾";
@@ -83,18 +83,8 @@ public final class LessonsPage implements Draw {
         for (Node child : node.children()) {
             children.addChildren(node(child, depth + 1));
         }
-        boolean open = FOLDED.getOrDefault(node.token(), node.openByDefault());
-        children.setDisplay(open);
-        Label arrow = new Label();
-        arrow.setText(Component.literal(open ? OPENED : CLOSED));
-        arrow.textStyle(style -> style.textWrap(TextWrap.NONE).textAlignHorizontal(Horizontal.CENTER));
-        Button head = line(node, depth, arrow);
-        head.setOnClick(event -> {
-            boolean now = !children.isDisplayed();
-            FOLDED.put(node.token(), now);
-            children.setDisplay(now);
-            arrow.setText(Component.literal(now ? OPENED : CLOSED));
-        });
+        Button head = branch(node.token(), Component.translatable(node.nameKey()), node.icon(), depth,
+            node.openByDefault(), children);
         UIElement top = head;
         if (node.plays().isPresent()) {
             ResourceLocation lesson = node.plays().get();
@@ -111,18 +101,46 @@ public final class LessonsPage implements Draw {
         return Rows.table().addChildren(top, children);
     }
 
-    // One row: the fold arrow's column (empty on a leaf, so names line up), its icon if any, its name.
+    /**
+     * A branch's head: a press folds its children open or shut in place, and what the player chose stays so for the
+     * session, across reopening the book. The book's other trees, such as its facilities, fold the same way.
+     */
+    static Button branch(String token, Component name, Optional<ResourceLocation> icon, int depth,
+                         boolean openByDefault, UIElement children) {
+        boolean open = FOLDED.getOrDefault(token, openByDefault);
+        children.setDisplay(open);
+        Label arrow = new Label();
+        arrow.setText(Component.literal(open ? OPENED : CLOSED));
+        arrow.textStyle(style -> style.textWrap(TextWrap.NONE).textAlignHorizontal(Horizontal.CENTER));
+        Button head = line(token, name, icon, depth, arrow);
+        head.setOnClick(event -> {
+            boolean now = !children.isDisplayed();
+            FOLDED.put(token, now);
+            children.setDisplay(now);
+            arrow.setText(Component.literal(now ? OPENED : CLOSED));
+        });
+        return head;
+    }
+
     private static Button line(Node node, int depth, UIElement arrow) {
+        return line(node.token(), Component.translatable(node.nameKey()), node.icon(), depth, arrow);
+    }
+
+    // One row: the fold arrow's column (empty on a leaf, so names line up), its icon if any, its name.
+    private static Button line(String token, Component name, Optional<ResourceLocation> icon, int depth,
+                               UIElement arrow) {
         Button row = Rows.wearing();
         row.layout(layout -> layout.flexDirection(FlexDirection.ROW)
             .widthPercent(100).flexShrink(1).minWidth(0).height(Rows.ROW_HEIGHT - 2).minHeight(Rows.ROW_HEIGHT - 2)
             .paddingLeft(2 + depth * INDENT).gapAll(Rows.GAP - 1));
-        row.setOverflowVisible(false);
         arrow.layout(layout -> layout.width(ARROW_WIDTH).flexShrink(0));
         row.addChildren(arrow);
-        node.icon().ifPresent(icon -> row.addChildren(Rows.icon(SettingsPage.iconOf(icon))));
-        row.addChildren(Rows.name(Component.translatable(node.nameKey())));
-        Tokens.name(row, node.token());
+        icon.ifPresent(item -> row.addChildren(Rows.icon(SettingsPage.iconOf(item))));
+        // The name clips to its own box: clipping the row would cut its oak tag down to the inside of its padding.
+        Label named = Rows.name(name);
+        named.setOverflowVisible(false);
+        row.addChildren(named);
+        Tokens.name(row, token);
         return row;
     }
 }

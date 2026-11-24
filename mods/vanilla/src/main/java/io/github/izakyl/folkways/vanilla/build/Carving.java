@@ -4,6 +4,7 @@ import io.github.izakyl.folkways.core.base.persist.Reader;
 import io.github.izakyl.folkways.core.base.persist.Writer;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import io.github.izakyl.folkways.core.work.api.Amount;
+import io.github.izakyl.folkways.core.work.api.BlockData;
 import io.github.izakyl.folkways.core.work.api.Need;
 import io.github.izakyl.folkways.core.work.api.StructureCompat;
 import io.github.izakyl.folkways.core.work.support.Leaves;

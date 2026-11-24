@@ -49,6 +49,7 @@ final class WorldCards {
     private static final float PAD_Y = 2.0F;
     private static final float ITEM_DEPTH = 1.0F;
     private static final float ITEM_LIFT = 0.5F;
+    private static final float COUNT_SCALE = 0.5F;
     // Share of the way a card's ink moves toward its backdrop's each frame, so a passing cloud fades rather than flickers.
     private static final float INK_EASE = 0.15F;
 
@@ -107,7 +108,7 @@ final class WorldCards {
             CardBackdrop.Ink ink = ink(minecraft, view, card, spots);
             inks.put(key(card), ink);
             if (hidden == 0) {
-                draw(minecraft, poseStack, ModeOverlays.buffers(buffers, OverheadTools.BUILD),
+                draw(minecraft, poseStack, layer(buffers, card),
                     card.anchor(), laid, card.scale(), ink);
                 buffers.endBatch();
             } else {
@@ -117,6 +118,11 @@ final class WorldCards {
         poseStack.popPose();
         INKS.clear();
         INKS.putAll(inks);
+    }
+
+    // A resident's card reads the same in every mode; a placard marks build work, so it dims outside building.
+    private static MultiBufferSource layer(MultiBufferSource buffers, Queued card) {
+        return card.look() == Look.PLACARD ? ModeOverlays.buffers(buffers, OverheadTools.BUILD) : buffers;
     }
 
     private static Vec3[] spots(Camera view, Queued card, LookCardLayout.Laid laid) {
@@ -212,7 +218,7 @@ final class WorldCards {
                     // Only clip-space z changes; screen positions, sizes and perspective stay the same.
                     RenderSystem.setProjectionMatrix(new Matrix4f(projection).m22(-1.0F).m32(-depth), sorting);
                 }
-                draw(minecraft, poseStack, ModeOverlays.buffers(buffers, OverheadTools.BUILD),
+                draw(minecraft, poseStack, layer(buffers, card),
                     card.anchor(), laid, card.scale(), ink);
                 buffers.endBatch();
             } finally {
@@ -251,6 +257,17 @@ final class WorldCards {
                     font.drawInBatch(text.text(), text.x(), text.y(),
                         text.color() == ColonyLookCard.TEXT_COLOR ? ink.bodyColor() : text.color(), false, matrix,
                         buffers, Font.DisplayMode.POLYGON_OFFSET, 0, LightTexture.FULL_BRIGHT);
+                case LookCardLayout.Piece.Count count -> {
+                    // Small in the item's corner and in front of it, as a slot draws its count over the stack.
+                    poseStack.pushPose();
+                    poseStack.translate(count.x() + Signs.countLeft(font, count.text(), COUNT_SCALE),
+                        count.y() + Signs.countTop(COUNT_SCALE), ITEM_LIFT + ITEM_DEPTH);
+                    poseStack.scale(COUNT_SCALE, COUNT_SCALE, 1.0F);
+                    font.drawInBatch(count.text(), 0, 0, count.color(), true,
+                        poseStack.last().pose(), buffers, Font.DisplayMode.POLYGON_OFFSET, 0,
+                        LightTexture.FULL_BRIGHT);
+                    poseStack.popPose();
+                }
             }
         }
         poseStack.popPose();

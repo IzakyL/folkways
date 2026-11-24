@@ -52,7 +52,7 @@ const MAINTAIN_DEMANDS = defineTask<Record<string, any>, Record<string, any>>({
     imports: [
       "io.github.izakyl.folkways.core.item.api.ItemFilter",
       "io.github.izakyl.folkways.vanilla.orders.OrdersContent",
-      "io.github.izakyl.folkways.core.front.engine.colony.ColonyBoards",
+      "io.github.izakyl.folkways.core.front.engine.colony.HeldFacilities",
       "io.github.izakyl.folkways.core.front.engine.colony.ColonyFront",
       "io.github.izakyl.folkways.core.front.engine.colony.ColonyGround",
       "io.github.izakyl.folkways.core.front.engine.colony.ColonySettings.Value",
@@ -91,10 +91,11 @@ for (var raw : args.list("demands")) {
         throw new IllegalStateException("Demand draft did not retain " + demand);
     }
     var act = Boolean.TRUE.equals(demand.get("once")) ? "deliver" : "maintain";
-    var attempt = ColonyBoards.act(level, colony, OrdersContent.ID, Optional.of(at), act)
-        .orElseThrow(() -> new IllegalStateException("No " + act + " action at " + at));
-    if (attempt.refusal().isPresent()) {
-        throw new IllegalStateException("Maintain refused: " + attempt.refusal().get().key());
+    var held = HeldFacilities.at(level, colony, at).orElseThrow(
+        () -> new IllegalStateException("No held container at " + at));
+    var problems = held.run(player, act, Map.of());
+    if (!problems.isEmpty()) {
+        throw new IllegalStateException("Order at " + at + " refused: " + problems);
     }
     filed.add(Map.of("at", cell, "item", item.toString(), "count", count,
         "orders", colony.kept(OrdersContent.ID).getList("orders", 10).size()));

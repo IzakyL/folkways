@@ -1,11 +1,10 @@
 package io.github.izakyl.folkways.core.shell.storage.sophisticated;
 
-import io.github.izakyl.folkways.core.inventory.api.port.PortIdentity;
-import io.github.izakyl.folkways.core.inventory.api.port.StorePort;
-import io.github.izakyl.folkways.core.inventory.api.port.Usability;
+import io.github.izakyl.folkways.core.facility.api.control.PortIdentity;
+import io.github.izakyl.folkways.core.facility.api.control.ItemPort;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.core.shell.storage.CellPort;
-import io.github.izakyl.folkways.core.shell.storage.Verdicts;
+import io.github.izakyl.folkways.core.shell.storage.StorageTraits;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -44,7 +43,7 @@ final class SophisticatedPort {
     private SophisticatedPort() {
     }
 
-    static StorePort create(ServerLevel level, BlockPos pos, IStorageWrapper wrapper, BooleanSupplier locked) {
+    static ItemPort create(ServerLevel level, BlockPos pos, IStorageWrapper wrapper, BooleanSupplier locked) {
         InventoryHandler inventory = wrapper.getInventoryHandler();
         MemorySettingsCategory memory = wrapper.getSettingsHandler().getTypeCategory(MemorySettingsCategory.class);
         List<CellPort.Cell> cells = new ArrayList<>();
@@ -102,7 +101,7 @@ final class SophisticatedPort {
         WorldPos home = WorldPos.of(level, pos);
         PortIdentity identity = wrapper.getContentsUuid().map(id -> new PortIdentity(new Contents(id), home))
             .orElseGet(() -> PortIdentity.block(home));
-        return new CellPort(identity, cells, () -> usability(wrapper), true, () -> upgradeRevision(wrapper));
+        return new CellPort(identity, cells, () -> traits(wrapper), true, () -> upgradeRevision(wrapper));
     }
 
     private static long upgradeRevision(IStorageWrapper wrapper) {
@@ -114,7 +113,7 @@ final class SophisticatedPort {
         return signature;
     }
 
-    static Usability usability(IStorageWrapper wrapper) {
+    static StorageTraits traits(IStorageWrapper wrapper) {
         UpgradeHandler upgrades = wrapper.getUpgradeHandler();
         for (int slot = 0; slot < upgrades.getSlots(); slot++) {
             ItemStack upgrade = upgrades.getStackInSlot(slot);
@@ -125,7 +124,7 @@ final class SophisticatedPort {
             if (!(id.getNamespace().equals("sophisticatedstorage")
                 || id.getNamespace().equals("sophisticatedbackpacks"))
                 || !SAFE.contains(id.getPath())) {
-                return Verdicts.upgrade(upgrade);
+                return StorageTraits.upgrade(upgrade);
             }
         }
         // Inception may expose processing upgrades from contained backpacks to the main inventory.
@@ -135,9 +134,9 @@ final class SophisticatedPort {
             if (!(id.getNamespace().equals("sophisticatedstorage")
                 || id.getNamespace().equals("sophisticatedbackpacks"))
                 || !SAFE.contains(id.getPath())) {
-                return Verdicts.upgrade(upgrade);
+                return StorageTraits.upgrade(upgrade);
             }
         }
-        return Usability.USABLE;
+        return StorageTraits.PLAIN;
     }
 }

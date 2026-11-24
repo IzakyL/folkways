@@ -1,11 +1,13 @@
 package io.github.izakyl.folkways.core.front.ui.screen;
 
 import com.lowdragmc.lowdraglib2.LDLib2;
+import com.lowdragmc.lowdraglib2.gui.texture.IGuiTexture;
 import com.lowdragmc.lowdraglib2.gui.ui.UIElement;
 import com.lowdragmc.lowdraglib2.gui.ui.data.TextWrap;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Button;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Label;
 import com.lowdragmc.lowdraglib2.gui.ui.event.UIEvents;
+import com.lowdragmc.lowdraglib2.gui.ui.style.StylesheetManager;
 import com.lowdragmc.lowdraglib2.gui.util.WindowDragHelper;
 import dev.vfyjxf.taffy.style.AlignItems;
 import dev.vfyjxf.taffy.style.FlexDirection;
@@ -13,7 +15,9 @@ import dev.vfyjxf.taffy.style.TaffyPosition;
 import io.github.izakyl.folkways.core.front.api.ui.Pane;
 import io.github.izakyl.folkways.core.front.api.ui.Rows;
 import io.github.izakyl.folkways.core.front.api.ui.Tokens;
+import io.github.izakyl.folkways.core.front.client.IconTooltips;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 import org.joml.Vector2f;
 
 public final class Window implements Pane {
@@ -55,6 +59,7 @@ public final class Window implements Pane {
     private float wantedHeight;
     private WindowGeometry.Box pressedAt;
     private Window beside;
+    private boolean staggerBeside;
 
     private Window(String id, Component title, WindowGeometry.Box byDefault,
             float minWidth, float minHeight) {
@@ -114,6 +119,29 @@ public final class Window implements Pane {
             float minWidth, float minHeight) {
         return new Window(id, title, new WindowGeometry.Box(x, y, width, height),
             minWidth, minHeight);
+    }
+
+    @Override
+    public void titleAction(UIElement action) {
+        titleBar.removeChild(closeButton);
+        titleBar.addChildren(action, closeButton);
+    }
+
+    @Override
+    public void offsetCloseTooltip() {
+        if (LDLib2.isRemote()) {
+            IconTooltips.install(closeButton,
+                Component.translatable("folkways.ui.close"));
+        }
+    }
+
+    @Override
+    public void dress(String styleClass, ResourceLocation stylesheet, IGuiTexture background) {
+        frame.addClass(styleClass);
+        frame.style(style -> style.background(background));
+        if (LDLib2.isRemote()) {
+            frame.addLocalStylesheet(StylesheetManager.INSTANCE.getStylesheetSafe(stylesheet));
+        }
     }
 
     private void draggable() {
@@ -218,6 +246,14 @@ public final class Window implements Pane {
         beside = neighbour == this ? null : neighbour;
     }
 
+    @Override
+    public void beside(Pane pane) {
+        if (pane instanceof Window window) {
+            nextTo(window);
+            staggerBeside = true;
+        }
+    }
+
     private WindowGeometry.Box spotIn(float deskWidth, float deskHeight) {
         float width = Math.min(preferredWidth, deskWidth);
         float height = Math.min(preferredHeight, deskHeight);
@@ -230,11 +266,27 @@ public final class Window implements Pane {
         float hostLeft = beside.frame.getLayoutX();
         float hostRight = hostLeft + beside.frame.getSizeWidth();
         float top = Math.max(0f, Math.min(deskHeight - height, beside.frame.getLayoutY()));
-        if (hostLeft - BESIDE_GAP - width >= 0f) {
-            return new WindowGeometry.Box(hostLeft - BESIDE_GAP - width, top, width, height);
+        float[][] spots = {
+            {hostLeft - BESIDE_GAP - width, top},
+            {hostRight + BESIDE_GAP, top},
+            {hostLeft, beside.frame.getLayoutY() - BESIDE_GAP - height},
+            {hostLeft, beside.frame.getLayoutY() + beside.frame.getSizeHeight() + BESIDE_GAP}
+        };
+        for (int index = 0; index < spots.length; index++) {
+            if (!staggerBeside && index >= 2) {
+                break;
+            }
+            float[] spot = spots[index];
+            WindowGeometry.Box candidate = new WindowGeometry.Box(spot[0], spot[1], width, height);
+            if (spot[0] >= 0 && spot[1] >= 0 && spot[0] + width <= deskWidth && spot[1] + height <= deskHeight
+                && (!staggerBeside || Desk.available(frame.getParent(), this, candidate))) {
+                return candidate;
+            }
         }
-        if (hostRight + BESIDE_GAP + width <= deskWidth) {
-            return new WindowGeometry.Box(hostRight + BESIDE_GAP, top, width, height);
+        if (staggerBeside) {
+            float x = Math.max(0f, Math.min(deskWidth - width, hostLeft + 120));
+            float y = Math.max(0f, Math.min(deskHeight - height, beside.frame.getLayoutY() + TITLE_HEIGHT + 4));
+            return new WindowGeometry.Box(x, y, width, height);
         }
         return middle;
     }
@@ -275,6 +327,9 @@ public final class Window implements Pane {
             WindowGeometry.flush();
         }
         onClose.run();
+        if (LDLib2.isRemote() && frame.getParent() != null) {
+            Desk.windowClosed(frame.getParent());
+        }
     }
 
     @Override
@@ -286,6 +341,9 @@ public final class Window implements Pane {
         order = raising++;
         int drawn = order;
         frame.style(style -> style.zIndex(drawn));
+        if (LDLib2.isRemote() && frame.getParent() != null) {
+            Desk.raiseLaunchers(frame.getParent());
+        }
     }
 
     int order() {
@@ -308,6 +366,11 @@ public final class Window implements Pane {
         titleBar.clearAllChildren();
         titleBar.addChildren(control, rest, closeButton);
         return this;
+    }
+
+    @Override
+    public void onClose(Runnable closed) {
+        onClose = closed;
     }
 
     public Window setOnClose(Runnable closed) {

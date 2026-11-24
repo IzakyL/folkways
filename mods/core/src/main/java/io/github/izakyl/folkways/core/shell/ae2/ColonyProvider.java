@@ -10,24 +10,29 @@ import appeng.api.networking.crafting.ICraftingProvider;
 import appeng.api.stacks.AEItemKey;
 import appeng.api.stacks.AEKey;
 import appeng.api.stacks.KeyCounter;
-import io.github.izakyl.folkways.core.shell.crafting.NetworkBuffers;
+import io.github.izakyl.folkways.core.shell.ae2.NetworkPort;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
+import io.github.izakyl.folkways.core.shell.crafting.NetworkBuffers;
 import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
 
 /** One off-world provider per colony/network, attached to an already enrolled device. */
-final class ColonyProvider implements ICraftingProvider {
+public final class ColonyProvider implements ICraftingProvider {
 
     final WorldPos device;
     final IGridNode anchor;
-    final IManagedGridNode node;
+    private final IManagedGridNode node;
     private final IGridConnection connection;
     private final NetworkPort port;
     private final NetworkBuffers buffers;
     private List<IPatternDetails> patterns = List.of();
     private int pushes;
+
+    public WorldPos device() {
+        return device;
+    }
 
     ColonyProvider(ServerLevel level, NetworkPort port, NetworkBuffers buffers) {
         this.port = port;
@@ -86,11 +91,15 @@ final class ColonyProvider implements ICraftingProvider {
         return buffers.busy();
     }
 
-    int pushes() {
+    public IManagedGridNode node() {
+        return node;
+    }
+
+    public int pushes() {
         return pushes;
     }
 
-    long buffered(AEKey item) {
+    public long buffered(AEKey item) {
         return item instanceof AEItemKey key ? buffers.count(device, key.toStack()) : 0;
     }
 

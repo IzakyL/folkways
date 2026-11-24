@@ -8,26 +8,12 @@ ext.modId = "folkways_core"
 ext.modName = "folkways-core"
 apply from: rootProject.file("gradle/mod.gradle")
 
-// Shared helpers stay in the core module to retain access to package-private planning internals.
-// They contain no test registration, so consumers never load the core test suite to reuse them.
-sourceSets {
-    gameTestFixtures
-}
-
-neoForge {
-    addModdingDependenciesTo sourceSets.gameTestFixtures
-}
-
-configurations {
-    gameTestFixturesCompileOnly.extendsFrom compileOnly
-    gameTestFixturesImplementation.extendsFrom implementation
-    gameTestFixturesRuntimeOnly.extendsFrom runtimeOnly
-}
+neoForge { addModdingDependenciesTo sourceSets.test }
 
 dependencies {
-    gameTestFixturesImplementation sourceSets.main.output
-    gameTestFixturesImplementation project(":vanilla")
-    gametestImplementation sourceSets.gameTestFixtures.output
+    implementation project(":solve")
+    jarJar project(":solve")
+
     compileOnly lib("curios"), lib("accessories")
     compileOnly lib("emi")
     compileOnly lib("jei")
@@ -35,8 +21,15 @@ dependencies {
     // JEC supplies this at runtime; only its configuration ticket is used, and nothing is bundled here.
     compileOnly lib("pinin")
     compileOnly lib("shouldersurfing")
-    compileOnly lib("create")
-    compileOnly lib("sable"), lib("sable-companion")
+    compileOnly lib("create"), lib("createfirefightingadd")
+    compileOnly lib("createbigcannons"), lib("ritchiesprojectilelib")
+    compileOnly lib("modulargolems"), lib("l2library"), lib("l2core"), lib("l2serial")
+    compileOnly lib("epicfight")
+    compileOnly lib("tacz"), lib("superbwarfare"), lib("kotlinforforge"), lib("geckolib")
+    compileOnly lib("kaleidoscope_cookery"), lib("kaleidoscope_tavern"), lib("astikorcartsredux")
+    compileOnly lib("chiselsandbits"), lib("chiselsandbits-api"), lib("chiselsandbits-core")
+    compileOnly lib("scena"), lib("scena-core")
+    compileOnly lib("sable"), lib("sable-companion"), lib("let_it_walk")
     compileOnly lib("ftbteams"), lib("architectury")
 
     compileOnly("net.createmod.ponder:ponder-neoforge:${project.ponder_version}") {
@@ -56,10 +49,11 @@ dependencies {
         }
         transitive = false
     }
-    api("com.lowdragmc.ldlib2:ldlib2-neoforge-${project.minecraft_version}:${project.ldlib_version}:all")
+    // Scripts are Starlark; the interpreter ships inside this mod's jar.
+    api project(":starlarkRuntime")
+    jarJar project(":starlarkRuntime")
 
-    // Engine integration tests use Vanilla's residents without loading Vanilla's test suite.
-    gametestImplementation project(":vanilla")
+    api("com.lowdragmc.ldlib2:ldlib2-neoforge-${project.minecraft_version}:${project.ldlib_version}:all")
 }
 
 def apiJar = tasks.register("apiJar", Jar) {
@@ -72,69 +66,50 @@ def apiJar = tasks.register("apiJar", Jar) {
 
 publishing.publications.mod.artifact apiJar
 
-// Native optional-integration tests share this mod's package and module, without linking its main source to Cookery.
-dependencies {
-    cookeryTestImplementation project(":cookery")
-    cookeryTestCompileOnly lib("kaleidoscope_cookery")
-}
-
-// Optional native fixtures stay out of the base Core suite and of every other profile.
-["curiosTest", "accessoriesTest", "storageTest", "sophisticatedStorageTest", "sophisticatedBackpacksTest", "drawersTest", "functionalTest",
-    "storageLaborTest", "ae2Test", "ae2LaborTest", "rs2Test", "rs2LaborTest",
-    "createStorageTest", "tomsTest", "colossalTest", "qioTest", "portsLaborTest"].each { suite ->
-    sourceSets.create(suite)
-    neoForge.addModdingDependenciesTo(sourceSets[suite])
-    configurations["${suite}CompileOnly"].extendsFrom configurations.compileOnly
-    configurations["${suite}Implementation"].extendsFrom configurations.implementation
-    configurations["${suite}RuntimeOnly"].extendsFrom configurations.runtimeOnly
-    dependencies.add("${suite}Implementation", sourceSets.main.output)
-    dependencies.add("${suite}Implementation", sourceSets.gameTestFixtures.output)
-}
-["sophisticatedStorageTest", "sophisticatedBackpacksTest", "drawersTest", "functionalTest",
-    "storageLaborTest", "createStorageTest", "tomsTest", "colossalTest", "qioTest", "portsLaborTest"].each { suite ->
-    dependencies.add("${suite}Implementation", sourceSets.storageTest.output)
-}
 dependencies {
     compileOnly lib("ae2"), lib("refinedstorage")
     compileOnly lib("fxntstorage"), lib("toms_storage"), lib("colossalchests"), lib("cyclopscore"), lib("mekanism")
-    portsLaborTestImplementation project(":vanilla")
-    ["createStorage", "toms", "colossal", "qio"].each { suite ->
-        add("portsLaborTestImplementation", sourceSets["${suite}Test"].output)
-    }
-    compileOnly lib("sophisticatedcore"), lib("sophisticatedstorage"), lib("sophisticatedbackpacks")
+    compileOnly lib("sophisticatedstorage"), lib("sophisticatedbackpacks"), lib("sophisticatedcore")
     compileOnly lib("storagedrawers"), lib("functionalstorage"), lib("titanium")
-    sophisticatedBackpacksTestImplementation project(":vanilla")
-    curiosTestImplementation project(":vanilla")
-    accessoriesTestImplementation project(":vanilla")
-    storageLaborTestImplementation project(":vanilla")
-    ae2LaborTestImplementation project(":vanilla")
-    ae2LaborTestImplementation sourceSets.ae2Test.output
-    rs2LaborTestImplementation project(":vanilla")
-    rs2LaborTestImplementation sourceSets.rs2Test.output
 }
 
-tasks.named("compileGametestJava", JavaCompile) {
-    // CURRENT is inlined into assertions; a version change must also rebuild otherwise unchanged tests.
-    inputs.file("src/main/java/io/github/izakyl/folkways/core/base/persist/upgrade/DataVersion.java")
-        .withPropertyName("dataVersion")
+// C&B 21.1.33 bundles this library as MOD without a mod descriptor, so NeoForge discards it (#1343 upstream).
+// Keep its pinned bytes and license; only the library manifest changes so the required class can be loaded.
+// The jar-in-jar entry shares upstream's identifier at 21.1.11.1, so NeoForge loads exactly one copy: this one
+// beside C&B 21.1.33 (and older), the newer upstream build beside C&B releases that bundle one.
+def saeculariaRuntime = tasks.register("saeculariaRuntime", Jar) {
+    archiveFileName = "folkways-saecularia-runtime.jar"
+    destinationDirectory = layout.buildDirectory.dir("runtime")
+    from({ zipTree(lib("saecularia-core").singleFile) }) {
+        exclude "META-INF/MANIFEST.MF"
+    }
+    from("src/main/resources/META-INF/licenses") { into "META-INF/licenses" }
+    manifest.attributes("FMLModType": "GAMELIBRARY", "Automatic-Module-Name": "folkways_saecularia_runtime")
 }
 
-// Compile and register only the requested Core fixtures in a focused base run.
-def coreGameTestClasses = providers.gradleProperty("coreGameTestClasses").getOrElse("")
-if (coreGameTestClasses) {
-    sourceSets.gametest.java.setIncludes(coreGameTestClasses.split(",").collect { "**/${it.trim()}.java" })
-    def focusedClasses = layout.buildDirectory.dir("classes/java/focusedGametest/${coreGameTestClasses.hashCode()}")
-    tasks.named("compileGametestJava", JavaCompile) {
-        destinationDirectory = focusedClasses
+tasks.named("jarJar") {
+    def metadata = file("src/jarJar/saecularia.json")
+    inputs.file(metadata)
+    inputs.file(saeculariaRuntime.flatMap { it.archiveFile })
+    doLast {
+        def directory = outputDirectory.get().dir("META-INF/jarjar").asFile
+        def manifest = new File(directory, "metadata.json")
+        def parser = new groovy.json.JsonSlurper()
+        def jars = parser.parse(manifest).jars + parser.parse(metadata).jars
+        manifest.text = groovy.json.JsonOutput.toJson([jars: jars]) + "\n"
+        copy {
+            from saeculariaRuntime
+            into directory
+        }
     }
-    sourceSets.gametest.output.classesDirs.setFrom(focusedClasses)
 }
-if (coreGameTestClasses || providers.gradleProperty("vanillaGameTestClasses").isPresent()
-    || providers.gradleProperty("accessoryProfile").isPresent()) {
-    sourceSets.gameTestFixtures.java.exclude("**/*GameTests.java")
-    def focusedFixtures = layout.buildDirectory.dir("classes/java/focusedGameTestFixtures")
-    tasks.named("compileGameTestFixturesJava", JavaCompile) {
-        destinationDirectory = focusedFixtures
-    }
-    sourceSets.gameTestFixtures.output.classesDirs.setFrom(focusedFixtures)
+
+// The pinned Gradle distribution supplies JUnit 4 for the offline save migration checks.
+dependencies {
+    testImplementation fileTree(dir: new File(gradle.gradleHomeDir, "lib"),
+        include: ["junit-4.*.jar", "hamcrest-core-*.jar"])
+}
+
+tasks.named("check") {
+    dependsOn tasks.named("jarJar")
 }

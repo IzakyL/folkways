@@ -96,9 +96,9 @@ test("a real Create train, assembled on real track, between two named stations",
     const driverRole = await setVocationPriorityViaPanel(
       server, client, player.name, founding.standBlock, crew[0].uuid, "folkways_vanilla:building", 0);
     const builderRole = await setVocationPriorityViaPanel(
-      server, client, player.name, founding.standBlock, crew[1].uuid, "folkways_create:conducting", 0);
+      server, client, player.name, founding.standBlock, crew[1].uuid, "folkways_vanilla:conducting", 0);
     expect(driverRole.ok, `the driver's folkways_vanilla:building should be off, got ${driverRole.after}`).toBe(true);
-    expect(builderRole.ok, `the builder's folkways_create:conducting should be off, got ${builderRole.after}`).toBe(true);
+    expect(builderRole.ok, `the builder's folkways_vanilla:conducting should be off, got ${builderRole.after}`).toBe(true);
 
     await tryCommand(server, `item replace entity ${player.name} inventory.0 from entity ${player.name} weapon.mainhand`);
 
@@ -248,13 +248,13 @@ test("a real Create train, assembled on real track, between two named stations",
         doing: await readDoing(server, conductorUuid),
         seat: await seatedAt(server, carriageUuid, conductorUuid),
       }),
-      done: (sample) => sample.doing === "folkways_create:driving" && sample.seat === driverSeatIndex,
+      done: (sample) => sample.doing === "folkways_vanilla:driving" && sample.seat === driverSeatIndex,
     });
     expect(driving.matched, "the same conductor should pick up the driving task within 100 ticks and stay in the driver seat").toBe(true);
     expect(
       driving.sample.doing,
       "the resident in the driver seat must be running the ongoing driving task; another resident on the ground must not hold it for them",
-    ).toBe("folkways_create:driving");
+    ).toBe("folkways_vanilla:driving");
 
     const material = Object.entries(schematicSpec(BLUEPRINT_ASSET).materials)[0];
     const supplied = await tryCommand(
@@ -355,7 +355,7 @@ test("a real Create train, assembled on real track, between two named stations",
 
     const boardingPosition = (await carriagePos())!;
     const destination = await tryCommand(server,
-      `data get entity ${passengerUuid} NeoForgeData."folkways_create:ride_destination"`);
+      `data get entity ${passengerUuid} NeoForgeData."folkways_core:ride_destination"`);
     expect(Math.hypot(boardingPosition.x - posBeforeDeparture.x, boardingPosition.z - posBeforeDeparture.z),
       "the builder passenger must board at Alpha's outbound or return stop").toBeLessThan(ALPHA_STOP_RADIUS);
     expect(destination.output?.[0], "the builder passenger's destination must be Beta").toContain(`"${STATION_B}"`);

@@ -1,12 +1,8 @@
 package io.github.izakyl.folkways.core.front.ui.screen;
 
 import io.github.izakyl.folkways.core.FolkwaysCoreMod;
-import io.github.izakyl.folkways.core.colony.api.Colony;
-import io.github.izakyl.folkways.core.front.api.Enrollment;
-import io.github.izakyl.folkways.core.front.api.Facing;
-import io.github.izakyl.folkways.core.front.api.panel.PageKind;
+import io.github.izakyl.folkways.core.front.api.ColonyPanel;
 import io.github.izakyl.folkways.core.front.api.ui.RegisteringUi;
-import io.github.izakyl.folkways.core.front.engine.Enrollments;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -14,54 +10,37 @@ import net.minecraft.resources.ResourceLocation;
 
 public final class PageKinds {
 
-    public static final PageKind CITIZENS =
+    public static final BookPage OVERVIEW = core("overview", "filled_map", "colony_panel");
+    public static final BookPage CITIZENS =
         core("residents", "player_head", "residents");
-    public static final PageKind METRICS = core("metrics", "chest", "colony_panel");
-    public static final PageKind MEMBERS = core("members", "bell", "colony_panel");
-    public static final PageKind LESSONS = core("lessons", "knowledge_book", "basics");
-    public static final PageKind SETTINGS = core("settings", "comparator", "colony_panel");
+    public static final BookPage METRICS = core("metrics", "chest", "colony_panel");
+    public static final BookPage FACILITIES = core("facilities", "lectern", "colony_panel");
+    public static final BookPage MEMBERS = core("members", "bell", "colony_panel");
+    public static final BookPage LESSONS = core("lessons", "knowledge_book", "basics");
+    public static final BookPage SETTINGS = core("settings", "comparator", "colony_panel");
 
-    public static final List<PageKind> CORE =
-        List.of(CITIZENS, METRICS, MEMBERS, LESSONS, SETTINGS);
+    /** The book's pages, in the order its navigation lists them. */
+    public static final List<BookPage> CORE =
+        List.of(OVERVIEW, CITIZENS, METRICS, FACILITIES, SETTINGS, MEMBERS, LESSONS);
 
-    // Listed last, under the preferences heading, below every plugin's page.
-    public static final List<PageKind> TRAILING = List.of(LESSONS, SETTINGS);
+    // Listed last, under the preferences heading.
+    public static final List<BookPage> TRAILING = List.of(SETTINGS, MEMBERS, LESSONS);
+
+    public record BookPage(ResourceLocation id, String nameKey, ResourceLocation icon,
+                           Optional<ResourceLocation> lesson) {
+    }
 
     private PageKinds() {
     }
 
-    public static List<PageKind> all() {
-        List<PageKind> pages = new ArrayList<>(CORE);
-        for (Enrollment enrolled : Enrollments.all().values()) {
-            List<PageKind> declared = enrolled.pages();
-            if (!declared.isEmpty()) {
-                pages.add(declared.get(0));
-                declared.stream().skip(1).filter(PageKind::navigation).forEach(pages::add);
-            }
-        }
-        return List.copyOf(pages);
-    }
-
-    public static List<PageKind> every() {
-        List<PageKind> pages = new ArrayList<>(CORE);
-        for (Enrollment enrolled : Enrollments.all().values()) {
-            pages.addAll(enrolled.pages());
-        }
-        return List.copyOf(pages);
-    }
-
-    public static boolean shows(Colony colony, ResourceLocation page) {
-        for (var enrolled : Enrollments.all().entrySet()) {
-            if (enrolled.getValue().pages().stream().anyMatch(kind -> kind.id().equals(page))) {
-                return Facing.of(colony, enrolled.getKey()).map(facing -> facing.shows(page)).orElse(true);
-            }
-        }
-        return true;
+    /** The pages the book's navigation lists: its own. A module's rows reach them through its colony panel. */
+    public static List<BookPage> all() {
+        return CORE;
     }
 
     public static void verify() {
         List<ResourceLocation> seen = new ArrayList<>();
-        for (PageKind kind : every()) {
+        for (BookPage kind : all()) {
             if (seen.contains(kind.id())) {
                 throw new IllegalStateException("page " + kind.id() + " is declared more than once");
             }
@@ -70,15 +49,17 @@ public final class PageKinds {
     }
 
     public static void registerUi(RegisteringUi event) {
-        event.page(CITIZENS.id(), ResidentsPage::new);
-        event.page(METRICS.id(), MetricsPage::create);
+        event.page(OVERVIEW.id(), OverviewPage::new);
+        event.page(CITIZENS.id(), () -> Sectioned.flowing(new ResidentsPage(), ColonyPanel.Page.RESIDENTS));
+        event.page(METRICS.id(), () -> new Sectioned(MetricsPage.create(), ColonyPanel.Page.STOCK));
+        event.page(FACILITIES.id(), FacilitiesPage::new);
         event.page(MEMBERS.id(), MembersPage::new);
         event.page(LESSONS.id(), LessonsPage::create);
         event.page(SETTINGS.id(), SettingsPage::of);
     }
 
-    private static PageKind core(String path, String icon, String lesson) {
-        return PageKind.boarded(id(path), "folkways.tab." + path,
+    private static BookPage core(String path, String icon, String lesson) {
+        return new BookPage(id(path), "folkways.tab." + path,
             ResourceLocation.withDefaultNamespace(icon), Optional.of(lesson.equals("residents")
                 ? ResourceLocation.fromNamespaceAndPath("folkways_vanilla", lesson) : id(lesson)));
     }

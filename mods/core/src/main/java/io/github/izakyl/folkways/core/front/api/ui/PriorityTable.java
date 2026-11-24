@@ -16,7 +16,7 @@ import io.github.izakyl.folkways.core.vocation.api.Keenness;
 import io.github.izakyl.folkways.core.vocation.api.Vocation;
 import io.github.izakyl.folkways.core.vocation.api.VocationGroup;
 import io.github.izakyl.folkways.core.vocation.api.Vocations;
-import io.github.izakyl.folkways.core.front.api.notice.Sentence;
+import io.github.izakyl.folkways.core.card.api.notice.Sentence;
 import java.util.ArrayList;
 import java.util.IdentityHashMap;
 import java.util.List;

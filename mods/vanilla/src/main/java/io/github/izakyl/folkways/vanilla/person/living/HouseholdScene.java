@@ -74,7 +74,7 @@ public final class HouseholdScene {
         scene.overlay().showOutline(PonderPalette.GREEN, "blue", blueBed, 90);
         scene.overlay()
             .showText(90)
-            .text("Join beds to the colony with the book. Residents automatically claim a free bed; the Human residents page lists those still unclaimed.")
+            .text("Take in beds with the book. Residents claim free beds on their own.")
             .pointAt(util.vector().topOf(redFoot))
             .placeNearTarget()
             .attachKeyFrame();
@@ -86,7 +86,7 @@ public final class HouseholdScene {
         scene.idle(10);
         scene.overlay()
             .showText(90)
-            .text("Walking tires him, and so does standing at work. Tired enough, he goes back to his own bed and sleeps it off. Without a bed of his own he cannot sleep, and his housing mood is poor.")
+            .text("Walking and work tire residents out. When tired, they go to their own bed to sleep. Without a bed they cannot sleep, and their mood drops.")
             .pointAt(residentA.at().add(0.0, 1.5, 0.0))
             .placeNearTarget()
             .attachKeyFrame();
@@ -101,7 +101,7 @@ public final class HouseholdScene {
         residentA.walkTo(scene, util.vector().topOf(4, 0, 4));
         scene.overlay()
             .showText(80)
-            .text("Work and walking consume food; time spent working and distance walked build fatigue.")
+            .text("Work and walking use up food. Time spent working and distance walked add up to fatigue.")
             .pointAt(residentA.at().add(0.0, 1.5, 0.0))
             .placeNearTarget()
             .attachKeyFrame();
@@ -114,7 +114,7 @@ public final class HouseholdScene {
         scene.overlay().showOutline(PonderPalette.OUTPUT, "chest", util.select().position(chest), 90);
         scene.overlay()
             .showText(100)
-            .text("The colony keeps food for three days in each resident's pack, and he eats when hungry. On the Human residents page, choose allowed foods or exclusions and whether food safety filters apply.")
+            .text("Each resident carries three days of food and eats when hungry. Choose allowed food under Settings → Food and daily needs.")
             .pointAt(util.vector().topOf(chest))
             .placeNearTarget()
             .attachKeyFrame();
@@ -124,7 +124,7 @@ public final class HouseholdScene {
         scene.overlay().showOutline(PonderPalette.RED, "chest", util.select().position(chest), 80);
         scene.overlay()
             .showText(80)
-            .text("With no allowed food in colony stores, his pack stays empty. A starving resident loses health.")
+            .text("With no allowed food in storage, packs stay empty, and a starving resident loses health.")
             .pointAt(util.vector().topOf(chest))
             .placeNearTarget()
             .attachKeyFrame();
@@ -132,7 +132,7 @@ public final class HouseholdScene {
 
         scene.overlay()
             .showText(90)
-            .text("Hold the book, and the card over each resident nearby shows a drumstick for how full he is and a moon for how rested.")
+            .text("Hold the book to see a card over each resident: a drumstick for fullness and a moon for rest.")
             .pointAt(residentA.at().add(0.0, 2.2, 0.0))
             .placeNearTarget()
             .attachKeyFrame();
@@ -140,7 +140,7 @@ public final class HouseholdScene {
 
         scene.overlay().showOutline(PonderPalette.BLUE, "red", redBed, 100);
         scene.overlay().showText(100)
-            .text("Hold the book to see a card over each colony bed: who sleeps there, its room grade, and advice for improving it.")
+            .text("Hold the book to see a card over each bed: who sleeps there, the room grade and how to improve it.")
             .pointAt(util.vector().topOf(redFoot)).placeNearTarget().attachKeyFrame();
         scene.idle(110);
     }

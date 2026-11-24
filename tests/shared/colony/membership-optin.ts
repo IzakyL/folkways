@@ -1,18 +1,21 @@
-import { defineTask, javaTask, screen, tick, type MinecraftClient, type MinecraftServer } from "@izakyl/blockwright-minecraft";
-import { clickElement, scrollElementIntoView } from "../../ldlib2";
+import { defineTask, javaTask, player, screen, tick, type MinecraftClient, type MinecraftServer } from "@izakyl/blockwright-minecraft";
+import { clickElement } from "../../ldlib2";
 import { chooseInSelector, optInViaBook } from "./colony-founding";
-import {
-  boardAct,
-  boardActs,
-  openSite,
-  typeCell,
-} from "../ui/site-panel";
-import { frames, safeAction, tryCommand, softly, waitForElement } from "../harness/bw-helpers";
+import { typeCell } from "../ui/site-panel";
+import { CARD_WINDOW, cardRows, openBlockCard, settleCard, waitForPresent } from "../ui/book-cards";
+import { frames, safeAction, softly, waitForElement } from "../harness/bw-helpers";
 import { GROUND, type Stage } from "../harness/stage";
 
 type Vec = { x: number; y: number; z: number };
 
-const ORDERS_PAGE = "folkways_vanilla.orders";
+// A held container's card: the order draft (item, low water, how many), the buttons that file it, and the container's
+// own orders listed under it.
+export const ORDER_ITEM = "folkways.card.items.item";
+export const ORDER_LOW = "folkways.card.number.low.field";
+export const ORDER_COUNT = "folkways.card.number.count.field";
+export const ORDER_MAINTAIN = "folkways.card.button.maintain";
+export const ORDER_DELIVER = "folkways.card.button.deliver";
+export const ORDERS_HERE = "orders_here";
 const ACT_MAINTAIN = 0;
 const ACT_DELIVER = 1;
 const FILED_POLLS = 12;
@@ -68,128 +71,114 @@ export async function setMaintainDemandViaUI(
   server: MinecraftServer, client: MinecraftClient, playerName: string, chest: Vec,
   itemId: string, count = 1, stage: Stage = GROUND, lowWater = 1,
 ) {
-  return fileOrderViaSitePanel(server, client, playerName, chest, itemId, count, ACT_MAINTAIN, 0, stage, lowWater);
+  return fileOrderViaCard(server, client, playerName, chest, itemId, count, ACT_MAINTAIN, 0, stage, lowWater);
 }
 
 // The same order, filed from wherever the player stands and looks: a filmed shot keeps its camera still, and
 // holds each step for beatMs so a viewer can follow it.
 export async function setMaintainDemandInView(
   server: MinecraftServer, client: MinecraftClient, chest: Vec, itemId: string, count = 1, beatMs = 0,
+  stage: Stage = GROUND, lowWater = 1,
 ) {
-  return fileOrderViaSitePanel(server, client, null, chest, itemId, count, ACT_MAINTAIN, beatMs);
+  return fileOrderViaCard(server, client, null, chest, itemId, count, ACT_MAINTAIN, beatMs, stage, lowWater);
 }
 
-export async function deliverOrderViaSitePanel(
+export async function deliverOrderViaCard(
   server: MinecraftServer, client: MinecraftClient, playerName: string, chest: Vec,
   itemId: string, count = 1, stage: Stage = GROUND,
 ) {
-  return fileOrderViaSitePanel(server, client, playerName, chest, itemId, count, ACT_DELIVER, 0, stage);
+  return fileOrderViaCard(server, client, playerName, chest, itemId, count, ACT_DELIVER, 0, stage);
 }
 
-// The site's panel open on its order draft, with the draft's item button: what an item dragged in lands on.
+// Open the container card and scroll to the button that opens the order item picker.
 export async function openOrderDraft(
-  server: MinecraftServer, client: MinecraftClient, chest: Vec,
+  server: MinecraftServer, client: MinecraftClient, playerName: string, chest: Vec, stage: Stage = GROUND,
 ) {
   const evidence: any = { chest };
-  evidence.open = await openSite(server, client, chest);
-  evidence.row = await orderDraftRow(client);
-  evidence.edit_item = (await boardAct(client, "edit", ORDERS_PAGE, evidence.row, 0)).id;
-  evidence.row_id = `folkways.board.row.${ORDERS_PAGE}.${evidence.row}`;
-  await scrollElementIntoView(client, { id: evidence.edit_item });
+  evidence.open = await openBlockCard(server, client, playerName, chest, stage);
+  evidence.edit_item = ORDER_ITEM;
+  await waitForPresent(server, client, ORDER_ITEM);
   return evidence;
 }
 
-async function fileOrderViaSitePanel(
+// The card of the container the player looks at, opened with the book without moving them.
+async function openCardInView(server: MinecraftServer, client: MinecraftClient) {
+  await screen.dismiss(client);
+  const click = await safeAction(() => player.click(client, { button: "right" }));
+  await waitForElement(client, { id: CARD_WINDOW }, { timeoutMs: 8_000 });
+  await settleCard(server, client);
+  return { click };
+}
+
+async function fileOrderViaCard(
   server: MinecraftServer, client: MinecraftClient, playerName: string | null, chest: Vec,
   itemId: string, count: number, act: number, beatMs = 0, stage: Stage = GROUND, lowWater = 1,
 ) {
   const evidence: any = { chest, itemId, count, act };
   const beat = () => (beatMs > 0 ? new Promise((resolve) => setTimeout(resolve, beatMs)) : Promise.resolve());
-  if (playerName !== null) {
-    const seen = stage.stand(chest);
-    await tryCommand(server, `tp ${playerName} ${seen.x + 0.5} ${seen.y} ${seen.z + 1.5} 180 30`);
-  }
   await tick.sprint(server, 5);
-  await screen.dismiss(client);
-
-  evidence.open = await openSite(server, client, chest, stage);
+  evidence.open = playerName === null ? await openCardInView(server, client)
+    : await openBlockCard(server, client, playerName, chest, stage);
   await beat();
-  const before = await ordersRowCount(client);
-  evidence.rows_before = before;
+  evidence.rows_before = (await cardRows(client, ORDERS_HERE)).length;
 
-  const draftRow = await orderDraftRow(client);
-  const wanted = await boardAct(client, "edit", ORDERS_PAGE, draftRow, 0);
-  evidence.edit_item = wanted.id;
-  await softly(() => clickElement(client, { id: wanted.id }, { scrollIntoView: true }));
+  await waitForPresent(server, client, ORDER_ITEM);
+  evidence.edit_item = ORDER_ITEM;
+  const opened = await softly(() => clickElement(client, { id: ORDER_ITEM }, { scrollIntoView: true }));
   await tick.sprint(server, 5);
   await safeAction(() => frames(client, 3));
   await beat();
 
-  // The draft names one item, picked straight from the selector the item act opens.
-  evidence.pick = await chooseInSelector(client, itemId, `*${itemId}`, evidence.edit_item);
+  // The draft names one item, picked straight from the selector the item button opens.
+  evidence.pick = await chooseInSelector(client, itemId, `*${itemId}`, opened);
   await waitForElement(client, { id: "folkways.selector.close" }, { state: "absent", timeoutMs: 8_000 });
-  await tick.sprint(server, 5);
-  await safeAction(() => frames(client, 3));
+  await settleCard(server, client);
   await beat();
 
-  const countRow = await orderDraftRow(client);
-  const howMany = await boardAct(client, "edit", ORDERS_PAGE, countRow, 2);
-  evidence.edit_count = howMany.id;
-  if (act === ACT_MAINTAIN) {
-    const low = await boardAct(client, "edit", ORDERS_PAGE, countRow, 1);
-    await scrollElementIntoView(client, { id: low.id });
-    evidence.set_low = await typeCell(server, client, low.id, "1");
-  }
-  await beat();
-  await scrollElementIntoView(client, { id: howMany.id });
-  evidence.set_count = await typeCell(server, client, howMany.id, String(count));
-  if (act === ACT_MAINTAIN && lowWater !== 1) {
-    const low = await boardAct(client, "edit", ORDERS_PAGE, countRow, 1);
-    evidence.set_low = await typeCell(server, client, low.id, String(lowWater));
-  }
-
-  const fileRow = await fileRowIndex(client);
-  const pressed = await boardAct(client, "do", ORDERS_PAGE, fileRow, act);
-  evidence.act_id = pressed.id;
+  evidence.edit_count = ORDER_COUNT;
+  const maintaining = act === ACT_MAINTAIN;
+  const pressed = maintaining ? ORDER_MAINTAIN : ORDER_DELIVER;
+  evidence.act_id = pressed;
   const observation = { player: playerName, chest: stage.at(chest), item: itemId };
-  // Delivered keys do not prove the setting reached the server: panel refreshes can replace a focused field.
-  // Observe the real draft before filing; retries still use the same visible keyboard interaction.
+  // A new draft status can redraw the card and reset its scroll position. Wait for the server to accept the
+  // picker selection before editing the counts, then file only once every changed value is acknowledged.
   evidence.draftAcknowledgements = [];
   let acknowledged = false;
-  for (let attempt = 0; attempt < 3; attempt++) {
-    // Finish scrolling before acknowledging the draft, then click without another scroll gesture.
-    await scrollElementIntoView(client, { id: pressed.id });
-    await tick.sprint(server, 5);
-    await safeAction(() => frames(client, 3));
+  for (let attempt = 0; attempt < FILED_POLLS; attempt++) {
+    await tick.sprint(server, 10);
+    await safeAction(() => frames(client, 5));
     const actual = await server.run(READ_ORDER_DRAFT, observation);
     evidence.draftAcknowledgements.push(actual);
-    const itemMatches = actual.items.length === 1 && actual.items[0] === itemId;
-    if (itemMatches && actual.count === count && (act !== ACT_MAINTAIN || actual.low === lowWater)) {
-      acknowledged = true;
-      break;
+    if (actual.items.length !== 1 || actual.items[0] !== itemId) {
+      continue;
     }
-    if (!itemMatches || attempt === 2) break;
-    const retryRow = await orderDraftRow(client);
+    if (maintaining && actual.low !== lowWater) {
+      await waitForPresent(server, client, ORDER_LOW);
+      evidence.set_low = await typeCell(server, client, ORDER_LOW, String(lowWater));
+      await beat();
+      continue;
+    }
     if (actual.count !== count) {
-      const retryCount = await boardAct(client, "edit", ORDERS_PAGE, retryRow, 2);
-      await scrollElementIntoView(client, { id: retryCount.id });
-      evidence.set_count = await typeCell(server, client, retryCount.id, String(count));
+      await waitForPresent(server, client, ORDER_COUNT);
+      evidence.set_count = await typeCell(server, client, ORDER_COUNT, String(count));
+      await beat();
+      continue;
     }
-    if (act === ACT_MAINTAIN && actual.low !== lowWater) {
-      const retryLow = await boardAct(client, "edit", ORDERS_PAGE, retryRow, 1);
-      await scrollElementIntoView(client, { id: retryLow.id });
-      evidence.set_low = await typeCell(server, client, retryLow.id, String(lowWater));
-    }
+    acknowledged = true;
+    break;
   }
-  if (!acknowledged) throw new Error(`order: server draft did not acknowledge ${itemId} count=${count} low=${lowWater}: `
-    + JSON.stringify(evidence.draftAcknowledgements));
+  if (!acknowledged) {
+    throw new Error(`order: server draft did not acknowledge ${itemId} count=${count} low=${lowWater}: `
+      + JSON.stringify(evidence.draftAcknowledgements));
+  }
+  await waitForPresent(server, client, pressed);
   await beat();
-  evidence.press = await softly(() => clickElement(client, { id: pressed.id }, { scrollIntoView: false }));
+  evidence.press = await softly(() => clickElement(client, { id: pressed }, { scrollIntoView: false }));
 
   for (let poll = 0; poll < FILED_POLLS; poll++) {
     await tick.sprint(server, 10);
     await safeAction(() => frames(client, 3));
-    evidence.rows_after = await ordersRowCount(client);
+    evidence.rows_after = (await cardRows(client, ORDERS_HERE)).length;
     evidence.filedAcknowledgement = await server.run(READ_ORDER_DRAFT, observation);
     // Filing the same item at the same container replaces its target, so the row count can stay unchanged.
     // Require the exact server target as well as its visible row; a missing order is not an acknowledgement.
@@ -210,34 +199,4 @@ async function fileOrderViaSitePanel(
   await tick.sprint(server, 20);
 
   return evidence;
-}
-
-async function ordersRowCount(client: MinecraftClient): Promise<number> {
-  const submit = await fileRowIndex(client);
-  return new Set((await boardActs(client, "do", ORDERS_PAGE))
-    .filter((act) => act.row > submit).map((act) => act.row)).size;
-}
-
-async function orderDraftRow(client: MinecraftClient): Promise<number> {
-  const edits = await boardActs(client, "edit", ORDERS_PAGE);
-  const rows = new Map<number, number>();
-  for (const edit of edits) rows.set(edit.row, (rows.get(edit.row) ?? 0) + 1);
-  const draft = [...rows].find(([, count]) => count === 3);
-  if (!draft) throw new Error(`order: no item/threshold/target draft on this page (${JSON.stringify(edits)})`);
-  return draft[0];
-}
-
-async function fileRowIndex(client: MinecraftClient): Promise<number> {
-  const draft = await orderDraftRow(client);
-  const acts = (await boardActs(client, "do", ORDERS_PAGE)).filter((act) => act.row > draft);
-  const byRow = new Map<number, number>();
-  for (const act of acts) {
-    byRow.set(act.row, (byRow.get(act.row) ?? 0) + 1);
-  }
-  for (const [row, count] of byRow) {
-    if (count >= 2) {
-      return row;
-    }
-  }
-  throw new Error(`order: no order row with two actions on this page (found ${JSON.stringify(acts.map((a) => a.id))})`);
 }

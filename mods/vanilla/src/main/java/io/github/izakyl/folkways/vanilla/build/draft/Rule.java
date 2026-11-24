@@ -22,6 +22,8 @@ import net.starlark.java.eval.Tuple;
 public record Rule(String name, StarlarkCallable fn, String phase, Set<String> labels, int priority,
                    Map<String, Object> attrs) implements StarlarkCallable {
 
+    private static final int MAX_LABELS = 1024;
+
     public Rule {
         Objects.requireNonNull(name, "name");
         Objects.requireNonNull(fn, "fn");
@@ -75,6 +77,9 @@ public record Rule(String name, StarlarkCallable fn, String phase, Set<String> l
         }
         if (!(written instanceof Sequence<?> many)) {
             throw Starlark.errorf("labels are a string or a list of strings, got %s", Starlark.type(written));
+        }
+        if (many.size() > MAX_LABELS) {
+            throw Starlark.errorf("at most %d labels are allowed", MAX_LABELS);
         }
         List<String> all = new ArrayList<>();
         for (Object each : many) {

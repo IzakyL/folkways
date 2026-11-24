@@ -3,6 +3,7 @@ package io.github.izakyl.folkways.core.work.api;
 import io.github.izakyl.folkways.core.resident.api.Doing;
 import io.github.izakyl.folkways.core.resident.api.Doings;
 import io.github.izakyl.folkways.core.vocation.api.Vocation;
+import io.github.izakyl.folkways.core.world.api.Stances;
 import java.util.List;
 import java.util.Optional;
 import net.minecraft.core.BlockPos;

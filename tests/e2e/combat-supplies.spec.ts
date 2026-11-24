@@ -147,7 +147,7 @@ const IMPORTS = [
   "io.github.izakyl.folkways.vanilla.person.PersonBody", "io.github.izakyl.folkways.vanilla.person.ResidentEntity",
   "io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutProfiles", "io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutProfile",
   "io.github.izakyl.folkways.core.item.api.ItemSpec", "net.neoforged.neoforge.common.Tags",
-  "io.github.izakyl.folkways.core.rts.combat.command.ResidentCommands", "io.github.izakyl.folkways.vanilla.combat.weapon.PatrolSupplies",
+  "io.github.izakyl.folkways.core.command.combat.command.ResidentCommands", "io.github.izakyl.folkways.vanilla.combat.weapon.PatrolSupplies",
 ];
 
 const SETUP = defineTask<Omit<Scene, "resident"> & { bow: boolean }, Scene>({

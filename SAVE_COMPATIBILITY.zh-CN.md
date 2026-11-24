@@ -44,7 +44,8 @@ PR 一律 squash 合并到 master，功能分支上的中间提交不会进入 m
 2. 每个 PR 只递增一次 `DataVersion.CURRENT`。在所属模组的 `upgrade` 包中新增 `Vn_Description.java`，
    只用字面量键处理原始 NBT，并完成注册。多个模组在同一版本修改同一入口时，用 `Upgrades.part` 注册具名片段；
    只涉及 keeps 的修改可使用 `KeepSteps.bag`。
-3. 编写时验证一次：用当前 `origin/master` 写出的存档加载并重新保存。不要提交样例存档或专门的迁移回归测试。
+3. 编写时验证一次：用当前 `origin/master` 写出的存档加载并重新保存。样例存档和专门的迁移回归测试通常不提交，
+   [发布版升级夹具](CONTRIBUTING.zh-CN.md#验证修改)除外。
 4. 运行 `./gradlew --offline check` 及受影响模组的 GameTests。
 
 master 上的步骤冻结不可改，修正需新增版本和步骤。`checkDataUpgrades`（属于 `check`）会将其与每个发布标签

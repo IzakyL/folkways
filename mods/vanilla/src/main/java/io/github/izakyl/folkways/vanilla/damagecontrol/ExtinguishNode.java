@@ -1,5 +1,7 @@
 package io.github.izakyl.folkways.vanilla.damagecontrol;
 
+import io.github.izakyl.folkways.core.work.api.LaborRefusal;
+import io.github.izakyl.folkways.core.facility.api.Facilities;
 import io.github.izakyl.folkways.core.resident.api.Bodies;
 import io.github.izakyl.folkways.core.resident.api.Conveyance;
 import io.github.izakyl.folkways.core.resident.api.Going;
@@ -9,7 +11,7 @@ import io.github.izakyl.folkways.core.work.api.Node;
 import io.github.izakyl.folkways.core.work.api.NodeSpec;
 import io.github.izakyl.folkways.core.work.api.Outcome;
 import io.github.izakyl.folkways.core.work.api.Recourse;
-import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.world.api.Stances;
 import io.github.izakyl.folkways.core.work.api.WorkGesture;
 import io.github.izakyl.folkways.core.work.api.WorkSite;
 import io.github.izakyl.folkways.core.work.api.Worker;
@@ -126,6 +128,11 @@ final class ExtinguishNode implements Node {
             changed.accept(level);
             return false;
         }
+        if (Facilities.protectedAt(level, target.block(level))) {
+            result = Outcome.failed(LaborRefusal.PROTECTED_FACILITY);
+            close();
+            return false;
+        }
         if (settleUntil != Long.MIN_VALUE) {
             if (level.getGameTime() < settleUntil) {
                 return true;
@@ -136,10 +143,6 @@ final class ExtinguishNode implements Node {
             return false;
         }
         if (session == null) {
-            if (!WorkStances.standingIn(who.body(), spec.stances())) {
-                result = Outcome.failed(DamageControlRefusal.NO_REACH);
-                return false;
-            }
             if (interaction++ < 10) {
                 return true;
             }
@@ -191,10 +194,6 @@ final class ExtinguishNode implements Node {
         BlockPos at = target.block(level);
         if (!FireSurvey.fire(level.getBlockState(at))) {
             return Outcome.done();
-        }
-        if (!WorkStances.standingIn(who.body(), spec.stances()) || !destinations.isEmpty()
-            && !WorkStances.standingIn(who.body(), new Stances.Cells(destinations))) {
-            return Outcome.failed(DamageControlRefusal.NO_REACH);
         }
         interaction = 10;
         return advance(level, who) ? Outcome.failed(DamageControlRefusal.BUSY) : result;

@@ -6,9 +6,9 @@ import io.github.izakyl.folkways.core.colony.api.ColonyView;
 import io.github.izakyl.folkways.core.work.api.NodeSpec;
 import io.github.izakyl.folkways.core.work.api.Outcome;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
-import io.github.izakyl.folkways.core.front.api.notice.Line;
-import io.github.izakyl.folkways.core.front.api.notice.Notice;
-import io.github.izakyl.folkways.core.front.api.notice.Sentence;
+import io.github.izakyl.folkways.core.card.api.notice.Line;
+import io.github.izakyl.folkways.core.card.api.notice.Notice;
+import io.github.izakyl.folkways.core.card.api.notice.Sentence;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -147,8 +147,8 @@ public final class PastDay {
                 .toList());
     }
 
-    // Whether anything was counted since this was last asked: the plugin keeps the tally again when it was.
-    public synchronized boolean changed() {
+    // Whether anything was counted since the last consumption: the plugin keeps the tally again when it was.
+    public synchronized boolean consumeChanged() {
         boolean was = changed;
         changed = false;
         return was;

@@ -14,10 +14,8 @@ public final class ColonyRuntime {
     }
 
     public static void opened(MinecraftServer server) {
-        Run run = RUNS.computeIfAbsent(server, Run::new);
-        for (ColonyData colony : ColonyRegistry.get(server).colonies()) {
-            run.settle(colony.works());
-        }
+        RUNS.computeIfAbsent(server, Run::new);
+        ColonyRegistry.initialize(server).start(server);
     }
 
     public static void closeAll(MinecraftServer server) {
@@ -26,6 +24,7 @@ public final class ColonyRuntime {
             run.closed(Closing.SHUTDOWN);
         }
         ColonyWays.forgetServer(server);
+        ColonyRegistry.forget(server);
     }
 
     static void refresh(MinecraftServer server, ColonyWorks colony) {

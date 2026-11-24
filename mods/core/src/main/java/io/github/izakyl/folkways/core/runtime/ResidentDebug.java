@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.core.runtime;
 
-import io.github.izakyl.folkways.core.front.api.notice.Line;
+import io.github.izakyl.folkways.core.card.api.notice.Line;
 import java.util.List;
 
 public record ResidentDebug(List<Line> lines, List<DebugWork> route) {

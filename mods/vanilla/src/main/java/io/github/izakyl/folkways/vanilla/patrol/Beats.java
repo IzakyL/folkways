@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.vanilla.patrol;
 
-import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.world.api.Stances;
 import io.github.izakyl.folkways.core.world.api.Footing;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.core.front.api.FrontView;

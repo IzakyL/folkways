@@ -1,32 +1,34 @@
 package io.github.izakyl.folkways.vanilla.patrol;
 
+import io.github.izakyl.folkways.core.card.api.Card;
+import io.github.izakyl.folkways.core.card.api.notice.Line;
 import io.github.izakyl.folkways.core.colony.api.Asking;
 import io.github.izakyl.folkways.core.colony.api.Cadence;
 import io.github.izakyl.folkways.core.colony.api.Closing;
 import io.github.izakyl.folkways.core.colony.api.Colony;
 import io.github.izakyl.folkways.core.colony.api.ColonyView;
+import io.github.izakyl.folkways.core.combat.api.DefenseControl;
+import io.github.izakyl.folkways.core.combat.api.SpottedTargets.Spot;
+import io.github.izakyl.folkways.core.facility.api.DefinedFacilities;
+import io.github.izakyl.folkways.core.facility.api.control.Value;
+import io.github.izakyl.folkways.core.front.api.Fronts;
+import io.github.izakyl.folkways.core.front.api.HoldingKind;
 import io.github.izakyl.folkways.core.plan.api.Before;
 import io.github.izakyl.folkways.core.plan.api.Grown;
 import io.github.izakyl.folkways.core.work.api.Ending;
 import io.github.izakyl.folkways.core.work.api.Node;
-import io.github.izakyl.folkways.core.work.api.Stances;
 import io.github.izakyl.folkways.core.work.api.Urge;
 import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.core.world.api.Footing;
 import io.github.izakyl.folkways.core.world.api.Reach;
+import io.github.izakyl.folkways.core.world.api.Stances;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.core.world.api.WorldSpaces;
-import io.github.izakyl.folkways.core.front.api.Facing;
-import io.github.izakyl.folkways.core.front.api.Fronts;
-import io.github.izakyl.folkways.core.front.api.PathView;
-import io.github.izakyl.folkways.core.front.api.notice.Line;
-import io.github.izakyl.folkways.core.front.api.panel.Board;
 import io.github.izakyl.folkways.vanilla.FolkwaysVanillaConfig;
-import io.github.izakyl.folkways.core.combat.api.DefenseControl;
 import io.github.izakyl.folkways.vanilla.combat.SpottedTargets;
 import io.github.izakyl.folkways.vanilla.combat.Threats;
 import io.github.izakyl.folkways.vanilla.combat.weapon.PatrolSupplies;
-import io.github.izakyl.folkways.vanilla.combat.weapon.Weapons;
+import io.github.izakyl.folkways.vanilla.combat.weapon.ResidentWeapons;
 import io.github.izakyl.folkways.vanilla.person.ResidentEntity;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -47,14 +49,14 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.Mob;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.server.ServerLifecycleHooks;
 
-final class PatrolPresence implements Facing {
+final class PatrolPresence implements HoldingKind {
+
 
     static final ResourceLocation ENGAGE = ResourceLocation.fromNamespaceAndPath("folkways_vanilla", "engage");
 
@@ -108,7 +110,7 @@ final class PatrolPresence implements Facing {
     private record RouteWorker(Worker worker, long tick) {
     }
 
-    private record Call(SpottedTargets.Spot spot, long until) {
+    private record Call(Spot spot, long until) {
     }
 
     private final Map<UUID, RouteWorker> routeWorkers = new LinkedHashMap<>();
@@ -189,63 +191,54 @@ final class PatrolPresence implements Facing {
         return rounds;
     }
 
-    // Each route by how many of its stops hold a ward now; one with nowhere to stand along it has no stops at all.
+    // A route's card staffs it: its headcount, the profiles allowed on it, and a retry once its team stalled.
     @Override
-    public Optional<Board> board(ResourceLocation page, ColonyView view) {
-        if (!page.equals(PatrolContent.ID)) {
-            return Optional.empty();
-        }
-        ServerLevel level = view.level();
-        long now = level.getGameTime();
-        Map<UUID, List<Stop>> charted = routes;
-        int count = 0;
-        int held = 0;
-        List<Board.Row> rows = new ArrayList<>();
-        for (PathView path : Fronts.of(colony).paths()) {
-            if (!path.delegation().equals(PatrolContent.BEAT) || !path.dimension().equals(level.dimension())
-                    || path.points().isEmpty()) {
-                continue;
-            }
-            count++;
-            ItemStack icon = new ItemStack(Items.IRON_SWORD);
-            Component title = Component.translatable("folkways.delegation.folkways_vanilla.patrol");
-            List<Stop> stops = charted.getOrDefault(path.id(), List.of());
-            if (stops.isEmpty()) {
-                rows.add(new Board.Row(icon, title, Component.translatable("folkways.page.patrol.unwalkable"),
-                    List.of(new Board.Act.Ping(path.points().getFirst()))));
-                continue;
-            }
-            int warded = (int) stops.stream().filter(stop -> Wards.until(level, stop.at().block(level)) > now).count();
-            held += warded;
-            Lap lap = laps.get(path.id());
-            String head = lap != null && lap.walking() ? "folkways.page.patrol.walking" : "folkways.page.patrol.head";
-            rows.add(Board.Row.gauged(icon, title, Component.translatable(head, warded, stops.size()),
-                warded, stops.size(), List.of(new Board.Act.Ping(stops.getFirst().at().block(level)))));
-            rows.add(Board.Row.of(ItemStack.EMPTY, title, PatrolStaffing.of(colony).summary(path.id())));
-            if (PatrolStaffing.of(colony).configured(path.id())) {
-                rows.add(Board.Row.of(ItemStack.EMPTY, title, Component.translatable(
-                    "folkways.staffing.team", Component.translatable("folkways.staffing." + teams.status(path.id())),
-                    teams.stop(path.id()) + 1)));
-            }
-        }
-        return Optional.of(new Board(
-            List.of(new Board.Figure("folkways.page.patrol.count", Component.literal(Integer.toString(count))),
-                new Board.Figure("folkways.page.patrol.warded", Component.literal(Integer.toString(held)))),
-            rows,
-            Optional.of(Component.translatable("folkways.page.patrol.empty"))));
+    public List<Card.Element> elements() {
+        return StaffingCard.elements(true);
     }
 
     @Override
-    public List<Line> pathLines(PathView path, ColonyView view) {
-        if (!path.delegation().equals(PatrolContent.BEAT)) {
+    public List<Card.Row> rows(Held held, String source, ColonyView view) {
+        return route(held) ? StaffingCard.rows(colony, held, source) : List.of();
+    }
+
+    @Override
+    public Optional<Value> parameter(Held held, String parameter) {
+        return route(held) ? StaffingCard.parameter(colony, held, parameter) : Optional.empty();
+    }
+
+    @Override
+    public Optional<List<DefinedFacilities.Problem>> setParameter(Held held, String parameter, Value value) {
+        return route(held) ? StaffingCard.setParameter(colony, held, parameter, value) : Optional.empty();
+    }
+
+    @Override
+    public Optional<List<DefinedFacilities.Problem>> act(Held held, ServerPlayer by, String routine,
+            Map<String, Value> arguments) {
+        return route(held) ? StaffingCard.act(colony, held, routine, arguments) : Optional.empty();
+    }
+
+    private static boolean route(Held held) {
+        return held.delegation().equals(PatrolContent.BEAT) && held.path().isPresent();
+    }
+
+    @Override
+    public List<Line> lines(Held held, ColonyView view) {
+        if (!route(held)) {
             return List.of();
         }
-        List<Line> lines = new ArrayList<>(PatrolStaffing.of(colony).lines(path.id()));
-        if (PatrolStaffing.of(colony).configured(path.id())) {
-            lines.add(Line.text(Component.translatable("folkways.staffing.team",
-                Component.translatable("folkways.staffing." + teams.status(path.id())), teams.stop(path.id()) + 1)));
+        UUID beat = held.id();
+        PatrolStaffing staffing = PatrolStaffing.of(colony);
+        List<Line> lines = new ArrayList<>(staffing.lines(beat));
+        if (staffing.configured(beat)) {
+            lines.add(teamLine(beat));
         }
         return List.copyOf(lines);
+    }
+
+    private Line teamLine(UUID beat) {
+        return Line.text(Component.translatable("folkways.staffing.team",
+            Component.translatable("folkways.staffing." + teams.status(beat)), teams.stop(beat) + 1));
     }
 
     PatrolTeams teams() {
@@ -319,13 +312,16 @@ final class PatrolPresence implements Facing {
             ? attacker(body).filter(target -> insideLeash(level, guard, WorldSpaces.at(target)))
             : guard.isPresent() || onDuty(who.resident().id(), level.getGameTime())
             || routeWorkers.containsKey(resident) || teams.member(resident)
-            ? called(who).or(() -> teams.foe(who)).or(() -> nearestFoe(level, who, guard))
+            ? called(who).filter(target -> ResidentWeapons.planned(colony, who, target))
+                .or(() -> teams.foe(who).filter(target -> ResidentWeapons.planned(colony, who, target)))
+                .or(() -> nearestFoe(level, who, guard))
             : attacker(body);
-        foe = foe.filter(target -> teams.permission(who, target).getAsBoolean());
+        foe = foe.filter(target -> teams.permission(who, target).getAsBoolean()
+            && ResidentWeapons.planned(colony, who, target));
         if (foe.isPresent()) {
             spots.observe(body);
         }
-        if (foe.isEmpty() || !Weapons.armed(who)) {
+        if (foe.isEmpty() || !ResidentWeapons.armed(who)) {
             return idle;
         }
         Optional<Stances> reach = battleStances(level, who, foe.get(), guard);
@@ -350,6 +346,9 @@ final class PatrolPresence implements Facing {
                 && (response == null || calls.get(resident) == response && called(who).isPresent())
                 && (SpottedTargets.sees(body, target) || spots.get(body, target.getUUID()).isPresent());
         Stances stances = reach.get();
+        // A waypoint detour can pull the defender out of sight of the foe before it reaches striking distance.
+        WorldPos from = WorldSpaces.at(body);
+        boolean directTravel = stances.cells().stream().allMatch(from::sameRealm);
         ResourceLocation intent =
             ResourceLocation.fromNamespaceAndPath(ENGAGE.getNamespace(), ENGAGE.getPath() + "/" + target.getUUID());
         return List.of(
@@ -359,8 +358,8 @@ final class PatrolPresence implements Facing {
             true,
             () ->
                 body instanceof ResidentEntity
-                    ? new StrikeNode(level, target, stances, authorized)
-                    : new ToolStrikeNode(level, target, stances, authorized)));
+                    ? new StrikeNode(level, target, stances, authorized, directTravel)
+                    : new ToolStrikeNode(level, target, stances, authorized, directTravel)));
     }
 
     private boolean onDuty(UUID resident, long now) {
@@ -386,13 +385,14 @@ final class PatrolPresence implements Facing {
         Mob body = worker.body();
         SpottedTargets spots = SpottedTargets.of(colony);
         List<Mob> seen = new ArrayList<>(spots.observe(body));
-        for (SpottedTargets.Spot spot : spots.targets(body)) {
-            spots.resolve(spot, body).filter(target -> Weapons.ranged(worker, target)
-                && (Weapons.indirect(worker, target) || Weapons.longRange(worker, target)
-                && body.hasLineOfSight(target) && body.distanceTo(target) <= Weapons.range(worker, target)))
+        for (Spot spot : spots.targets(body)) {
+            spots.resolve(spot, body).filter(target -> ResidentWeapons.ranged(worker, target)
+                && (ResidentWeapons.indirect(worker, target) || ResidentWeapons.longRange(worker, target)
+                && body.hasLineOfSight(target) && body.distanceTo(target) <= ResidentWeapons.range(worker, target)))
                 .filter(target -> !seen.contains(target)).ifPresent(seen::add);
         }
         return seen.stream().filter(mob -> insideLeash(level, guard, WorldSpaces.at(mob)))
+            .filter(mob -> ResidentWeapons.planned(colony, worker, mob))
             .min(Comparator.comparingDouble(body::distanceToSqr));
     }
 
@@ -418,7 +418,7 @@ final class PatrolPresence implements Facing {
 
     void call(Mob sentry, Mob target) {
         ServerLevel level = (ServerLevel) sentry.level();
-        Optional<SpottedTargets.Spot> spot = SpottedTargets.of(colony).get(sentry, target.getUUID());
+        Optional<Spot> spot = SpottedTargets.of(colony).get(sentry, target.getUUID());
         if (spot.isEmpty()) {
             return;
         }
@@ -429,7 +429,7 @@ final class PatrolPresence implements Facing {
         List<PatrolTeams.Responder> candidates = new ArrayList<>(teams.responders(sentry, target, spot.get(), id -> {
             RouteWorker candidate = routeWorkers.get(id);
             return candidate != null && level.getGameTime() - candidate.tick() <= 40
-                && Weapons.armed(candidate.worker())
+                && ResidentWeapons.armed(candidate.worker())
                 && fighting.getOrDefault(id, 0L) < level.getGameTime()
                 && !supplies.underway(id);
         }));
@@ -441,7 +441,7 @@ final class PatrolPresence implements Facing {
             .filter(worker -> worker.body().level() == level && worker.body().isAlive() && !worker.body().isRemoved()
                 && worker.body().distanceToSqr(sentry) <= radius * radius
                 && worker.body().getHealth() > worker.body().getMaxHealth() * WOUNDED
-                && Weapons.armed(worker) && !calls.containsKey(worker.resident().id())
+                && ResidentWeapons.armed(worker) && !calls.containsKey(worker.resident().id())
                 && !teams.member(worker.resident().id())
                 && fighting.getOrDefault(worker.resident().id(), 0L) < level.getGameTime()
                 && !SentryPosts.of(colony).assigned(worker.resident().id())
@@ -492,11 +492,11 @@ final class PatrolPresence implements Facing {
         ServerLevel level, Worker who, Mob foe, Optional<? extends DefenseControl.Order> guard) {
         Mob body = who.body();
         Set<BlockPos> cells = new LinkedHashSet<>();
-        if (Weapons.ranged(who, foe)) {
-            double range = Weapons.range(who, foe);
+        if (ResidentWeapons.ranged(who, foe)) {
+            double range = ResidentWeapons.range(who, foe);
             BlockPos here = cellOf(level, body);
             if (body.distanceTo(foe) <= range
-                && (body.hasLineOfSight(foe) || Weapons.indirect(who, foe)) && Footing.withFeetAt(level, here)) {
+                && (body.hasLineOfSight(foe) || ResidentWeapons.indirect(who, foe)) && Footing.withFeetAt(level, here)) {
                 // Ranged guards fire from their existing footing instead of walking into melee.
                 cells.add(here);
             } else {
@@ -520,7 +520,7 @@ final class PatrolPresence implements Facing {
             // Reaching a stance permits 0.9 horizontal and 1.0 vertical displacement. Compare
             // real world positions and leave that room before the native attack's strict range
             // check.
-            double safeReach = Math.max(0, Weapons.range(who, foe) - Math.hypot(.9, 1.0));
+            double safeReach = Math.max(0, ResidentWeapons.range(who, foe) - Math.hypot(.9, 1.0));
             for (BlockPos cell : Reach.workableCells(level, cellOf(level, foe))) {
                 if (WorldSpaces.world(level, WorldSpaces.at(level, cell))
                     .filter(point -> point.distanceToSqr(foe.position()) <= safeReach * safeReach)

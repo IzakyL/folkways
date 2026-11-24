@@ -1,0 +1,29 @@
+package io.github.izakyl.folkways.vanilla.create.rail.domain;
+
+import java.util.UUID;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.minecraft.resources.ResourceLocation;
+
+public record RequestRosterPacket(UUID colonyId) implements CustomPacketPayload {
+
+    public static final Type<RequestRosterPacket> TYPE = new Type<>(
+        ResourceLocation.fromNamespaceAndPath("folkways_vanilla", "request_roster"));
+
+    public static final StreamCodec<RegistryFriendlyByteBuf, RequestRosterPacket> STREAM_CODEC =
+        StreamCodec.ofMember(RequestRosterPacket::encode, RequestRosterPacket::decode);
+
+    @Override
+    public Type<? extends CustomPacketPayload> type() {
+        return TYPE;
+    }
+
+    private void encode(RegistryFriendlyByteBuf buffer) {
+        buffer.writeUUID(colonyId);
+    }
+
+    private static RequestRosterPacket decode(RegistryFriendlyByteBuf buffer) {
+        return new RequestRosterPacket(buffer.readUUID());
+    }
+}

@@ -7,6 +7,7 @@ import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Consumer;
@@ -24,7 +25,7 @@ final class Runners {
         this.execution = execution;
     }
 
-    BodyRunner of(UUID resident) {
+    BodyRunner assign(UUID resident) {
         BodyRunner had = byResident.get(resident);
         if (had != null) {
             return had;
@@ -35,6 +36,10 @@ final class Runners {
         return fresh;
     }
 
+    Optional<BodyRunner> find(UUID resident) {
+        return Optional.ofNullable(byResident.get(resident));
+    }
+
     Collection<BodyRunner> all() {
         return byResident.values();
     }
@@ -42,7 +47,7 @@ final class Runners {
     // Every runner follows its route as laid now, from its start: work it let go of since is on it again.
     void follow(Map<UUID, Tour> tours) {
         for (Map.Entry<UUID, Tour> given : tours.entrySet()) {
-            of(given.getKey()).follow(given.getValue().nodes());
+            assign(given.getKey()).follow(given.getValue().nodes());
         }
         for (BodyRunner runner : byResident.values()) {
             if (!tours.containsKey(runner.resident())) {

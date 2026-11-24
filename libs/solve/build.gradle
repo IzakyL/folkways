@@ -1,0 +1,22 @@
+plugins {
+    id "java-library"
+}
+
+group = project.maven_group
+version = providers.gradleProperty("version_suffix").map { "${project.mod_version}-${it}" }
+    .getOrElse(project.mod_version)
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(project.java_release.toInteger())
+    }
+}
+
+tasks.named("jar", Jar) {
+    manifest.attributes("FMLModType": "GAMELIBRARY")
+}
+
+dependencies {
+    testImplementation fileTree(dir: new File(gradle.gradleHomeDir, "lib"),
+        include: ["junit-4.*.jar", "hamcrest-core-*.jar"])
+}

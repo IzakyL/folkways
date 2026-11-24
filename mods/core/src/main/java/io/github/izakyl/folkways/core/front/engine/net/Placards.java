@@ -1,7 +1,7 @@
 package io.github.izakyl.folkways.core.front.engine.net;
 
 import io.github.izakyl.folkways.core.front.api.Placard;
-import io.github.izakyl.folkways.core.front.api.notice.Line;
+import io.github.izakyl.folkways.core.card.api.notice.Line;
 import io.netty.handler.codec.DecoderException;
 import java.util.List;
 import java.util.UUID;

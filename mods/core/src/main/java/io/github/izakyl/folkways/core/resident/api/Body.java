@@ -37,7 +37,7 @@ public interface Body {
 
     default Pack pack() {
         Pack pack = state().pack();
-        pack.bind(this);
+        pack.bindInventories(this);
         return pack;
     }
 

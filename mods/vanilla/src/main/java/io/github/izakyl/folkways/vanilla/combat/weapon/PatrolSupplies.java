@@ -7,7 +7,7 @@ import io.github.izakyl.folkways.core.colony.api.Equipment;
 import io.github.izakyl.folkways.core.combat.api.Loadouts;
 import io.github.izakyl.folkways.core.equipment.api.EquipmentProfiles;
 import io.github.izakyl.folkways.core.inventory.api.InventorySnapshot;
-import io.github.izakyl.folkways.core.inventory.api.SlotSnapshot;
+import io.github.izakyl.folkways.core.facility.api.control.SlotSnapshot;
 import io.github.izakyl.folkways.core.item.api.Containers;
 import io.github.izakyl.folkways.core.item.api.Goods;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
@@ -18,7 +18,7 @@ import io.github.izakyl.folkways.core.work.api.Amount;
 import io.github.izakyl.folkways.core.work.api.Need;
 import io.github.izakyl.folkways.core.work.api.Node;
 import io.github.izakyl.folkways.core.work.api.NodeSpec;
-import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.world.api.Stances;
 import io.github.izakyl.folkways.core.work.api.WorkSite;
 import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.core.work.api.Workload;
@@ -552,7 +552,7 @@ public final class PatrolSupplies {
 
     /** Allocate each physical unit once, in profile order, including matching loaded ammunition. */
     public Map<UUID, Integer> deficits(ResidentEntity body, LoadoutProfile profile) {
-        List<ItemStack> carried = new ArrayList<>(LoadoutRegistry.carried(body));
+        List<ItemStack> carried = new ArrayList<>(ResidentWeapons.carried(body));
         return allocate(profile, carried, body::getItemBySlot, kind -> tack(body, kind));
     }
 

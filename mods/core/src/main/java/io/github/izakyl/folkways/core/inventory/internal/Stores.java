@@ -2,7 +2,8 @@ package io.github.izakyl.folkways.core.inventory.internal;
 
 import io.github.izakyl.folkways.core.inventory.api.InventoryFeedback;
 import io.github.izakyl.folkways.core.inventory.api.StoreRule;
-import io.github.izakyl.folkways.core.inventory.api.port.StorePorts;
+import io.github.izakyl.folkways.core.facility.api.control.SlotWindow;
+import io.github.izakyl.folkways.core.inventory.api.port.StoreAccess;
 import io.github.izakyl.folkways.core.colony.api.Colonies;
 import io.github.izakyl.folkways.core.item.api.Containers;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
@@ -42,8 +43,8 @@ public final class Stores {
     public static Optional<Container> at(ServerLevel level, WorldPos where, boolean directed) {
         return WorldSpaces.resolve(level.getServer(), where)
             .filter(block -> block.level() == level)
-            .flatMap(block -> StorePorts.at(block.level(), block.cell()))
-            .filter(port -> port.usability().usable() && usable(level, where))
+            .flatMap(block -> StoreAccess.at(block.level(), block.cell()))
+            .filter(port -> StoreAccess.usability(level, port).usable() && usable(level, where))
             .filter(SlotPort.class::isInstance).map(SlotPort.class::cast).map(SlotPort::container)
             .flatMap(container -> kept(container, rulesAt(level, where), directed))
             .map(container -> new Watched(container, () -> InventoryFeedback.store(level, where)));
@@ -53,11 +54,11 @@ public final class Stores {
         for (var colony : Colonies.all(level.getServer())) {
             var store = colony.inventory().snapshot().store(where);
             if (store.isPresent() && (!store.get().usability().usable()
-                || store.get().aliases().stream().anyMatch(alias -> StorePorts.condemned(alias).isPresent()))) {
+                || store.get().aliases().stream().anyMatch(alias -> StoreAccess.observation(alias).isPresent()))) {
                 return false;
             }
         }
-        return StorePorts.condemned(where).isEmpty();
+        return StoreAccess.observation(where).isEmpty();
     }
 
     public static void ruled(UUID colony, Map<WorldPos, List<StoreRule>> rules) {
@@ -87,7 +88,14 @@ public final class Stores {
         return List.copyOf(rules);
     }
 
+    public static boolean hasLocalRules(ServerLevel level, WorldPos where) {
+        return StoreAccess.localRules(level, where);
+    }
+
     public static List<StoreRule> rulesAt(ServerLevel level, WorldPos where) {
+        if (hasLocalRules(level, where)) {
+            return rulesAt(where);
+        }
         for (var colony : Colonies.all(level.getServer())) {
             var store = colony.inventory().snapshot().store(where);
             if (store.isPresent()) {
@@ -115,16 +123,16 @@ public final class Stores {
         };
     }
 
-    public static int accessibleSlot(List<StoreRule> rules, int size, int physicalSlot) {
-        int from = 0;
-        int to = size;
-        for (StoreRule rule : rules) {
-            if (rule instanceof StoreRule.Slots slots) {
-                from = Math.max(from, slots.from());
-                to = Math.min(to, slots.to());
-            }
+    static Optional<Container> window(Container container, Optional<SlotWindow> window) {
+        if (window.isEmpty()) {
+            return Optional.of(container);
         }
-        return physicalSlot >= from && physicalSlot < to ? physicalSlot - from : -1;
+        return kept(container, List.of(), window.get());
+    }
+
+    private static Optional<Container> kept(Container container, List<StoreRule> rules, SlotWindow window) {
+        int to = Math.min(container.getContainerSize(), window.to());
+        return window.from() >= to ? Optional.empty() : Optional.of(new Kept(container, rules, window.from(), to));
     }
 
     static Optional<Container> kept(Container container, List<StoreRule> rules) {
@@ -138,18 +146,16 @@ public final class Stores {
         if (rules.stream().allMatch(rule -> rule instanceof StoreRule.Reserve || rule instanceof StoreRule.Prefer)) {
             return Optional.of(container);
         }
-        int from = 0;
-        int to = container.getContainerSize();
-        for (StoreRule rule : rules) {
-            if (rule instanceof StoreRule.Slots slots) {
-                from = Math.max(from, slots.from());
-                to = Math.min(to, slots.to());
-            }
-        }
-        return from >= to ? Optional.empty() : Optional.of(new Kept(container, rules, from, to));
+        return kept(container, rules, StoreTransfers.window(rules)
+            .orElseGet(() -> new SlotWindow(0, container.getContainerSize())));
     }
 
-    private record Watched(Container inner, Runnable changed) implements Container {
+    private record Watched(Container inner, Runnable changed) implements Containers.Contents {
+
+        @Override
+        public boolean known() {
+            return Containers.known(inner);
+        }
 
         @Override
         public int getContainerSize() {
@@ -220,7 +226,12 @@ public final class Stores {
         }
     }
 
-    private record Kept(Container inner, List<StoreRule> rules, int from, int to) implements Container {
+    private record Kept(Container inner, List<StoreRule> rules, int from, int to) implements Containers.Contents {
+
+        @Override
+        public boolean known() {
+            return Containers.known(inner);
+        }
 
         @Override
         public int getContainerSize() {

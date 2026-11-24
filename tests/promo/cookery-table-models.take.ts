@@ -9,7 +9,7 @@ const DISHES = ["dark_cuisine", "dongpo_pork", "spicy_chicken", "braised_beef", 
 const MODELS = defineTask<{ x: number; y: number; z: number }, Record<string, any>>({
   name: "folkways.promo.table-models", side: "client", timeoutMs: 20_000,
   source: javaTask({ imports: ["net.minecraft.client.Minecraft", "net.minecraft.core.registries.BuiltInRegistries",
-    "net.minecraft.resources.ResourceLocation", "io.github.izakyl.folkways.cookery.dining.TableFoodModels",
+    "net.minecraft.resources.ResourceLocation", "io.github.izakyl.folkways.core.shell.cookery.dining.TableFoodModels",
     "com.github.ysbbbbbb.kaleidoscopecookery.client.render.block.TableBlockEntityRender",
     "com.github.ysbbbbbb.kaleidoscopecookery.blockentity.decoration.TableBlockEntity", "net.minecraft.core.BlockPos",
     "net.neoforged.neoforge.items.ItemStackHandler"], body: `

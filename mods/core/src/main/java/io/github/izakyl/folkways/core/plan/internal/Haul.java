@@ -1,6 +1,5 @@
 package io.github.izakyl.folkways.core.plan.internal;
 
-import io.github.izakyl.folkways.core.inventory.api.Stash;
 import io.github.izakyl.folkways.core.plan.api.Delivery;
 import io.github.izakyl.folkways.core.plan.api.Grown;
 import io.github.izakyl.folkways.core.plan.api.Intent;
@@ -58,8 +57,8 @@ public final class Haul {
             if (asked.site() instanceof WorkSite.AtEntity into) {
                 return Optional.of(Grown.of(Receipt.of(delivery, into, count)));
             }
-            return Optional.of(Grown.of(TransferNode.delivering(asked.id(), new Stash(asked.site().where()),
-                new Need(delivery.goods().spec(), count, true), asked.stances(), delivery.arrived())));
+            return Optional.of(Grown.of(TransferNode.delivering(delivery,
+                new Need(delivery.goods().spec(), count, true))));
         }
     };
 

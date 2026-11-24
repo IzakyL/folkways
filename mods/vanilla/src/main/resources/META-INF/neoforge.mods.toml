@@ -57,3 +57,48 @@ config = "folkways-vanilla-wares.mixins.json"
 
 [[mixins]]
 config = "folkways-vanilla-person.mixins.json"
+
+[[mixins]]
+config = "folkways-vanilla-carts.mixins.json"
+
+[[mixins]]
+config = "folkways-vanilla-cookery-spit.mixins.json"
+
+[[mixins]]
+config = "folkways-vanilla-cookery-steamer.mixins.json"
+
+[[mixins]]
+config = "folkways-vanilla-cookery-tavern.mixins.json"
+
+[[mixins]]
+config = "folkways-vanilla-cookery-tray.mixins.json"
+
+[[mixins]]
+config = "folkways-vanilla-cookery.mixins.json"
+
+[[mixins]]
+config = "folkways-vanilla-warfare.mixins.json"
+
+[[dependencies.${mod_id}]]
+modId = "tacz"
+type = "optional"
+ordering = "AFTER"
+side = "BOTH"
+
+[[dependencies.${mod_id}]]
+modId = "superbwarfare"
+type = "optional"
+ordering = "AFTER"
+side = "BOTH"
+
+[[dependencies.${mod_id}]]
+modId = "create"
+type = "optional"
+ordering = "AFTER"
+side = "BOTH"
+
+[[dependencies.${mod_id}]]
+modId = "createfirefightingadd"
+type = "optional"
+ordering = "AFTER"
+side = "BOTH"

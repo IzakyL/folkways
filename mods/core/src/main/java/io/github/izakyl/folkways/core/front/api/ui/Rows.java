@@ -230,6 +230,16 @@ public final class Rows {
     public static Button wearing() {
         Button press = new Button().noText();
         press.layout(layout -> layout.alignItems(AlignItems.CENTER));
+        // LDLib2 hands a button its release and the pointer's leaving only while the pointer is over it, and reads
+        // that from the frame before. A press that opens a window over the button sends both to the window, so the
+        // button would stay drawn pressed until the pointer next crossed it; once nothing points at it, it lets go.
+        press.addEventListener(UIEvents.TICK, event -> {
+            if (press.getState() != Button.State.DEFAULT && !press.isSelfOrChildHover()) {
+                UIEvent leave = UIEvent.create(UIEvents.MOUSE_LEAVE);
+                leave.target = press;
+                UIEventDispatcher.dispatchDirectEvent(leave);
+            }
+        });
         return press;
     }
 

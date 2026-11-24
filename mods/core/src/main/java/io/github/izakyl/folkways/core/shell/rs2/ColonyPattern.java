@@ -17,12 +17,12 @@ import java.util.Set;
 import java.util.UUID;
 import net.minecraft.core.registries.BuiltInRegistries;
 
-final class ColonyPattern {
+public final class ColonyPattern {
 
     private ColonyPattern() {
     }
 
-    static Optional<Pattern> of(String reference, WorkshopRecipes.Recipe recipe) {
+    public static Optional<Pattern> of(String reference, WorkshopRecipes.Recipe recipe) {
         try {
             List<Ingredient> ingredients = new ArrayList<>();
             for (var need : recipe.inputs()) {

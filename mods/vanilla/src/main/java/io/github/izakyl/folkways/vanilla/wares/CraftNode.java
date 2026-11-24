@@ -5,7 +5,7 @@ import io.github.izakyl.folkways.core.work.api.Node;
 import io.github.izakyl.folkways.core.work.api.NodeSpec;
 import io.github.izakyl.folkways.core.work.api.Outcome;
 import io.github.izakyl.folkways.core.work.api.Recourse;
-import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.world.api.Stances;
 import io.github.izakyl.folkways.core.work.api.WorkGesture;
 import io.github.izakyl.folkways.core.work.api.WorkNoise;
 import io.github.izakyl.folkways.core.work.api.WorkSite;
@@ -86,7 +86,8 @@ abstract class CraftNode implements Node {
     }
 
     boolean standing(ServerLevel level) {
-        return at.in(level) && level.isLoaded(at.block(level)) && level.getBlockState(at.block(level)).is(block);
+        return at.in(level) && level.isLoaded(at.block(level)) && level.getBlockState(at.block(level)).is(block)
+            && !io.github.izakyl.folkways.core.facility.api.DefinedFacilities.covers(level, at);
     }
 
     final Optional<Container> machine(ServerLevel level) {

@@ -24,7 +24,7 @@ public final class ColonyLookup implements Colonies.Source {
 
     @Override
     public Colony mint(MinecraftServer server) {
-        return ColonyRegistry.get(server).mint(server).works();
+        return ColonyRegistry.initialize(server).mint(server).works();
     }
 
     @Override

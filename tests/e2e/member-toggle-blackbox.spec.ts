@@ -1,21 +1,18 @@
 import { expect, test } from "@playwright/test";
-import { player, screen, tick, world } from "@izakyl/blockwright-minecraft";
-import { createColonyViaBook, isColonyMember, optInViaBook, waitForGroundedPlayer, type Vec } from "../shared/colony/colony-founding";
-import { clickElement } from "../ldlib2";
+import { screen, tick, world } from "@izakyl/blockwright-minecraft";
+import { createColonyViaBook, isColonyMember, optInViaBook, setBookGesture, waitForGroundedPlayer, type Vec } from "../shared/colony/colony-founding";
+import { facilityAt, openBlockCard } from "../shared/ui/book-cards";
 import { launchPair, type E2EPair } from "../shared/harness/pair";
 import { ensureOut, tracePath } from "../shared/harness/out-paths";
 import { seededServer } from "../shared/harness/mod-settings";
 import { BUDGET } from "../shared/harness/budgets";
-import { waitForAnyScreen, waitForElement, safeAction, safeScreen, screenOpen, isSafeFailure, commandPos, tryCommand, softly } from "../shared/harness/bw-helpers";
+import { commandPos, tryCommand } from "../shared/harness/bw-helpers";
 import { newRunId } from "../shared/harness/run-id";
 import { around, twins } from "../shared/harness/stage";
 
 const BOOK_ITEM = "folkways_core:colony_book";
-const TOGGLE_WIDGET = "folkways.member.toggle";
-const PANEL_WIDGET = "folkways.site.panel";
-const TOGGLE_TICKS = 200;
 
-for (const stage of twins()) test(stage.title("either half of a double chest opens its window, whose member toggle takes it out of the colony and back in"), async ({}, testInfo) => {
+for (const stage of twins()) test(stage.title("both halves open the same chest card and point mode toggles membership"), async ({}, testInfo) => {
   test.setTimeout(BUDGET.quick);
   ensureOut("e2e");
 
@@ -64,35 +61,24 @@ for (const stage of twins()) test(stage.title("either half of a double chest ope
     evidence.opt_in = await optInViaBook(server, client, playerName, chest, "chest", stage);
     expect(await isColonyMember(server, chest, stage)).toBe(true);
 
-    // The half the book was not pointed at opens the same chest's window; the toggle is then worked from the other.
+    const facility = await facilityAt(server, playerName, stage.at(chest));
+    expect(facility).toBeTruthy();
+    expect(await facilityAt(server, playerName, stage.at(otherHalf))).toBe(facility);
     for (const half of [otherHalf, chest]) {
+      await openBlockCard(server, client, playerName, half, stage);
+    }
+    await screen.dismiss(client);
+    await setBookGesture(server, client, playerName, "point");
+    for (const [half, member] of [[otherHalf, false], [chest, true]] as const) {
       const seen = stage.stand(half);
       await tryCommand(server, `tp ${playerName} ${seen.x + 0.5} ${seen.y} ${seen.z + 1.5} 180 30`);
       await tick.sprint(server, 5);
-      await screen.dismiss(client);
-      await safeAction(() => player.useBlock(client, stage.at(half), { face: "up" }));
-      await waitForAnyScreen(client, 10_000);
-      if (!screenOpen(await safeScreen(client))) {
-        throw new Error(`member-toggle: no window opened on the chest half at ${commandPos(half)}`);
-      }
-      await tick.sprint(server, 5);
-      const panel = await safeAction(() => waitForElement(client, { id: PANEL_WIDGET }, { timeoutMs: 10_000 }));
-      expect(isSafeFailure(panel), `the half at ${commandPos(half)} should open the colony chest's window with its board`).toBe(false);
+      await stage.click({ server, client }, half, { player: playerName, button: "left" });
+      await expect.poll(async () => {
+        await tick.sprint(server, 5);
+        return isColonyMember(server, chest!, stage);
+      }).toBe(member);
     }
-    await waitForElement(client, { id: TOGGLE_WIDGET }, { timeoutMs: 10_000 });
-
-    evidence.click_leave = await softly(() => clickElement(client, { id: TOGGLE_WIDGET }));
-    await safeAction(() => world.waitFor(server, memberCondition(stage.at(chest!), false), { maxTicks: TOGGLE_TICKS, stepTicks: 5 }));
-    evidence.member_after_leave = await isColonyMember(server, chest, stage);
-    expect(evidence.member_after_leave).toBe(false);
-    // Only a block the colony holds has a board: once the chest leaves there is the button alone.
-    await waitForElement(client, { id: PANEL_WIDGET }, { state: "absent", timeoutMs: 10_000 });
-
-    evidence.click_join = await softly(() => clickElement(client, { id: TOGGLE_WIDGET }));
-    await safeAction(() => world.waitFor(server, memberCondition(stage.at(chest!), true), { maxTicks: TOGGLE_TICKS, stepTicks: 5 }));
-    evidence.member_after_join = await isColonyMember(server, chest, stage);
-    expect(evidence.member_after_join).toBe(true);
-    await waitForElement(client, { id: PANEL_WIDGET }, { timeoutMs: 10_000 });
 
     await screen.dismiss(client);
     testInfo.attach(stage.name("member-toggle"), { body: JSON.stringify(evidence, null, 2), contentType: "application/json" });
@@ -103,7 +89,3 @@ for (const stage of twins()) test(stage.title("either half of a double chest ope
     await pair?.teardown(testInfo);
   }
 });
-
-function memberCondition(chest: Vec, member: boolean): string {
-  return `${member ? "if" : "unless"} data block ${commandPos(chest)} "neoforge:attachments"."folkways_core:colony_member"`;
-}

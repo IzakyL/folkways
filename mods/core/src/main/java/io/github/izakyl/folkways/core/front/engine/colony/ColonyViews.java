@@ -4,7 +4,6 @@ import io.github.izakyl.folkways.core.colony.api.Colony;
 import io.github.izakyl.folkways.core.colony.api.ColonyView;
 import java.util.List;
 import java.util.Optional;
-import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 
 public final class ColonyViews {
@@ -32,7 +31,4 @@ public final class ColonyViews {
         });
     }
 
-    public static ColonyView forBoard(Colony colony, ServerLevel level, Optional<BlockPos> at) {
-        return at.isPresent() ? here(colony, level) : anyOf(colony, level);
-    }
 }

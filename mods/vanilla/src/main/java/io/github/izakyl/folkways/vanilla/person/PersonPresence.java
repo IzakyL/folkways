@@ -1,32 +1,26 @@
 package io.github.izakyl.folkways.vanilla.person;
 
+import io.github.izakyl.folkways.core.card.api.Card;
+import io.github.izakyl.folkways.core.card.api.notice.Line;
 import io.github.izakyl.folkways.core.colony.api.Cadence;
 import io.github.izakyl.folkways.core.colony.api.Colony;
 import io.github.izakyl.folkways.core.colony.api.ColonyView;
-import io.github.izakyl.folkways.core.colony.api.WorkDefaults;
+import io.github.izakyl.folkways.core.facility.api.DefinedFacilities;
+import io.github.izakyl.folkways.core.facility.api.control.Value;
+import io.github.izakyl.folkways.core.front.api.ColonyPanel;
 import io.github.izakyl.folkways.core.resident.api.Resident;
-import io.github.izakyl.folkways.core.resident.api.WorkPriorities;
-import io.github.izakyl.folkways.core.vocation.api.Vocations;
 import io.github.izakyl.folkways.core.front.api.Endorsement;
-import io.github.izakyl.folkways.core.front.api.Facing;
-import io.github.izakyl.folkways.core.front.api.panel.Board;
 import io.github.izakyl.folkways.core.front.engine.colony.Endorsements;
-import io.github.izakyl.folkways.vanilla.person.look.LookPool;
-import io.github.izakyl.folkways.vanilla.person.look.ResidentLooks;
-import io.github.izakyl.folkways.vanilla.person.name.ColonyNames;
-import io.github.izakyl.folkways.vanilla.person.name.NamePool;
-import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 
-final class PersonPresence implements Facing {
+final class PersonPresence implements ColonyPanel {
 
     private static final int SWEEP_TICKS = 100;
 
@@ -108,51 +102,27 @@ final class PersonPresence implements Facing {
     }
 
     @Override
-    public Optional<Board> board(ResourceLocation page, ColonyView view) {
-        if (!page.equals(PersonContent.ID)) {
+    public List<Card.Row> rows(Page page, ColonyView view) {
+        if (page != Page.RESIDENTS) {
+            return List.of();
+        }
+        return List.of(Card.Row.of(new ItemStack(Items.BELL),
+            Line.text(Component.translatable("folkways.settlers.waiting", settlers.waiting(), settlers.cap())),
+            List.of(Line.text(nextSettler(view))))
+            .with(new Card.Act.Run("admit", Map.of(), new Card.Label("folkways.settlers.admit", true),
+                Optional.empty())));
+    }
+
+    @Override
+    public Optional<List<DefinedFacilities.Problem>> act(ServerPlayer by, String routine,
+            Map<String, Value> arguments) {
+        if (!routine.equals("admit")) {
             return Optional.empty();
         }
-        List<Board.Row> rows = new ArrayList<>();
-        rows.add(Board.Row.heading(Component.translatable("folkways.page.person.joining")));
-        rows.add(new Board.Row(new ItemStack(Items.BELL),
-            Component.translatable("folkways.settlers.waiting", settlers.waiting(), settlers.cap()),
-            nextSettler(view),
-            List.of(new Board.Act.Admit("folkways.settlers.admit", PersonBody.ID))));
-        rows.add(new Board.Row(new ItemStack(BuiltInRegistries.ITEM.get(PersonContent.NAMES.icon())),
-            Component.translatable(PersonContent.NAMES.nameKey()),
-            names(view),
-            List.of(new Board.Act.Open(PersonContent.NAMES.id()))));
-        rows.add(new Board.Row(new ItemStack(BuiltInRegistries.ITEM.get(PersonContent.LOOKS.icon())),
-            Component.translatable(PersonContent.LOOKS.nameKey()),
-            looks(view),
-            List.of(new Board.Act.Open(PersonContent.LOOKS.id()))));
-        rows.add(new Board.Row(new ItemStack(BuiltInRegistries.ITEM.get(PersonContent.WORK_DEFAULTS.icon())),
-            Component.translatable(PersonContent.WORK_DEFAULTS.nameKey()),
-            workDefaults(),
-            List.of(new Board.Act.Open(PersonContent.WORK_DEFAULTS.id()))));
-        return Optional.of(new Board(List.of(), rows,
-            Optional.of(Component.translatable("folkways.page.person.empty"))));
-    }
-
-    private Component names(ColonyView view) {
-        NamePool pool = ColonyNames.of(colony, view.level().registryAccess());
-        return Component.translatable("folkways.pool.names.short", pool.names().size(), pool.surnames().size());
-    }
-
-    private Component workDefaults() {
-        WorkPriorities priorities = WorkDefaults.of(colony, PersonBody.ID);
-        long changed = Vocations.ids().stream()
-            .filter(trade -> !priorities.of(trade).equals(WorkPriorities.defaults(trade))).count();
-        return changed == 0 ? Component.translatable("folkways.work_defaults.usual")
-            : Component.translatable("folkways.work_defaults.changed", changed);
-    }
-
-    private Component looks(ColonyView view) {
-        LookPool pool = LookPool.of(colony);
-        long admitted = ResidentLooks.keysInPool(view.level().registryAccess()).stream()
-            .filter(key -> pool.allows(key.location()))
-            .count();
-        return Component.translatable("folkways.pool.looks.holds", admitted);
+        var result = Endorsements.called(by.serverLevel(), colony, by, PersonBody.ID);
+        return Optional.of(result.refusal()
+            .map(why -> List.of(new DefinedFacilities.Problem("routine", why)))
+            .orElse(List.of()));
     }
 
     private Component nextSettler(ColonyView view) {

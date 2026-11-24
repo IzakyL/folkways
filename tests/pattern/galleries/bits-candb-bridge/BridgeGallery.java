@@ -1,8 +1,28 @@
+import blockwright.minecraft.core.Sync;
+import dev.blockwright.api.Context;
+import io.github.izakyl.folkways.core.shell.chiselsandbits.CandBStructureCodec;
+import io.github.izakyl.folkways.core.work.api.Voxelizer;
+import io.github.izakyl.folkways.vanilla.build.draft.Chosen;
+import io.github.izakyl.folkways.vanilla.build.draft.Commission;
+import io.github.izakyl.folkways.vanilla.build.draft.DraftTemplate;
+import io.github.izakyl.folkways.vanilla.build.draft.Drafting;
+import io.github.izakyl.folkways.vanilla.build.draft.Drawn;
+import io.github.izakyl.folkways.vanilla.build.draft.Hint;
+import io.github.izakyl.folkways.vanilla.build.draft.Patterns;
+import io.github.izakyl.folkways.vanilla.build.draft.World;
+import java.io.ByteArrayOutputStream;
+import java.util.HashSet;
+import java.util.Map;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.NbtIo;
+import net.minecraft.resources.ResourceLocation;
 
 public final class Task {
 
     public static Object run(Context ctx) throws Exception {
-        var pattern = Patterns.find(ResourceLocation.parse("folkways_carving:stone_arch_bridge")).orElseThrow();
+        var pattern = Patterns.find(ResourceLocation.parse("folkways_vanilla:stone_arch_bridge")).orElseThrow();
         var defaults = new CompoundTag();
         for (var setting : pattern.knobs().settings()) {
             if (setting instanceof io.github.izakyl.folkways.core.front.api.Schema.Setting.Items items) {
@@ -13,7 +33,7 @@ public final class Task {
         long started = System.nanoTime();
         var drawn = Drafting.draw(pattern, new Commission(
             new Hint.Zone(new BlockPos(0, 1, 0), new BlockPos(2, 1, 19)),
-            Chosen.load(pattern.knobs(), defaults), World.NONE, Direction.SOUTH, 0)).join();
+            Chosen.normalize(pattern.knobs(), defaults), World.NONE, Direction.SOUTH, 0)).join();
         long millis = (System.nanoTime() - started) / 1_000_000;
         if (!(drawn instanceof Drawn.Ready ready)) {
             throw new AssertionError(drawn.toString());

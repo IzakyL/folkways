@@ -1,5 +1,7 @@
 package io.github.izakyl.folkways.vanilla.farming;
 
+import io.github.izakyl.folkways.core.work.api.LaborRefusal;
+import io.github.izakyl.folkways.core.facility.api.Facilities;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import io.github.izakyl.folkways.core.work.api.Amount;
 import io.github.izakyl.folkways.core.work.api.Outcome;
@@ -56,6 +58,10 @@ final class FellNode extends FarmNode {
         List<ItemStack> logs = new ArrayList<>();
         List<WorkNoise> heard = new ArrayList<>();
         Set<Block> voiced = new HashSet<>();
+        if (java.util.stream.Stream.concat(tree.cells().stream(), tree.canopy().stream())
+                .anyMatch(cell -> Facilities.protectedAt(level, cell))) {
+            return Outcome.failed(LaborRefusal.PROTECTED_FACILITY);
+        }
         for (BlockPos vine : tree.canopy()) {
             if (!level.isLoaded(vine)) continue;
             BlockState state = level.getBlockState(vine);

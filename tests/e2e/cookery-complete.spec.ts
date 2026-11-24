@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { writeFileSync } from "node:fs";
 import { defineTask, javaTask, screen, tick, world, type MinecraftServer } from "@izakyl/blockwright-minecraft";
 import { foundColonyFast, foundingBox, optInViaBook, waitForGroundedPlayer } from "../shared/colony/colony-founding";
-import { deliverOrderViaSitePanel } from "../shared/colony/membership-optin";
+import { deliverOrderViaCard } from "../shared/colony/membership-optin";
 import { launchPair, type E2EPair } from "../shared/harness/pair";
 import { tracePath } from "../shared/harness/out-paths";
 import { seededServer } from "../shared/harness/mod-settings";
@@ -109,7 +109,7 @@ for (const scenario of CASES) for (const stage of scenario.aboard ? twins() : [G
       expect(initialStacks.filter(stack => stack.id === item), "the order starts without a ready-made intermediate, dish, tool or container: " + item).toEqual([]);
     }
     await world.command(server, "gamemode survival " + name);
-    evidence.order = await deliverOrderViaSitePanel(server, client, name, cells.target, scenario.dish, 1, stage);
+    evidence.order = await deliverOrderViaCard(server, client, name, cells.target, scenario.dish, 1, stage);
     await screen.dismiss(client);
     let done = false;
     for (let elapsed = 0; elapsed <= 16000; elapsed += 40) {
@@ -124,6 +124,7 @@ for (const scenario of CASES) for (const stage of scenario.aboard ? twins() : [G
     // those real batches and their drivers to finish, including queued batches between unbound moments.
     // A 64-item reserve needs at most three 500-tick mill batches; leave room for hauling and walking clear.
     evidence.millSettlement = { limit: 6000, samples: [], completed: false };
+    let settledSince: number | undefined;
     for (let elapsed = 0; elapsed <= evidence.millSettlement.limit; elapsed += 20) {
       const sample = await samplePhysical(server, cells);
       evidence.millSettlement.samples.push({ elapsed, ...sample });
@@ -133,7 +134,8 @@ for (const scenario of CASES) for (const stage of scenario.aboard ? twins() : [G
       expect(sample.target.filter((stack: any) => stack.id === scenario.dish)
         .reduce((sum: number, stack: any) => sum + Number(stack.count ?? 1), 0),
       "waiting for independent reserves never repeats the delivered food order").toBe(1);
-      if (settled) {
+      settledSince = settled ? settledSince ?? elapsed : undefined;
+      if (settledSince !== undefined && elapsed - settledSince >= 120) {
         evidence.final = sample;
         evidence.millSettlement.elapsed = elapsed;
         evidence.millSettlement.completed = true;
@@ -162,12 +164,7 @@ for (const scenario of CASES) for (const stage of scenario.aboard ? twins() : [G
     expect(evidence.final.residents.every((resident: any) => resident.pack.every((entry: any) => !entry.Stack?.id?.includes(expectedTool))), "residents release their borrowed tool after work").toBe(true);
     } else expect(evidence.final.tools, "a tool-free native recipe never creates kitchen tools").toEqual([]);
     expect(evidence.final.millBound, "the millstone releases its actual driver").toBe(false);
-    await tick.sprint(server, 120);
-    const stable = await samplePhysical(server, cells);
-    evidence.stable = stable;
-    expect(stable.millBound, "an exited driver must not be captured again").toBe(false);
-    expect(stable.workers.every((worker: any) => !worker.millExiting), "the driver finishes its physical exit").toBe(true);
-    expect(stable.target.filter((stack: any) => stack.id === scenario.dish).reduce((sum: number, stack: any) => sum + Number(stack.count ?? 1), 0)).toBe(1);
+
   } catch (error) {
     pair?.failing(error); evidence.failure = String(error); throw error;
   } finally {

@@ -23,7 +23,7 @@ public abstract class FolkwaysMixinPlugin implements IMixinConfigPlugin {
 
     private static final Logger LOGGER = LoggerFactory.getLogger("folkways-mixin");
 
-    private static final String VERIFIED_CREATE = "[6.0.0,7.0)";
+    private static final String VERIFIED_CREATE = "[6.0.7,7.0)";
 
     // An essential mixin is one Folkways cannot run without: when it is not in force, loading stops.
     public record Degradable(String mixin, String target, String lost, boolean clientOnly, boolean essential) {
@@ -45,7 +45,6 @@ public abstract class FolkwaysMixinPlugin implements IMixinConfigPlugin {
     private static final Map<String, Degradable> DEGRADABLE = new ConcurrentHashMap<>();
     private static final Set<String> APPLIED = ConcurrentHashMap.newKeySet();
     private static final Map<String, String> DROPPED = new ConcurrentHashMap<>();
-    private static final Set<String> INAPPLICABLE = ConcurrentHashMap.newKeySet();
 
     private boolean createPresent;
 
@@ -67,7 +66,12 @@ public abstract class FolkwaysMixinPlugin implements IMixinConfigPlugin {
         createUnverified = createPresent && !VERIFIED.containsVersion(create)
             ? "Create " + create + " is outside the verified range " + VERIFIED_CREATE
             : null;
+        Set<String> createMixins = createOnly();
         for (Degradable entry : degradable()) {
+            // Mixin selection can reject a disabled integration before recording why it was skipped.
+            if (!enabled(entry.mixin()) || (!createPresent && createMixins.contains(entry.mixin()))) {
+                continue;
+            }
             DEGRADABLE.putIfAbsent(entry.mixin(), entry);
         }
     }
@@ -94,8 +98,6 @@ public abstract class FolkwaysMixinPlugin implements IMixinConfigPlugin {
         }
         if (createUnverified != null) {
             DROPPED.put(mixin, createUnverified);
-        } else {
-            INAPPLICABLE.add(mixin);
         }
         return false;
     }
@@ -110,7 +112,7 @@ public abstract class FolkwaysMixinPlugin implements IMixinConfigPlugin {
         boolean client = FMLEnvironment.dist.isClient();
         List<ModLoadingIssue> fatal = new ArrayList<>();
         for (Degradable entry : DEGRADABLE.values()) {
-            if (INAPPLICABLE.contains(entry.mixin()) || (entry.clientOnly() && !client)) {
+            if (entry.clientOnly() && !client) {
                 continue;
             }
             String reason = DROPPED.get(entry.mixin());

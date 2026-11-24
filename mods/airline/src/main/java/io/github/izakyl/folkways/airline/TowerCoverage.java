@@ -63,11 +63,6 @@ public final class TowerCoverage {
             return samples.stream().allMatch(sample -> !sample.towers().isEmpty());
         }
 
-        public boolean staffed(List<Tower> towers) {
-            Set<BlockPos> onDuty = new LinkedHashSet<>();
-            towers.stream().filter(Tower::staffed).forEach(tower -> onDuty.add(tower.pos()));
-            return samples.stream().allMatch(sample -> sample.towers().stream().anyMatch(onDuty::contains));
-        }
     }
 
     public static List<BlockPos> samples(Footprint area) {

@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.Predicate;
+import java.util.function.Supplier;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -23,6 +24,8 @@ import net.minecraft.world.item.ItemStack;
 public final class ResidentPack implements Pack {
     public static final int DEFAULT_SIZE = Pack.DEFAULT_SIZE;
     public static final int BASE_PLANNABLE_CELLS = DEFAULT_SIZE;
+    private Supplier<Pack> existing;
+    private Supplier<Pack> assign;
     private SimpleContainer container;
     private final int baseSize;
     private final List<ItemStack> recovered = new ArrayList<>();
@@ -38,14 +41,53 @@ public final class ResidentPack implements Pack {
         container = new SimpleContainer(size);
     }
 
+    public ResidentPack(Supplier<Pack> existing, Supplier<Pack> assign) {
+        this();
+        this.existing = existing;
+        this.assign = assign;
+    }
+
+    private Pack writing() {
+        Pack pack = assign.get();
+        if (owner != null) {
+            pack.bind(owner);
+        }
+        return pack;
+    }
+
     @Override
     public void onChanged(Runnable listener) {
+        if (assign != null) {
+            writing().onChanged(listener);
+            return;
+        }
         changed = Objects.requireNonNull(listener);
     }
 
     @Override
-    public void bind(Body body) {
+    public void bindInventories(Body body) {
         owner = body;
+        Pack current = existing == null ? null : existing.get();
+        if (current != null) {
+            current.bindInventories(body);
+        }
+    }
+
+    @Override
+    public void bind(Body body) {
+        bindInventories(body);
+        if (assign != null) {
+            writing();
+            return;
+        }
+        recoverPending();
+    }
+
+    private void recoverPending() {
+        Body body = owner;
+        if (body == null) {
+            return;
+        }
         if (!recovered.isEmpty() && body.mob().isAddedToLevel()) {
             List<ItemStack> pending = List.copyOf(recovered);
             recovered.clear();
@@ -60,6 +102,11 @@ public final class ResidentPack implements Pack {
 
     @Override
     public void applyCapacityMultiplier(double multiplier) {
+        if (assign != null) {
+            writing().applyCapacityMultiplier(multiplier);
+            return;
+        }
+        recoverPending();
         int size = (int) Math.max(baseSize, Math.round(baseSize * multiplier));
         if (size == container.getContainerSize()) {
             return;
@@ -97,11 +144,19 @@ public final class ResidentPack implements Pack {
 
     @Override
     public int ownCells() {
+        Pack current = existing == null ? null : existing.get();
+        if (current != null) {
+            return current.ownCells();
+        }
         return container.getContainerSize();
     }
 
     @Override
     public int slotLimit(int slot, ItemStack stack) {
+        Pack current = existing == null ? null : existing.get();
+        if (current != null) {
+            return current.slotLimit(slot, stack);
+        }
         if (slot < container.getContainerSize()) {
             return container.getMaxStackSize(stack);
         }
@@ -111,6 +166,12 @@ public final class ResidentPack implements Pack {
 
     @Override
     public ItemStack insertSlot(int slot, ItemStack stack, boolean simulate) {
+        if (assign != null) {
+            Pack current = simulate ? existing.get() : writing();
+            if (current != null) {
+                return current.insertSlot(slot, stack, simulate);
+            }
+        }
         if (slot >= container.getContainerSize()) {
             Cell cell = cell(slot);
             ItemStack rest = cell.inventory().insertItem(cell.index(), stack, simulate);
@@ -133,6 +194,9 @@ public final class ResidentPack implements Pack {
 
     @Override
     public ItemStack insert(ItemStack stack) {
+        if (assign != null) {
+            return writing().insert(stack);
+        }
         ItemStack rest = stack.copy();
         for (int pass = 0; pass < 2; pass++) {
             for (int slot = 0; slot < getContainerSize() && !rest.isEmpty(); slot++) {
@@ -146,6 +210,10 @@ public final class ResidentPack implements Pack {
 
     @Override
     public int plannableCells(Predicate<Item> tool) {
+        Pack current = existing == null ? null : existing.get();
+        if (current != null) {
+            return current.plannableCells(tool);
+        }
         int cells = 0;
         for (int slot = 0; slot < getContainerSize(); slot++) {
             ItemStack stack = getItem(slot);
@@ -158,6 +226,10 @@ public final class ResidentPack implements Pack {
 
     @Override
     public int plannableRoom(Predicate<Item> tool) {
+        Pack current = existing == null ? null : existing.get();
+        if (current != null) {
+            return current.plannableRoom(tool);
+        }
         int cells = 0;
         for (int slot = 0; slot < getContainerSize(); slot++) {
             if (getItem(slot).isEmpty()) {
@@ -169,16 +241,28 @@ public final class ResidentPack implements Pack {
 
     @Override
     public int countMatching(Predicate<ItemStack> predicate) {
+        Pack current = existing == null ? null : existing.get();
+        if (current != null) {
+            return current.countMatching(predicate);
+        }
         return contents().stream().filter(predicate).mapToInt(ItemStack::getCount).sum();
     }
 
     @Override
     public int count(Item item) {
+        Pack current = existing == null ? null : existing.get();
+        if (current != null) {
+            return current.count(item);
+        }
         return countMatching(stack -> stack.is(item));
     }
 
     @Override
     public List<ItemStack> contents() {
+        Pack current = existing == null ? null : existing.get();
+        if (current != null) {
+            return current.contents();
+        }
         List<ItemStack> result = new ArrayList<>();
         for (int slot = 0; slot < getContainerSize(); slot++) {
             ItemStack stack = getItem(slot);
@@ -191,16 +275,28 @@ public final class ResidentPack implements Pack {
 
     @Override
     public int getContainerSize() {
+        Pack current = existing == null ? null : existing.get();
+        if (current != null) {
+            return current.getContainerSize();
+        }
         return container.getContainerSize() + extensions().stream().mapToInt(KitProvider.Inventory::getSlots).sum();
     }
 
     @Override
     public boolean isEmpty() {
+        Pack current = existing == null ? null : existing.get();
+        if (current != null) {
+            return current.isEmpty();
+        }
         return contents().isEmpty();
     }
 
     @Override
     public ItemStack getItem(int slot) {
+        Pack current = existing == null ? null : existing.get();
+        if (current != null) {
+            return current.getItem(slot);
+        }
         if (slot < container.getContainerSize()) {
             return container.getItem(slot);
         }
@@ -210,6 +306,9 @@ public final class ResidentPack implements Pack {
 
     @Override
     public ItemStack removeItem(int slot, int amount) {
+        if (assign != null) {
+            return writing().removeItem(slot, amount);
+        }
         ItemStack result;
         if (slot < container.getContainerSize()) {
             result = container.removeItem(slot, amount);
@@ -223,6 +322,9 @@ public final class ResidentPack implements Pack {
 
     @Override
     public ItemStack removeItemNoUpdate(int slot) {
+        if (assign != null) {
+            return writing().removeItemNoUpdate(slot);
+        }
         if (slot < container.getContainerSize()) {
             // Transfer the whole stack without splitting or copying its component state.
             ItemStack taken = container.removeItemNoUpdate(slot);
@@ -234,6 +336,10 @@ public final class ResidentPack implements Pack {
 
     @Override
     public void setItem(int slot, ItemStack stack) {
+        if (assign != null) {
+            writing().setItem(slot, stack);
+            return;
+        }
         if (slot < container.getContainerSize()) {
             container.setItem(slot, stack);
         } else {
@@ -245,16 +351,28 @@ public final class ResidentPack implements Pack {
 
     @Override
     public boolean canPlaceItem(int slot, ItemStack stack) {
+        Pack current = existing == null ? null : existing.get();
+        if (current != null) {
+            return current.canPlaceItem(slot, stack);
+        }
         return slotLimit(slot, stack) > 0;
     }
 
     @Override
     public int getMaxStackSize() {
+        Pack current = existing == null ? null : existing.get();
+        if (current != null) {
+            return current.getMaxStackSize();
+        }
         return Integer.MAX_VALUE;
     }
 
     @Override
     public void setChanged() {
+        if (assign != null) {
+            writing().setChanged();
+            return;
+        }
         container.setChanged();
         // Callers may mutate a live stack (ammunition, food, tools). Notify the native owner so it persists it.
         for (var inventory : extensions()) {
@@ -269,11 +387,19 @@ public final class ResidentPack implements Pack {
 
     @Override
     public boolean stillValid(Player player) {
+        Pack current = existing == null ? null : existing.get();
+        if (current != null) {
+            return current.stillValid(player);
+        }
         return true;
     }
 
     @Override
     public void clearContent() {
+        if (assign != null) {
+            writing().clearContent();
+            return;
+        }
         // Clear extensions before removing base-cell backpacks that make those extensions reachable.
         for (var inventory : extensions()) {
             for (int slot = 0; slot < inventory.getSlots(); slot++) {
@@ -286,6 +412,10 @@ public final class ResidentPack implements Pack {
 
     @Override
     public void recover(ItemStack stack) {
+        if (assign != null) {
+            writing().recover(stack);
+            return;
+        }
         if (!stack.isEmpty()) {
             recovered.add(stack.copy());
         }
@@ -293,6 +423,10 @@ public final class ResidentPack implements Pack {
 
     @Override
     public CompoundTag save(HolderLookup.Provider provider) {
+        Pack current = existing == null ? null : existing.get();
+        if (current != null) {
+            return current.save(provider);
+        }
         CompoundTag tag = new CompoundTag();
         ListTag items = new ListTag();
         // Worn storage saves its own contents. Serializing the flattened inventory would duplicate them.
@@ -316,6 +450,10 @@ public final class ResidentPack implements Pack {
 
     @Override
     public void load(CompoundTag tag, HolderLookup.Provider provider) {
+        if (assign != null) {
+            writing().load(tag, provider);
+            return;
+        }
         container.clearContent();
         recovered.clear();
         for (Tag item : Required.list(tag, "Items", Tag.TAG_COMPOUND)) {
@@ -336,6 +474,10 @@ public final class ResidentPack implements Pack {
 
     @Override
     public void dropContents(LivingEntity entity) {
+        if (assign != null) {
+            writing().dropContents(entity);
+            return;
+        }
         // External inventories stay inside their worn items when those items drop.
         for (ItemStack stack : container.removeAllItems()) {
             entity.spawnAtLocation(stack);

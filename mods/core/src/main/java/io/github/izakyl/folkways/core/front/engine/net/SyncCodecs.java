@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.core.front.engine.net;
 
-import io.github.izakyl.folkways.core.front.api.notice.Line;
+import io.github.izakyl.folkways.core.card.api.notice.Line;
 import io.netty.buffer.ByteBuf;
 import java.util.ArrayList;
 import java.util.List;

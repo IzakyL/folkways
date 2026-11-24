@@ -30,6 +30,7 @@ public final class ColonyMemberWrites {
         }
         LocalGrounds.blockChanged(serverLevel, pos);
         BlockChanges.changed(serverLevel, pos);
+        io.github.izakyl.folkways.core.facility.api.Facilities.ownershipBlockChanged(serverLevel, pos);
         PENDING.computeIfAbsent(serverLevel.getServer(), ignored -> new Changed()).add(serverLevel, pos);
     }
 

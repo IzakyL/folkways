@@ -3,8 +3,8 @@ package io.github.izakyl.folkways.core.front.engine.net;
 import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.colony.api.Colony;
 import io.github.izakyl.folkways.core.colony.api.ColonyView;
-import io.github.izakyl.folkways.core.front.api.Facing;
 import io.github.izakyl.folkways.core.front.api.Ghost;
+import io.github.izakyl.folkways.core.front.engine.Enrollments;
 import io.github.izakyl.folkways.core.front.engine.colony.ColonyLooks;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -73,8 +73,8 @@ public final class ColonyOverviews {
         var ghosts = new ArrayList<>(common.ghosts().stream()
             .filter(ghost -> ghost.order().filter(unavailable::contains).isEmpty()).toList());
         if (!unavailable.isEmpty()) {
-            for (var facing : Facing.all(colony)) {
-                ghosts.addAll(facing.payloadGhosts(colony.view(level), unavailable,
+            for (var source : Enrollments.ghostSource(colony).values()) {
+                ghosts.addAll(source.payloadGhosts(colony.view(level), unavailable,
                     ColonyOverviewPacket.MAX_GHOSTS, near));
             }
             ghosts = new ArrayList<>(Ghost.limited(ghosts,
@@ -108,10 +108,14 @@ public final class ColonyOverviews {
 
     // Explicit edits must be visible immediately, including to other viewers of this colony.
     static ColonyOverviewPacket fresh(ServerPlayer player, Colony colony) {
-        for (var colonies : BY_LEVEL.values()) {
-            colonies.remove(colony.id());
-        }
+        forget(colony.id());
         return of(player, colony);
+    }
+
+    public static void forget(UUID colony) {
+        for (var colonies : BY_LEVEL.values()) {
+            colonies.remove(colony);
+        }
     }
 
     static LookAtSnapshotPacket looks(ServerPlayer player, Colony colony) {

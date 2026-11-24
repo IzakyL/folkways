@@ -1,3 +1,28 @@
+import blockwright.minecraft.core.Args;
+import blockwright.minecraft.core.Sync;
+import dev.blockwright.api.Context;
+import io.github.izakyl.folkways.core.front.api.Schema;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
+import io.github.izakyl.folkways.core.shell.chiselsandbits.CandBStructureCodec;
+import io.github.izakyl.folkways.core.work.api.StructureCompat;
+import io.github.izakyl.folkways.core.work.api.Voxelizer;
+import io.github.izakyl.folkways.vanilla.build.draft.Chosen;
+import io.github.izakyl.folkways.vanilla.build.draft.Commission;
+import io.github.izakyl.folkways.vanilla.build.draft.DraftTemplate;
+import io.github.izakyl.folkways.vanilla.build.draft.Drafting;
+import io.github.izakyl.folkways.vanilla.build.draft.Drawn;
+import io.github.izakyl.folkways.vanilla.build.draft.Hint;
+import io.github.izakyl.folkways.vanilla.build.draft.Pattern;
+import io.github.izakyl.folkways.vanilla.build.draft.Patterns;
+import io.github.izakyl.folkways.vanilla.build.draft.World;
+import java.io.ByteArrayOutputStream;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.NbtIo;
+import net.minecraft.resources.ResourceLocation;
 
 public final class Task {
     public static Object run(Context ctx) throws Exception {
@@ -6,7 +31,7 @@ public final class Task {
 
     private static Object build(Context ctx) throws Exception {
         var level = ctx.server().overworld();
-        var id = ResourceLocation.parse("folkways_carving:curved_gallery");
+        var id = ResourceLocation.parse("folkways_vanilla:curved_gallery");
         var pattern = Pattern.parse(id, Args.of(ctx).string("source")).orElseThrow();
         if (Patterns.find(id).isEmpty()) {
             throw new AssertionError("integration namespace was not loaded");
@@ -20,7 +45,7 @@ public final class Task {
                     .map(filter -> ItemSpec.of(filter.id())).toList()).save());
             }
         }
-        var commission = new Commission(hint, Chosen.load(pattern.knobs(), defaults),
+        var commission = new Commission(hint, Chosen.normalize(pattern.knobs(), defaults),
             World.NONE, Direction.NORTH, 73);
         long began = System.nanoTime();
         var drawn = Drafting.draw(pattern, commission).join();

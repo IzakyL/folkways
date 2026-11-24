@@ -1,5 +1,6 @@
 package io.github.izakyl.folkways.core.front.engine.colony;
 
+import io.github.izakyl.folkways.core.inventory.api.port.StoreAccess;
 import io.github.izakyl.folkways.core.colony.api.Claim;
 import io.github.izakyl.folkways.core.colony.api.ClaimRelease;
 import io.github.izakyl.folkways.core.colony.api.Claimed;
@@ -78,7 +79,7 @@ public final class ColonyGround {
         boolean point = io.github.izakyl.folkways.core.front.engine.Enrollments.delegation(owner)
             .filter(delegation -> delegation.shape() instanceof io.github.izakyl.folkways.core.front.api.Shape.Point).isPresent();
         return colony.hold(owner, (point
-            || io.github.izakyl.folkways.core.inventory.api.port.StorePorts.ledger(level, pos))
+            || io.github.izakyl.folkways.core.inventory.api.port.StoreAccess.ledger(level, pos))
             ? new Claimed.Point(at) : new Claimed.Block(at));
     }
 

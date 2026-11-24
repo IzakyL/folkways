@@ -27,7 +27,7 @@ public final class BookModesScene {
     }
 
     public static void program(SceneBuilder scene, SceneBuildingUtil util) {
-        scene.title("book_modes", "One book, three things a click can mean");
+        scene.title("book_modes", "One book, three gestures");
         PonderScenery.openWorld(scene, util, PLATE);
         PonderScenery.grassGround(scene, util, PLATE);
 
@@ -53,7 +53,7 @@ public final class BookModesScene {
 
         scene.overlay()
             .showText(70)
-            .text("A left click with the book acts on the world. Which of three things it does shows on the book itself.")
+            .text("Left-click with the book to act on the world. What it does depends on its gesture, which shows on the book itself.")
             .pointAt(middle)
             .attachKeyFrame();
         scene.idle(80);
@@ -65,7 +65,7 @@ public final class BookModesScene {
         scene.overlay().showOutline(PonderPalette.GREEN, "member", chestArea, 80);
         scene.overlay()
             .showText(80)
-            .text("Pointing: a left click takes the block or the body under your crosshair into the colony, or back out of it.")
+            .text("Taking in: left-click a block or creature to add it to the colony. Click again to remove it.")
             .pointAt(util.vector().blockSurface(chest, Direction.SOUTH))
             .placeNearTarget()
             .attachKeyFrame();
@@ -78,7 +78,7 @@ public final class BookModesScene {
         scene.idle(30);
         scene.overlay()
             .showText(80)
-            .text("Sneak and scroll turns the book to the next gesture. A second book keeps whatever it was left in.")
+            .text("Sneak and scroll to turn the book to its next gesture: taking in, marking out a box, or drawing a line.")
             .pointAt(middle)
             .attachKeyFrame();
         scene.idle(90);
@@ -94,7 +94,7 @@ public final class BookModesScene {
         scene.overlay().showOutline(PonderPalette.WHITE, DRAFT, framed, 100);
         scene.overlay()
             .showText(80)
-            .text("Marking out: that same click draws a box instead, one click on each of two opposite corners.")
+            .text("Marking out: left-click two opposite corners to mark out a box.")
             .pointAt(util.vector().topOf(4, 0, 2))
             .placeNearTarget()
             .attachKeyFrame();
@@ -109,7 +109,7 @@ public final class BookModesScene {
         scene.overlay().showOutline(PonderPalette.WHITE, DRAFT, pushed, 110);
         scene.overlay()
             .showText(100)
-            .text("Hold Ctrl (Cmd on a Mac) and scroll. Before the box is framed this sets a reach, and a Ctrl click drops a corner that far out, in open air. Once it is framed, it pushes the face you aim at in or out.")
+            .text("Hold Ctrl (Cmd on Mac) and scroll. Before the box is done, this sets how far out a Ctrl-click places a corner. After, it pushes or pulls the face you aim at.")
             .pointAt(eastFace)
             .placeNearTarget()
             .attachKeyFrame();
@@ -122,7 +122,7 @@ public final class BookModesScene {
         scene.idle(45);
         scene.overlay()
             .showText(90)
-            .text("Then right click. The panel asks what the ground is for, and the answers come from the parts of Folkways you have installed: a farm, a pasture, a building, and so on.")
+            .text("Right-click to finish. The book asks what the box becomes, such as a farm or a pasture, and its card opens.")
             .pointAt(util.vector().topOf(4, 1, 2))
             .placeNearTarget()
             .attachKeyFrame();
@@ -141,7 +141,7 @@ public final class BookModesScene {
         }
         scene.overlay()
             .showText(80)
-            .text("Drawing a line: each left click adds a stop, joined to the one before, up to 4096 of them. A right click asks what the path is for.")
+            .text("Drawing a line: each left-click adds a point. Right-click to finish and choose what the route becomes.")
             .pointAt(stops.get(2))
             .placeNearTarget()
             .attachKeyFrame();
@@ -154,7 +154,7 @@ public final class BookModesScene {
         scene.idle(30);
         scene.overlay()
             .showText(70)
-            .text("Sneak and left click throws the box or line you are drawing away.")
+            .text("Sneak and left-click to throw away the box or line you are drawing.")
             .pointAt(stops.get(3))
             .placeNearTarget()
             .attachKeyFrame();
@@ -167,7 +167,7 @@ public final class BookModesScene {
         scene.idle(45);
         scene.overlay()
             .showText(90)
-            .text("Aimed at a zone or path already marked out, right click opens its settings, whichever gesture the book is in. Anywhere else, it opens the colony panel.")
+            .text("Right-click an area, route or block the colony already holds to open its card. Anywhere else, it opens the book.")
             .pointAt(util.vector().topOf(4, 1, 2))
             .placeNearTarget()
             .attachKeyFrame();

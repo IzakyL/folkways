@@ -61,15 +61,17 @@ final class HousingRooms {
     private static final Room PENDING = new Room(Grade.PENDING, 0, 0, 0, false, false, false, "pending");
 
     Room get(ServerLevel level, BlockPos bed) {
-        Map<BlockPos, Cached> in = rooms.computeIfAbsent(level.dimension(), ignored -> new HashMap<>());
-        Cached cached = in.get(bed);
-        if (cached != null && level.getGameTime() - cached.checked() < 600) {
-            return cached.room();
-        }
-        if (survey == null && level.isLoaded(bed)) {
+        Cached cached = rooms.getOrDefault(level.dimension(), Map.of()).get(bed);
+        return cached == null ? PENDING : cached.room();
+    }
+
+    Room request(ServerLevel level, BlockPos bed) {
+        Cached cached = rooms.getOrDefault(level.dimension(), Map.of()).get(bed);
+        if ((cached == null || level.getGameTime() - cached.checked() >= 600)
+                && survey == null && level.isLoaded(bed)) {
             survey = new Survey(level, bed);
         }
-        return cached == null ? PENDING : cached.room();
+        return get(level, bed);
     }
 
     List<Cached> surveyed(ServerLevel level) {
@@ -219,6 +221,11 @@ final class HousingRooms {
                 sign(at);
                 if (state.getBlock() instanceof DoorBlock) {
                     Direction facing = state.getValue(DoorBlock.FACING);
+                    if (!level.isLoaded(at.relative(facing)) || !level.isLoaded(at.relative(facing.getOpposite()))) {
+                        pending = true;
+                        open.clear();
+                        break;
+                    }
                     entrance |= Footing.withFeetAt(level, at.relative(facing))
                         && Footing.withFeetAt(level, at.relative(facing.getOpposite()));
                     boundary(at);

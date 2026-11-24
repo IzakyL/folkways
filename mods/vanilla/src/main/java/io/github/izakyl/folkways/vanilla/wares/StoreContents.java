@@ -1,9 +1,9 @@
 package io.github.izakyl.folkways.vanilla.wares;
 
-import io.github.izakyl.folkways.core.front.api.notice.Line;
+import io.github.izakyl.folkways.core.card.api.notice.Line;
 import io.github.izakyl.folkways.core.inventory.api.InventorySnapshot;
-import io.github.izakyl.folkways.core.inventory.api.SlotSnapshot;
-import io.github.izakyl.folkways.core.inventory.api.port.PortReader;
+import io.github.izakyl.folkways.core.facility.api.control.SlotSnapshot;
+import io.github.izakyl.folkways.core.facility.api.control.PortReader;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;

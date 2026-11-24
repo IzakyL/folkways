@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { defineTask, input, javaTask, screen, tick, type MinecraftClient } from "@izakyl/blockwright-minecraft";
-import { visibleBox, clickElement, panelElements, scrollElementIntoView, waitForElement } from "../ldlib2";
+import { visibleBox, clickElement, hoverElement, panelElements, scrollElementIntoView, waitForElement } from "../ldlib2";
 import { foundColonyFast, openColonyPanelViaBook, waitForGroundedPlayer } from "../shared/colony/colony-founding";
 import { VisualRun } from "../shared/capture/visual-kit";
 import { launchPair, type E2EPair } from "../shared/harness/pair";
@@ -10,7 +10,6 @@ import { BUDGET } from "../shared/harness/budgets";
 import { frames } from "../shared/harness/bw-helpers";
 import { SET_GUI_SCALE, setVisualLanguage } from "../shared/capture/ponder";
 import { clickTab } from "../shared/ui/colony-pages";
-import { boardActs } from "../shared/ui/site-panel";
 
 const GATHERING = "folkways_core.gathering";
 const FARMING = "folkways_vanilla:farming";
@@ -20,7 +19,7 @@ const SPRITES = [
   "folkways_core:vocation_group/gathering", "folkways_vanilla:vocation/farming", "folkways_vanilla:vocation/fishing",
   "folkways_vanilla:vocation/herding", "folkways_core:vocation_group/processing", "folkways_vanilla:vocation/crafting",
   "folkways_core:vocation_group/construction", "folkways_vanilla:vocation/building", "folkways_core:vocation_group/transport",
-  "folkways_core:vocation/hauling", "folkways_create:vocation/dispatching", "folkways_create:vocation/conducting",
+  "folkways_core:vocation/hauling", "folkways_vanilla:vocation/dispatching", "folkways_vanilla:vocation/conducting",
   "folkways_core:vocation_group/defence", "folkways_vanilla:vocation/patrolling", "folkways_vanilla:vocation/damage_control",
 ];
 
@@ -28,7 +27,7 @@ const SPRITES = [
 const ICONS = defineTask<{ sprites: string }, Array<{ id: string; width: number; height: number; dark: string; glyph: boolean }>>({
   name: "folkways.vocation-groups.icons", side: "client",
   source: javaTask({ imports: ["net.minecraft.client.Minecraft", "net.minecraft.resources.ResourceLocation",
-    "io.github.izakyl.folkways.core.front.api.ui.Signs", "io.github.izakyl.folkways.core.front.api.notice.Sentence"], body: `
+    "io.github.izakyl.folkways.core.front.api.ui.Signs", "io.github.izakyl.folkways.core.card.api.notice.Sentence"], body: `
 var mc = Minecraft.getInstance();
 var result = new ArrayList<Map<String, Object>>();
 for (var id : Args.of(ctx).string("sprites").split(",")) {
@@ -78,7 +77,7 @@ const LICENCE = defineTask<{ prefix: string; vocation: string; priority: number 
   source: javaTask({
     imports: ["net.minecraft.server.MinecraftServer", "net.minecraft.resources.ResourceLocation",
       "io.github.izakyl.folkways.core.resident.api.Body", "io.github.izakyl.folkways.core.vocation.api.Vocations",
-      "io.github.izakyl.folkways.core.vocation.api.Keenness", "io.github.izakyl.folkways.core.shell.neoforge.FolkwaysAttachments"],
+      "io.github.izakyl.folkways.core.vocation.api.Keenness", "io.github.izakyl.folkways.core.resident.internal.FolkwaysAttachments"],
     body: `
 var args = Args.of(ctx);
 for (var entity : ((MinecraftServer)ctx.server()).overworld().getAllEntities()) {
@@ -128,6 +127,8 @@ for (const locale of ["en_us", "zh_cn"]) test(`vocation groups fold the work gri
     const group = (who: string) => `folkways.resident.group.${GATHERING}.${who}`;
     const farming = (who: string) => `folkways.resident.vocation.folkways_vanilla.farming.${who}`;
 
+    await scrollElementIntoView(client, { id: group(second) });
+
     // Folded by default: one column per group, and no vocation's own column on show.
     expect(await shows(client, group(first))).toBe(true);
     expect(await shows(client, farming(first))).toBe(false);
@@ -146,7 +147,7 @@ for (const locale of ["en_us", "zh_cn"]) test(`vocation groups fold the work gri
     await expect.poll(() => text(client, group(second))).toBe("±");
     await input.move(client, { x: 0, y: 0 });
     await run.shot(client, "02-mixed", { subject: "Mixed group cells where a group's vocations differ", worldState: {}, hard: true });
-    expect(await run.hover(client, group(first))).toBeTruthy();
+    await hoverElement(client, { id: group(first) }, { scrollIntoView: true });
     await run.shot(client, "03-mixed-tooltip", { subject: "A mixed group cell lists each vocation's standing", worldState: {}, hard: true });
 
     // Opening the group shows each vocation, editable as before; opening it again folds it back.
@@ -163,7 +164,7 @@ for (const locale of ["en_us", "zh_cn"]) test(`vocation groups fold the work gri
     expect(await shows(client, farming(first))).toBe(false);
 
     // A click on a mixed group allows every vocation in it.
-    await clickElement(client, { id: group(first) });
+    await clickElement(client, { id: group(first) }, { scrollIntoView: true });
     await tick.sprint(server, 10);
     expect((await server.run(LICENCE, { prefix: first, vocation: HERDING, priority: 0 })).allowed).toBe(true);
     await expect.poll(() => text(client, group(first))).toBe("3");
@@ -172,7 +173,7 @@ for (const locale of ["en_us", "zh_cn"]) test(`vocation groups fold the work gri
 
     // The resident's own window keeps its vocation levels under the group headings.
     await server.run(GROW, { prefix: first });
-    await clickElement(client, { id: `folkways.resident.name.${first}` });
+    await clickElement(client, { id: `folkways.resident.name.${first}` }, { scrollIntoView: true });
     await waitForElement(client, { id: "folkways.resident.mood" });
     await scrollElementIntoView(client, { id: `folkways.resident.vocation_group.${GATHERING}` });
     await frames(client, 5);
@@ -182,25 +183,6 @@ for (const locale of ["en_us", "zh_cn"]) test(`vocation groups fold the work gri
     expect(icon.width, "the detail group's label leaves room for its icon").toBe(10);
     await run.shot(client, "06-detail", { subject: "Resident detail vocation levels under group headings", worldState: {}, hard: true });
     await clickElement(client, { id: "folkways.resident.back" });
-
-    // Arrival defaults fold the same way.
-    await clickTab(client, "folkways.page.person");
-    const opens = await boardActs(client, "open", "folkways_vanilla.person");
-    await clickElement(client, { id: opens[2].id });
-    await waitForElement(client, { id: `folkways.work_defaults.group.${GATHERING}` });
-    await frames(client, 3);
-    await expectHeadings(client, "folkways.work_defaults");
-    const defaults = await panelElements(client);
-    const defaultHeading = defaults.find(element => element.id === `folkways.work_defaults.open.${GATHERING}`)!;
-    const defaultCell = defaults.find(element => element.id === `folkways.work_defaults.group.${GATHERING}`)!;
-    expect(defaultCell.y - defaultHeading.y, "folded defaults have no redundant count/header row").toBeLessThan(24);
-    await input.move(client, { x: 0, y: 0 });
-    await run.shot(client, "07-defaults", { subject: "Work defaults folded by group", worldState: {}, hard: true });
-    await clickElement(client, { id: `folkways.work_defaults.open.${GATHERING}` });
-    await frames(client, 3);
-    expect(await shows(client, "folkways.work_defaults.folkways_vanilla.farming")).toBe(true);
-    await input.move(client, { x: 0, y: 0 });
-    await run.shot(client, "08-defaults-expanded", { subject: "Work defaults with gathering opened", worldState: {}, hard: true });
 
   } catch (error) {
     pair?.failing(error);

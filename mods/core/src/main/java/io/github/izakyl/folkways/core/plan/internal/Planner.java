@@ -20,7 +20,9 @@ public final class Planner {
 
     private final Claims claims;
     private final Cooldowns cooldowns;
+    private PlanInputs.Capture inputs;
     private final Weaver weaver;
+    private long rounds;
 
     private final Map<UUID, UUID> inHand = new LinkedHashMap<>();
 
@@ -32,11 +34,31 @@ public final class Planner {
     // the plan has to say about itself.
     public record Woven(WeaveDelta delta, Crew crew, Ways ways, boolean retry, List<Shortfall> shortfalls,
                         List<Refused> refused, List<Stall> stalls, Asks asks, Timing timing, int nodes,
-                        Map<UUID, List<Claim>> claims) {
+                        Map<UUID, Cooldowns.Bar> cooldowns, PlanInputs inputs, long tick,
+                        List<PlanTask> attempted, boolean wanted, Map<UUID, List<Claim>> claims) {
+
         public Woven {
+            shortfalls = List.copyOf(shortfalls);
+            refused = List.copyOf(refused);
+            stalls = List.copyOf(stalls);
+            cooldowns = Map.copyOf(cooldowns);
+            attempted = List.copyOf(attempted);
             Map<UUID, List<Claim>> copy = new LinkedHashMap<>();
             claims.forEach((owner, entries) -> copy.put(owner, List.copyOf(entries)));
             claims = Map.copyOf(copy);
+        }
+
+        public Woven(WeaveDelta delta, Crew crew, Ways ways, boolean retry, List<Shortfall> shortfalls,
+                     List<Refused> refused, List<Stall> stalls, Asks asks, Timing timing, int nodes) {
+            this(delta, crew, ways, retry, shortfalls, refused, stalls, asks, timing, nodes, Map.of(),
+                PlanInputs.EMPTY, -1, List.of(), false, Map.of());
+        }
+
+        public Woven(WeaveDelta delta, Crew crew, Ways ways, boolean retry, List<Shortfall> shortfalls,
+                     List<Refused> refused, List<Stall> stalls, Asks asks, Timing timing, int nodes,
+                     Map<UUID, List<Claim>> claims) {
+            this(delta, crew, ways, retry, shortfalls, refused, stalls, asks, timing, nodes, Map.of(),
+                PlanInputs.EMPTY, -1, List.of(), false, claims);
         }
     }
 
@@ -53,6 +75,11 @@ public final class Planner {
     // `tours` are the routes the schedule last laid, as far as this stage has heard: work that finishes on one is
     // the toured worker's from then on.
     public Woven handle(Known known, List<Message> inbox, long tick, Map<UUID, Tour> tours) {
+        return handle(known, inbox, tick, tours, false);
+    }
+
+    public Woven handle(Known known, List<Message> inbox, long tick, Map<UUID, Tour> tours, boolean wanted) {
+        rounds++;
         long started = System.nanoTime();
         cooldowns.round(tick);
         boolean retry = false;
@@ -105,7 +132,7 @@ public final class Planner {
         // Such nodes no longer occupy a hand; otherwise idle cargo recovery waits on them forever.
         inHand.values().removeIf(node -> !weaver.contains(node));
         Crew crew = crewOf(known);
-        weaver.know(known.world(), crew);
+        weaver.know(known.world(), crew, wanted);
 
         long digested = System.nanoTime();
         WeaveDelta delta = weaver.grow(retry);
@@ -116,9 +143,26 @@ public final class Planner {
         }
         long woven = System.nanoTime();
         List<Shortfall> shortfalls = weaver.shortfalls();
+        Map<UUID, Cooldowns.Bar> cooling = Map.of();
+        PlanInputs captured = PlanInputs.EMPTY;
+        List<PlanTask> attempted = List.of();
+        if (wanted) {
+            if (inputs == null) {
+                inputs = new PlanInputs.Capture();
+            }
+            cooling = cooldowns.snapshot();
+            captured = inputs.of(known, weaver.processes());
+            attempted = weaver.attempted();
+        } else {
+            inputs = null;
+        }
         return new Woven(delta, crew, known.world().ways(), retry, shortfalls, weaver.refused(),
             weaver.stalls(), asks(shortfalls, crew), new Timing(digested - started, woven - digested), weaver.size(),
-            claims.snapshot());
+            cooling, captured, tick, attempted, wanted, claims.snapshot());
+    }
+
+    public long rounds() {
+        return rounds;
     }
 
     public void closed() {

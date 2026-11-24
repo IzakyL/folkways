@@ -6,10 +6,10 @@ import appeng.api.stacks.AEItemKey;
 import appeng.api.stacks.AEKey;
 import appeng.api.stacks.GenericStack;
 import io.github.izakyl.folkways.core.base.persist.Reader;
-import io.github.izakyl.folkways.core.front.engine.registry.FolkwaysItems;
 import io.github.izakyl.folkways.core.item.api.Goods;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import io.github.izakyl.folkways.core.plan.api.WorkshopRecipes;
+import io.github.izakyl.folkways.core.front.engine.registry.FolkwaysItems;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -24,9 +24,9 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.component.CustomData;
 import net.minecraft.world.level.Level;
 
-final class ColonyPattern implements IPatternDetails {
+public final class ColonyPattern implements IPatternDetails {
 
-    static final IPatternDetailsDecoder DECODER = new IPatternDetailsDecoder() {
+    public static final IPatternDetailsDecoder DECODER = new IPatternDetailsDecoder() {
         @Override
         public boolean isEncodedPattern(ItemStack stack) {
             return stack.is(FolkwaysItems.NETWORK_PATTERN.get());
@@ -46,7 +46,7 @@ final class ColonyPattern implements IPatternDetails {
     private final List<IInput> inputs;
     private final List<GenericStack> outputs;
 
-    static Optional<ColonyPattern> of(String reference, WorkshopRecipes.Recipe recipe, ServerLevel level) {
+    public static Optional<ColonyPattern> of(String reference, WorkshopRecipes.Recipe recipe, ServerLevel level) {
         try {
             return Optional.of(new ColonyPattern(reference, recipe, level));
         } catch (RuntimeException invalid) {
@@ -146,7 +146,7 @@ final class ColonyPattern implements IPatternDetails {
         return definition.get(DataComponents.CUSTOM_DATA).copyTag().getString("recipe");
     }
 
-    static boolean isColonyPattern(IPatternDetails pattern) {
+    public static boolean isColonyPattern(IPatternDetails pattern) {
         return pattern.getDefinition().is(FolkwaysItems.NETWORK_PATTERN.get());
     }
 

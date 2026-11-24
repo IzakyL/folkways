@@ -11,6 +11,7 @@ import io.github.izakyl.folkways.core.colony.api.Closing;
 import io.github.izakyl.folkways.core.travel.internal.ColonyWays;
 import java.nio.file.Files;
 import java.util.Collection;
+import java.util.IdentityHashMap;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -35,6 +36,9 @@ public final class ColonyRegistry extends SavedData {
     private static final SavedData.Factory<ColonyRegistry> FACTORY =
         new SavedData.Factory<>(ColonyRegistry::new, ColonyRegistry::load);
     private static final Logger LOGGER = LoggerFactory.getLogger("folkways-persist");
+
+    private static final Map<MinecraftServer, ColonyRegistry> LOADED = new IdentityHashMap<>();
+    private static final ColonyRegistry UNLOADED = sealed("Registry is not initialized.");
 
     private final Optional<Component> refusal;
 
@@ -74,6 +78,14 @@ public final class ColonyRegistry extends SavedData {
     }
 
     public static ColonyRegistry get(MinecraftServer server) {
+        return LOADED.getOrDefault(server, UNLOADED);
+    }
+
+    static void forget(MinecraftServer server) {
+        LOADED.remove(server);
+    }
+
+    static ColonyRegistry initialize(MinecraftServer server) {
         var storage = server.overworld().getDataStorage();
         ColonyRegistry registry = storage.get(FACTORY, DATA_NAME);
         if (registry == null) {
@@ -91,18 +103,33 @@ public final class ColonyRegistry extends SavedData {
         try {
             for (ColonyData colony : List.copyOf(registry.colonies.values())) {
                 colony.on(server);
+            }
+        } catch (RuntimeException exception) {
+            registry = startupFailed(server, exception);
+        }
+        LOADED.put(server, registry);
+        return registry;
+    }
+
+    void start(MinecraftServer server) {
+        try {
+            for (ColonyData colony : List.copyOf(colonies.values())) {
                 ColonyRuntime.settle(server, colony.works());
             }
         } catch (RuntimeException exception) {
-            LOGGER.error("A Folkways colony service failed to start; sealing the registry. "
-                + "The colony file was not changed. Resolve the cause below, then reopen the world.", exception);
-            registry = new ColonyRegistry(Optional.of(Component.literal(
-                "A Folkways colony service failed to start. The colony file was not changed. "
-                    + "The server log has the cause. The world can be reopened once the failure is resolved.")));
-            storage.set(DATA_NAME, registry);
-            for (ServerPlayer player : List.copyOf(server.getPlayerList().getPlayers())) {
-                registry.rejectPlayer(player);
-            }
+            LOADED.put(server, startupFailed(server, exception));
+        }
+    }
+
+    private static ColonyRegistry startupFailed(MinecraftServer server, RuntimeException exception) {
+        LOGGER.error("A Folkways colony service failed to start; sealing the registry. "
+            + "The colony file was not changed. Resolve the cause below, then reopen the world.", exception);
+        ColonyRegistry registry = new ColonyRegistry(Optional.of(Component.literal(
+            "A Folkways colony service failed to start. The colony file was not changed. "
+                + "The server log has the cause. The world can be reopened once the failure is resolved.")));
+        server.overworld().getDataStorage().set(DATA_NAME, registry);
+        for (ServerPlayer player : List.copyOf(server.getPlayerList().getPlayers())) {
+            registry.rejectPlayer(player);
         }
         return registry;
     }

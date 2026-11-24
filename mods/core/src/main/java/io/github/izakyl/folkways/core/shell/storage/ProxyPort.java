@@ -1,7 +1,6 @@
 package io.github.izakyl.folkways.core.shell.storage;
 
-import io.github.izakyl.folkways.core.inventory.api.port.PortIdentity;
-import io.github.izakyl.folkways.core.inventory.api.port.Usability;
+import io.github.izakyl.folkways.core.facility.api.control.PortIdentity;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
 import java.util.List;
 import java.util.Optional;
@@ -19,7 +18,7 @@ public final class ProxyPort extends CellPort {
 
     public ProxyPort(WorldPos home, List<WorldPos> members, boolean connected, Set<Operation> operations) {
         super(PortIdentity.block(home), List.of(),
-            () -> connected ? Usability.USABLE : Verdicts.because("disconnected"), false);
+            () -> connected ? StorageTraits.PLAIN : StorageTraits.unavailable("disconnected"), false);
         this.members = members.stream().distinct().toList();
         this.operations = Set.copyOf(operations);
     }

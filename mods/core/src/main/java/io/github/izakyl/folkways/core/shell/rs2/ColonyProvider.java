@@ -20,8 +20,9 @@ import com.refinedmods.refinedstorage.api.resource.ResourceAmount;
 import com.refinedmods.refinedstorage.api.resource.ResourceKey;
 import com.refinedmods.refinedstorage.common.support.resource.ItemResource;
 import io.github.izakyl.folkways.core.base.persist.Reader;
-import io.github.izakyl.folkways.core.shell.crafting.NetworkBuffers;
+import io.github.izakyl.folkways.core.shell.rs2.NetworkPort;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
+import io.github.izakyl.folkways.core.shell.crafting.NetworkBuffers;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
@@ -33,8 +34,8 @@ import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.world.item.ItemStack;
 
-/** An off-world, zero-energy provider, attached through the native container lifecycle. */
-final class ColonyProvider extends AbstractNetworkNode implements PatternProvider, TaskListener {
+/** An off-world, zero-energy provider attached to the native autocrafting component. */
+public final class ColonyProvider extends AbstractNetworkNode implements PatternProvider, TaskListener {
 
     WorldPos device;
     AbstractNetworkNode anchor;
@@ -51,14 +52,18 @@ final class ColonyProvider extends AbstractNetworkNode implements PatternProvide
         }
     };
 
-    ColonyProvider(WorldPos device, NetworkBuffers buffers) {
+    public WorldPos device() {
+        return device;
+    }
+
+    public ColonyProvider(WorldPos device, NetworkBuffers buffers) {
         this.buffers = buffers;
         this.device = device;
         devices.add(device);
         TerminalRecipes.added(this);
     }
 
-    void connect(NetworkPort port) {
+    public void connect(NetworkPort port) {
         device = port.identity().home();
         devices.add(device);
         anchor = port.node();
@@ -66,18 +71,19 @@ final class ColonyProvider extends AbstractNetworkNode implements PatternProvide
             detach();
             setNetwork(anchor.getNetwork());
             setActive(true);
-            network.addContainer(container);
+            // RS2 sorts graph members by their block positions during topology changes.
+            network.getComponent(AutocraftingNetworkComponent.class).onContainerAdded(container);
         }
     }
 
     void detach() {
         if (network != null) {
-            network.removeContainer(container);
+            network.getComponent(AutocraftingNetworkComponent.class).onContainerRemoved(container);
             setNetwork(null);
         }
     }
 
-    List<Task> tasks() {
+    public List<Task> tasks() {
         return tasks.getAll();
     }
 
@@ -114,7 +120,7 @@ final class ColonyProvider extends AbstractNetworkNode implements PatternProvide
         return provider;
     }
 
-    void patterns(Map<Pattern, String> offered) {
+    public void patterns(Map<Pattern, String> offered) {
         if (patterns.equals(offered)) {
             return;
         }
@@ -215,15 +221,15 @@ final class ColonyProvider extends AbstractNetworkNode implements PatternProvide
         return Result.ACCEPTED;
     }
 
-    boolean isBusy() {
+    public boolean isBusy() {
         return buffers.busy();
     }
 
-    int pushes() {
+    public int pushes() {
         return pushes;
     }
 
-    long buffered(ItemResource item) {
+    public long buffered(ItemResource item) {
         return buffers.count(device, item.toItemStack());
     }
 
@@ -234,7 +240,7 @@ final class ColonyProvider extends AbstractNetworkNode implements PatternProvide
         }
     }
 
-    void destroy() {
+    public void destroy() {
         detach();
         TerminalRecipes.removed(this);
     }

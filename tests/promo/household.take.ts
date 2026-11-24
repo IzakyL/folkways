@@ -540,15 +540,17 @@ const PLACARDS = defineTask<Record<string, any>, Record<string, any>>({
   timeoutMs: 20_000,
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.core.front.api.Facing",
-      "io.github.izakyl.folkways.core.front.api.notice.Line",
+      "io.github.izakyl.folkways.core.front.engine.Enrollments",
+      "io.github.izakyl.folkways.core.card.api.notice.Line",
       "io.github.izakyl.folkways.core.front.engine.colony.ColonyGround",
     ],
     body: `
 var server=ctx.server();var level=server.overworld();var args=Args.of(ctx);
 var colony=ColonyGround.of(server,UUID.fromString(args.string("colony_id"))).orElseThrow();
 var view=colony.view(level);var out=new ArrayList<Object>();
-for(var facing:Facing.all(colony))for(var placard:facing.placards(view)){
+var placards = Enrollments.ghostSource(colony).values().stream()
+    .flatMap(source -> source.placards(view).stream()).toList();
+for (var placard : placards) {
   var lines=new ArrayList<Object>();
   for(var line:placard.lines())lines.add(switch(line){
     case Line.Said said->said.notice().component().getString();

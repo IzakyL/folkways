@@ -14,6 +14,8 @@ import io.github.izakyl.folkways.core.work.api.Disposition;
 import io.github.izakyl.folkways.core.work.api.Ending;
 import io.github.izakyl.folkways.core.work.api.HoldingContext;
 import io.github.izakyl.folkways.core.work.api.HoldingStep;
+import io.github.izakyl.folkways.core.work.api.Joint;
+import io.github.izakyl.folkways.core.work.api.Joints;
 import io.github.izakyl.folkways.core.work.api.LaborRefusal;
 import io.github.izakyl.folkways.core.work.api.Need;
 import io.github.izakyl.folkways.core.work.api.Node;
@@ -22,7 +24,7 @@ import io.github.izakyl.folkways.core.work.api.Outcome;
 import io.github.izakyl.folkways.core.work.api.PreemptReason;
 import io.github.izakyl.folkways.core.work.api.Recourse;
 import io.github.izakyl.folkways.core.work.api.SoftPreempt;
-import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.world.api.Stances;
 import io.github.izakyl.folkways.core.work.api.StructureCompat;
 import io.github.izakyl.folkways.core.work.api.ToolUse;
 import io.github.izakyl.folkways.core.work.api.WorkHolding;
@@ -36,7 +38,6 @@ import io.github.izakyl.folkways.core.world.api.Reach;
 import io.github.izakyl.folkways.core.world.api.Realm;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.vanilla.FolkwaysVanillaConfig;
-import io.github.izakyl.folkways.vanilla.build.draft.Joint;
 import io.github.izakyl.folkways.vanilla.person.walk.Breathing;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -238,6 +239,7 @@ final class BuildSite {
     private final Map<BlockPos, UUID> pieceAt = new HashMap<>();
     private final List<Joint> joints = new ArrayList<>();
     private final Set<Joint> joined = new LinkedHashSet<>();
+    private Set<BlockPos> demolition = Set.of();
     private final Map<BlockPos, BuildRefusal> refused = new LinkedHashMap<>();
     private final Set<BlockPos> told = new LinkedHashSet<>();
     private long geometryVersion;
@@ -267,6 +269,10 @@ final class BuildSite {
     private final Map<Integer, Piece> openingNodes = new LinkedHashMap<>();
     private int openingIndex;
     private int openingPhase;
+
+    void demolition(Set<BlockPos> cells) {
+        demolition = Set.copyOf(cells);
+    }
 
     BuildSite(UUID order, Asks asks, BuildTarget target, TemporaryScaffolds temporary) {
         this.order = order;
@@ -418,7 +424,7 @@ final class BuildSite {
             min = min == null ? cell : BlockPos.min(min, cell);
             max = max == null ? cell : BlockPos.max(max, cell);
         }
-        reopen = Closures.close(level, BoundingBox.fromCorners(min, max).inflatedBy(CLOSED_MARGIN));
+        reopen = Closures.close(level, this, BoundingBox.fromCorners(min, max).inflatedBy(CLOSED_MARGIN));
     }
 
     /**
@@ -1194,6 +1200,7 @@ final class BuildSite {
 
     private BuildAction action(ServerLevel level, Step step, Stances footings) {
         BuildAction node = BuildAction.of(step.job(level, target, footings, latched), temporary)
+            .demolition(cell -> step.kind() == BuildJob.Kind.STRIP && demolition.contains(cell))
             .emptying(emptying);
         node.cache = cache;
         if (step.kind() == BuildJob.Kind.RAISE || step.kind() == BuildJob.Kind.LOWER || step.kind() == BuildJob.Kind.JOIN) {
@@ -1494,7 +1501,8 @@ final class BuildSite {
                     refused.put(cell, blocked.get());
                 } else if (refused.get(cell) == BuildRefusal.EMPTYING_CONTAINER
                     || refused.get(cell) == BuildRefusal.NO_ROOM_TO_EMPTY
-                    || refused.get(cell) == BuildRefusal.UNREADABLE_CONTAINER) {
+                    || refused.get(cell) == BuildRefusal.UNREADABLE_CONTAINER
+                    || refused.get(cell) == BuildRefusal.PROTECTED_FACILITY) {
                     refused.remove(cell);
                 }
             }

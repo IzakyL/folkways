@@ -4,6 +4,7 @@ import io.github.izakyl.folkways.core.resident.api.Body;
 import io.github.izakyl.folkways.core.work.api.Worker;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.Entity;
@@ -90,7 +91,17 @@ public interface Combatant {
 
     /** Hostility that lets a holding squad defend itself without an explicit attack order. */
     default boolean hostile(Mob foe, LivingEntity resident) {
-        return foe instanceof Enemy && foe.isAlive() && !foe.isAlliedTo(resident);
+        return hostile(foe) && !foe.isAlliedTo(resident);
+    }
+
+    /** Hostility for a facility scan, which has no resident observer. */
+    default boolean hostile(Mob foe) {
+        return foe instanceof Enemy && foe.isAlive() && !foe.isRemoved();
+    }
+
+    /** Whether this entity belongs to the colony as a pet. */
+    default boolean colonyPet(Entity entity, UUID colony) {
+        return false;
     }
 
     /** Fear outranks orders: a fleeing body yields its guard post. */

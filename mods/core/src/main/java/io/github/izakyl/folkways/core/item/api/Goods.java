@@ -80,6 +80,9 @@ public final class Goods {
     }
 
     public static long countIn(Container container, ItemSpec what) {
+        if (!Containers.known(container)) {
+            return 0;
+        }
         long held = 0;
         for (int slot = 0; slot < container.getContainerSize(); slot++) {
             ItemStack stack = container.getItem(slot);

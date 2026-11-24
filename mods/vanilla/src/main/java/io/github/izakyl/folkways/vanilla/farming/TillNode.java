@@ -1,5 +1,7 @@
 package io.github.izakyl.folkways.vanilla.farming;
 
+import io.github.izakyl.folkways.core.work.api.LaborRefusal;
+import io.github.izakyl.folkways.core.facility.api.Facilities;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import io.github.izakyl.folkways.core.work.api.Amount;
 import io.github.izakyl.folkways.core.work.api.Outcome;
@@ -54,6 +56,9 @@ final class TillNode extends FarmNode {
         BlockPos above = ground.above();
         BlockState weeds = level.getBlockState(above);
         if (clearing.clearsForTilling(weeds)) {
+            if (Facilities.protectedAt(level, above)) {
+                return Outcome.failed(LaborRefusal.PROTECTED_FACILITY);
+            }
             taken.addAll(Yield.take(level, who.body(), above, weeds));
             heard.add(WorkNoise.broke(above, weeds));
         }

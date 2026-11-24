@@ -1,5 +1,6 @@
 package io.github.izakyl.folkways.core.front.api.ui;
 
+import io.github.izakyl.folkways.core.front.api.Category;
 import io.github.izakyl.folkways.core.front.api.Ghost;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -64,7 +65,16 @@ public final class Placing {
     }
 
     /** {@code open} shows what there is to pick; picking one holds it, and the view it was opened from stays. */
-    public record Shelf(String nameKey, ResourceLocation icon, Runnable open) {
+    public record Shelf(String nameKey, ResourceLocation icon, Runnable open, ResourceLocation category) {
+
+        public Shelf(String nameKey, ResourceLocation icon, Runnable open) {
+            this(nameKey, icon, open, Category.OTHER.id());
+        }
+
+        /** The same shelf, offered among the view's tools of that category. */
+        public Shelf in(Category category) {
+            return new Shelf(nameKey, icon, open, category.id());
+        }
     }
 
     public interface Held {

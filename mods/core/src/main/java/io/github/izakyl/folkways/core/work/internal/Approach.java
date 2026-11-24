@@ -35,6 +35,11 @@ final class Approach implements WorkHolding {
         return walking.travelling();
     }
 
+    // Stands up from the seat this approach sat the body in, once the work there is over.
+    void rise(HoldingContext context) {
+        walking.rise(context.body());
+    }
+
     @Override
     public HoldingStep tick(HoldingContext context) {
         if (failure != null) {
@@ -91,6 +96,7 @@ final class Approach implements WorkHolding {
         }
         released = true;
         walking.release(context.body());
+        walking.rise(context.body());
         context.body().clearDoing();
     }
 }

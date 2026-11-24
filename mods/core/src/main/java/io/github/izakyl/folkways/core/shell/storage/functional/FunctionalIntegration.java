@@ -1,5 +1,6 @@
 package io.github.izakyl.folkways.core.shell.storage.functional;
 
+import io.github.izakyl.folkways.core.facility.api.Ports;
 import com.buuz135.functionalstorage.block.tile.CompactingDrawerTile;
 import com.buuz135.functionalstorage.block.tile.ControllableDrawerTile;
 import com.buuz135.functionalstorage.block.tile.DrawerTile;
@@ -7,14 +8,12 @@ import com.buuz135.functionalstorage.block.tile.SimpleCompactingDrawerTile;
 import com.buuz135.functionalstorage.block.tile.StorageControllerExtensionTile;
 import com.buuz135.functionalstorage.block.tile.StorageControllerTile;
 import com.buuz135.functionalstorage.inventory.BigInventoryHandler;
-import io.github.izakyl.folkways.core.inventory.api.port.PortIdentity;
-import io.github.izakyl.folkways.core.inventory.api.port.StorePort;
-import io.github.izakyl.folkways.core.inventory.api.port.StorePorts;
-import io.github.izakyl.folkways.core.inventory.api.port.Usability;
+import io.github.izakyl.folkways.core.facility.api.control.PortIdentity;
+import io.github.izakyl.folkways.core.facility.api.control.ItemPort;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.core.shell.storage.CellPort;
 import io.github.izakyl.folkways.core.shell.storage.ProxyPort;
-import io.github.izakyl.folkways.core.shell.storage.Verdicts;
+import io.github.izakyl.folkways.core.shell.storage.StorageTraits;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -37,11 +36,11 @@ public final class FunctionalIntegration {
     }
 
     public static void install() {
-        StorePorts.register(ResourceLocation.fromNamespaceAndPath("folkways_core", "functional"),
-            StorePorts.SPECIFIC, FunctionalIntegration::at);
+        Ports.registerItem(ResourceLocation.fromNamespaceAndPath("folkways_core", "functional"),
+            Ports.SPECIFIC, FunctionalIntegration::at);
     }
 
-    private static Optional<StorePort> at(ServerLevel level, BlockPos pos) {
+    private static Optional<ItemPort> at(ServerLevel level, BlockPos pos) {
         if (!(level.getBlockEntity(pos) instanceof ControllableDrawerTile<?> tile)) {
             return Optional.empty();
         }
@@ -66,6 +65,12 @@ public final class FunctionalIntegration {
             }
             return Optional.of(new ProxyPort(home, members, controller != null));
         }
+        if (tile instanceof CompactingDrawerTile compacting) {
+            return Optional.of(new CompactingPort(home, compacting.getHandler()));
+        }
+        if (tile instanceof SimpleCompactingDrawerTile compacting) {
+            return Optional.of(new CompactingPort(home, compacting.getHandler()));
+        }
         List<CellPort.Cell> cells = new ArrayList<>();
         if (tile instanceof DrawerTile drawer) {
             BigInventoryHandler inventory = drawer.getHandler();
@@ -73,17 +78,14 @@ public final class FunctionalIntegration {
                 cells.add(cell(inventory, slot));
             }
         }
-        return Optional.of(new CellPort(PortIdentity.block(home), cells, () -> usability(List.of(tile)), false));
+        return Optional.of(new CellPort(PortIdentity.block(home), cells, () -> traits(List.of(tile)), false));
     }
 
-    private static Usability usability(List<ControllableDrawerTile<?>> members) {
+    private static StorageTraits traits(List<ControllableDrawerTile<?>> members) {
         for (ControllableDrawerTile<?> member : members) {
-            if (member instanceof CompactingDrawerTile || member instanceof SimpleCompactingDrawerTile) {
-                return Verdicts.because("compacting");
-            }
             if (!(member instanceof DrawerTile || member instanceof StorageControllerTile<?>
                 || member instanceof StorageControllerExtensionTile<?>)) {
-                return Verdicts.because("unsupported");
+                return StorageTraits.unavailable("unsupported");
             }
             for (int kind = 0; kind < 2; kind++) {
                 IItemHandler upgrades = kind == 0 ? member.getUtilityUpgrades() : member.getStorageUpgrades();
@@ -98,12 +100,12 @@ public final class FunctionalIntegration {
                     }
                     ResourceLocation id = BuiltInRegistries.ITEM.getKey(upgrade.getItem());
                     if (!id.getNamespace().equals("functionalstorage") || !safe.contains(id.getPath())) {
-                        return Verdicts.upgrade(upgrade);
+                        return StorageTraits.upgrade(upgrade);
                     }
                 }
             }
         }
-        return Usability.USABLE;
+        return StorageTraits.PLAIN;
     }
 
     private static CellPort.Cell cell(BigInventoryHandler inventory, int slot) {

@@ -1,12 +1,15 @@
 package io.github.izakyl.folkways.core.inventory.internal;
 
+import io.github.izakyl.folkways.core.facility.api.control.PortObservation;
+import io.github.izakyl.folkways.core.facility.api.Facilities;
+import io.github.izakyl.folkways.core.facility.api.Ports;
 import io.github.izakyl.folkways.core.base.persist.Reader;
 import io.github.izakyl.folkways.core.colony.api.Colonies;
 import io.github.izakyl.folkways.core.colony.api.Colony;
 import io.github.izakyl.folkways.core.inventory.api.InventoryFeedback;
 import io.github.izakyl.folkways.core.inventory.api.Stash;
-import io.github.izakyl.folkways.core.inventory.api.port.PortIdentity;
-import io.github.izakyl.folkways.core.inventory.api.port.StorePorts;
+import io.github.izakyl.folkways.core.facility.api.control.PortIdentity;
+import io.github.izakyl.folkways.core.inventory.api.port.StoreAccess;
 import io.github.izakyl.folkways.core.item.api.Containers;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
 import java.util.HashMap;
@@ -23,7 +26,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.neoforged.neoforge.server.ServerLifecycleHooks;
 
-public final class PortHooks implements StorePorts.Hooks {
+public final class PortHooks implements Ports.Hooks {
 
     private static final ResourceLocation OWNER =
         ResourceLocation.fromNamespaceAndPath("folkways_core", "store_verdicts");
@@ -39,16 +42,19 @@ public final class PortHooks implements StorePorts.Hooks {
     public static void install() {
         PortHooks hooks = new PortHooks();
         installed = hooks;
-        StorePorts.register(ResourceLocation.fromNamespaceAndPath("folkways_core", "containers"), StorePorts.CONTAINERS,
+        Ports.registerItem(ResourceLocation.fromNamespaceAndPath("folkways_core", "containers"), Ports.CONTAINERS,
             (level, pos) -> {
                 hooks.observe(level.getServer());
                 return Containers.at(level, pos).map(container -> new SlotPort(
                     new PortIdentity(new PortIdentity.Block(WorldPos.of(level, Containers.chestAnchor(level, pos))),
                         WorldPos.of(level, pos)), container));
             });
-        StorePorts.install(hooks);
+        StoreAccess.install((level, pos) -> Ports.itemAt(level, WorldPos.of(level, pos)), hooks::observation,
+            Facilities::attachedStore, Facilities::owningStorePart);
+        Ports.installItems((level, pos, priority, port) ->
+            StoreAccess.checked(level, pos, priority, Ports.CONTAINERS, port), hooks);
         Containers.installPorts(PortHooks::anchor, (level, pos) -> level instanceof ServerLevel server
-            ? StorePorts.at(server, pos).isPresent() : Containers.at(level, pos).isPresent());
+            ? StoreAccess.at(server, pos).isPresent() : Containers.at(level, pos).isPresent());
     }
 
     private void observe(net.minecraft.server.MinecraftServer server) {
@@ -60,13 +66,13 @@ public final class PortHooks implements StorePorts.Hooks {
 
     private static BlockPos anchor(net.minecraft.world.level.Level level, BlockPos clicked) {
         if (level instanceof ServerLevel server) {
-            var port = StorePorts.at(server, clicked);
+            var port = StoreAccess.at(server, clicked);
             if (port.isPresent()) {
                 Object key = port.get().identity().key();
                 Optional<BlockPos> registered = Colonies.all(server.getServer()).stream()
                     .flatMap(colony -> colony.storesIn(server.dimension()).stream())
                     .filter(at -> at.in(server)).map(at -> at.block(server)).distinct()
-                    .filter(at -> StorePorts.at(server, at)
+                    .filter(at -> StoreAccess.at(server, at)
                         .filter(other -> other.identity().key().equals(key)).isPresent())
                     .min(BlockPos::compareTo);
                 if (registered.isPresent()) {
@@ -84,7 +90,9 @@ public final class PortHooks implements StorePorts.Hooks {
     }
 
     @Override
-    public void condemn(ServerLevel level, WorldPos at, Component reason) {
+    public void observe(ServerLevel level, PortObservation observation) {
+        WorldPos at = observation.at();
+        Component reason = observation.reason();
         observe(level.getServer());
         boolean kept = false;
         for (Colony colony : Colonies.all(level.getServer())) {
@@ -111,7 +119,7 @@ public final class PortHooks implements StorePorts.Hooks {
     }
 
     @Override
-    public Optional<Component> condemned(WorldPos at) {
+    public Optional<PortObservation> observation(WorldPos at) {
         var running = ServerLifecycleHooks.getCurrentServer();
         var server = running == null ? observedServer : running;
         if (server == null) {
@@ -124,11 +132,11 @@ public final class PortHooks implements StorePorts.Hooks {
                 if (WorldPos.load(Reader.of(verdict)).filter(at::equals).isPresent()) {
                     return ComponentSerialization.CODEC.parse(
                         server.registryAccess().createSerializationContext(NbtOps.INSTANCE), verdict.get("reason"))
-                        .result();
+                        .result().map(reason -> new PortObservation(at, reason));
                 }
             }
         }
-        return Optional.ofNullable(unclaimedVerdicts.get(at));
+        return Optional.ofNullable(unclaimedVerdicts.get(at)).map(reason -> new PortObservation(at, reason));
     }
 
     public static void registered(Colony colony, WorldPos at) {

@@ -101,7 +101,7 @@ const IMPORTS = [
   "io.github.izakyl.folkways.vanilla.person.look.ResidentLooks",
   "io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutProfiles",
   "io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutProfile",
-  "io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutRegistry",
+  "io.github.izakyl.folkways.core.combat.api.Loadouts",
   "io.github.izakyl.folkways.vanilla.patrol.SentryPosts",
   "io.github.izakyl.folkways.vanilla.patrol.PatrolStaffing",
   "net.neoforged.neoforge.common.NeoForge", "net.neoforged.neoforge.event.tick.EntityTickEvent",
@@ -183,7 +183,7 @@ for (var entity : level.getAllEntities()) {
     var profiles = LoadoutProfiles.of(colony);
     var profile = profiles.create("Pose " + body.getUUID());
     profiles.add(profile.id(), LoadoutProfile.Entry.weapon(
-        LoadoutRegistry.using(gun).orElseThrow().profileWeapon(gun)));
+        Loadouts.using(gun).orElseThrow().profileWeapon(gun)));
     profiles.assign(List.of(body.id()), Optional.of(profile.id()));
     var cells = new LinkedHashSet<WorldPos>();
     for (int x = 0; x < 2; x++) {
@@ -249,7 +249,7 @@ const CLIENT_IMPORTS = [
   "io.github.izakyl.folkways.vanilla.person.PersonBody",
   "io.github.izakyl.folkways.vanilla.person.ResidentWeaponPoses",
   "io.github.izakyl.folkways.vanilla.person.ResidentSkinRenderer",
-  "io.github.izakyl.folkways.firearms.warfare.WarfareWeapons", "com.atsuishio.superbwarfare.data.gun.GunData",
+  "io.github.izakyl.folkways.vanilla.warfare.WarfareRoster", "com.atsuishio.superbwarfare.data.gun.GunData",
   "com.tacz.guns.api.item.IGun", "net.minecraft.core.registries.BuiltInRegistries",
 ];
 
@@ -319,7 +319,7 @@ var client = (Minecraft) ctx.client();
 var body = PersonBody.RESIDENT.get().create(client.level);
 int checked = 0;
 float maxError = 0;
-for (var adapter : WarfareWeapons.ALL) {
+for (var adapter : WarfareRoster.ALL) {
     var stack = new ItemStack(BuiltInRegistries.ITEM.get(adapter.weapon().item().orElseThrow()));
     body.setItemSlot(EquipmentSlot.MAINHAND, stack);
     for (var hand : HumanoidArm.values()) {

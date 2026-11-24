@@ -395,10 +395,10 @@ const DRAW_LINE = defineTask<Record<string, any>, any>({
   side: "server",
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.core.api.colony.Colonies",
+      "io.github.izakyl.folkways.core.colony.api.Colonies",
       "io.github.izakyl.folkways.core.front.engine.colony.ColonyFront",
       "io.github.izakyl.folkways.core.front.engine.colony.ColonySettings",
-      "io.github.izakyl.folkways.carts.FolkwaysCartsMod",
+      "io.github.izakyl.folkways.vanilla.carts.CartsPlugin",
       "net.minecraft.core.BlockPos",
       "net.minecraft.resources.ResourceLocation",
     ],
@@ -411,9 +411,9 @@ for (var raw : a.list("points")) {
   var p = (Map<?, ?>) raw;
   points.add(new BlockPos(((Number) p.get("x")).intValue(), ((Number) p.get("y")).intValue(), ((Number) p.get("z")).intValue()));
 }
-var path = ColonyFront.of(colony).addPath(level, FolkwaysCartsMod.LINE, points, ColonySettings.empty()
+var path = ColonyFront.of(colony).addPath(level, CartsPlugin.LINE, points, ColonySettings.empty()
     .with("cart", new ColonySettings.Value.Choice(ResourceLocation.parse("astikorcartsredux:supply_cart")))
-    .with("round", new ColonySettings.Value.Choice(ResourceLocation.parse("folkways_carts:line_open"))))
+    .with("round", new ColonySettings.Value.Choice(ResourceLocation.parse("folkways_vanilla:line_open"))))
     .orElseThrow(() -> new IllegalStateException("line refused"));
 return Map.of("path", path.id().toString(), "points", points.size());`,
   }),
@@ -425,8 +425,8 @@ const CART = defineTask<Record<string, any>, any>({
   side: "server",
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.core.api.colony.Colonies",
-      "io.github.izakyl.folkways.carts.FolkwaysCartsMod",
+      "io.github.izakyl.folkways.core.colony.api.Colonies",
+      "io.github.izakyl.folkways.vanilla.carts.CartsPlugin",
       "net.minecraft.core.registries.BuiltInRegistries",
       "net.minecraft.world.entity.Mob",
       "net.minecraft.world.item.Items",
@@ -486,8 +486,8 @@ if (cart != null) {
   out.put("items", List.of()); out.put("puller", ""); out.put("horse", null); out.put("near", List.of());
 }
 var lines = new ArrayList<Object>();
-var cls = Class.forName("io.github.izakyl.folkways.carts.CartLines", true, FolkwaysCartsMod.class.getClassLoader());
-var service = colony.service(FolkwaysCartsMod.OWNER, cls);
+var cls = Class.forName("io.github.izakyl.folkways.vanilla.carts.CartLines", true, CartsPlugin.class.getClassLoader());
+var service = colony.service(CartsPlugin.OWNER, cls);
 if (service.isPresent()) {
   var f = cls.getDeclaredField("states"); f.setAccessible(true);
   var states = (Map<?, ?>) f.get(service.get());
@@ -555,9 +555,9 @@ const BAKERY = defineTask<Record<string, any>, any>({
   side: "server",
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.core.api.colony.Colonies",
-      "io.github.izakyl.folkways.core.api.terms.Containers",
-      "io.github.izakyl.folkways.core.api.terms.Reach",
+      "io.github.izakyl.folkways.core.colony.api.Colonies",
+      "io.github.izakyl.folkways.core.item.api.Containers",
+      "io.github.izakyl.folkways.core.world.api.Reach",
       "io.github.izakyl.folkways.vanilla.wares.WaresContent",
       "io.github.izakyl.folkways.vanilla.person.ResidentEntity",
       "net.minecraft.core.BlockPos",
@@ -712,10 +712,10 @@ const CARD_VIEW = defineTask<Record<string, never>, CardView>({
       "net.minecraft.client.Minecraft",
       "io.github.izakyl.folkways.core.front.engine.item.HeldBook",
       "io.github.izakyl.folkways.core.front.client.ColonyLookState",
-      "io.github.izakyl.folkways.carts.CartsCards",
-      "io.github.izakyl.folkways.carts.CartContents",
+      "io.github.izakyl.folkways.vanilla.carts.CartsCards",
+      "io.github.izakyl.folkways.core.shell.carts.api.CartContents",
       "com.jusipat.astikorcartsredux.entity.AbstractCargoCart",
-      "io.github.izakyl.folkways.core.front.api.notice.Line",
+      "io.github.izakyl.folkways.core.card.api.notice.Line",
     ],
     body: `
 var mc = Minecraft.getInstance();

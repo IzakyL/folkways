@@ -5,9 +5,6 @@ import io.github.izakyl.folkways.core.work.api.Need;
 import io.github.izakyl.folkways.core.work.api.Outcome;
 import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.core.work.api.Xp;
-import io.github.izakyl.folkways.core.work.support.WorkStances;
-import io.github.izakyl.folkways.core.world.api.Reach;
-import io.github.izakyl.folkways.core.world.api.WorldSpaces;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -53,8 +50,7 @@ final class FeedNode extends PenNode {
     public Outcome commit(ServerLevel level, Worker who) {
         Pen now = current.apply(level).orElse(null);
         Pair pair = now == null ? null : pair(level, now);
-        if (pair == null || !WorkStances.standingIn(who.body(), spec().stances())
-                || !inReach(level, who, pair.first()) || !inReach(level, who, pair.second())) {
+        if (pair == null) {
             return refuse(PastureRefusal.NOT_FEEDABLE);
         }
         if (now.feedings(now.stock(level)) == 0) {
@@ -71,12 +67,6 @@ final class FeedNode extends PenNode {
         pair.first().setInLove(null);
         pair.second().setInLove(null);
         return counted(level, new Outcome.Done(List.of(), List.of(), Optional.of(new Xp(PastureContent.trade(), 2))));
-    }
-
-    private static boolean inReach(ServerLevel level, Worker who, Animal beast) {
-        return who.body().distanceToSqr(beast) <= Reach.PLAYER_BLOCK_REACH * Reach.PLAYER_BLOCK_REACH
-            && (Reach.inSight(level, WorldSpaces.at(who.body()).block(level), WorldSpaces.at(beast).block(level))
-                || Pen.seenOver(level, who.body().getEyePosition(), beast));
     }
 
     private record Pair(Animal first, Animal second) {

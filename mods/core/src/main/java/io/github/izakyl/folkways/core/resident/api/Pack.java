@@ -18,10 +18,13 @@ public interface Pack extends Container, Inserting {
 
     void onChanged(Runnable listener);
 
-    /** Binds native worn inventories and safely returns old development-save overflow. */
+    /** Binds native worn inventories for reads without creating state or recovering overflow. */
+    void bindInventories(Body owner);
+
+    /** Explicitly binds the owner and returns saved overflow to its pack or the world. */
     void bind(Body owner);
 
-    /** Base-pack growth from resident perks; storage items never use this. */
+    /** Refreshes base-pack growth from resident perks and returns saved overflow; storage items never grow here. */
     void applyCapacityMultiplier(double multiplier);
 
     int ownCells();

@@ -2,9 +2,10 @@ package io.github.izakyl.folkways.vanilla.build;
 
 import io.github.izakyl.folkways.core.item.api.Goods;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
+import io.github.izakyl.folkways.core.work.api.Joint;
+import io.github.izakyl.folkways.core.work.api.SchematicPrinter;
 import io.github.izakyl.folkways.core.work.api.StructureCompat;
 import io.github.izakyl.folkways.core.world.api.Reach;
-import io.github.izakyl.folkways.vanilla.build.draft.Joint;
 import it.unimi.dsi.fastutil.longs.LongArrayFIFOQueue;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import java.util.ArrayDeque;
@@ -338,7 +339,7 @@ final class Layering {
                 }
             } else {
                 // A part another shot makes is laid with that shot, met here or later from its own cell.
-                Optional<SchematicPlacement.Launch> launch = target.launch(cell);
+                Optional<SchematicPrinter.Launch> launch = target.launch(cell);
                 if (launch.isEmpty()) {
                     continue;
                 }
@@ -456,7 +457,7 @@ final class Layering {
         }
     }
 
-    private boolean unlayable(SchematicPlacement.Launch launch) {
+    private boolean unlayable(SchematicPrinter.Launch launch) {
         return level instanceof net.minecraft.server.level.ServerLevel server
             ? target.costs(server, launch, latched).isEmpty()
             : BuildJob.quoted(launch, target::wanted).isEmpty();

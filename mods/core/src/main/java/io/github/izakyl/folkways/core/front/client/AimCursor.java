@@ -30,7 +30,7 @@ final class AimCursor {
             return;
         }
         Optional<BlockPos> cell = HeldBook.bound(minecraft.player).flatMap(book ->
-            book.gesture() == Shape.Gesture.BOX ? ZoneSelection.cursor(minecraft.player) : Aim.cell(minecraft.player));
+            BookTools.gesture() == Shape.Gesture.BOX ? ZoneSelection.cursor(minecraft.player) : Aim.cell(minecraft.player));
         if (cell.isEmpty() || (!Overhead.on() && minecraft.hitResult instanceof BlockHitResult outlined
             && outlined.getType() == HitResult.Type.BLOCK && outlined.getBlockPos().equals(cell.get()))) {
             return;

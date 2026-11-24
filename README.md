@@ -20,80 +20,69 @@ versions. Back up your world before trying a nightly build.
 
 ## What it does
 
-- **Mark the colony's blocks.** Register chests, beds and work stations with the
-  Colony Book. Fencing off land claims nothing.
-- **Rank trades, then let residents plan.** Set priorities on the Workforce page;
+- **Mark the colony's blocks.** Left-click chests, beds and work stations with the Colony Book to register them. Fencing off land claims nothing.
+- **Rank trades, then let residents plan.** Set priorities on the **Workforce** page;
   the colony chooses tasks, supplies and the order of work.
 - **Lay out work areas.** Frame fields, pens and fisheries, choose crops and herd
   sizes, and draw patrol routes.
 - **Keep chests stocked.** Set an item and a target amount. Residents craft, smelt,
   harvest or haul until the order is filled.
-  Orders bypass container whitelists, blacklists and Allow storing. These settings
+  Orders bypass container allowlists, denylists and Allow storing. These settings
   govern ordinary resident storage and can be changed while orders exist; player storage is unaffected.
-- **Compost surplus seeds.** Mark a native composter, then configure automatic
-  composting and seed reserves on its Composting settings page.
+  Residents put goods away in ordinary stores. Facility parts such as machine inputs and outputs receive
+  and release goods through the facility's own work. A Tom's Simple Storage terminal registered as a store
+  places the same orders from its **Order…** button; see [INTEGRATIONS.md](INTEGRATIONS.md#stores-from-storage-mods).
+- **Compost surplus seeds.** Register a native composter so residents can turn excess seed stock into bone meal.
 - **Build from drawings.** Choose patterns for roads, arch bridges, walls, docks,
   mines, railways, arcades and terraced fields. Builders clear the site and use
-  the colony's stores.
+  the colony's stores. Automatic work such as farming, construction and damage control
+  skips protected facility blocks. Explicit **Clear** orders under **Groundwork** can remove
+  them, and the confirmation preview lists affected facilities.
   Enable `blueprints.simpleConstruction` (default `false`) to have builders stop on entering the site and work in place.
 - **Care for residents.** They sleep in their own beds, carry three days of
-  rations, tire from work and travel, and flee danger. Data packs can replace
+  rations, and tire from work and travel. Residents flee visible attackers or
+  dangers such as burns, favoring reachable spots near colony facilities and
+  members. Data packs can replace
   colony name and appearance pools; see [DATAPACKS.md](DATAPACKS.md) for data packs,
   tags and the `folkways/` library folder.
 - **Let them grow with practice.** Each trade has ten levels, and every level
   draws a speciality; levels 3, 6 and 10 also draw a shared perk.
 - **Set tables and build homes.** Dining areas serve table meals, beds grade their
-  rooms, and mood moves work speed between 75% and 115%. Idle residents stroll,
-  chat and pet animals; cats, wolves and parrots move in as the colony grows.
+  rooms, and mood moves work speed between 75% and 115%. Idle residents stroll, chat and pet animals. Cats, wolves
+  and parrots move in as the colony grows.
 - **Equip and defend.** Assign equipment profiles with weapons, armor, supplies and backpacks,
   then staff patrol routes and sentry posts, or command people and golems directly;
-  Firearms integrations for TACZ and Superb Warfare add supported firearms.
+  Core and Vanilla integrate supported TACZ and Superb Warfare firearms.
 - **Protect and restore buildings.** Mark damage-control areas for residents to
   put out fires. Record a baseline and enable repairs to replace missing building
   blocks with materials from colony stores.
 
 ## Mods
 
-This repository builds ten mods, one per directory under `mods/`. Each ships as
-`folkways-<directory>-*.jar`. Every extension requires Core and Vanilla.
+This repository builds four mods, one per directory under `mods/`. Each ships as
+`folkways-<directory>-*.jar`. Every extension requires Core; extensions other than Assistant also require Vanilla.
 
 | Mod                                       | Directory            | Also requires                                                                       | What it does                                                                                                                    |
 | ----------------------------------------- | -------------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| Folkways Core                             | `mods/core`          | —                                                                                   | The colony engine: residents who plan their own work, their pathfinding, the Colony Book and panel, and direct commands and squads for any resident kind. Adds no work on its own |
+| Folkways Core                             | `mods/core`          | —                                                                                   | The colony engine: residents who plan their own work, their pathfinding, the Colony Book and panel, and direct commands and squads for any resident kind. Includes the AE2/RS2 **Network service** vocation |
 | Folkways Vanilla                          | `mods/vanilla`       | Core                                                                                | Residents and their trades among vanilla blocks: farming, herding, fishing, crafting, hauling and building; weapons, equipment profiles and patrols |
-| Folkways Carving                          | `mods/carving` | Chisels & Bits 21.1.25+                                             | Residents build and reshape carvings using whole blocks, with a small rounding loss                                                 |
-| Folkways × Create | `mods/create` | Create 6.0.7+; FireFighting Additions 0.2.3-beta+ optional (requires Create [6.0.10,6.1)) | Trains, parcels, track and schematics; with the addon, residents fight fires with extinguishers and hydrant hoses and refill extinguishers |
-| Folkways × Modular Golems                 | `mods/golems` | Modular Golems 3.1.6+                                                              | Golems join the roster and take trades like people                                                                              |
-| Folkways × Kaleidoscope Cookery           | `mods/cookery`       | Kaleidoscope Cookery 1.6.0+; Kaleidoscope Tavern 1.2.0+ optional                    | Residents grow, prepare, cook and store food with its native appliances; with Tavern, they make and serve wine                  |
-| Folkways Firearms | `mods/firearms` | Optional: TACZ 1.1.8+ (including 1.2.0); Superb Warfare [0.8.9.2,0.8.9.3) and Kotlin for Forge [5.12.0,6) | Residents use native firearms and emplacements with physical ammunition when their target mod is installed |
-| Folkways × AstikorCarts Redux | `mods/carts` | AstikorCarts Redux 1.2.2+ | Haulers hitch hand and supply carts and carry store deliveries in the cart storage, separately from their packs |
-| Folkways × Epic Fight                     | `mods/epicfight` (jar: `folkways-epicfight`) | Epic Fight 21.17.1+; Core and Vanilla from the same Folkways build | Residents use native Epic Fight melee, hit reactions, everyday movement and GEO rendering |
-| Folkways Airline | `mods/airline` | Folkways × Create; Create [6.0.10,6.1); Sable 2.0.6 | Airport patterns, surveys, towers, runways, helipads, taxiways and stands, including moving airports on Sable structures |
+| Folkways Airline                          | `mods/airline`       | Core, Vanilla, Create 6.0.10–6.0.x, Sable 2.0.6                                     | Airport patterns, surveys, towers, runways, helipads, taxiways and stands, including moving airports on Sable structures |
+| Folkways Assistant                        | `mods/assistant`     | Core; install on both client and server                                             | An in-game chat assistant that reads your colony and answers questions through a language model you configure                   |
 
-When updating to Carving, remove the old `folkways-chiselsandbits-*.jar` before installing
-`folkways-carving-*.jar`; keeping both causes duplicate registrations and a crash.
+Assistant provides the tool registry for reading colony data and previewing and confirming changes. It uses
+Core’s colony and facility APIs. Configure a model in the assistant settings and add an API key if your
+provider requires one. See the [colony assistant integration](INTEGRATIONS.md#colony-assistant) for supported
+providers. Facility definitions, facility parameters and colony script writes always require confirmation.
 
-Folkways Airline provides airport patterns, surveys, towers and moving landing facilities. RTS aircraft take off on their own when ordered to move or loiter, hold
-a chosen altitude band (Low, Cruise or High) above the terrain ahead, and land at their saved home airport by
-default; airports assign suitable free surfaces automatically.
-Runways and taxiway patterns accept any level heading. Runway numbers follow the landing heading rounded
-to ten degrees (north is 36); parallel runways receive L/C/R designators, mirrored at the opposite end.
+Core includes both directions of the AE2 and RS2 integrations, including the **Network service** vocation.
+It also includes the Modular Golems, Epic Fight and Chisels & Bits integrations. See [Integrations](INTEGRATIONS.md)
+for verified versions. Core also provides Cookery, Tavern and AstikorCarts Redux adapters. Vanilla adds
+kitchens, winemaking and cart lines when the corresponding integrations are enabled. When upgrading, remove the old `folkways-golems-*.jar`, `folkways-epicfight-*.jar`,
+`folkways-carving-*.jar`, `folkways-chiselsandbits-*.jar`, `folkways-cookery-*.jar`, `folkways-carts-*.jar`, `folkways-firearms-*.jar` and `folkways-create-*.jar`.
 
-Runways are delimited by continuous white edge lines and piano-key threshold stripes at both ends, including on
-oblique headings. The drawing adds long centreline dashes and paired aiming points. Aprons are continuous gray
-pavement: a yellow lead-in ending at a three-block white stop line identifies each stand. Clearance to pavement
-boundaries and neighbouring stands determines parking dimensions. Connected pavement is
-taxiable without a yellow centreline; routes prefer guide lines and central clearance, and admit aircraft by the
-minimum boundary clearance along the route. Unreachable stands or runways are reported. Helipads use a white
-border and slender white H (width about 60% of height), with an optional yellow touchdown circle. All facilities
-can share continuous pavement; grass gaps are unnecessary.
-
-Airport bookings queue Superb Warfare combat departures (including catapults) and landings in request order. Without Airline, Firearms keeps a local runway queue. Bookings are not saved.
-
-Colony ownership of a Superb Warfare vehicle remains after crew dismount, including automatic idle release.
-Use **Release ownership** on its command card to disembark and give it up while grounded. Unowned vehicles appear
-and can be claimed only while the player's client tracks them; colony-owned vehicles remain commandable at any
-distance while loaded. Locked vehicles cannot be claimed or commanded.
+Airline's runway markings, stands and bookings are described under
+[Airports](INTEGRATIONS.md#airports-folkways-airline); commanding aircraft and colony vehicle ownership are under
+[TACZ and Superb Warfare](INTEGRATIONS.md#tacz-and-superb-warfare-core-and-vanilla).
 
 ## Installation
 
@@ -108,40 +97,68 @@ are listed separately from nightly builds.
 | [NeoForge](https://neoforged.net/)       | 21.1.233 or newer                   |
 | [LDLib2](https://modrinth.com/mod/ldlib) | 2.2.37 or newer; install separately |
 
-Install **Core and Vanilla**, then add extensions for the mods you use.
+Install **Core and Vanilla**, then add Airline or Assistant if you want them.
 **All Folkways jars must come from the same build.**
 
 See [Mods](#mods) for what each jar adds and what it needs.
-Firearms activates each integration only when TACZ or Superb Warfare is installed;
-Create activates firefighting only when FireFighting Additions is installed.
-When present, they need TACZ 1.1.8+, Superb Warfare [0.8.9.2,0.8.9.3) and FireFighting Additions
-0.2.3-beta+. Direct commands and squads are part of Core.
+Core and Vanilla activate TACZ, Superb Warfare and Create support, and FireFighting Additions support alongside
+Create, only for the versions listed in [Integrations](INTEGRATIONS.md). Direct commands and squads are part of Core.
 
-Ponder and Flywheel are bundled in Core; the Starlark interpreter is bundled in
-Vanilla. They do not need separate installation.
+Ponder, Flywheel and the Starlark interpreter are bundled in Core. They do not need separate installation.
 
 ## Getting started
 
 1. Craft a **Colony Book** from one book.
 2. Right-click to open the colony panel and select **New Colony**.
-3. Left-click chests, beds and work stations with the book to register them.
-4. Stock food in a registered chest and leave a registered bed free. Newcomers
-   arrive over time; admit them from the **Human residents** page.
-5. Sneak and scroll to switch the book to **marking out**. Left-click two opposite
-   corners of a plot, then right-click and choose **Farm**.
+3. Left-click chests, beds and work stations with the book to register them. A new book starts out taking things in.
+4. In Survival, stock food in a registered chest and leave a registered bed free. Newcomers
+   arrive over time. Click **Let one in** on **Workforce** to admit one. In Creative, the button
+   admits a settler immediately, regardless of the queue, beds or food.
+5. Sneak and scroll to turn the book to its next gesture: taking in, marking out a box or drawing a line.
+   Mark out two opposite corners of a plot, right-click and choose **Farm**: the farm's card opens to set it up.
+   With the book in hand, right-click a held zone, path or block to open its card.
+   In the view from above (**V**), the book's tools are grouped along the top by what they serve, such as
+   **Food & farming** or **Defense**; pick one first and the shape you draw becomes it.
 
-The panel's **Lessons** tab contains Ponder tutorials for the rest of the mod.
+**Overview** shows what needs attention. **Workforce** covers residents and their priorities, and
+**Stock & orders** shows supplies and orders. **Facilities** groups zones, routes and more, and lists held
+blocks by kind beside them, folded like **Lessons**; open a facility's card from its row. **Settings** opens cards
+for colony-wide options. **Members** manages membership and **Lessons** contains Ponder tutorials.
 
-For combat, open **Equipment profiles**, create a profile, fill its slots and assign human residents.
-Keep the selected weapons, armor and matching ammunition in registered stores
-that allow taking items. Enable the **Patrol** trade and staff patrol routes
-or sentry posts for autonomous defense. For direct control, hold the Colony Book, press **V**
-and select **RTS** to group and command residents. Weapon rules stay with residents when squads are split or regrouped;
-range limits determine how close they approach before firing.
+For autonomous defense, enable the **Patrol** trade and configure staffing on the patrol route or
+sentry post card. Keep weapons, armor and matching ammunition in registered stores that allow taking items. For direct control, hold the Colony Book, press **V**
+and switch the view to **Control** to group and command residents. Weapon rules stay with residents when squads are split or regrouped;
+range limits determine how close they approach before firing. Same-colony entities and player members cannot damage
+one another. Automatic fire avoids colony entities and blocks. Player-chosen shots skip aim prediction, and
+explosions follow vanilla or the installed mod's rules.
 
-For damage control, hold the Colony Book, press **V** and choose **Damage Control**.
-Mark two corners, protect the area and allow residents to work in **Damage control**.
-Repairs are off by default: right-click the area, use **Reset baseline** and enable
+The **Colony assistant** saves conversations on this client by world or server and by player.
+Open **History** to resume a conversation, or ask the assistant to look up text from previous sessions.
+The assistant assumes your model can see images. It photographs nearby views, and checks a drafted build or
+facility change from several sides before showing it to you. Turn off **Model supports image input** in
+**Settings** for a text-only model.
+The assistant groups changes by subject and presents them one at a time in a review window beside the conversation.
+The window describes the current group and offers **Locate**, **Confirm** and **Reject**. You can decide on each group
+independently. Changes that depend on each other share a group. Until you decide, the change is marked in the world: an outline round the
+resident it touches, a line through the points it draws, the drawn blocks of a build, or a facility's old extent
+faint beside its new one, with the cells it gains or gives up tinted.
+In creative, a build's review window also offers **Build now** or **Have the colony build it**, as placing a blueprint does.
+Loaded colony vehicles, such as crewed Superb Warfare vehicles, hitched carts and Create trains, are also
+facilities the assistant can send to a destination; select one in **Control** to use its command card.
+
+Ask the **Colony assistant** to designate player-built facilities such as an iron gate operated by a lever.
+For a machine, such as a door raised by a valve handle, the assistant reads how it is connected and tries
+its controls without moving the machine, so it knows which control to turn and which way. A machine that turns
+goods into others can become a workshop: residents bring it what orders need and carry the products back.
+Open the facility card from **Facilities**, or select the facility in **Control**. Its card can run routines,
+show readings, change parameters or switch scheduled triggers on and off. A card command can also ask for an
+area: click two corners in the world. A mobile facility can reposition itself while sweeping a picked box.
+The facility area is protected.
+Residents can walk through a projected gate while its opening conditions hold. Closed gates block their routes.
+
+For damage control, mark two corners with the book, right-click and choose **Damage control** to
+protect the area, and allow residents to work in **Damage control**.
+Repairs are off by default: on the area's card, use **Reset baseline** and enable
 **Restore missing blocks**. Containers, crops, fluids and machines are excluded;
 different blocks already occupying a recorded cell are reported as conflicts.
 
@@ -171,6 +188,8 @@ Folkways also works with about thirty other mods, from Create and Create Aeronau
 storage networks, accessories and client tools. See [Integrations](INTEGRATIONS.md) for what each one
 adds, how to use it in game and the versions it needs.
 
+With Create installed, an **Anonymous Typewriter** links **Control Terminals** to one resident duty seat.
+
 ## Building from source
 
 With a **Java 21 JDK** and **Node.js 22.14+**, run the locked setup on **Linux x64** or
@@ -183,7 +202,7 @@ npm run setup
 ```
 
 Setup downloads the pinned integration dependencies and writes the manifest
-required by Gradle. The ten mod jars are collected in `build/libs/`.
+required by Gradle. The four mod jars are collected in `build/libs/`.
 Windows support in the Blockwright test SDK is a candidate; see
 [development setup](CONTRIBUTING.md#development-setup).
 

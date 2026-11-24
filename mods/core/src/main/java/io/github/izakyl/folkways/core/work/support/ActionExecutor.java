@@ -139,6 +139,7 @@ public final class ActionExecutor implements ActionHandle {
             gestureReleased = true;
         }
         walking.release(context.body());
+        walking.rise(context.body());
         context.body().clearDoing();
         context.body().clearHandPresentation();
     }

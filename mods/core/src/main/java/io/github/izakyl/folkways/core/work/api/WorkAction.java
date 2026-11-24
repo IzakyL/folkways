@@ -2,6 +2,7 @@ package io.github.izakyl.folkways.core.work.api;
 
 import io.github.izakyl.folkways.core.resident.api.Doing;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.Mob;
 
 // One executable action, either a planned node or a private step inside a holding.
 public interface WorkAction {
@@ -19,6 +20,11 @@ public interface WorkAction {
 
     default boolean staysAtWorkSite() {
         return false;
+    }
+
+    // Whether this body may take the work's seat, when its stance is one; asked on arrival, before it sits down.
+    default boolean admits(ServerLevel level, Mob body) {
+        return true;
     }
 
     // Actions that can resume a finite wind-up keep the ticks already performed when suspended.

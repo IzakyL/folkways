@@ -39,20 +39,16 @@ public final class DiningScene {
         scene.idle(15);
         scene.overlay().showOutline(PonderPalette.BLUE, "area", util.select().fromTo(1, 0, 1, 6, 2, 5), 120);
         scene.overlay().showText(120)
-            .text("With the book marking out, frame a dining area around tables and adjacent chairs. "
-                + "Use supported mod tables; bottom stairs make chairs. "
-                + "Include the chairs in the area and leave a clear aisle beside them.")
+            .text("Mark out the tables and the chairs beside them, then right-click and choose Dining area. Use tables from a supported mod; bottom stairs work as chairs. Leave an aisle beside the chairs.")
             .pointAt(util.vector().topOf(3, 1, 4)).placeNearTarget().attachKeyFrame();
         scene.idle(130);
         scene.overlay().showOutline(PonderPalette.GREEN, "table", util.select().fromTo(2, 1, 3, 4, 1, 3), 100);
         scene.overlay().showText(110)
-            .text("Connected table tops on the same level form one table. Residents can serve it from any reachable edge and eat from any free chair beside it; they do not need to reach each dish separately.")
+            .text("Table tops joined on one level form one table. Residents serve from any reachable edge and eat at any free chair.")
             .pointAt(util.vector().topOf(3, 1, 3)).placeNearTarget().attachKeyFrame();
         scene.idle(120);
         scene.overlay().showText(120)
-            .text("Choose food and 1 to 4 servings per table cell in the area settings. "
-                + "Tables with an inventory use that many slots, up to their capacity. "
-                + "Supported tables without inventories hold one placed dish, such as cake.")
+            .text("On the card, choose Table food and Servings per tabletop block (1–4). Tables without storage hold one placed food, such as a cake.")
             .pointAt(util.vector().topOf(2, 1, 3)).placeNearTarget().attachKeyFrame();
         scene.idle(130);
         var waiter = PonderScenery.body(scene, PersonBody.RESIDENT.get(), util.vector().topOf(6, 0, 2), 180);
@@ -68,13 +64,13 @@ public final class DiningScene {
             if (resident.getX() < 3) { resident.leisureMotion("dining"); }
         });
         scene.overlay().showText(110)
-            .text("Residents bring the chosen food from colony supplies or arrange its production, then set the table. Hungry neighbours take a free place and eat. Keep ingredients and a route to the table available.")
+            .text("Residents bring the food from storage, or have it made, and set the table. Hungry residents take a free seat and eat.")
             .pointAt(util.vector().topOf(2, 2, 3)).placeNearTarget().attachKeyFrame();
         scene.idle(120);
         scene.world().modifyBlock(util.grid().at(2, 2, 3), state -> state.setValue(CakeBlock.BITES, 2), false);
         scene.overlay().showOutline(PonderPalette.INPUT, "store", util.select().position(store), 120);
         scene.overlay().showText(130)
-            .text("The drink list is separate from food. With compatible bar furniture installed, dining areas stock supported drink counters automatically. Diners fetch a drink with their meal; ordinary storage cabinets can instead be stocked by delivery orders.")
+            .text("Bar drinks is a separate list. Supported bar counters in the area restock themselves, and diners fetch a drink with their meal. Plain bar cabinets need delivery orders.")
             .pointAt(util.vector().topOf(store)).placeNearTarget().attachKeyFrame();
         scene.idle(140);
     }

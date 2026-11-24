@@ -19,8 +19,8 @@ import io.github.izakyl.folkways.core.front.api.ui.Tokens;
 import io.github.izakyl.folkways.core.item.api.ItemFilter;
 import io.github.izakyl.folkways.core.item.api.ItemQuery;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
-import io.github.izakyl.folkways.core.rts.combat.net.UnitOrders;
-import io.github.izakyl.folkways.core.rts.combat.net.UnitRequest;
+import io.github.izakyl.folkways.core.command.combat.net.UnitOrders;
+import io.github.izakyl.folkways.core.command.combat.net.UnitRequest;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -70,6 +70,9 @@ public final class VehicleProfilePage implements Draw {
         this.player = player;
         content = Rows.page();
         var binding = DataBindingBuilder.stringC2S(raw -> {
+            if (raw.isEmpty()) {
+                return;
+            }
             if (player instanceof ServerPlayer server) {
                 try {
                     CompoundTag request = TagParser.parseTag(raw.substring(raw.indexOf('\n') + 1));

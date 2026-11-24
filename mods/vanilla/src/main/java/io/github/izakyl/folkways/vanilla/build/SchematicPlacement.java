@@ -2,9 +2,12 @@ package io.github.izakyl.folkways.vanilla.build;
 
 import io.github.izakyl.folkways.core.item.api.Goods;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
+import io.github.izakyl.folkways.core.work.api.BlockData;
+import io.github.izakyl.folkways.core.work.api.Costs;
 import io.github.izakyl.folkways.core.work.api.Need;
+import io.github.izakyl.folkways.core.work.api.SchematicPrinter;
 import io.github.izakyl.folkways.core.work.api.StructureCompat;
-import io.github.izakyl.folkways.core.world.api.StructurePayload;
+import io.github.izakyl.folkways.core.work.api.UnloadedBlock;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -24,17 +27,12 @@ import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.NbtUtils;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.block.BedBlock;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.LiquidBlock;
-import net.minecraft.world.level.block.Mirror;
-import net.minecraft.world.level.block.Rotation;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.block.state.properties.BedPart;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
-import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
 
 /**
@@ -45,119 +43,14 @@ import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemp
 public final class SchematicPlacement {
 
     /**
-     * One shot of the cannon: the cell aimed at, the target cells it leaves placed (a door's upper half comes with
-     * its lower one), and the cells whose requirements the shot pays for.
-     */
-    public record Launch(BlockPos anchor, Set<BlockPos> produces, List<BlockPos> charged) {
-
-        public Launch {
-            anchor = anchor.immutable();
-            produces = Set.copyOf(produces);
-            charged = List.copyOf(charged);
-        }
-
-        public static Launch of(BlockPos anchor, Set<BlockPos> produces) {
-            return new Launch(anchor, produces, List.of(anchor));
-        }
-    }
-
-    /** The schematic as the printer sees it, once it has been placed into an empty schematic level. */
-    public interface Printed {
-
-        BlockState state(BlockPos pos);
-
-        @Nullable
-        BlockEntity entity(BlockPos pos);
-    }
-
-    public interface Adapter {
-
-        /** Places the template into the printer's empty level, as the printer does when it loads a schematic. */
-        Printed print(ServerLevel level, StructureTemplate template, Vec3i size);
-
-        /** The printer's {@code setZeroAge}: what every read state is turned into before anything else sees it. */
-        BlockState zeroAge(BlockState state);
-
-        void turn(BlockEntity entity, Mirror mirror, Rotation rotation);
-
-        /** What the cannon carries of a block entity's data: only what it trusts, never contents. */
-        @Nullable
-        CompoundTag prepare(ServerLevel level, BlockState state, @Nullable BlockEntity entity);
-
-        /** Cells the cannon never aims at: they are made by another shot, or not at all. */
-        boolean ignored(BlockState state);
-
-        Costs.Quote requirement(BlockState state, @Nullable BlockEntity entity);
-
-        /** Places a schematic cell using Folkways rules and integration-specific hooks. */
-        void place(ServerLevel level, BlockPos pos, BlockState state, ItemStack stack, @Nullable CompoundTag data);
-
-        default Optional<Launch> launch(Function<BlockPos, BlockState> target, BlockPos pos) {
-            BlockState state = target.apply(pos);
-            if (ignored(state)) {
-                return Optional.empty();
-            }
-            Set<BlockPos> produces = new LinkedHashSet<>();
-            produces.add(pos.immutable());
-            partner(state, pos).filter(other -> {
-                BlockState there = target.apply(other);
-                return there.is(state.getBlock()) && ignored(there);
-            }).ifPresent(produces::add);
-            return Optional.of(Launch.of(pos, produces));
-        }
-
-        /** Fires a shot whose cells are already addressed in the world. */
-        default void fire(ServerLevel level, Launch launch, Function<BlockPos, BlockState> states,
-                Function<BlockPos, BlockData> data, ItemStack stack) {
-            BlockState state = states.apply(launch.anchor());
-            BlockData kept = data.apply(launch.anchor());
-            if (StructureCompat.of(state).isPresent()) {
-                StructurePayload payload = kept.payload(state);
-                StructureCompat.inspect(state, payload);
-                CompoundTag nativeData = StructureCompat.of(state).orElseThrow()
-                    .placementData(level.registryAccess(), launch.anchor(), state, payload);
-                place(level, launch.anchor(), state, stack, nativeData);
-            } else {
-                BlockEntity entity = kept.entity(level, launch.anchor(), state);
-                place(level, launch.anchor(), state, stack, prepare(level, state, entity));
-            }
-        }
-    }
-
-    private static volatile Adapter adapter = new VanillaSchematics();
-
-    private SchematicPlacement() {
-    }
-
-    public static void install(Adapter installed) {
-        adapter = installed;
-    }
-
-    public static Adapter adapter() {
-        return adapter;
-    }
-
-    /** The parts vanilla blocks make for themselves when placed: a two-high block's top, a bed's head. */
-    static Optional<BlockPos> partner(BlockState state, BlockPos pos) {
-        if (state.hasProperty(BlockStateProperties.DOUBLE_BLOCK_HALF)
-            && state.getValue(BlockStateProperties.DOUBLE_BLOCK_HALF) == DoubleBlockHalf.LOWER) {
-            return Optional.of(pos.above());
-        }
-        if (state.getBlock() instanceof BedBlock && state.getValue(BedBlock.PART) == BedPart.FOOT) {
-            return Optional.of(pos.relative(state.getValue(BedBlock.FACING)));
-        }
-        return Optional.empty();
-    }
-
-    /**
      * Resolves a blueprint into what the cannon would print: states and block entities read back from the printer's
      * level and aged back to their start. A cell the printer cannot keep (gone after placement, made by no shot, or
      * with no valid requirement) is dropped, as the cannon skips it. Fluid sources stay: they are poured as a step of
      * their own, outside the cannon's rules.
      */
     static Blueprint resolve(ServerLevel level, Blueprint source) {
-        Adapter rules = adapter;
-        Printed printed = rules.print(level, template(level, source), source.volume().size());
+        SchematicPrinter.Adapter rules = SchematicPrinter.adapter();
+        SchematicPrinter.Printed printed = rules.print(level, template(level, source), source.volume().size());
         Map<BlockPos, BlockState> states = new LinkedHashMap<>();
         Map<BlockPos, BlockData> data = new LinkedHashMap<>();
         for (BlueprintBlock cell : source.blocks()) {
@@ -228,7 +121,7 @@ public final class SchematicPlacement {
     /** A validated whole operation whose individual shots can be spread across server ticks. */
     static final class Printing {
         private final ServerLevel level;
-        private final Adapter printer = adapter;
+        private final SchematicPrinter.Adapter printer = SchematicPrinter.adapter();
         private final Map<BlockPos, BlockState> states = new LinkedHashMap<>();
         private final Map<BlockPos, BlockData> data = new LinkedHashMap<>();
         private final java.util.Iterator<Map.Entry<BlockPos, BlockState>> remaining;
@@ -320,7 +213,7 @@ public final class SchematicPlacement {
         if (stored == null) {
             return null;
         }
-        CompoundTag prepared = adapter.prepare(level, state, stored);
+        CompoundTag prepared = SchematicPrinter.adapter().prepare(level, state, stored);
         if (StructureCompat.of(state).isPresent()) {
             if (prepared == null) {
                 throw StructureCompat.invalid();
@@ -335,7 +228,7 @@ public final class SchematicPlacement {
     }
 
     /** What a shot costs, or nothing when the colony cannot represent it. */
-    static Optional<List<Need>> costs(ServerLevel level, Launch launch, Function<BlockPos, BlockState> states,
+    static Optional<List<Need>> costs(ServerLevel level, SchematicPrinter.Launch launch, Function<BlockPos, BlockState> states,
             Function<BlockPos, BlockData> data) {
         Map<ItemSpec, Long> counted = new LinkedHashMap<>();
         for (BlockPos cell : launch.charged()) {
@@ -347,7 +240,7 @@ public final class SchematicPlacement {
                     (long) (count + volume.perBlock() - 1) / volume.perBlock(), Long::sum));
                 continue;
             }
-            Costs.Quote quote = adapter.requirement(state, entity(level, cell, state, data.apply(cell)));
+            Costs.Quote quote = SchematicPrinter.adapter().requirement(state, entity(level, cell, state, data.apply(cell)));
             if (quote.needs().isEmpty()) {
                 return Optional.empty();
             }

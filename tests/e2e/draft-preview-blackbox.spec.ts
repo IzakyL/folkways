@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { defineTask, javaTask, tick, type MinecraftClient, type MinecraftServer } from "@izakyl/blockwright-minecraft";
 import { clickElement, panelElements } from "../ldlib2";
 import { commandPos, createColonyViaBook, tryCommand, waitForGroundedPlayer } from "../shared/colony/colony-founding";
-import { markBox, openBookPage, setBookGesture } from "../shared/ui/zone-tools";
+import { chooseBookTool, markBox, useBook } from "../shared/ui/zone-tools";
 import { drainActionBar, readActionBar } from "../shared/ui/zone-receipt";
 import { settlePanel } from "../shared/ui/site-panel";
 import { launchPair, type E2EPair } from "../shared/harness/pair";
@@ -11,10 +11,10 @@ import { seededServer } from "../shared/harness/mod-settings";
 import { BUDGET } from "../shared/harness/budgets";
 import { clickUnverified, safeScreen, screenOpen, waitForElement } from "../shared/harness/bw-helpers";
 import { newRunId } from "../shared/harness/run-id";
-import { around, twins, type Stage } from "../shared/harness/stage";
+import { around, twins } from "../shared/harness/stage";
 
 const BOOK_ITEM = "folkways_core:colony_book";
-const OFFER = "folkways.zoneconfig.offer.folkways_vanilla.draft";
+const OFFER = "offer:folkways_vanilla:draft";
 const CHOOSE = "folkways.draft.choose";
 const PATTERN = "folkways.draft.pattern.folkways_vanilla.terraced_field";
 const PREVIEW = "folkways.draft.preview";
@@ -69,7 +69,6 @@ const MEMORY = defineTask<void, Record<string, boolean>>({
   source: javaTask({
     imports: [
       "io.github.izakyl.folkways.core.FolkwaysClientConfig",
-      "io.github.izakyl.folkways.core.front.ui.screen.RememberedSettings",
       "io.github.izakyl.folkways.core.front.api.Schema",
       "io.github.izakyl.folkways.vanilla.build.draft.client.KnobValues",
       "net.minecraft.resources.ResourceLocation",
@@ -81,19 +80,24 @@ const MEMORY = defineTask<void, Record<string, boolean>>({
 var path = FMLPaths.CONFIGDIR.get().resolve("folkways-drawing-settings.properties");
 byte[] before = Files.exists(path) ? Files.readAllBytes(path) : null;
 boolean enabled = FolkwaysClientConfig.rememberDrawingSettings();
+var memory = Class.forName("io.github.izakyl.folkways.vanilla.build.draft.client.RememberedPatternSettings");
+var load = memory.getDeclaredMethod("load", String.class);
+load.setAccessible(true);
+var save = memory.getDeclaredMethod("save", String.class, CompoundTag.class);
+save.setAccessible(true);
 try {
     FolkwaysClientConfig.rememberDrawingSettings(true);
     var a = new CompoundTag(); a.putInt("width", 99);
     var b = new CompoundTag(); b.putInt("width", -9);
-    RememberedSettings.save("pattern/folkways_vanilla:memory_a", a);
-    RememberedSettings.save("pattern/folkways_vanilla:memory_b", b);
+    save.invoke(null, "pattern/folkways_vanilla:memory_a", a);
+    save.invoke(null, "pattern/folkways_vanilla:memory_b", b);
     var disk = new java.util.Properties();
     try (var input = Files.newInputStream(path)) { disk.load(input); }
     boolean persisted = disk.getProperty("pattern/folkways_vanilla:memory_a").equals(a.toString())
         && disk.getProperty("pattern/folkways_vanilla:memory_b").equals(b.toString());
-    boolean isolated = RememberedSettings.load("pattern/folkways_vanilla:memory_a").orElseThrow().getInt("width") == 99
-        && RememberedSettings.load("pattern/folkways_vanilla:memory_b").orElseThrow().getInt("width") == -9
-        && RememberedSettings.load("folkways_vanilla:memory_a").isEmpty();
+    boolean isolated = readMemory(load, "pattern/folkways_vanilla:memory_a").orElseThrow().getInt("width") == 99
+        && readMemory(load, "pattern/folkways_vanilla:memory_b").orElseThrow().getInt("width") == -9
+        && readMemory(load, "folkways_vanilla:memory_a").isEmpty();
     var stone = ResourceLocation.parse("minecraft:stone");
     var dirt = ResourceLocation.parse("minecraft:dirt");
     var schema = new Schema(List.of(
@@ -114,17 +118,24 @@ try {
         && fallback.choice("choice").equals(stone) && fallback.items("material").isPresent();
     byte[] written = Files.readAllBytes(path);
     FolkwaysClientConfig.rememberDrawingSettings(false);
-    boolean disabledRead = RememberedSettings.load("pattern/folkways_vanilla:memory_a").isEmpty();
-    RememberedSettings.save("pattern/folkways_vanilla:memory_a", b);
+    boolean disabledRead = readMemory(load, "pattern/folkways_vanilla:memory_a").isEmpty();
+    save.invoke(null, "pattern/folkways_vanilla:memory_a", b);
     boolean disabledWrite = java.util.Arrays.equals(written, Files.readAllBytes(path));
     FolkwaysClientConfig.rememberDrawingSettings(true);
-    boolean preserved = RememberedSettings.load("pattern/folkways_vanilla:memory_a").orElseThrow().equals(a);
+    boolean preserved = readMemory(load, "pattern/folkways_vanilla:memory_a").orElseThrow().equals(a);
     return Map.of("persisted", persisted, "isolated", isolated, "restored", restoredValues,
         "conformed", conformed, "disabledRead", disabledRead, "disabledWrite", disabledWrite,
         "preserved", preserved);
 } finally {
     FolkwaysClientConfig.rememberDrawingSettings(enabled);
     if (before == null) Files.deleteIfExists(path); else Files.write(path, before);
+}
+`,
+    members: `
+@SuppressWarnings("unchecked")
+private static Optional<CompoundTag> readMemory(java.lang.reflect.Method load, String key)
+        throws ReflectiveOperationException {
+    return (Optional<CompoundTag>) load.invoke(null, key);
 }
 `,
   }),
@@ -164,7 +175,7 @@ for (const stage of twins()) test(stage.title("a pattern is previewed out in the
     await tryCommand(server, `item replace entity ${playerName} weapon.mainhand with ${BOOK_ITEM}`);
     await tick.sprint(server, 5);
     evidence.found = await createColonyViaBook(server, client, playerName, origin, stage);
-    evidence.mode = await setBookGesture(server, client, playerName, "box");
+    evidence.tool = await chooseBookTool(server, client, OFFER);
 
     const min = { x: origin.x + 2, y: origin.y - 1, z: origin.z + 2 };
     const max = { x: origin.x + 10, y: origin.y + 3, z: origin.z + 10 };
@@ -181,7 +192,12 @@ for (const stage of twins()) test(stage.title("a pattern is previewed out in the
     evidence.sites_before = await sites(server, playerName);
 
     // The first time, only a preview can be asked for.
-    await openOffer(server, client, playerName, origin, stage);
+    await useBook(client);
+    await settlePanel(server, client);
+    await waitForElement(client, { id: CHOOSE }, { timeoutMs: 8_000 });
+    await clickElement(client, { id: CHOOSE });
+    await settlePanel(server, client);
+    await waitForElement(client, { id: PATTERN }, { timeoutMs: 8_000 });
     await clickElement(client, { id: PATTERN });
     await settlePanel(server, client);
     evidence.first = await tokensOf(client);
@@ -208,8 +224,8 @@ for (const stage of twins()) test(stage.title("a pattern is previewed out in the
     expect(evidence.sites_previewed.sites, "a preview files no build site")
       .toBe(evidence.sites_before.sites);
 
-    // Back in the window it opens on the same pattern, and can now be built.
-    await openBookPage(server, client, playerName, origin, stage);
+    // Used again, the book opens the offer's window on the same pattern, which can now be built.
+    await useBook(client);
     await waitForElement(client, { id: BUILD }, { timeoutMs: 8_000 });
     evidence.again = await tokensOf(client);
     expect(evidence.again, "the window opens on the previewed pattern again").toEqual(expect.arrayContaining([PREVIEW, BUILD]));
@@ -237,17 +253,6 @@ for (const stage of twins()) test(stage.title("a pattern is previewed out in the
     await pair?.teardown(testInfo);
   }
 });
-
-async function openOffer(server: MinecraftServer, client: MinecraftClient, playerName: string, standBlock: any, stage: Stage) {
-  await openBookPage(server, client, playerName, standBlock, stage);
-  await waitForElement(client, { id: OFFER }, { timeoutMs: 8_000 });
-  await clickElement(client, { id: OFFER });
-  await settlePanel(server, client);
-  await waitForElement(client, { id: CHOOSE }, { timeoutMs: 8_000 });
-  await clickElement(client, { id: CHOOSE });
-  await settlePanel(server, client);
-  await waitForElement(client, { id: PATTERN }, { timeoutMs: 8_000 });
-}
 
 async function sites(server: MinecraftServer, playerName: string) {
   return (await server.run(SITES, { player: playerName })) as { sites: number };

@@ -1,6 +1,8 @@
 import { expect, test } from "@playwright/test";
 import { defineTask, javaTask, media, screen, tick, world } from "@izakyl/blockwright-minecraft";
-import { clickElement, panelElements, scrollElementIntoView } from "../ldlib2";
+import { panelElements, scrollElementIntoView } from "../ldlib2";
+import { BOOK_TABS, facilityAt, openBlockCard, textUnder, waitForPresent } from "../shared/ui/book-cards";
+import { clickTab } from "../shared/ui/colony-pages";
 import { LDLIB2 } from "../ldlib2/module";
 import { PANEL_ROUTES } from "../ldlib2/routes";
 import {
@@ -18,22 +20,22 @@ const UNUSABLE = defineTask<Vec, boolean>({
   name: "folkways.store-usability.fixture", side: "server",
   source: javaTask({ imports: ["java.lang.reflect.Proxy", "net.minecraft.core.BlockPos",
     "net.minecraft.resources.ResourceLocation", "net.minecraft.network.chat.Component",
-    "io.github.izakyl.folkways.core.inventory.api.port.StorePort",
-    "io.github.izakyl.folkways.core.inventory.api.port.StorePorts",
-    "io.github.izakyl.folkways.core.inventory.api.port.Usability"], body: `
+    "io.github.izakyl.folkways.core.facility.api.control.ItemPort",
+    "io.github.izakyl.folkways.core.facility.api.Ports",
+    "io.github.izakyl.folkways.core.inventory.api.port.StoreAccess"], body: `
 var args = Args.of(ctx);
 var level = ctx.server().overworld();
 var pos = new BlockPos((int) args.integer("x"), (int) args.integer("y"), (int) args.integer("z"));
-var original = StorePorts.at(level, pos).orElseThrow();
-var unusable = (StorePort) Proxy.newProxyInstance(StorePort.class.getClassLoader(), new Class<?>[] {StorePort.class},
+var original = StoreAccess.at(level, pos).orElseThrow();
+var unusable = (ItemPort) Proxy.newProxyInstance(ItemPort.class.getClassLoader(), new Class<?>[] {ItemPort.class},
     (proxy, method, values) -> {
-        if (method.getName().equals("usability")) {
-            return Usability.because(Component.literal("Unsafe test container"));
+        if (method.getName().equals("unavailable")) {
+            return Optional.of(Component.literal("Unsafe test container"));
         }
         return method.invoke(original, values);
     });
-StorePorts.register(ResourceLocation.fromNamespaceAndPath("folkways_core", "e2e_unusable"),
-    StorePorts.SPECIFIC + 1, (world, at) -> world == level && at.equals(pos)
+Ports.registerItem(ResourceLocation.fromNamespaceAndPath("folkways_core", "e2e_unusable"),
+    Ports.SPECIFIC + 1, (world, at) -> world == level && at.equals(pos)
         ? Optional.of(unusable) : Optional.empty());
 return true;
 ` }),
@@ -53,8 +55,7 @@ for (var node : tree.nodes()) {
     if (!node.displayed || !node.visible) {
         continue;
     }
-    if (node.text == null || !List.of("Chest", "Barrel").contains(node.text)
-            && !node.text.contains("Unsafe test container")) {
+    if (node.text == null || !node.text.contains("Unsafe test container")) {
         continue;
     }
     Object value = Reflect.navigate(node.target, "getText()");
@@ -73,7 +74,7 @@ return result;
 ` }),
 });
 
-test("the book admits usable and unusable stores; the colony panel greys the latter and explains why",
+test("the book admits usable and unusable stores; the unusable store card explains why",
   async ({}, testInfo) => {
   test.setTimeout(BUDGET.quick);
   const run = newRunId();
@@ -99,14 +100,21 @@ test("the book admits usable and unusable stores; the colony panel greys the lat
     await screen.dismiss(client);
     await tick.sprint(server, 40);
     await openColonyPanelViaBook(server, client, player.name, founded.standBlock);
-    await clickElement(client, { id: "folkways.page.wares" }, { scrollIntoView: true });
-    await expect.poll(async () => (await panelElements(client)).some(element => element.text?.includes(REASON)),
-      { timeout: 15_000 }).toBe(true);
+    await clickTab(client, BOOK_TABS.facilities);
+    for (const [at, name] of [[chest, "Chest"], [barrel, "Barrel"]] as const) {
+      const facility = await facilityAt(server, player.name, at);
+      expect(facility, `the colony holds the ${name}`).toBeTruthy();
+      const row = `folkways.book.facility.${facility}`;
+      await waitForPresent(server, client, row);
+      expect(textUnder(await panelElements(client), row)).toContain("Storage");
+    }
+    await openBlockCard(server, client, player.name, barrel);
+    await expect.poll(async () => {
+      await tick.sprint(server, 3);
+      return textUnder(await panelElements(client), "folkways.card.lines");
+    }, { timeout: 15_000 }).toContain(REASON);
     await scrollElementIntoView(client, { text: REASON });
     const labels = await client.run(LABELS, { routes: PANEL_ROUTES });
-    expect(labels.find(label => label.text === "Chest"), "the usable chest remains listed").toBeTruthy();
-    expect(labels.find(label => label.text === "Barrel")?.colors, "the unusable store name is grey")
-      .toContain(0xAAAAAA);
     const reason = labels.find(label => label.text.includes(REASON));
     expect(reason?.text).toMatch(/unusable/i);
     expect(reason?.colors, "the explanation is grey too").toContain(0xAAAAAA);

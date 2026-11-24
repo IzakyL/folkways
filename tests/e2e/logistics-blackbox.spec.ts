@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { MinecraftTimeoutError, tick, world } from "@izakyl/blockwright-minecraft";
-import { deliverOrderViaSitePanel, optInContainerViaUI } from "../shared/colony/membership-optin";
+import { deliverOrderViaCard, optInContainerViaUI } from "../shared/colony/membership-optin";
 import { foundColonyFast, foundingBox, waitForGroundedPlayer,
   entityTypeMatches,
 } from "../shared/colony/colony-founding";
@@ -72,7 +72,7 @@ test("a one-shot order delivers colony stock into the container it was filed on"
     await optInContainerViaUI(server, client, playerName, targetChest, stage);
     expect((await readChest(server, stage, targetChest, PROVIDE_ITEM)).total).toBe(0);
 
-    await deliverOrderViaSitePanel(server, client, playerName, targetChest, PROVIDE_ITEM, PROVIDE_COUNT, stage);
+    await deliverOrderViaCard(server, client, playerName, targetChest, PROVIDE_ITEM, PROVIDE_COUNT, stage);
 
     const final = await pollDelivery(server, stage, sourceChest, targetChest);
 

@@ -125,7 +125,7 @@ const IMPORTS = [
   "io.github.izakyl.folkways.vanilla.person.ResidentEntity",
   "io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutProfiles", "io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutProfile",
   "io.github.izakyl.folkways.core.item.api.ItemSpec",
-  "io.github.izakyl.folkways.core.rts.combat.command.ResidentCommands",
+  "io.github.izakyl.folkways.core.command.combat.command.ResidentCommands",
 ];
 
 const SETUP = defineTask<{ weapon: Weapon; x: string; y: string; z: string }, Scene>({

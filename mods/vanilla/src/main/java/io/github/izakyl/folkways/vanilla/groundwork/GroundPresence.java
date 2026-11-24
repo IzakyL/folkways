@@ -10,14 +10,14 @@ import io.github.izakyl.folkways.core.colony.api.Sweep;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import io.github.izakyl.folkways.core.plan.api.Grown;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
-import io.github.izakyl.folkways.core.front.api.Facing;
+import io.github.izakyl.folkways.core.front.api.HoldingKind;
 import io.github.izakyl.folkways.core.front.api.FrontView;
 import io.github.izakyl.folkways.core.front.api.Fronts;
 import io.github.izakyl.folkways.core.front.api.PastDay;
 import io.github.izakyl.folkways.core.front.api.Settings;
 import io.github.izakyl.folkways.core.front.api.ZoneView;
-import io.github.izakyl.folkways.core.front.api.notice.Line;
-import io.github.izakyl.folkways.core.front.api.notice.Notice;
+import io.github.izakyl.folkways.core.card.api.notice.Line;
+import io.github.izakyl.folkways.core.card.api.notice.Notice;
 import io.github.izakyl.folkways.vanilla.build.Blueprint;
 import io.github.izakyl.folkways.vanilla.build.BlueprintBlock;
 import io.github.izakyl.folkways.vanilla.build.BlueprintVolume;
@@ -44,7 +44,7 @@ import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 
-final class GroundPresence implements Facing {
+final class GroundPresence implements HoldingKind {
 
     private static final String TAG_MADE = "made";
 
@@ -275,8 +275,9 @@ final class GroundPresence implements Facing {
     }
 
     @Override
-    public List<Line> zoneLines(ZoneView zone, ColonyView view) {
-        if (!zone.delegation().equals(GroundworkContent.ZONE)) {
+    public List<Line> lines(Held held, ColonyView view) {
+        ZoneView zone = held.zone().orElse(null);
+        if (zone == null || !zone.delegation().equals(GroundworkContent.ZONE)) {
             return List.of();
         }
         Site site = sites.get(zone.id());

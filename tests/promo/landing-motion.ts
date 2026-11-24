@@ -37,7 +37,7 @@ observer = event -> {
     }
     if (!v.level().isClientSide()) {
         try {
-            var type = Class.forName("io.github.izakyl.folkways.firearms.warfare.VehicleController");
+            var type = Class.forName("io.github.izakyl.folkways.core.shell.warfare.VehicleController");
             var active = type.getDeclaredField("ACTIVE"); active.setAccessible(true);
             var c = ((Map<?, ?>) active.get(null)).get(v);
             for (String name : List.of("approachAligned", "touchdown", "groundContactTicks", "action")) {

@@ -89,14 +89,14 @@ for(int n=0;n<3;n++){
  ids.add(body.getUUID().toString());
  var target=EntityType.ZOMBIE.create(level);target.setNoAi(true);target.setItemSlot(EquipmentSlot.HEAD,new ItemStack(Items.CARVED_PUMPKIN));
  target.getAttribute(Attributes.MAX_HEALTH).setBaseValue(1000);target.setHealth(1000);
- target.moveTo(body.getX()+8,body.getY(),body.getZ());target.addTag("folkways_firearms_tacz_test");level.addFreshEntity(target);
+ target.moveTo(body.getX()+8,body.getY(),body.getZ());target.addTag("folkways_vanilla_tacz_test");level.addFreshEntity(target);
 }
 player.teleportTo(origin.getX()+3,origin.getY(),origin.getZ()-5);player.setYRot(0);player.setXRot(10);
 return Map.of("residents",ids,"colony",colony.id().toString(),"player",player.getGameProfile().getName());
 ` }) });
 const READ_DAMAGE = defineTask<Scene, number>({ name: "folkways.tacz.damage", side: "server", source: javaTask({ imports: IMPORTS, body: `
 var level=((MinecraftServer)ctx.server()).overworld();
-return level.getEntities(EntityType.ZOMBIE,e->e.getTags().contains("folkways_firearms_tacz_test")).stream().mapToDouble(e->e.getHealth()).min().orElse(1000);
+return level.getEntities(EntityType.ZOMBIE,e->e.getTags().contains("folkways_vanilla_tacz_test")).stream().mapToDouble(e->e.getHealth()).min().orElse(1000);
 ` }) });
 const READ_POSES = defineTask<Scene, Array<{ appearance: string; armed: boolean; aiming: boolean }>>({
   name: "folkways.tacz.poses", side: "client", source: javaTask({ imports: [
@@ -117,6 +117,6 @@ return rows;
 const CLEANUP = defineTask<Scene, boolean>({ name: "folkways.tacz.cleanup", side: "server", source: javaTask({ imports: IMPORTS, body: `
 var a=Args.of(ctx);var server=(MinecraftServer)ctx.server();var level=server.overworld();
 for(String id:a.strings("residents")){var entity=level.getEntity(UUID.fromString(id));if(entity!=null)entity.discard();}
-level.getEntities(EntityType.ZOMBIE,e->e.getTags().contains("folkways_firearms_tacz_test")).forEach(e->e.discard());
+level.getEntities(EntityType.ZOMBIE,e->e.getTags().contains("folkways_vanilla_tacz_test")).forEach(e->e.discard());
 Colonies.of(server,UUID.fromString(a.string("colony"))).ifPresent(c->c.raze());return true;
 ` }) });

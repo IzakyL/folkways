@@ -1,3 +1,8 @@
+import dev.blockwright.api.Context;
+import java.util.Map;
+import net.minecraft.client.Minecraft;
+import net.neoforged.neoforge.client.event.ViewportEvent;
+import net.neoforged.neoforge.common.NeoForge;
 
 public final class Task {
 

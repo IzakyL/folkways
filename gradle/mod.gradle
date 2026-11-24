@@ -23,24 +23,27 @@ java {
     withSourcesJar()
 }
 
-sourceSets {
-    gametest
-    cookeryTest
-}
+neoForge { version = project.neoforge_version }
 
-neoForge {
-    version = project.neoforge_version
-    addModdingDependenciesTo sourceSets.gametest
-    addModdingDependenciesTo sourceSets.cookeryTest
-}
+if (project.modId != "folkways_core") {
+    sourceSets {
+        gametest
+        cookeryTest
+    }
 
-configurations {
-    gametestCompileOnly.extendsFrom compileOnly
-    gametestImplementation.extendsFrom implementation
-    gametestRuntimeOnly.extendsFrom runtimeOnly
-    cookeryTestCompileOnly.extendsFrom gametestCompileOnly
-    cookeryTestImplementation.extendsFrom gametestImplementation
-    cookeryTestRuntimeOnly.extendsFrom gametestRuntimeOnly
+    neoForge {
+        addModdingDependenciesTo sourceSets.gametest
+        addModdingDependenciesTo sourceSets.cookeryTest
+    }
+
+    configurations {
+        gametestCompileOnly.extendsFrom compileOnly
+        gametestImplementation.extendsFrom implementation
+        gametestRuntimeOnly.extendsFrom runtimeOnly
+        cookeryTestCompileOnly.extendsFrom gametestCompileOnly
+        cookeryTestImplementation.extendsFrom gametestImplementation
+        cookeryTestRuntimeOnly.extendsFrom gametestRuntimeOnly
+    }
 }
 
 def modsManifest = rootProject.file(".blockwright/mods.json")
@@ -53,11 +56,13 @@ ext.lib = { String name ->
     files(paths.collect { rootProject.file(it) })
 }
 
-// Optional integration tests reuse their own mod's tests; cross-mod helpers have a separate fixtures output.
-dependencies {
-    gametestImplementation sourceSets.main.output
-    cookeryTestImplementation sourceSets.main.output
-    cookeryTestImplementation sourceSets.gametest.output
+if (project.modId != "folkways_core") {
+    // Optional integration tests reuse their own mod's tests; cross-mod helpers have a separate fixtures output.
+    dependencies {
+        gametestImplementation sourceSets.main.output
+        cookeryTestImplementation sourceSets.main.output
+        cookeryTestImplementation sourceSets.gametest.output
+    }
 }
 
 tasks.named("jar", Jar) {

@@ -1,28 +1,31 @@
 package io.github.izakyl.folkways.vanilla.patrol;
 
-import io.github.izakyl.folkways.core.combat.api.Supplies;
-import io.github.izakyl.folkways.vanilla.combat.weapon.PatrolSupplyReadout;
 import io.github.izakyl.folkways.core.colony.api.Colony;
 import io.github.izakyl.folkways.core.colony.api.KitRules;
+import io.github.izakyl.folkways.core.combat.api.FireControl;
+import io.github.izakyl.folkways.core.combat.api.Supplies;
+import io.github.izakyl.folkways.core.effect.Modifier;
+import io.github.izakyl.folkways.core.effect.Stat;
+import io.github.izakyl.folkways.core.effect.perk.Perk;
 import io.github.izakyl.folkways.core.extension.api.Declaring;
+import io.github.izakyl.folkways.core.facility.api.Posts;
+import io.github.izakyl.folkways.core.front.api.Category;
+import io.github.izakyl.folkways.core.front.api.ColonyPanel;
+import io.github.izakyl.folkways.core.front.api.Delegation;
+import io.github.izakyl.folkways.core.front.api.Enrollment;
+import io.github.izakyl.folkways.core.front.api.HoldingKind;
+import io.github.izakyl.folkways.core.front.api.Registering;
+import io.github.izakyl.folkways.core.front.api.Schema;
+import io.github.izakyl.folkways.core.front.api.Shape;
 import io.github.izakyl.folkways.core.vocation.api.Vocation;
 import io.github.izakyl.folkways.core.vocation.api.VocationGroup;
 import io.github.izakyl.folkways.core.vocation.api.VocationSpec;
 import io.github.izakyl.folkways.core.vocation.api.Vocations;
 import io.github.izakyl.folkways.core.work.api.ToolNeed;
-import io.github.izakyl.folkways.core.effect.Modifier;
-import io.github.izakyl.folkways.core.effect.Stat;
-import io.github.izakyl.folkways.core.effect.perk.Perk;
-import io.github.izakyl.folkways.core.front.api.Delegation;
-import io.github.izakyl.folkways.core.front.api.Enrollment;
-import io.github.izakyl.folkways.core.front.api.Facing;
-import io.github.izakyl.folkways.core.front.api.Registering;
-import io.github.izakyl.folkways.core.front.api.Schema;
-import io.github.izakyl.folkways.core.front.api.Shape;
-import io.github.izakyl.folkways.core.front.api.panel.PageKind;
 import io.github.izakyl.folkways.vanilla.FolkwaysVanillaConfig;
 import io.github.izakyl.folkways.vanilla.combat.SpottedTargets;
 import io.github.izakyl.folkways.vanilla.combat.weapon.PatrolSupplies;
+import io.github.izakyl.folkways.vanilla.combat.weapon.PatrolSupplyReadout;
 import io.github.izakyl.folkways.vanilla.person.ResidentEntity;
 import java.util.List;
 import java.util.Optional;
@@ -45,9 +48,6 @@ public final class PatrolContent {
 
     public static final ResourceLocation FIGHTING =
         ResourceLocation.fromNamespaceAndPath("folkways_vanilla", "fighting");
-
-    private static final PageKind PAGE =
-        PageKind.boarded(ID, "folkways.page.patrol", ResourceLocation.withDefaultNamespace("iron_sword"));
 
     // Any melee weapon will do; other mods list theirs under the common tag.
     static final ToolNeed WEAPON = new ToolNeed.Tagged(Tags.Items.MELEE_WEAPON_TOOLS);
@@ -94,6 +94,8 @@ public final class PatrolContent {
         KitRules.supplyPolicy(
             ID, (colony, body) -> !(body.mob() instanceof ResidentEntity person) || !person.weaponDrawn());
         declaring.colony(Supplies.ID, scope -> scope.share(new PatrolSupplyReadout(scope.colony())));
+        FireControl.registerSource(SpottedTargets.ID, (colony, server) ->
+            colony.service(SpottedTargets.ID, SpottedTargets.class).map(spots -> spots.contacts(server)).orElse(List.of()));
         declaring.colony(SpottedTargets.ID, scope -> {
             SpottedTargets spots = new SpottedTargets(scope.colony());
             scope.share(spots);
@@ -105,6 +107,8 @@ public final class PatrolContent {
             scope.share(staffing);
             scope.tick(staffing::tick);
         });
+        Posts.register((level, colony) -> colony.service(SentryPosts.ID, SentryPosts.class)
+            .map(posts -> posts.posts(level)).orElseGet(List::of));
         declaring.colony(SentryPosts.ID, scope -> {
             SentryPosts posts = new SentryPosts(scope.colony());
             scope.share(posts);
@@ -126,9 +130,12 @@ public final class PatrolContent {
     }
 
     public static void enroll(Registering registering) {
-        registering.facing(SentryPosts.ID,
-            colony -> colony.service(SentryPosts.ID, SentryPosts.class).map(Facing.class::cast));
-        registering.facing(ID, colony -> colony.service(ID, PatrolPresence.class).map(Facing.class::cast));
+        registering.holding(BEAT,
+            colony -> colony.service(ID, PatrolPresence.class).map(HoldingKind.class::cast));
+        registering.holding(SentryPosts.ZONE,
+            colony -> colony.service(SentryPosts.ID, SentryPosts.class).map(HoldingKind.class::cast));
+        registering.panel(ID,
+            colony -> colony.service(SentryPosts.ID, SentryPosts.class).map(ColonyPanel.class::cast));
         registering.enrollment(
             ID,
             new Enrollment(
@@ -136,9 +143,9 @@ public final class PatrolContent {
             new Delegation(
             BEAT,
             new Shape.Path(FolkwaysVanillaConfig.maxPatrolPoints()),
-            ResourceLocation.withDefaultNamespace("iron_sword")),
+            ResourceLocation.withDefaultNamespace("iron_sword")).in(Category.DEFENSE),
             new Delegation(SentryPosts.ZONE, new Shape.Volume(FolkwaysVanillaConfig.maxSentryCells()),
-                ResourceLocation.withDefaultNamespace("bow"))),
+                ResourceLocation.withDefaultNamespace("bow")).in(Category.DEFENSE)),
             new Schema(
             List.of(
             new Schema.Setting.Choice(
@@ -148,10 +155,7 @@ public final class PatrolContent {
             List.of(
             ResourceLocation.fromNamespaceAndPath("folkways_vanilla", "flee"),
             ResourceLocation.fromNamespaceAndPath("folkways_vanilla", "engage")),
-            ResourceLocation.fromNamespaceAndPath("folkways_vanilla", "flee")))),
-            List.of(PAGE,
-                PageKind.boarded(SentryPosts.ID, "folkways.page.sentry_posts",
-                ResourceLocation.withDefaultNamespace("bow")))));
+            ResourceLocation.fromNamespaceAndPath("folkways_vanilla", "flee"))))));
     }
 
     static Vocation trade() {

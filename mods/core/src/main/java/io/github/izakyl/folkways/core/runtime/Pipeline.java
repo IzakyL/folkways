@@ -1,6 +1,7 @@
 package io.github.izakyl.folkways.core.runtime;
 
 import io.github.izakyl.folkways.core.FolkwaysConfig;
+import io.github.izakyl.folkways.core.base.task.ColonyLog;
 import io.github.izakyl.folkways.core.plan.internal.Known;
 import io.github.izakyl.folkways.core.plan.internal.Message;
 import io.github.izakyl.folkways.core.plan.internal.Planner;
@@ -82,6 +83,11 @@ final class Pipeline {
     // Hands everything reported so far to the weave, and what the weave makes of it on to the schedule.
     void weave(Executor weaveThread, Executor scheduleThread, Known known, long tick,
                BiConsumer<List<Message>, Planner.Woven> woven, Consumer<Scheduler.Scheduled> laid) {
+        weave(weaveThread, scheduleThread, known, tick, false, woven, laid);
+    }
+
+    void weave(Executor weaveThread, Executor scheduleThread, Known known, long tick, boolean wanted,
+               BiConsumer<List<Message>, Planner.Woven> woven, Consumer<Scheduler.Scheduled> laid) {
         if (closed) {
             return;
         }
@@ -89,11 +95,11 @@ final class Pipeline {
         weaving = true;
         weaveBegan = Util.getNanos();
         long queuedAt = weaveBegan;
-        weaveThread.execute(() -> {
+        weaveThread.execute(ColonyLog.capture(() -> {
             long started = Util.getNanos();
             Planner.Woven result;
             try {
-                result = planner.handle(known, batch, tick, tours);
+                result = planner.handle(known, batch, tick, tours, wanted);
             } catch (RuntimeException | Error broken) {
                 Labor.LOGGER.error("weaving failed; its {} messages go back on the queue", batch.size(), broken);
                 made.add(() -> {
@@ -121,7 +127,7 @@ final class Pipeline {
             });
             lay(scheduleThread, new Scheduler.Input(result.delta(), result.crew(), result.ways(), result.retry(),
                 tick), laid);
-        });
+        }));
     }
 
     // Time alone has brought work past the horizon nearer: the schedule looks again, at the plan it already has.
@@ -137,7 +143,7 @@ final class Pipeline {
         }
         laying.add(input);
         if (!retrying && scheduling.compareAndSet(false, true)) {
-            scheduleThread.execute(() -> drain(scheduleThread, laid));
+            scheduleThread.execute(ColonyLog.capture(() -> drain(scheduleThread, laid)));
         }
     }
 
@@ -190,7 +196,7 @@ final class Pipeline {
             scheduling.set(false);
         }
         if (!closed && !retrying && !laying.isEmpty() && scheduling.compareAndSet(false, true)) {
-            scheduleThread.execute(() -> drain(scheduleThread, laid));
+            scheduleThread.execute(ColonyLog.capture(() -> drain(scheduleThread, laid)));
         }
     }
 
@@ -222,7 +228,7 @@ final class Pipeline {
         retry = null;
         made.clear();
         laying.clear();
-        weaveThread.execute(planner::closed);
-        scheduleThread.execute(scheduler::closed);
+        weaveThread.execute(ColonyLog.capture(planner::closed));
+        scheduleThread.execute(ColonyLog.capture(scheduler::closed));
     }
 }

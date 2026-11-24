@@ -62,7 +62,7 @@ public final class DiningTables {
     /** Furniture remains reachable from beside it, but its top is never a work or walking footing. */
     static synchronized void installKeepout() {
         if (keepoutInstalled) { return; }
-        Keepouts.install((level, x, y, z) -> level instanceof ServerLevel server
+        Keepouts.install(DiningTables.class, (level, x, y, z) -> level instanceof ServerLevel server
             && keepout(server, new BlockPos(x, y - 1, z)));
         keepoutInstalled = true;
     }

@@ -44,7 +44,7 @@ public final class PastureScene {
     }
 
     public static void program(SceneBuilder scene, SceneBuildingUtil util) {
-        scene.title("pasture", "Pastures: keep breeders and harvest grown surplus");
+        scene.title("pasture", "Pastures: keep a herd, harvest the rest");
         PonderScenery.openWorld(scene, util, PLATE);
         PonderScenery.grassGround(scene, util, PLATE);
 
@@ -61,14 +61,14 @@ public final class PastureScene {
 
         scene.overlay().showOutline(PASTURE, "pasture", util.select().fromTo(1, 0, 1, 6, 2, 6), 180);
         scene.overlay().showText(90)
-            .text("Frame a pen the way you frame a plot. Choose its animal (cows, sheep, pigs or chickens), how many adults to retain from 0 to 64, and whether to shear.")
+            .text("Mark out a pasture like a farm. On its card, choose the Animal (cows, sheep, pigs or chickens), Retained adults (0–64) and Shear wool.")
             .pointAt(util.vector().topOf(3, 1, 3))
             .placeNearTarget()
             .attachKeyFrame();
         scene.idle(100);
 
         scene.overlay().showText(90)
-            .text("The Pastures page lists every pen: its animal, total head, retained adult target and current grown head. Young animals are included in the total.")
+            .text("Young animals count toward the herd, but only grown ones count as retained adults.")
             .pointAt(util.vector().topOf(3, 1, 1))
             .placeNearTarget()
             .attachKeyFrame();
@@ -83,7 +83,7 @@ public final class PastureScene {
         ElementLink<EntityElement> calf = cow(scene, util.vector().topOf(4, 0, 3), 0.0F, true);
         herder.hold(scene, ItemStack.EMPTY);
         scene.overlay().showText(90)
-            .text("Below or at the target, residents feed ready adults in pairs. At the target, breeding continues for one surplus calf; feeding then waits while the surplus grows.")
+            .text("At or below the target, residents feed adults in pairs to breed them. At the target, one extra young is allowed; feeding then waits until it grows up.")
             .pointAt(util.vector().topOf(4, 1, 3))
             .placeNearTarget()
             .attachKeyFrame();
@@ -105,7 +105,7 @@ public final class PastureScene {
         scene.world().modifyEntity(extraB, Entity::discard);
         herder.hold(scene, new ItemStack(Items.BEEF, 3));
         scene.overlay().showText(100)
-            .text("Only grown head above the retained adult target are culled. With a target of four, six grown cows provide two carcasses; a calf never costs the herd a retained adult. A target of 0 clears every grown animal.")
+            .text("Only grown animals above the target are culled: keep four with six grown cows, and two are culled. A target of 0 culls every grown animal.")
             .pointAt(util.vector().topOf(3, 1, 3))
             .placeNearTarget()
             .attachKeyFrame();
@@ -118,7 +118,7 @@ public final class PastureScene {
         herder.hold(scene, new ItemStack(Items.MILK_BUCKET));
         scene.overlay().showOutline(PASTURE, "milk", util.select().position(util.grid().at(2, 1, 2)), 90);
         scene.overlay().showText(90)
-            .text("Milk is drawn only when something in the colony asked for milk, and each cow gives it once a day.")
+            .text("Cows are milked only when the colony needs milk, once per cow per day.")
             .pointAt(util.vector().topOf(2, 1, 2))
             .placeNearTarget()
             .attachKeyFrame();
@@ -139,7 +139,7 @@ public final class PastureScene {
         scene.world().createItemEntity(util.vector().centerOf(9, 1, 2), new Vec3(0.0, 0.15, 0.0),
             new ItemStack(Items.WHITE_WOOL, 2));
         scene.overlay().showText(100)
-            .text("While the shear switch is on, sheep are shorn once their wool is back, and the shears must be on the tool list on the Pasture page. In a chicken pen, eggs are picked up where they fall.")
+            .text("With Shear wool on, sheep are shorn when their wool grows back; shears must be allowed under Settings → Trade tools. Eggs are picked up where they land.")
             .pointAt(util.vector().topOf(9, 1, 2))
             .placeNearTarget()
             .attachKeyFrame();
@@ -153,7 +153,7 @@ public final class PastureScene {
         scene.world().modifyEntity(milker, entity -> PonderScenery.stand(entity, util.vector().topOf(3, 0, 0), 180.0F));
         scene.overlay().showOutline(PonderPalette.RED, "gap", util.select().position(gap), 80);
         scene.overlay().showText(90)
-            .text("A gap in the fence shows on the pasture's card in red. A beast that walks off the ground you framed stops being counted, and the pen breeds back up to the target.")
+            .text("A gap in the fence shows in red on the pasture's card. Animals that wander out stop counting, and the pasture breeds back up.")
             .colored(PonderPalette.RED)
             .pointAt(util.vector().topOf(3, 0, 1))
             .placeNearTarget()

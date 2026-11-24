@@ -20,6 +20,11 @@ public final class InventoryProviders {
 
         Container open(ServerLevel level, Endpoint endpoint);
 
+        /** Whether workshops reserve goods from these endpoints as planner lots. */
+        default boolean suppliesStock() {
+            return false;
+        }
+
         // Metadata only. Change this when the endpoint membership changes.
         default long revision(InventoryDiscovery colony, ServerLevel level) {
             return 0;

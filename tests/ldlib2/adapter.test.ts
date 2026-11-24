@@ -327,7 +327,7 @@ test("a detached target is resolved again before any press, using the replacemen
     if (task.source.includes("Ldlib2.check")) {
       return answered({ value: replaced ? replacement : TARGET, ticks: 0, elapsedMs: 1 });
     }
-    if (task.source.includes("Ldlib2.attached")) {
+    if (task.source.includes("Ldlib2.stillAimed")) {
       return answered(false);
     }
     if (task.source.includes("Mouse.buttonTask")) {
@@ -343,6 +343,7 @@ test("a detached target is resolved again before any press, using the replacemen
   const done = await clickElement(mc, { id: "confirm" });
   assert.deepEqual({ x: done.x, y: done.y }, replacement.aim);
   assert.deepEqual(instance.args("Ldlib2.hover").map(({ x, y }) => ({ x, y })), [TARGET.aim, replacement.aim]);
+  assert.deepEqual(instance.args("Ldlib2.stillAimed").map(({ x, y }) => ({ x, y })), [TARGET.aim]);
   assert.deepEqual(instance.args("Mouse.buttonTask").filter(args => args.action === "press")
     .map(args => args.hovered.within), [TARGET.subtree, replacement.subtree]);
   assert.deepEqual(instance.args("Ldlib2.release"), [{ handles: ["h8"] }, { handles: ["h17"] }]);

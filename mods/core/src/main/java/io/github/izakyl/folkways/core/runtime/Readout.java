@@ -108,7 +108,7 @@ final class Readout {
         Map<String, Integer> standing = new LinkedHashMap<>();
         int skipped = 0;
         for (BodyRunner runner : runners.all()) {
-            skipped += runner.drainSkipped();
+            skipped += runner.skippedCount();
             standing.merge(runner.standing(), 1, Integer::sum);
         }
         if (!standing.isEmpty()) {
@@ -118,11 +118,6 @@ final class Readout {
             said.append(" skipped=").append(skipped);
         }
         if (!completed.isEmpty()) said.append(" completed=").append(completed);
-        completed.clear();
-        didFinish = 0;
-        didRelease = 0;
-        didRefuse.clear();
-        didBreak.clear();
         if (solvingNanos > 0) {
             said.append(" solving");
             if (solvingNanos >= 1_000_000_000L) {
@@ -130,6 +125,18 @@ final class Readout {
             }
         }
         return said.toString();
+    }
+
+    String consumeLine(Map<UUID, Vertex> graph, Phases phases, Schedule schedule, Diagnosis diagnosis,
+            Runners runners, long solvingNanos) {
+        String line = line(graph, phases, schedule, diagnosis, runners, solvingNanos);
+        completed.clear();
+        didFinish = 0;
+        didRelease = 0;
+        didRefuse.clear();
+        didBreak.clear();
+        runners.all().forEach(BodyRunner::consumeSkipped);
+        return line;
     }
 
     List<String> stalls(Map<UUID, Vertex> graph, Phases phases, Runners runners,

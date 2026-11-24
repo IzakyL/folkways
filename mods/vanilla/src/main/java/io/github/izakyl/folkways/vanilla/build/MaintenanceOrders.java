@@ -1,17 +1,19 @@
 package io.github.izakyl.folkways.vanilla.build;
 
+import io.github.izakyl.folkways.core.facility.api.Facilities;
 import io.github.izakyl.folkways.core.colony.api.Colony;
 import io.github.izakyl.folkways.core.resident.api.RefusalKind;
 import io.github.izakyl.folkways.core.vocation.api.Vocation;
+import io.github.izakyl.folkways.core.work.api.BlockData;
 import io.github.izakyl.folkways.core.work.api.Ending;
 import io.github.izakyl.folkways.core.work.api.Need;
 import io.github.izakyl.folkways.core.work.api.Node;
 import io.github.izakyl.folkways.core.work.api.NodeSpec;
 import io.github.izakyl.folkways.core.work.api.Outcome;
 import io.github.izakyl.folkways.core.work.api.Recourse;
-import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.work.api.SchematicPrinter;
+import io.github.izakyl.folkways.core.world.api.Stances;
 import io.github.izakyl.folkways.core.work.api.Worker;
-import io.github.izakyl.folkways.core.work.support.WorkStances;
 import io.github.izakyl.folkways.core.world.api.Reach;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
 import java.util.ArrayList;
@@ -45,7 +47,7 @@ public final class MaintenanceOrders {
         }
         BlockPos corner = source.keySet().stream().reduce(BlockPos::min).orElseThrow();
         List<BlueprintBlock> cells = source.entrySet().stream()
-            .filter(entry -> SchematicPlacement.partner(entry.getValue(), entry.getKey())
+            .filter(entry -> SchematicPrinter.partner(entry.getValue(), entry.getKey())
                 .map(source::containsKey).orElse(true))
             .map(entry -> new BlueprintBlock(entry.getKey().subtract(corner), entry.getValue(), BlockData.EMPTY))
             .toList();
@@ -82,15 +84,15 @@ public final class MaintenanceOrders {
         List<Node> nodes = new ArrayList<>();
         Set<BlockPos> handled = new HashSet<>();
         for (BlockPos at : cells.keySet()) {
-            if (handled.contains(at) || SchematicPlacement.partner(cells.get(at), at)
+            if (handled.contains(at) || SchematicPrinter.partner(cells.get(at), at)
                 .filter(part -> !cells.containsKey(part)).isPresent()) {
                 continue;
             }
-            Optional<SchematicPlacement.Launch> shot = SchematicPlacement.adapter().launch(target, at);
+            Optional<SchematicPrinter.Launch> shot = SchematicPrinter.adapter().launch(target, at);
             if (shot.isEmpty() || !cells.keySet().containsAll(shot.get().produces())) {
                 continue;
             }
-            SchematicPlacement.Launch launch = shot.get();
+            SchematicPrinter.Launch launch = shot.get();
             handled.addAll(launch.produces());
             // A partial multi-block has no independent cannon shot; report it rather than resetting its other half.
             if (launch.produces().stream().anyMatch(pos -> !level.isLoaded(pos)
@@ -135,12 +137,12 @@ public final class MaintenanceOrders {
                     if (!ready(world)) {
                         return Outcome.failed(BuildRefusal.CELL_NOT_LOADED);
                     }
-                    if (!WorkStances.standingIn(who.body(), spec.stances())) {
-                        return Outcome.failed(BuildRefusal.NO_WAY_TO_BUILD);
-                    }
                     if (after.entrySet().stream().allMatch(cell ->
                         world.getBlockState(cell.getKey().block(world)) == cell.getValue())) {
                         return new Outcome.Done(List.of(), List.of(), Optional.empty(), who.supplied());
+                    }
+                    if (after.keySet().stream().anyMatch(cell -> Facilities.protectedAt(world, cell.block(world)))) {
+                        return Outcome.failed(BuildRefusal.PROTECTED_FACILITY);
                     }
                     if (after.keySet().stream().anyMatch(cell -> !world.getBlockState(cell.block(world)).isAir())) {
                         return Outcome.failed(conflict);

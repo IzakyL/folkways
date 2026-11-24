@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { expect, test } from "@playwright/test";
 import { camera, defineTask, input, javaTask, player, reflect, screen, tick, world, type MinecraftClient } from "@izakyl/blockwright-minecraft";
 import { cameraLookingAt } from "@izakyl/blockwright-minecraft/internal";
@@ -8,8 +9,8 @@ import {
 import { MARK_MEMBERS, runColonyTask } from "../shared/colony/colony-tasks";
 import { WIRE_NETWORK } from "../shared/colony/integration-tasks";
 import { buildRailLine } from "../shared/rail/rail-fixture";
+import { waitForPresent } from "../shared/ui/book-cards";
 import { settlePanel } from "../shared/ui/site-panel";
-import { zoneKindToken } from "../shared/ui/zone-tools";
 import { HANDOFF_CONFIRM } from "../shared/ui/schematic-tools";
 import { drainActionBar, readActionBar } from "../shared/ui/zone-receipt";
 import { readDoing } from "../shared/colony/resident-probe";
@@ -44,15 +45,9 @@ const MAID = "touhou_little_maid:maid/geckolib/winefox";
 const MAID_LOOK = "folkways.looks.look.touhou_little_maid.maid.geckolib.winefox";
 const MAID_FOLDER = "folkways.looks.folder.touhou_little_maid.maid";
 const MAID_SUB = "folkways.looks.folder.touhou_little_maid.maid.geckolib";
-const POOL_MAID_FOLDER = "folkways.pool.looks.folder.touhou_little_maid.maid";
-const POOL_MAID_SUB = "folkways.pool.looks.folder.touhou_little_maid.maid.geckolib";
-const POOL_MAID_SET = "folkways.pool.looks.replace.touhou_little_maid.maids.geckolib";
-const SWEEP_OFFER = "folkways.zoneconfig.offer.folkways_core.sweep";
 const SWEEP_STORES = "folkways.sweep.kind.folkways_vanilla.store";
 const SWEEP_STATIONS = "folkways.sweep.kind.folkways_vanilla.station";
 const SWEEP_TAKE = "folkways.sweep.take";
-const GROUND_KIND = zoneKindToken("ground");
-const ZONE_CONFIRM = "folkways.zoneconfig.confirm";
 // Nothing else in the take yields bricks, so the colony's stores back home hold none to carry instead.
 const PACK_ITEM = "minecraft:bricks";
 const PACK_ORDER = 16;
@@ -434,7 +429,15 @@ async function stageUi(run: VisualRun, server: any, client: any, player: string,
         mark(name);
         await sleepMs(1_100);
       }
-      await click(client, "folkways.settings.open.tool");
+      const scope = createHash("md5").update("folkways_core:colony_settings/folkways_vanilla:building").digest();
+      scope[6] = (scope[6] & 0x0f) | 0x30;
+      scope[8] = (scope[8] & 0x3f) | 0x80;
+      const id = scope.toString("hex").replace(/^(........)(....)(....)(....)/, "$1-$2-$3-$4-");
+      const heading = `folkways.book.scope.${id}`;
+      await waitForPresent(server, client, heading);
+      await click(client, heading);
+      await waitForPresent(server, client, "folkways.card.items.tool");
+      await click(client, "folkways.card.items.tool");
       await waitFor(client, "folkways.selector.close");
       await settle(server, client, 8);
       mark("picker");
@@ -491,7 +494,7 @@ async function stageMaids(run: VisualRun, server: any, client: any, player: stri
   const aim = at_;
   const shot = await film(run, client, server, "02-maids", {
     subject: "A resident's own window: the look change dialog opens, its Touhou Little Maid folder opened twice down "
-      + "to Wine Fox and picked, the resident shown in that model, then the colony's look pool opened on the same folder",
+      + "to Wine Fox and picked, then the resident shown in that model",
     during: async (mark) => {
       await screen.dismiss(client);
       await standAt(server, client, player, feet, aim, 50);
@@ -537,42 +540,9 @@ async function stageMaids(run: VisualRun, server: any, client: any, player: stri
       await tryCommand(server, "tick rate 20");
       await safeAction(() => frames(client, 30));
       mark("worn");
-      // The resident turns to the camera in its new model while the pool is opened over it.
       await world.command(server, `tp ${who.uuid} ${at_.x + 0.5} ${at_.y} ${at_.z + 0.5} 0 0`);
       await sleepMs(2_500);
       await setHud(client, false);
-      await tick.freeze(server, true);
-      await standAt(server, client, player, feet, aim, 50);
-      await openBook(server, client);
-      await openTab(server, client, "folkways.page.person");
-      await settle(server, client, 8);
-      await click(client, "folkways.board.open.folkways_vanilla.person.3.0");
-      await waitFor(client, "folkways.window.folkways_vanilla.looks");
-      await settle(server, client, 8);
-      mark("pool");
-      await sleepMs(1_200);
-      await click(client, "folkways.pool.looks.choose");
-      if (!(await visible(client, "folkways.pool.looks.look.touhou_little_maid.maid.geckolib.winefox"))) {
-        await click(client, POOL_MAID_FOLDER);
-        await settle(server, client);
-      }
-      if (!(await visible(client, "folkways.pool.looks.look.touhou_little_maid.maid.geckolib.winefox"))) {
-        await click(client, POOL_MAID_SUB);
-        await settle(server, client, 8);
-      }
-      mark("pool_folder");
-      await sleepMs(1_400);
-      await click(client, "folkways.pool.looks.close");
-      await click(client, POOL_MAID_SET);
-      await settle(server, client, 8);
-      mark("pool_set");
-      await sleepMs(1_600);
-      await click(client, "folkways.window.close.folkways_vanilla.looks");
-      await settle(server, client, 8);
-      await openTab(server, client, "folkways.tab.residents");
-      await settle(server, client, 5);
-      await screen.dismiss(client);
-      await standAt(server, client, player, feet, aim, 50);
       await tick.freeze(server, false);
       await tick.sprint(server, 20);
       await sleepMs(2_000);
@@ -614,22 +584,15 @@ async function stageBlueprint(run: VisualRun, server: any, client: any, player: 
   await view.park();
 
   const shot = await film(run, client, server, "03-blueprint", {
-    subject: "In the book's view from above: the colony book opened with a right click, its build page opens the "
+    subject: "In the book's view from above: the toolbar opens the "
       + "blueprint shelf, the hut .nbt is picked, the ghost follows the mouse over the plot, and a click raises it whole",
     during: async (mark) => {
       await tick.freeze(server, true);
       // The view and its buttons held a moment before the book opens over them.
       await sleepMs(2_500);
       mark("hud");
-      await view.click({ x: at_.x + 0.5, y: at_.y, z: at_.z + 4.5 }, "right");
-      await screen.waitFor(client, "ModularUIContainerScreen", { timeoutMs: 10_000 });
-      await openTab(server, client, "folkways.page.build");
-      await settle(server, client, 8);
-      mark("build");
-      await sleepMs(1_200);
-      await click(client, "folkways.board.open.folkways_vanilla.build.0.0");
-      await waitFor(client, "folkways.window.folkways_vanilla.blueprints");
-      await click(client, "folkways.blueprints.choose");
+      await view.press("folkways.tab.blueprints");
+      await waitFor(client, "folkways.blueprints.search");
       await settle(server, client, 8);
       mark("shelf");
       await sleepMs(1_300);
@@ -826,13 +789,13 @@ async function stageGroundwork(run: VisualRun, server: any, client: any, player:
   const shot = await film(run, client, server, "04-groundwork", {
     subject: "On a real hillside, in the book's view from above: the box gesture picked, a slice of the upper terrace "
       + "with the tree on it marked with two clicks, groundwork picked with a right click, weed, fell and haul ticked "
-      + "and confirmed; the crew digs the terrace down level, fells the tree, pulls the flowers and grass, hauls a "
+      + "on its card; the crew digs the terrace down level, fells the tree, pulls the flowers and grass, hauls a "
       + "loose stack, and fills the lower terrace's corner",
     during: async (mark) => {
       await tick.freeze(server, true);
       await sleepMs(1_500);
       mark("mark");
-      await view.press("folkways.overhead.gesture.box");
+      await view.press("folkways.delegation.folkways_vanilla.farm");
       await sleepMs(600);
       // Each corner clicked on the top of its block.
       await view.click({ x: pile.x + 0.5, y: pile.y + 1, z: pile.z + 0.5 }, "left", 800);
@@ -848,30 +811,21 @@ async function stageGroundwork(run: VisualRun, server: any, client: any, player:
       if (raised) box.max.y = raised.max[1];
       mark("raised");
       await sleepMs(1_200);
+      await view.press("folkways.delegation.folkways_vanilla.ground");
       await view.click({ x: 80.5, y: upper.y, z: -41.5 }, "right");
-      await waitFor(client, GROUND_KIND);
-      await settle(server, client, 8);
-      mark("offer");
-      await sleepMs(1_000);
-      await click(client, GROUND_KIND);
-      await settlePanel(server, client);
-      await waitFor(client, ZONE_CONFIRM);
+      await waitFor(client, "folkways.card.flag.clear");
+      await click(client, "folkways.card.flag.clear");
       await settle(server, client, 8);
       mark("works");
       await sleepMs(900);
       for (const work of ["weed", "fell", "haul"]) {
         // A tick box sits in no scrolling list, so it is pressed where it stands.
-        await clickElement(client, { id: `folkways.draft.value.${work}` }, LIMITS);
+        await clickElement(client, { id: `folkways.card.flag.${work}` }, LIMITS);
         await settlePanel(server, client);
         await sleepMs(450);
       }
       mark("ticked");
       await sleepMs(900);
-      // Confirmed, the panel turns to the new zone's own page; closed, the view from above comes back.
-      await click(client, ZONE_CONFIRM);
-      await settle(server, client, 8);
-      mark("confirmed");
-      await sleepMs(1_400);
       await closePanel(client);
       await view.park();
       run.note("pit_zone", await runColonyTask(server, DRAW_ZONE, {
@@ -1134,7 +1088,7 @@ async function stageSweep(run: VisualRun, server: any, client: any, player: stri
       await tick.freeze(server, true);
       await sleepMs(1_200);
       mark("mark");
-      await view.press("folkways.overhead.gesture.box");
+      await view.press("folkways.delegation.folkways_vanilla.farm");
       await sleepMs(600);
       for (const corner of [at(at_, -3, 0), at(at_, 5, 0)]) {
         await view.click({ x: corner.x + 0.5, y: corner.y + 1, z: corner.z + 0.5 }, "left", 800);
@@ -1144,12 +1098,8 @@ async function stageSweep(run: VisualRun, server: any, client: any, player: stri
       await tick.sprint(server, 5);
       mark("marked");
       await sleepMs(1_200);
+      await view.press("folkways.sweep");
       await view.click({ x: at_.x + 1.5, y: at_.y + 1, z: at_.z + 0.5 }, "right");
-      await waitFor(client, SWEEP_OFFER);
-      await settle(server, client, 8);
-      mark("offer");
-      await sleepMs(1_200);
-      await click(client, SWEEP_OFFER);
       await settlePanel(server, client);
       await waitFor(client, SWEEP_STORES);
       await waitFor(client, SWEEP_STATIONS);
@@ -1259,7 +1209,7 @@ async function stagePacking(run: VisualRun, server: any, client: any, player: st
   // log and the kiln is set down on top of it. It is taken away again once the kiln is ordered, out of the shot.
   const farStand = at(frog, FAR - 4, 10);
   await tryCommand(server, `setblock ${commandPos(farStand)} minecraft:oak_log`);
-  run.note("kiln_order", await orderBlueprint(server, client, player, "kiln", farStand, at(frog, FAR - 4, 8), kilnCorner));
+  run.note("kiln_order", await orderBlueprint(server, client, player, "kiln", at(frog, FAR - 4, 8), kilnCorner));
   await tryCommand(server, `setblock ${commandPos(farStand)} minecraft:air`);
   await tick.freeze(server, true);
   await teleport(server, player, at(frog, 0, 10), 180, 10);
@@ -1451,20 +1401,16 @@ async function dressFrogYard(server: any, frog: Vec) {
   await meadow(server, [at(frog, -11, 4), at(frog, 11, -3), at(frog, 14, 5), at(frog, -12, -4)]);
 }
 
-// Orders a blueprint from the shelf as a player would, off camera: the build page, the shelf, the ghost set down
-// at the corner aimed at, and the hand-off's Place the build order.
-async function orderBlueprint(server: any, client: MinecraftClient, player: string, name: string, standBlock: Vec,
+// Opens the blueprint library from the view from above, then sets down the selected blueprint.
+async function orderBlueprint(server: any, client: MinecraftClient, player: string, name: string,
   feet: Vec, corner: Vec) {
-  await screen.dismiss(client);
-  await openColonyPanelViaBook(server, client, player, standBlock);
-  await openTab(server, client, "folkways.page.build");
-  await settle(server, client, 8);
-  await click(client, "folkways.board.open.folkways_vanilla.build.0.0");
-  await waitFor(client, "folkways.window.folkways_vanilla.blueprints");
-      await click(client, "folkways.blueprints.choose");
-  await settle(server, client, 8);
+  const view = await enterOverhead(client);
+  await view.press("folkways.tab.blueprints");
+  await waitFor(client, "folkways.blueprints.search");
   await click(client, `folkways.blueprints.entry.local.blueprint.${name}`);
   await settle(server, client, 8);
+  await waitOverhead(client);
+  await screen.dismiss(client);
   await tick.freeze(server, false);
   await tryCommand(server, `gamemode creative ${player}`);
   await safeAction(() => frames(client, 10));
@@ -1781,8 +1727,8 @@ const MAIL_REACH = defineTask<Record<string, any>, Record<string, any>>({
     imports: [
       "com.simibubi.create.Create",
       "com.simibubi.create.content.trains.entity.Carriage",
-      "io.github.izakyl.folkways.create.dispatch.PackageNetworks",
-      "io.github.izakyl.folkways.create.rail.domain.TransitNetworks",
+      "io.github.izakyl.folkways.core.shell.create.dispatch.PackageNetworks",
+      "io.github.izakyl.folkways.core.shell.create.rail.domain.TransitNetworks",
       "net.minecraft.core.BlockPos",
       "net.minecraft.server.MinecraftServer",
     ],
@@ -1824,7 +1770,7 @@ const CHAIN_REACH = defineTask<Record<string, any>, Record<string, any>>({
   timeoutMs: 20_000,
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.create.dispatch.PackageNetworks",
+      "io.github.izakyl.folkways.core.shell.create.dispatch.PackageNetworks",
       "net.minecraft.core.BlockPos",
       "net.minecraft.server.MinecraftServer",
     ],
@@ -1880,8 +1826,8 @@ const DISPATCH_STATE = defineTask<Record<string, any>, Record<string, any>>({
   source: javaTask({
     imports: [
       "io.github.izakyl.folkways.core.colony.internal.ColonyWorks",
-      "io.github.izakyl.folkways.create.dispatch.DispatchContent",
-      "io.github.izakyl.folkways.create.dispatch.DispatchPresence",
+      "io.github.izakyl.folkways.vanilla.create.dispatch.DispatchContent",
+      "io.github.izakyl.folkways.vanilla.create.dispatch.DispatchPresence",
       "io.github.izakyl.folkways.core.front.engine.colony.ColonyGround",
       "net.minecraft.resources.ResourceLocation",
       "net.minecraft.server.MinecraftServer",

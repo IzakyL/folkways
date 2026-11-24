@@ -1,0 +1,6 @@
+{
+  "parent": "create:block/redstone_link/receiver_vertical",
+  "textures": {
+    "redstone_bridge_side": "minecraft:block/lapis_block"
+  }
+}

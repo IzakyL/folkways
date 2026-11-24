@@ -9,7 +9,7 @@ import java.util.Set;
 import java.util.UUID;
 
 public record Placement(Set<Stand> stands, List<Amount> carrying, List<Stash> from, List<Stash> into,
-                        List<Draw> draws) {
+                        List<Draw> draws, ReservationPool reservations, UUID stowing, DrawSettlement settlement) {
 
     public static final Placement NOWHERE = new Placement(Set.of(), List.of(), List.of(), List.of());
 
@@ -19,6 +19,19 @@ public record Placement(Set<Stand> stands, List<Amount> carrying, List<Stash> fr
                        Optional<UUID> producer) {
         public Draw(Optional<Stash> from, ItemSpec spec, long count) {
             this(from, spec, count, Optional.empty(), Optional.empty());
+        }
+    }
+
+    public record DrawSettlement(UUID node, List<Runnable> booked) {
+
+        public DrawSettlement {
+            booked = List.copyOf(booked);
+        }
+
+        public void drawn(UUID committed) {
+            if (node.equals(committed)) {
+                booked.forEach(Runnable::run);
+            }
         }
     }
 
@@ -32,6 +45,10 @@ public record Placement(Set<Stand> stands, List<Amount> carrying, List<Stash> fr
 
     public Placement(Set<Stand> stands, List<Amount> carrying, List<Stash> from, List<Stash> into) {
         this(stands, carrying, from, into, List.of());
+    }
+
+    public Placement(Set<Stand> stands, List<Amount> carrying, List<Stash> from, List<Stash> into, List<Draw> draws) {
+        this(stands, carrying, from, into, draws, null, null, null);
     }
 
     public Optional<Stash> firstFrom() {

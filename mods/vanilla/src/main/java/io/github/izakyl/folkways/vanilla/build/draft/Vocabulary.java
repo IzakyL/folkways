@@ -2,11 +2,15 @@ package io.github.izakyl.folkways.vanilla.build.draft;
 
 import com.google.common.collect.ImmutableMap;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
-import io.github.izakyl.folkways.core.item.api.ItemFilter;
-import io.github.izakyl.folkways.core.world.api.StructurePayload;
 import io.github.izakyl.folkways.core.front.api.Schema;
-import io.github.izakyl.folkways.core.front.api.notice.Notice;
+import io.github.izakyl.folkways.core.card.api.notice.Notice;
+import io.github.izakyl.folkways.core.item.api.ItemFilter;
+import io.github.izakyl.folkways.core.script.api.Profile;
+import io.github.izakyl.folkways.core.work.api.Joint;
+import io.github.izakyl.folkways.core.world.api.StructurePayload;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -14,9 +18,11 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.stream.Collectors;
 import net.minecraft.commands.arguments.blocks.BlockStateParser;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -54,6 +60,61 @@ public final class Vocabulary implements StarlarkValue {
         ImmutableMap.Builder<String, Object> environment = ImmutableMap.builder();
         Starlark.addMethods(environment, INSTANCE);
         return environment.build();
+    }
+
+    public static String help() {
+        var names = predeclared().keySet();
+        String vocabulary = Arrays.stream(Vocabulary.class.getMethods())
+            .map(method -> method.getAnnotation(StarlarkMethod.class))
+            .filter(method -> method != null && names.contains(method.name()))
+            .sorted(Comparator.comparing(StarlarkMethod::name))
+            .map(Vocabulary::describe)
+            .collect(Collectors.joining("\n"));
+        return """
+            Pass exactly one of pattern=id or source=program to draft or build. A program defines draw(site)
+            and returns a list of parts. Declare accepts = ["zone"] or ["path"] if restricting marks.
+            Optional knobs declare settings. lang supplies words for reject and translated.
+            Pattern source is capped at %d characters. Inline programs can be assembled in the calling script.
+            Path points and area corners are the ground cells the building stands on, as clicked with the Colony Book.
+            Building content starts at Y+1. Foundations, ballast and grading can also work at or below the marked Y.
+            For railway, use the cell beneath an existing track or the adjacent ground cell along its open end.
+            site.zone is the oriented marked scope. site.path.points gives path points; site.kind gives the mark kind.
+            site.flag/count/choice/items(key) read knobs. Use load() for installed pattern libraries.
+
+            Solid pad:
+            def draw(site):
+                return [part("pad", box(site.zone.at(y = 1)), ["minecraft:stone_bricks"])]
+
+            Pad with a palette from a shipped library:
+            load("folkways_vanilla:materials.star", "offer")
+            def draw(site):
+                palette = offer(["minecraft:cobblestone"], ["minecraft:stone"])
+                return [part("pad", box(site.zone.at(y = 1)), palette)]
+
+            Pattern vocabulary
+            """.formatted(Profile.MAX_PATTERN_SOURCE) + vocabulary + "\n\nScope methods and fields\n" + Arrays.stream(Scope.class.getMethods())
+                .map(method -> method.getAnnotation(StarlarkMethod.class))
+                .filter(Objects::nonNull)
+                .sorted(Comparator.comparing(StarlarkMethod::name))
+                .map(Vocabulary::describe)
+                .collect(Collectors.joining("\n"));
+    }
+
+    private static String describe(StarlarkMethod method) {
+        List<String> params = new ArrayList<>();
+        for (Param param : method.parameters()) {
+            if (!param.positional() && !params.contains("*")) {
+                params.add("*");
+            }
+            params.add(param.name() + (param.defaultValue().isEmpty() ? "" : "=" + param.defaultValue()));
+        }
+        if (!method.extraPositionals().name().isEmpty()) {
+            params.add("*" + method.extraPositionals().name());
+        }
+        String signature = method.name() + (method.structField() ? "" : "(" + String.join(", ", params) + ")");
+        String doc = method.doc();
+        int sentence = doc.indexOf(". ");
+        return signature + " — " + (sentence < 0 ? doc : doc.substring(0, sentence + 1));
     }
 
     @StarlarkBuiltin(name = "translation", doc = "A translation key used as a rejection's argument.")
@@ -202,6 +263,9 @@ public final class Vocabulary implements StarlarkValue {
             Object names, Object snap, StarlarkInt tolerance, Object emit, StarlarkThread thread)
             throws EvalException {
         int along = scope.along(axis);
+        if (scope.span(along) > Extent.MAX_EDGE || shares.size() > Extent.MAX_EDGE) {
+            throw Starlark.errorf("split takes at most %d cells and shares", Extent.MAX_EDGE);
+        }
         List<Splits.Share> parsed = new ArrayList<>();
         for (Object share : shares) {
             parsed.add(Splits.parse(share, along));
@@ -556,6 +620,10 @@ public final class Vocabulary implements StarlarkValue {
             + " cuts and fills column by column hands them over this way.",
         parameters = {@Param(name = "points")})
     public Shape cells(Sequence<?> points) throws EvalException {
+        int most = Lattice.maxCells();
+        if (points.size() > most) {
+            throw Starlark.errorf("cells takes at most %d points", most);
+        }
         Set<BlockPos> filled = new HashSet<>();
         for (Object point : points) {
             if (point instanceof Point cell) {
@@ -621,7 +689,7 @@ public final class Vocabulary implements StarlarkValue {
             return null;
         }
         Solid cut = new Solid.Intersection(kept, limit);
-        BoundingBox shared = cut.bounds();
+        BoundingBox shared = checkedScan(cut.bounds());
         Drafting.checkTime();
         for (BlockPos cell : BlockPos.betweenClosed(shared.minX(), shared.minY(), shared.minZ(), shared.maxX(),
                 shared.maxY(), shared.maxZ())) {
@@ -1231,7 +1299,7 @@ public final class Vocabulary implements StarlarkValue {
     public boolean occluded(Scope scope, Object by, StarlarkThread thread) throws EvalException {
         Derivation drawing = Derivation.of(thread);
         Derivation.By looking = Derivation.By.parse(by);
-        BoundingBox box = scope.bounds();
+        BoundingBox box = checkedScan(scope.bounds());
         for (BlockPos cell : BlockPos.betweenClosed(box.minX(), box.minY(), box.minZ(), box.maxX(), box.maxY(),
                 box.maxZ())) {
             if (scope.holds(cell.getX() + 0.5D, cell.getY() + 0.5D, cell.getZ() + 0.5D)
@@ -1253,7 +1321,7 @@ public final class Vocabulary implements StarlarkValue {
 
     private static boolean overlapping(Derivation drawing, Scope scope, Derivation.By looking)
             throws EvalException {
-        BoundingBox box = scope.bounds();
+        BoundingBox box = checkedScan(scope.bounds());
         for (BlockPos cell : BlockPos.betweenClosed(box.minX(), box.minY(), box.minZ(), box.maxX(), box.maxY(),
                 box.maxZ())) {
             if (scope.holds(cell.getX() + 0.5D, cell.getY() + 0.5D, cell.getZ() + 0.5D)
@@ -1277,7 +1345,7 @@ public final class Vocabulary implements StarlarkValue {
         }
         Vec3 out = scope.outward();
         List<Direction> ways = out == null ? List.of(Direction.values()) : List.of(Frame.nearest(out));
-        BoundingBox box = scope.bounds();
+        BoundingBox box = checkedScan(scope.bounds());
         for (BlockPos cell : BlockPos.betweenClosed(box.minX(), box.minY(), box.minZ(), box.maxX(), box.maxY(),
                 box.maxZ())) {
             if (!scope.holds(cell.getX() + 0.5D, cell.getY() + 0.5D, cell.getZ() + 0.5D)) {
@@ -1307,14 +1375,17 @@ public final class Vocabulary implements StarlarkValue {
             throws EvalException {
         Derivation drawing = Derivation.of(thread);
         Derivation.By looking = Derivation.By.parse(to);
-        BoundingBox box = scope.bounds();
+        BoundingBox box = checkedScan(scope.bounds());
         int reach = within.toInt("within");
+        if (reach > Extent.MAX_EDGE) {
+            throw Starlark.errorf("distance scans at most %d cells outward", Extent.MAX_EDGE);
+        }
         if (overlapping(drawing, scope, looking)) {
             return StarlarkInt.of(0);
         }
         for (int ring = 1; ring <= reach; ring++) {
             Drafting.checkTime();
-            BoundingBox outer = box.inflatedBy(ring);
+            BoundingBox outer = checkedScan(box.inflatedBy(ring));
             for (BlockPos cell : BlockPos.betweenClosed(outer.minX(), outer.minY(), outer.minZ(), outer.maxX(),
                     outer.maxY(), outer.maxZ())) {
                 boolean onRing = cell.getX() == outer.minX() || cell.getX() == outer.maxX()
@@ -1361,6 +1432,9 @@ public final class Vocabulary implements StarlarkValue {
         Solid solid = solidOf(region);
         BlockClass wanted = BlockClass.parse(until);
         int limit = max.toInt("max");
+        if (limit > Extent.MAX_EDGE) {
+            throw Starlark.errorf("a region extends at most %d cells", Extent.MAX_EDGE);
+        }
         Set<BlockPos> inside = cellsOf(solid);
         Set<BlockPos> grown = new HashSet<>();
         for (BlockPos cell : inside) {
@@ -1375,6 +1449,9 @@ public final class Vocabulary implements StarlarkValue {
                     || wanted.matches(drawing.read(at.getX(), at.getY(), at.getZ()))) {
                     met = true;
                     break;
+                }
+                if (grown.size() + run.size() >= Lattice.maxCells()) {
+                    throw Starlark.errorf("extended region exceeds %d cells", Lattice.maxCells());
                 }
                 run.add(at);
             }
@@ -1417,7 +1494,7 @@ public final class Vocabulary implements StarlarkValue {
     public Shape terrain(Scope scope, String of, StarlarkThread thread) throws EvalException {
         Derivation drawing = Derivation.of(thread);
         BlockClass wanted = BlockClass.parse(of);
-        BoundingBox box = scope.bounds();
+        BoundingBox box = checkedScan(scope.bounds());
         Set<BlockPos> found = new HashSet<>();
         for (BlockPos cell : BlockPos.betweenClosed(box.minX(), box.minY(), box.minZ(), box.maxX(), box.maxY(),
                 box.maxZ())) {
@@ -1443,7 +1520,7 @@ public final class Vocabulary implements StarlarkValue {
             throws EvalException {
         Derivation drawing = Derivation.of(thread);
         Solid solid = solidOf(region);
-        BoundingBox box = solid.bounds();
+        BoundingBox box = checkedScan(solid.bounds());
         int width = Scope.span(box, Direction.Axis.X);
         int depth = Scope.span(box, Direction.Axis.Z);
         double[] lift = new double[width * depth];
@@ -1461,8 +1538,16 @@ public final class Vocabulary implements StarlarkValue {
         return new Shape(new Solid.Lifted(solid, box.minX(), box.minZ(), width, lift, smooth));
     }
 
-    private static Set<BlockPos> cellsOf(Solid solid) {
-        BoundingBox box = solid.bounds();
+    static BoundingBox checkedScan(BoundingBox box) throws EvalException {
+        int max = Lattice.maxCells();
+        if (!Extent.fits(box, max)) {
+            throw Starlark.errorf("draft scan exceeds %d cells or %d cells along an edge", max, Extent.MAX_EDGE);
+        }
+        return box;
+    }
+
+    private static Set<BlockPos> cellsOf(Solid solid) throws EvalException {
+        BoundingBox box = checkedScan(solid.bounds());
         Set<BlockPos> cells = new HashSet<>();
         for (BlockPos cell : BlockPos.betweenClosed(box.minX(), box.minY(), box.minZ(), box.maxX(), box.maxY(),
                 box.maxZ())) {

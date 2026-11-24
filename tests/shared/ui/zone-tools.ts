@@ -2,13 +2,16 @@ import { expect } from "@playwright/test";
 import { defineTask, input, javaTask, player, reflect, screen, tick, world, type MinecraftClient, type MinecraftServer } from "@izakyl/blockwright-minecraft";
 import { cameraLookingAt } from "@izakyl/blockwright-minecraft/internal";
 import { clickElement, type Element, panelElements } from "../../ldlib2";
-import { chooseInSelector, openColonyPanelViaBook, setBookGesture, type Vec } from "../colony/colony-founding";
+import {
+  BOOK_TOOLBAR, chooseBookTool, chooseInSelector, openColonyPanelViaBook, pendingBookPick, pickShape, setBookGesture, type Vec,
+} from "../colony/colony-founding";
 import { cellTextIn, pickCell, settlePanel, toggleCell, typeCell } from "./site-panel";
 import { drainActionBar, readActionBar } from "./zone-receipt";
+import { waitForPresent } from "./book-cards";
 import { frames, safeAction, tryCommand, screenName, waitForElement, softly } from "../harness/bw-helpers";
 import { GROUND, type Stage } from "../harness/stage";
 
-export { setBookGesture };
+export { chooseBookTool, pickShape, setBookGesture };
 export type { BookGesture } from "../colony/colony-founding";
 
 export const KEY_LEFT_CONTROL = 341;
@@ -130,16 +133,47 @@ export const ZONE_KIND_ID = {
 
 export type ZoneKind = keyof typeof ZONE_KIND_ID;
 
-function sanitize(id: string): string {
-  return id.replace(/[:/]/g, ".");
+/** The held book's toolbar entry that draws this kind of zone. */
+export function zoneKindKey(kind: ZoneKind): string {
+  return `kind:${ZONE_KIND_ID[kind]}`;
 }
 
-export function zoneKindToken(kind: ZoneKind): string {
-  return `folkways.zoneconfig.kind.${sanitize(ZONE_KIND_ID[kind])}`;
+/** A facility's card window, and the parts of it these helpers reach. */
+export const CARD_WINDOW = "folkways.card.window";
+export const CARD_LINES = "folkways.card.lines";
+export const CARD_RELEASE = "folkways.card.button.release";
+
+/** The card control a zone setting is edited with: a flag's box, a count's field, a choice, an item list. */
+export function zoneSettingToken(edit: ZoneEdit | string): string {
+  if (typeof edit === "string") return `folkways.card.flag.${edit}`;
+  if ("count" in edit) return `folkways.card.number.${edit.key}.field`;
+  if ("option" in edit) return `folkways.card.choice.${edit.key}`;
+  if ("item" in edit) return `folkways.card.items.${edit.key}`;
+  return `folkways.card.flag.${edit.key}`;
 }
 
-export function zoneSettingToken(key: string): string {
-  return `folkways.zoneconfig.value.${key}`;
+/**
+ * Hands the shape drawn to an entry: the book is turned to the entry's gesture (a shape drawn that way stays), used,
+ * and the entry picked in the picker that asks what the shape becomes. A kind's card, or an offer's panel, opens.
+ */
+export async function handShapeTo(server: MinecraftServer, client: MinecraftClient, key: string) {
+  const choose = await chooseBookTool(server, client, key);
+  const use = await useBook(client);
+  await tick.sprint(server, 5);
+  return { key, choose, use };
+}
+
+/**
+ * The book used where it is aimed, as a right click: it opens what is aimed at, or, on a whole shape, asks what the
+ * shape becomes. That question is answered with the entry {@link chooseBookTool} last readied, as a player answers it.
+ */
+export async function useBook(client: MinecraftClient) {
+  const pending = pendingBookPick(client);
+  const whole = pending ? (await softly(() => client.run(BOOK_TOOLBAR, undefined)) as any)?.ready === true : false;
+  const press = await safeAction(() => input.button(client, { button: "right", action: "press" }));
+  const release = await safeAction(() => input.button(client, { button: "right", action: "release" }));
+  const pick = pending && whole ? await pickShape(client, pending) : undefined;
+  return { press, release, pick };
 }
 
 export async function openBookPage(
@@ -154,6 +188,10 @@ export async function openBookPage(
   return { open_panel };
 }
 
+/**
+ * Gives the box already marked to a kind of zone: the book is used on it and the kind picked in the picker that
+ * asks what it becomes, and the new zone's card opens; it is closed again here.
+ */
 export async function createMarkedZone(
   server: MinecraftServer,
   client: MinecraftClient,
@@ -162,21 +200,19 @@ export async function createMarkedZone(
   kind: ZoneKind,
   stage: Stage = GROUND,
 ) {
-  const token = zoneKindToken(kind);
+  const key = zoneKindKey(kind);
   const registry = await colonyRegistry(server);
   const before = await zoneCount(server, registry);
-  const evidence: any = { kind, kind_token: token, zones_before: before };
-  Object.assign(evidence, await openBookPage(server, client, playerName, standBlock, stage));
-  await waitForElement(client, { id: token }, { timeoutMs: 8_000 });
-  evidence.click_kind = await clickElement(client, { id: token });
-  await settlePanel(server, client);
-  await waitForElement(client, { id: "folkways.zoneconfig.confirm" }, { timeoutMs: 8_000 });
-  evidence.click_confirm = await clickElement(client, { id: "folkways.zoneconfig.confirm" });
+  const evidence: any = { kind, kind_key: key, zones_before: before, player: playerName, stand: standBlock,
+    stage: stage.name("") };
+  evidence.choose = await chooseBookTool(server, client, key);
+  evidence.use = await useBook(client);
   await expect.poll(async () => {
     await tick.sprint(server, 3);
     return zoneCount(server, registry);
   }, { timeout: 8_000, message: `after creating ${kind} the server must register a new zone` }).toBe(before + 1);
   evidence.zones_after = before + 1;
+  evidence.card = await waitForElement(client, { id: CARD_WINDOW }, { timeoutMs: 8_000 });
   evidence.close = await screen.dismiss(client);
   await tick.sprint(server, 10);
   return evidence;
@@ -191,12 +227,19 @@ export type ZoneEdit =
 export async function applyZoneSetting(
   server: MinecraftServer, client: MinecraftClient, edit: ZoneEdit,
 ) {
-  const token = zoneSettingToken(edit.key);
+  const token = zoneSettingToken(edit);
   if ("count" in edit) {
     return { key: edit.key, ...await typeCell(server, client, token, String(edit.count)) };
   }
   if ("option" in edit) {
-    return { key: edit.key, ...await pickCell(server, client, token, edit.option, edit.shot) };
+    // A short choice lays its options out as chips; a long one opens them from a button.
+    const chip = `${token}.${edit.option}`;
+    if ((await panelElements(client)).some((element) => element.id === chip)) {
+      const press = await clickElement(client, { id: chip });
+      await settlePanel(server, client);
+      return { key: edit.key, chip, press };
+    }
+    return { key: edit.key, ...await pickCell(server, client, `${token}.open`, edit.option, edit.shot) };
   }
   if ("item" in edit) {
     // The setting's button opens the item picker; the item is searched for, picked, and confirmed there.
@@ -207,9 +250,8 @@ export async function applyZoneSetting(
     await settlePanel(server, client);
     return { key: edit.key, before, after: cellTextIn(await panelElements(client), token), ...picked };
   }
-  const before = cellTextIn(await panelElements(client), token);
   const evidence = await toggleCell(server, client, token);
-  return { key: edit.key, before, ...evidence };
+  return { key: edit.key, ...evidence };
 }
 
 const HOLD_ZONE_ATTEMPTS = 3;
@@ -243,11 +285,10 @@ export async function holdZoneAndOpen(
       }),
       click: await player.click(client, { button: "right" }),
     })));
-    await softly(() => screen.waitFor(client, "ModularUIContainerScreen", { timeoutMs: 8_000 }));
-    await settlePanel(server, client);
     try {
-      evidence.settings_row = await waitForElement(
-        client, { idPattern: "folkways.zoneconfig.setting.*" }, { timeoutMs: 4_000 });
+      evidence.card = await waitForElement(client, { id: CARD_WINDOW }, { timeoutMs: 8_000 });
+      await settlePanel(server, client);
+      evidence.lines = await waitForElement(client, { id: CARD_LINES }, { timeoutMs: 4_000 });
       return evidence;
     } catch (error) {
       missed = error;
@@ -255,7 +296,7 @@ export async function holdZoneAndOpen(
   }
   // What the client held when no click opened the zone: the zones it knows of, and where the player looked from.
   const seen = await softly(() => client.run(CLIENT_ZONES, undefined));
-  throw new Error(`no right-click on ${JSON.stringify(cell)} opened a zone's settings; the client knew ${JSON.stringify(seen)}: ${missed}`);
+  throw new Error(`no right-click on ${JSON.stringify(cell)} opened a zone's card; the client knew ${JSON.stringify(seen)}: ${missed}`);
 }
 
 const CLIENT_ZONES = defineTask<undefined, Record<string, any>>({
@@ -287,7 +328,8 @@ export async function configureZone(
   try {
     Object.assign(evidence, await holdZoneAndOpen(server, client, playerName, box, stage));
     for (const edit of edits) {
-      await waitForElement(client, { id: zoneSettingToken(edit.key) }, { timeoutMs: 8_000 });
+      // A choice's line goes by the choice's own token; its chips or picker button sit in it.
+      await waitForPresent(server, client, zoneSettingToken(edit));
       evidence.edits.push(await applyZoneSetting(server, client, edit));
       await tick.sprint(server, 3);
     }

@@ -18,6 +18,7 @@ public final class FolkwaysDataComponents {
         FolkwaysCoreMod.MOD_ID
     );
 
+    /** What a book does with a click: take things in, mark out a box or draw a line. */
     public static final DeferredHolder<DataComponentType<?>, DataComponentType<Shape.Gesture>> BOOK_GESTURE =
         COMPONENTS.register(
             "book_gesture",

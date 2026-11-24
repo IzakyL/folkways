@@ -1,9 +1,12 @@
 package io.github.izakyl.folkways.vanilla.build;
 
+import io.github.izakyl.folkways.core.work.api.BlockData;
+import io.github.izakyl.folkways.core.work.api.Costs;
+import io.github.izakyl.folkways.core.work.api.Joint;
 import io.github.izakyl.folkways.core.work.api.Need;
-import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.work.api.SchematicPrinter;
+import io.github.izakyl.folkways.core.world.api.Stances;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
-import io.github.izakyl.folkways.vanilla.build.draft.Joint;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -172,7 +175,7 @@ record Step(BuildJob.Kind kind, BlockPos focus, Map<BlockPos, BlockState> before
             return new BuildJob(kind, target.cell(focus), footings, addressed(target, before), addressed(target, after),
                 ends, cost, Map.of(), Set.of());
         }
-        Optional<SchematicPlacement.Launch> launch = target.launch(focus);
+        Optional<SchematicPrinter.Launch> launch = target.launch(focus);
         Set<WorldPos> shot = new LinkedHashSet<>();
         Map<WorldPos, BlockData> data = new LinkedHashMap<>();
         launch.ifPresent(found -> found.produces().forEach(cell -> {

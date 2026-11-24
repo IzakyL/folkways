@@ -1,5 +1,8 @@
 package io.github.izakyl.folkways.vanilla.build;
 
+import io.github.izakyl.folkways.core.work.api.BlockData;
+import io.github.izakyl.folkways.core.work.api.Joints;
+import io.github.izakyl.folkways.core.work.api.SchematicPrinter;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -47,8 +50,8 @@ final class Rubble {
             if (aimed.getBlock() instanceof LiquidBlock) {
                 level.setBlock(anchor, aimed, Block.UPDATE_ALL);
             } else {
-                SchematicPlacement.Launch launch = new SchematicPlacement.Launch(anchor, shot, List.of(anchor));
-                SchematicPlacement.adapter().fire(level, launch,
+                SchematicPrinter.Launch launch = new SchematicPrinter.Launch(anchor, shot, List.of(anchor));
+                SchematicPrinter.adapter().fire(level, launch,
                     cell -> after.getOrDefault(cell, level.getBlockState(cell)),
                     cell -> data.getOrDefault(cell, BlockData.EMPTY), icon);
                 for (BlockPos cell : shot) {

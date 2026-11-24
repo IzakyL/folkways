@@ -5,6 +5,7 @@ import io.github.izakyl.folkways.core.colony.internal.ColonyData;
 import io.github.izakyl.folkways.core.colony.internal.ColonyMemberWrites;
 import io.github.izakyl.folkways.core.colony.internal.ColonyRegistry;
 import io.github.izakyl.folkways.core.travel.internal.ColonyWays;
+import io.github.izakyl.folkways.core.base.task.ColonyLog;
 import io.github.izakyl.folkways.core.travel.internal.PathfindingLoad;
 import io.github.izakyl.folkways.core.travel.internal.TickBudget;
 import java.util.ArrayList;
@@ -106,10 +107,10 @@ public final class Labor {
         for (int i = 0; i < count; i++) {
             Visit visit = visits.get((start + i) % count);
             TickBudget.openSite(count - i);
-            try {
+            try (var ignored = ColonyLog.open(visit.colony().colonyId())) {
                 ColonyWays.advance(visit.colony(), visit.level());
                 ColonyLabor labor = sites.compute(visit.key(), (site, previous) -> previous == null
-                    ? new ColonyLabor(visit.colony(), visit.level().dimension()) : previous.current());
+                    ? new ColonyLabor(visit.colony(), visit.level().dimension()) : previous.reconcile());
                 labor.run(visit.level(), planFor(visit.colony().colonyId()));
                 if (labor.desertedLongEnough(visit.deserted(), visit.level().getGameTime())) {
                     sites.remove(visit.key()).close();
@@ -148,7 +149,7 @@ public final class Labor {
         List<String> lines = new ArrayList<>();
         for (Map.Entry<Site, ColonyLabor> site : sites.entrySet()) {
             lines.add(site.getKey().colony() + "@" + site.getKey().dimension().location() + " "
-                + site.getValue().heartbeat());
+                + site.getValue().consumeHeartbeat());
             for (String stall : site.getValue().stalls()) {
                 lines.add("  " + stall);
             }
@@ -162,10 +163,12 @@ public final class Labor {
         for (Map.Entry<Site, ColonyLabor> site : sites.entrySet()) {
             long nanos = site.getValue().solvingFor(now);
             if (nanos >= SLOW_SOLVE_NANOS) {
-                LOGGER.warn("{}@{} has been solving for {}s — that colony is not planning, and the"
-                    + " numbers below it are the last reading a finished cycle froze",
-                    site.getKey().colony(), site.getKey().dimension().location(),
-                    nanos / 1_000_000_000L);
+                try (var ignored = ColonyLog.open(site.getKey().colony())) {
+                    LOGGER.warn("{}@{} has been solving for {}s — that colony is not planning, and the"
+                        + " numbers below it are the last reading a finished cycle froze",
+                        site.getKey().colony(), site.getKey().dimension().location(),
+                        nanos / 1_000_000_000L);
+                }
             }
         }
     }

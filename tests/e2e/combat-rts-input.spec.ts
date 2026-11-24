@@ -14,7 +14,7 @@ import { checkModeLayers } from "../shared/ui/mode-layers";
 import {
   PREPARE_RESIDENTS, READ_CLIENT, PROJECT, RESIZE, type Vec, type Pixel, type ClientState,
 } from "../shared/combat/rts-fixtures";
-import { foundBookColony, layFloor, openRtsTool, tapV } from "../shared/combat/overhead";
+import { foundBookColony, layFloor, openRtsTool, pickRtsTool, tapV } from "../shared/combat/overhead";
 
 type ServerState = {
   selection: string[]; groups: string[][]; owned: boolean[]; reserved: boolean[];
@@ -27,6 +27,8 @@ type Context = { colony: string; player: string; residents: string[] };
 
 // Player actions under test go through input.*. The explicit rejected-packet probes below additionally
 // exercise server refusal feedback; other Java tasks only arrange fixtures or observe production state.
+const FACILITY_KEYS = [82, 84, 89, 85, 70, 75, 81, 87, 69, 82, 65, 83, 68, 70];
+
 test("RTS real pointer and keyboard inputs select, bind, queue, stop, suspend and release", async ({}, testInfo) => {
   test.setTimeout(BUDGET.standard);
   let pair: E2EPair | undefined;
@@ -86,12 +88,15 @@ test("RTS real pointer and keyboard inputs select, bind, queue, stop, suspend an
     await input.drag(client, { from, to, steps: 8, button: "left" });
     await selection(client, server, context, residents, beforeBox);
 
-    // The group dock's top edge belongs to the dock: clicks there neither select nor order.
+    // The group dock's top edge belongs to the dock: right clicks there neither select nor order (a left click on the
+    // bind cell would bind, which is its job).
     const beforeFrame = await client.run(READ_CLIENT);
     const frameTop = boxes[0].height - beforeFrame.barHeight;
-    const dock = beforeFrame.buttons.filter(hit => hit.kind === "GROUP");
+    // Nothing is bound yet: the dock is the cell that binds the selection to the first free group.
+    const dock = beforeFrame.buttons;
+    expect(dock.map(hit => hit.kind), "with a selection and no groups the dock offers only to bind one").toEqual(["BIND"]);
     const dockX = (dock[0].x + dock[dock.length - 1].x + dock[dock.length - 1].width) / 2;
-    for (const button of ["left", "right"] as const) {
+    for (const button of ["right"] as const) {
       await input.click(client, { x: dockX, y: frameTop }, { button });
       if (button === "right") {
         await input.click(client, { x: dockX, y: frameTop }, { button, modifiers: ["ctrl"] });
@@ -162,11 +167,14 @@ test("RTS real pointer and keyboard inputs select, bind, queue, stop, suspend an
     expect(same(unbound.server.selection, residents)).toBe(true);
     expect(unbound.server.owned).toEqual([true, true, true]);
 
-    // A group card shows pressed exactly while its members are the selection, whether recalled by key or card.
+    // A group cell shows pressed exactly while its members are the selection, whether recalled by key or cell; the
+    // dock shows only the groups that have members.
     const groupTextures = async (slots: number[]) => {
       await frames(client, 3);
-      const groups = (await client.run(READ_CLIENT)).buttons.filter(hit => hit.kind === "GROUP");
-      expect(groups).toHaveLength(9);
+      const state = await client.run(READ_CLIENT);
+      const groups = state.buttons.filter(hit => hit.kind === "GROUP");
+      expect(groups.map(hit => hit.slot)).toEqual(state.control.groups
+        .map((members, index) => members.length > 0 ? index + 1 : 0).filter(slot => slot > 0));
       expect(groups.filter(hit => hit.texture === "pressed").map(hit => hit.slot)).toEqual(slots);
     };
     const bind = async (slot: number, members: string[]) => {
@@ -279,8 +287,8 @@ test("RTS real pointer and keyboard inputs select, bind, queue, stop, suspend an
     expect(loop.server.command, "append/closure keeps the accepted generation").toBe(generation);
 
     const keys = await client.run(KEY_SETTINGS, { stop: 72 });
-    expect(keys.codes).toEqual([71, 77, 72, 66, 78, 76, 79, 67, 88, 73, 74]);
-    expect(keys.categories).toEqual(Array(11).fill("key.categories.folkways_core.rts"));
+    expect(keys.codes).toEqual([71, 77, 72, 66, 78, 76, 79, 67, 88, 73, 74, ...FACILITY_KEYS]);
+    expect(keys.categories).toEqual(Array(11 + FACILITY_KEYS.length).fill("key.categories.folkways_core.rts"));
     expect(keys.hintBindings.filter(Boolean)).toEqual(["key.folkways.rts.release_control"]);
     expect((await client.run(READ_CLIENT)).buttons.some(hit =>
       ["ATTACK_MOVE", "STOP", "RELEASE"].includes(hit.kind))).toBe(false);
@@ -409,7 +417,7 @@ test("RTS real pointer and keyboard inputs select, bind, queue, stop, suspend an
     expectMode(modeReturn.client, false);
     routeRequest = (await client.run(READ_CLIENT)).route.request;
     const rebound = await client.run(KEY_SETTINGS, { stop: 75 });
-    expect(rebound.codes).toEqual([71, 77, 75, 66, 78, 76, 79, 67, 88, 73, 74]);
+    expect(rebound.codes).toEqual([71, 77, 75, 66, 78, 76, 79, 67, 88, 73, 74, ...FACILITY_KEYS]);
     expect(rebound.hintBindings.filter(Boolean)).toEqual(["key.folkways.rts.release_control"]);
     await input.key(client, { keyCode: 72 });
     expect((await client.run(READ_CLIENT)).route.request, "old H binding must stop issuing commands").toBe(routeRequest);
@@ -427,22 +435,15 @@ test("RTS real pointer and keyboard inputs select, bind, queue, stop, suspend an
     await input.key(client, { keyCode: 71 });
     expect((await client.run(READ_CLIENT)).armed, "G after leaving the RTS tool keeps commands unarmed").toBe("NONE");
     await tick.sprint(server, 2);
-    let returned = false;
-    for (let step = 0; step < 12; step++) {
-      await input.key(client, { keyCode: 258 });
-      await tick.sprint(server, 1);
-      await frames(client, 4);
-      if ((await client.run(READ_CLIENT)).combat) { returned = true; break; }
-    }
-    expect(returned, "Tab cycles the book gestures and returns to Combat").toBe(true);
-    const resumed = await waitFor("Tab return restores authoritative selection without replacing orders", client, server, context,
+    await pickRtsTool(client);
+    const resumed = await waitFor("selecting RTS restores authoritative selection without replacing orders", client, server, context,
       value => value.client.combat && !value.client.controlPending && same(value.client.selected, residents)
         && value.server.group === inFlight.server.group && value.server.command === stopGeneration);
     expect(resumed.server.owned).toEqual([true, true, true]);
     await expect.poll(async () => {
       await frames(client, 10);
       return (await client.run(READ_CLIENT)).overlay;
-    }, { timeout: 8_000, message: "the non-RTS book gesture hint from Tab must expire before the next order" }).toBe("");
+    }, { timeout: 8_000, message: "the book toolbar hint from Tab must expire before the next order" }).toBe("");
 
     await bindOne(residents);
     before = (await client.run(READ_CLIENT)).control.request;
@@ -681,7 +682,7 @@ const GROUP_EXISTS = defineTask<{ colony: string; group: string }, boolean>({
   name: "folkways.combat-rts-input.observe-superseded-squad", side: "server",
   source: javaTask({
     imports: ["java.util.UUID", "net.minecraft.server.MinecraftServer", "io.github.izakyl.folkways.core.colony.api.Colonies",
-      "io.github.izakyl.folkways.core.rts.combat.group.UnitGroups"],
+      "io.github.izakyl.folkways.core.command.combat.group.UnitGroups"],
     body: `var a=Args.of(ctx);var colony=Colonies.of((MinecraftServer)ctx.server(),UUID.fromString(a.string("colony"))).orElseThrow();
 return UnitGroups.of(colony).group(UUID.fromString(a.string("group"))).isPresent();`,
   }),
@@ -692,8 +693,8 @@ const READ_SERVER = defineTask<Context, ServerState>({
   source: javaTask({
     imports: ["java.util.UUID", "java.util.List", "java.util.Map", "java.util.LinkedHashMap", "net.minecraft.server.MinecraftServer",
       "io.github.izakyl.folkways.core.colony.api.Colonies", "io.github.izakyl.folkways.core.resident.api.Bodies",
-      "io.github.izakyl.folkways.core.rts.combat.group.UnitGroups", "io.github.izakyl.folkways.core.rts.combat.command.ResidentCommands",
-      "io.github.izakyl.folkways.core.rts.combat.control.CombatSelectionOwnership"],
+      "io.github.izakyl.folkways.core.command.combat.group.UnitGroups", "io.github.izakyl.folkways.core.command.combat.command.ResidentCommands",
+      "io.github.izakyl.folkways.core.command.combat.control.CombatSelectionOwnership"],
     body: `
 var a=Args.of(ctx);var server=(MinecraftServer)ctx.server();var player=server.getPlayerList().getPlayerByName(a.string("player"));
 var colony=Colonies.of(server,UUID.fromString(a.string("colony"))).orElseThrow();
@@ -724,7 +725,7 @@ const KEY_SETTINGS = defineTask<{ stop: number }, {
   source: javaTask({
     imports: ["java.util.List", "java.util.Map", "java.util.Arrays", "net.minecraft.client.Minecraft",
       "com.mojang.blaze3d.platform.InputConstants", "net.minecraft.client.KeyMapping",
-      "io.github.izakyl.folkways.core.rts.client.CombatKeys", "io.github.izakyl.folkways.core.front.api.ui.OverheadTools"],
+      "io.github.izakyl.folkways.core.command.client.CombatKeys", "io.github.izakyl.folkways.core.front.api.ui.OverheadTools"],
     body: `
 CombatKeys.STOP.setKey(InputConstants.Type.KEYSYM.getOrCreate((int) Args.of(ctx).integer("stop")));
 KeyMapping.resetMapping();
@@ -744,9 +745,9 @@ const REJECTED_PACKET = defineTask<Vec & { intent: string }, boolean>({
   name: "folkways.combat-rts-input.probe-failure-only-rejections", side: "client",
   source: javaTask({
     imports: ["java.util.List", "java.util.UUID", "net.minecraft.client.Minecraft", "net.minecraft.core.BlockPos",
-      "io.github.izakyl.folkways.core.world.api.WorldPos", "io.github.izakyl.folkways.core.rts.combat.net.CombatPackets",
-      "io.github.izakyl.folkways.core.rts.combat.net.CombatControlPacket",
-      "io.github.izakyl.folkways.core.rts.combat.net.CombatStopPacket", "net.neoforged.neoforge.network.PacketDistributor"],
+      "io.github.izakyl.folkways.core.world.api.WorldPos", "io.github.izakyl.folkways.core.command.combat.net.CombatPackets",
+      "io.github.izakyl.folkways.core.command.combat.net.CombatControlPacket",
+      "io.github.izakyl.folkways.core.command.combat.net.CombatStopPacket", "net.neoforged.neoforge.network.PacketDistributor"],
     body: `
 var a = Args.of(ctx);
 var mc = Minecraft.getInstance();

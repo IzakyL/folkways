@@ -2,29 +2,30 @@ package io.github.izakyl.folkways.vanilla.build;
 
 import io.github.izakyl.folkways.core.base.persist.Reader;
 import io.github.izakyl.folkways.core.base.persist.Writer;
+import io.github.izakyl.folkways.core.card.api.Card;
+import io.github.izakyl.folkways.core.card.api.notice.Line;
+import io.github.izakyl.folkways.core.card.api.notice.Notice;
+import io.github.izakyl.folkways.core.card.api.notice.Sentence;
 import io.github.izakyl.folkways.core.colony.api.Cadence;
 import io.github.izakyl.folkways.core.colony.api.Closing;
 import io.github.izakyl.folkways.core.colony.api.Colony;
 import io.github.izakyl.folkways.core.colony.api.ColonyView;
+import io.github.izakyl.folkways.core.facility.api.DefinedFacilities;
+import io.github.izakyl.folkways.core.facility.api.control.Value;
+import io.github.izakyl.folkways.core.front.api.Ghost;
+import io.github.izakyl.folkways.core.front.api.operation.Commissioning;
+import io.github.izakyl.folkways.core.front.api.GhostSource;
+import io.github.izakyl.folkways.core.front.api.Placard;
 import io.github.izakyl.folkways.core.item.api.Goods;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import io.github.izakyl.folkways.core.plan.api.Grown;
 import io.github.izakyl.folkways.core.work.api.Ending;
+import io.github.izakyl.folkways.core.work.api.Joint;
 import io.github.izakyl.folkways.core.work.api.StructureCompat;
 import io.github.izakyl.folkways.core.world.api.StructurePayload;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
-import io.github.izakyl.folkways.core.front.api.Facing;
-import io.github.izakyl.folkways.core.front.api.Ghost;
-import io.github.izakyl.folkways.core.front.api.Placard;
-import io.github.izakyl.folkways.core.front.api.notice.Attempt;
-import io.github.izakyl.folkways.core.front.api.notice.Line;
-import io.github.izakyl.folkways.core.front.api.notice.Notice;
-import io.github.izakyl.folkways.core.front.api.notice.Sentence;
-import io.github.izakyl.folkways.core.front.api.panel.Board;
+import io.github.izakyl.folkways.vanilla.ListedFacility;
 import io.github.izakyl.folkways.vanilla.build.draft.Hint;
-import io.github.izakyl.folkways.vanilla.build.draft.Joint;
-import io.github.izakyl.folkways.vanilla.build.draft.Patterns;
-import io.github.izakyl.folkways.vanilla.build.draft.Templates;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -41,21 +42,19 @@ import java.util.function.BiConsumer;
 import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.core.HolderLookup;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 
-final class BuildPresence implements Facing {
+final class BuildPresence implements GhostSource {
 
     // How often the board's count of what an order still owes is read again, while its cells are being met.
     private static final int TALLY_TICKS = 20;
@@ -257,10 +256,10 @@ final class BuildPresence implements Facing {
 
     Optional<BlueprintBuildOrder> file(ServerLevel level, Blueprint blueprint, BlockPos anchor, String typed,
             Optional<UUID> playerId, String playerName, ResourceLocation pattern, Hint hint, CompoundTag settings,
-            Direction facing) {
+            Direction facing, Optional<String> source) {
         Optional<BlueprintBuildOrder> filed = place(level, blueprint, anchor, siteName(typed), playerId, playerName);
         filed.ifPresent(order -> {
-            drafted.put(order.id(), new Drafted(order.id(), pattern, hint, settings.copy(), facing));
+            drafted.put(order.id(), new Drafted(order.id(), pattern, hint, settings.copy(), facing, source));
             spend(typed);
             keep();
         });
@@ -271,20 +270,6 @@ final class BuildPresence implements Facing {
             Optional<UUID> playerId, String playerName) {
         book.add(level, blueprint);
         return book.place(level, blueprint.id(), name, anchor, playerId, playerName, level.getGameTime());
-    }
-
-    @Override
-    public Attempt act(ResourceLocation page, String actionKey, Optional<BlockPos> at, ColonyView view) {
-        if (!page.equals(BuildContent.PAGE.id())) {
-            return Attempt.refused(BuildRefusal.NO_SUCH_ORDER);
-        }
-        Optional<UUID> order = BuildAct.cancelled(actionKey);
-        if (order.isEmpty() || !filed(order.get())) {
-            return Attempt.refused(BuildRefusal.NO_SUCH_ORDER);
-        }
-        cancel(order.get());
-        keep();
-        return Attempt.went();
     }
 
     // An order called off keeps its site only to take down what scaffolding it left; its work is withdrawn now.
@@ -317,7 +302,7 @@ final class BuildPresence implements Facing {
 
     /**
      * Brings every order up to what has been heard: a site opened, and its work asked for, for an order that has
-     * none yet; what each site heard taken in; an order whose every cell is met finished; growth drawn on. Nothing
+     * none yet; what each site heard taken in; an order whose every cell is met finished. Nothing
      * here looks at an order's cells again unless something was heard of them.
      */
     void settle(MinecraftServer server) {
@@ -419,7 +404,7 @@ final class BuildPresence implements Facing {
             BuildSite site = opening.get(order.id());
             if (site == null) {
                 Optional<Blueprint> drawing = cancelled.contains(order.id())
-                    ? Optional.empty() : book.blueprint(order.blueprintId());
+                    ? Optional.empty() : book.confirmTarget(level, order.blueprintId());
                 BuildTarget target = cancelled.contains(order.id()) || drawing.isEmpty()
                     ? new BuildTarget(order.anchor().realm(), Map.of())
                     : BuildTarget.of(order, drawing.get()).in(level);
@@ -427,6 +412,16 @@ final class BuildPresence implements Facing {
                     return null;
                 }
                 site = new BuildSite(order.id(), asks, target, scaffoldsOf(order.id()));
+                // Single-use all-air drawings are explicit Groundwork Clear orders.
+                if (drawing.isPresent() && book.isSingleUse(order.blueprintId())) {
+                    Blueprint blueprint = drawing.get();
+                    if (blueprint.unloaded().isEmpty() && blueprint.blocks().stream().allMatch(block ->
+                            block.state().isAir())) {
+                        BlockPos anchor = order.anchor().block(level);
+                        site.demolition(blueprint.blocks().stream().map(block -> anchor.offset(block.offset()))
+                            .collect(java.util.stream.Collectors.toUnmodifiableSet()));
+                    }
+                }
                 site.cache = cacheOf(order.id());
                 site.begin(level, met.getOrDefault(order.id(), Set.of()), joined.getOrDefault(order.id(), Set.of()));
                 opening.put(order.id(), site);
@@ -598,7 +593,7 @@ final class BuildPresence implements Facing {
                 BuildSite site = sites.get(order.id());
                 if (site != null) {
                     Drafted recipe = drafted.get(order.id());
-                    if (recipe != null && Patterns.find(recipe.pattern()).isPresent()) {
+                    if (recipe != null && recipe.canPreview()) {
                         owed.addAll(BuildOrderView.recipePending(level, site.target(), site.metCells(),
                             site.metJoints(), most - owed.size(), near, order.id()));
                         continue;
@@ -625,7 +620,7 @@ final class BuildPresence implements Facing {
             for (BlueprintBuildOrder order : book.allBuildOrders()) {
                 BuildSite site = sites.get(order.id());
                 Drafted recipe = drafted.get(order.id());
-                if (!orders.contains(order.id()) || recipe == null || Patterns.find(recipe.pattern()).isEmpty()
+                if (!orders.contains(order.id()) || recipe == null || !recipe.canPreview()
                         || cancelled.contains(order.id()) || site == null
                         || !order.anchor().in(view.level()) || ghosts.size() >= most) {
                     continue;
@@ -648,7 +643,7 @@ final class BuildPresence implements Facing {
         return book.allBuildOrders().stream()
             .filter(order -> !cancelled.contains(order.id()) && order.anchor().in(view.level()))
             .map(order -> drafted.get(order.id()))
-            .filter(recipe -> recipe != null && Patterns.find(recipe.pattern()).isPresent())
+            .filter(recipe -> recipe != null && recipe.canPreview())
             .map(Drafted::save).toList();
     }
 
@@ -682,78 +677,121 @@ final class BuildPresence implements Facing {
         return List.copyOf(placards);
     }
 
-    @Override
-    public Optional<Board> board(ResourceLocation page, ColonyView view) {
-        if (!page.equals(BuildContent.PAGE.id())) {
-            return Optional.empty();
-        }
-        List<Board.Row> standing = new ArrayList<>();
-        for (BlueprintBuildOrder order : book.allBuildOrders()) {
-            standing.add(rowFor(order, view.level().registryAccess()));
-        }
-        // The blueprints there are to set down lead the page, and the build orders standing follow them.
-        List<Board.Row> rows = new ArrayList<>();
-        rows.add(new Board.Row(new ItemStack(BuiltInRegistries.ITEM.get(BuildContent.BLUEPRINTS.icon())),
-            Component.translatable(BuildContent.BLUEPRINTS.nameKey()),
-            Component.translatable("folkways.blueprints.shelved", Templates.blueprints().size()),
-            List.of(new Board.Act.Open(BuildContent.BLUEPRINTS.id()))));
-        rows.add(Board.Row.heading(Component.translatable("folkways.page.build.orders")));
-        if (standing.isEmpty()) {
-            rows.add(Board.Row.of(ItemStack.EMPTY, Component.translatable("folkways.page.build.empty"),
-                Component.empty()));
-        }
-        rows.addAll(standing);
-        return Optional.of(new Board(
-            List.of(new Board.Figure("folkways.page.build.open",
-                Component.literal(Integer.toString(standing.size())))),
-            rows,
-            Optional.of(Component.translatable("folkways.page.build.empty"))));
+    List<Commissioning.Order> orders() {
+        return book.allBuildOrders().stream().map(order -> {
+            Drafted drawing = drafted.get(order.id());
+            List<BlockPos> marks = drawing == null ? List.of() : switch (drawing.hint()) {
+                case Hint.Zone zone -> List.of(zone.min(), zone.max());
+                case Hint.Path path -> path.points();
+            };
+            String pattern = drawing == null ? "blueprint"
+                : drawing.source().isPresent() ? "inline" : drawing.pattern().toString();
+            Optional<Commissioning.Progress> progress = Optional.ofNullable(sites.get(order.id()))
+                .flatMap(BuildSite::progress).map(view -> new Commissioning.Progress(view.placed(), view.total()));
+            return new Commissioning.Order(order.id(), order.name(), order.anchor(), pattern, marks,
+                drawing != null && drawing.hint() instanceof Hint.Path, cancelled.contains(order.id()), progress);
+        }).toList();
     }
 
-    private Board.Row rowFor(BlueprintBuildOrder order, HolderLookup.Provider registries) {
-        BuildSite site = sites.get(order.id());
-        Board.Row row = new Board.Row(new ItemStack(Items.BRICKS),
-            Component.literal(order.name()),
-            cancelled.contains(order.id())
-                ? Component.translatable("folkways.page.build.cleanup")
-                : payloadFailures.getOrDefault(order.id(), detailOf(site)),
-            List.of(new Board.Act.Ping(order.anchor().cell()),
-                new Board.Act.Do(BuildAct.cancelling(order.id()), "folkways.action.delete",
-                    ResourceLocation.withDefaultNamespace("barrier"))));
-        return cancelled.contains(order.id()) || site == null || site.progress().isEmpty()
-            ? row
-            : row.told(toldOf(site, owed.getOrDefault(order.id(), Map.of()), registries));
+    boolean cancelOrder(UUID id) {
+        if (!filed(id) || cancelled.contains(id)) {
+            return false;
+        }
+        cancel(id);
+        keep();
+        return true;
     }
 
-    // The building glyph and the first of what is owed, or how far it has come when nothing is;
-    // then how many
-    // cells nothing can be done about.
-    private static Sentence toldOf(BuildSite site, Map<ItemSpec, Long> owed, HolderLookup.Provider registries) {
-        BuildOrderView seen = site.progress().orElseThrow();
-        Sentence told =
-            owed.isEmpty()
-            ? Sentence.of(
-            Sentence.doing(BuildContent.BUILDING),
-            Sentence.word(
-            new Notice(
-            "folkways.page.build.progress",
-            List.of(Notice.count(seen.placed()), Notice.count(seen.total())))))
-            : BuildPlacards.needs(owed, TOLD_WARES, registries);
-        int refused = site.refusals().size();
-        return refused == 0 ? told : told.then(Sentence.glyph("refuses"),
-            Sentence.word(Notice.count(refused)));
+    Optional<OrderFacility> operation(UUID id) {
+        return book.allBuildOrders().stream().filter(order -> order.id().equals(id))
+            .findFirst().map(OrderFacility::new);
     }
 
-    private static Component detailOf(BuildSite site) {
-        if (site == null || site.progress().isEmpty()) {
-            return Component.translatable("folkways.page.build.unseen");
+    List<OrderFacility> operations() {
+        return book.allBuildOrders().stream().map(OrderFacility::new).toList();
+    }
+
+    final class OrderFacility implements ListedFacility {
+
+        @Override
+        public ResourceLocation kind() {
+            return BuildContent.ID;
         }
-        BuildOrderView seen = site.progress().get();
-        int refused = site.refusals().size();
-        if (refused == 0) {
-            return Component.translatable("folkways.page.build.progress", seen.placed(), seen.total());
+        static final String CANCEL = "cancel";
+        private final BlueprintBuildOrder order;
+
+        OrderFacility(BlueprintBuildOrder order) {
+            this.order = order;
         }
-        return Component.translatable("folkways.page.build.refused", seen.placed(), seen.total(), refused)
-            .append(": ").append(Component.translatable(site.refusals().values().iterator().next().translationKey()));
+
+        @Override
+        public UUID id() {
+            return order.id();
+        }
+
+        @Override
+        public WorldPos site() {
+            return order.anchor();
+        }
+
+        @Override
+        public Component title() {
+            return Component.literal(order.name());
+        }
+
+        @Override
+        public Optional<ResourceLocation> icon() {
+            return Optional.of(ResourceLocation.withDefaultNamespace("bricks"));
+        }
+
+        @Override
+        public Card card() {
+            if (cancelled.contains(id())) {
+                return ListedFacility.super.card();
+            }
+            return new Card(List.of(new Card.Element.Lines(),
+                new Card.Element.Button(CANCEL, Optional.of(ResourceLocation.withDefaultNamespace("barrier")),
+                    Map.of(), Optional.of(new Card.Label("folkways.action.cancel", true)))));
+        }
+
+        @Override
+        public List<Line> lines(ServerLevel level, Map<String, Value> readings) {
+            if (cancelled.contains(id())) {
+                return List.of(Line.text(Component.translatable("folkways.page.build.cleanup")));
+            }
+            List<Line> lines = new ArrayList<>();
+            BuildSite site = sites.get(id());
+            Optional<BuildOrderView> progress = site == null ? Optional.empty() : site.progress();
+            lines.add(Line.text(progress.<Component>map(seen -> Component.translatable("folkways.page.build.progress",
+                seen.placed(), seen.total())).orElseGet(() -> Component.translatable("folkways.page.build.unseen"))));
+            Component payloadFailure = payloadFailures.get(id());
+            if (payloadFailure != null) {
+                lines.add(Line.text(payloadFailure));
+            }
+            if (site != null && !site.refusals().isEmpty()) {
+                Map<BuildRefusal, Integer> counts = new LinkedHashMap<>();
+                site.refusals().values().forEach(why -> counts.merge(why, 1, Integer::sum));
+                counts.forEach((why, count) -> lines.add(Line.blocked(new Notice(why.translationKey(), List.of()),
+                    Sentence.of(Sentence.glyph("refuses"), Sentence.word(Notice.count(count)),
+                        Sentence.word(new Notice(why.translationKey(), List.of()))))));
+            }
+            Map<ItemSpec, Long> missing = owed.getOrDefault(id(), Map.of());
+            if (!missing.isEmpty()) {
+                lines.add(Line.told(BuildPlacards.needs(missing, TOLD_WARES, level.registryAccess())));
+            }
+            return List.copyOf(lines);
+        }
+
+        @Override
+        public List<DefinedFacilities.Problem> run(ServerPlayer by, String routine, Map<String, Value> arguments) {
+            if (!routine.equals(CANCEL)) {
+                return ListedFacility.super.run(by, routine, arguments);
+            }
+            if (!cancelOrder(id())) {
+                return List.of(new DefinedFacilities.Problem("routine", BuildRefusal.NO_SUCH_ORDER.translationKey(),
+                    ""));
+            }
+            return List.of();
+        }
     }
 }

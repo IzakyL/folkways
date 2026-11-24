@@ -10,7 +10,7 @@ import io.github.izakyl.folkways.core.work.api.Amount;
 import io.github.izakyl.folkways.core.work.api.Need;
 import io.github.izakyl.folkways.core.work.api.Node;
 import io.github.izakyl.folkways.core.work.api.WorkSite;
-import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.world.api.Stances;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -37,6 +37,8 @@ final class Costs {
 
     static final long UNREACHABLE = Long.MAX_VALUE;
 
+    private static final int MOST_PROCESSES = 4096;
+
     private static final Logger LOGGER = LoggerFactory.getLogger("folkways-labor");
 
     record Offer(Workshop from, Refinement.Change change) {
@@ -48,6 +50,12 @@ final class Costs {
     private final List<Workshop> workshops;
     private final Predicate<ItemSpec> stocked;
     private final LongSupplier revision;
+
+    private Set<PlanInputs.Process> processes = Set.of();
+    private boolean wanted;
+    private long processSummaries;
+
+    private List<PlanInputs.Process> shownProcesses = List.of();
 
     private final Map<ItemSpec, List<Offer>> probed = new LinkedHashMap<>();
     private final Map<ItemSpec, List<Way>> discovered = new LinkedHashMap<>();
@@ -61,6 +69,21 @@ final class Costs {
         this.workshops = workshops;
         this.stocked = stocked;
         this.revision = revision;
+    }
+
+    void wanted(boolean wanted) {
+        this.wanted = wanted;
+        if (!wanted) {
+            processes = Set.of();
+            shownProcesses = List.of();
+        }
+    }
+
+    List<PlanInputs.Process> processes() {
+        if (shownProcesses.size() != processes.size()) {
+            shownProcesses = List.copyOf(processes);
+        }
+        return shownProcesses;
     }
 
     // The stores were read again: what is drawable is settled anew, what workshops offer is kept.
@@ -82,6 +105,17 @@ final class Costs {
                         throw new IllegalArgumentException("carried workshop must offer work for its bearer alone");
                     }
                     found.add(new Offer(workshop, change));
+                    if (wanted) {
+                        for (Node node : change.replacement().nodes()) {
+                            if (processes.size() < MOST_PROCESSES) {
+                                if (processes.isEmpty()) {
+                                    processes = new LinkedHashSet<>();
+                                }
+                                processes.add(PlanInputs.Process.of(workshop.key(), node.spec()));
+                                processSummaries++;
+                            }
+                        }
+                    }
                 }
             } catch (RuntimeException | LinkageError broken) {
                 LOGGER.error("workshop {} threw answering for {}", workshop.key(), asked.wanted(), broken);

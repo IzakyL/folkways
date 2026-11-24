@@ -75,6 +75,9 @@ final class Expansion {
     final List<Hold> holds = new ArrayList<>();
     final List<Claim> claims = new ArrayList<>();
     final List<Touch> touches = new ArrayList<>();
+    PoolClaims pool;
+    UUID stowing;
+    final List<PoolClaims.Loan> loans = new ArrayList<>();
     long covers;
     private boolean settled;
     // Further edges fed from the same making, each covered whole by what it asks, and the consumers that finished

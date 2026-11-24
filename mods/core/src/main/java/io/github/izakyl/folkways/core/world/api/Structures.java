@@ -3,6 +3,7 @@ package io.github.izakyl.folkways.core.world.api;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Objects;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 import net.minecraft.core.BlockPos;
@@ -24,14 +25,30 @@ public final class Structures {
         }
     }
 
-    private static final List<Obstacles> SOURCES = new CopyOnWriteArrayList<>();
+    private record Entry(ServerLevel level, Object source, Obstacles value) {
+    }
+
+    private static final List<Entry> SOURCES = new CopyOnWriteArrayList<>();
 
     private Structures() {
     }
 
-    public static Runnable install(Obstacles source) {
-        SOURCES.add(source);
-        return () -> SOURCES.remove(source);
+    public static Runnable install(Obstacles value) {
+        return install(new Object(), value);
+    }
+
+    public static Runnable install(Object source, Obstacles value) {
+        return install(null, source, value);
+    }
+
+    public static Runnable install(ServerLevel level, Object source, Obstacles value) {
+        Entry entry = new Entry(level, Objects.requireNonNull(source), Objects.requireNonNull(value));
+        SOURCES.add(entry);
+        return () -> SOURCES.removeIf(one -> one == entry);
+    }
+
+    public static void forget(Object source) {
+        SOURCES.removeIf(entry -> entry.source().equals(source));
     }
 
     public static List<AABB> obstacles(ServerLevel level, AABB area) {
@@ -40,7 +57,11 @@ public final class Structures {
 
     public static List<AABB> obstacles(ServerLevel level, AABB area, java.util.UUID excluded) {
         List<AABB> found = new ArrayList<>();
-        for (Obstacles source : SOURCES) {
+        for (Entry entry : SOURCES) {
+            if (entry.level() != null && entry.level() != level) {
+                continue;
+            }
+            Obstacles source = entry.value();
             found.addAll(source.in(level, area, excluded));
         }
         return List.copyOf(found);

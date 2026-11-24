@@ -4,7 +4,7 @@ import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import io.github.izakyl.folkways.core.FolkwaysCoreMod;
-import io.github.izakyl.folkways.core.front.api.notice.Line;
+import io.github.izakyl.folkways.core.card.api.notice.Line;
 import io.github.izakyl.folkways.core.front.engine.net.DebugFocusPacket;
 import io.github.izakyl.folkways.core.front.engine.net.DebugFocusPacket.Kind;
 import io.github.izakyl.folkways.core.front.engine.net.DebugStatePacket;

@@ -13,14 +13,15 @@ public final class RegistryAliases {
         for (var entry : registry.getEntries()) {
             ResourceLocation id = entry.getId();
             String legacy = "folkways:" + id.getPath();
-            if (!legacy.equals(id.toString()) && NamespaceIds.current(legacy).equals(id.toString())) {
-                alias(registry, legacy, id.toString());
+            // The candidate is inferred from the current path, so it may never have been a released ID.
+            if (NamespaceIds.hasMapping(legacy) && NamespaceIds.current(legacy).equals(id.toString())) {
+                alias(registry, legacy, id);
             }
         }
         registry.register(bus);
     }
 
-    public static void alias(DeferredRegister<?> registry, String oldId, String currentId) {
-        registry.addAlias(ResourceLocation.parse(oldId), ResourceLocation.parse(currentId));
+    public static void alias(DeferredRegister<?> registry, String oldId, ResourceLocation currentId) {
+        registry.addAlias(ResourceLocation.parse(oldId), currentId);
     }
 }

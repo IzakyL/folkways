@@ -1,5 +1,6 @@
 {
   "//": "Typecheck-only options every suite's tsconfig.json extends. Playwright transpiles without checking types, so a broken import or a wrong argument count otherwise only shows up after booting Minecraft.",
+  "exclude": ["gametest"],
   "compilerOptions": {
     "target": "ES2022",
     "lib": ["ES2022"],

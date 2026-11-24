@@ -2,6 +2,7 @@ package io.github.izakyl.folkways.core.colony.api;
 
 import io.github.izakyl.folkways.core.base.task.Cleanup;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
+import io.github.izakyl.folkways.core.base.task.ColonyLog;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -31,18 +32,22 @@ public final class ColonyLifecycle {
 
     public static Runnable prepareRelocation(MinecraftServer server, Colony colony,
             Map<WorldPos, WorldPos> moved) {
-        Map<WorldPos, WorldPos> snapshot = Map.copyOf(moved);
-        List<Runnable> actions = LISTENERS.stream()
-            .map(listener -> listener.relocating(server, colony, snapshot)).toList();
-        return () -> actions.forEach(Runnable::run);
+        try (var ignored = ColonyLog.open(colony.id())) {
+            Map<WorldPos, WorldPos> snapshot = Map.copyOf(moved);
+            List<Runnable> actions = LISTENERS.stream()
+                .map(listener -> listener.relocating(server, colony, snapshot)).toList();
+            return ColonyLog.capture(() -> actions.forEach(Runnable::run));
+        }
     }
 
     public static void closed(Colony colony, Closing why) {
-        try (Cleanup cleanup = new Cleanup("Closing colony " + colony.id() + " listeners as " + why)) {
-            int index = 0;
-            for (Listener listener : LISTENERS) {
-                cleanup.run("listener " + index++ + " " + listener.getClass().getName(),
-                    () -> listener.closed(colony, why));
+        try (var ignored = ColonyLog.open(colony.id())) {
+            try (Cleanup cleanup = new Cleanup("Closing colony " + colony.id() + " listeners as " + why)) {
+                int index = 0;
+                for (Listener listener : LISTENERS) {
+                    cleanup.run("listener " + index++ + " " + listener.getClass().getName(),
+                        () -> listener.closed(colony, why));
+                }
             }
         }
     }

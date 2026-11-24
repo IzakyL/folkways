@@ -237,7 +237,7 @@ public record Scope(Frame frame, Vec3i size, String name, String face, boolean m
         name = "sized",
         doc = "The same room of space resized. Zero keeps an axis. anchor keeps the 'start' (the default),"
             + " 'center' or 'end' of each resized axis where it is; a centre that falls between cells needs"
-            + " parity 'low' or 'high'.",
+            + " parity 'low', 'high' or 'world_low'.",
         parameters = {
             @Param(name = "width", defaultValue = "0", named = true, positional = false),
             @Param(name = "height", defaultValue = "0", named = true, positional = false),
@@ -256,7 +256,13 @@ public record Scope(Frame frame, Vec3i size, String name, String face, boolean m
             if (wanted[axis] < 0) {
                 throw Starlark.errorf("a size is at least one cell, got %d", wanted[axis]);
             }
-            lead[axis] = leading(made[axis], wanted[axis], anchor, parity);
+            String bias = parity;
+            if (parity.equalsIgnoreCase("world_low")) {
+                Vec3 way = axis(axis);
+                double component = Math.abs(way.x) > 1e-9 ? way.x : Math.abs(way.y) > 1e-9 ? way.y : way.z;
+                bias = component < 0 ? "high" : "low";
+            }
+            lead[axis] = leading(made[axis], wanted[axis], anchor, bias);
             made[axis] = wanted[axis];
         }
         return framed(frame.moved(lead[0], lead[1], lead[2]), new Vec3i(made[0], made[1], made[2]));

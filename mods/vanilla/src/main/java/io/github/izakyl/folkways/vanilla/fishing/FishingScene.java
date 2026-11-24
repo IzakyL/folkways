@@ -36,7 +36,7 @@ public final class FishingScene {
     }
 
     public static void program(SceneBuilder scene, SceneBuildingUtil util) {
-        scene.title("fishing", "Fishing: frame the bank, not the water");
+        scene.title("fishing", "Fishing: mark the bank, not the water");
         PonderScenery.openWorld(scene, util, PLATE);
         PonderScenery.grassGround(scene, util, PLATE);
         scene.world().setBlocks(util.select().fromTo(5, 0, 0, 8, 0, 8), Blocks.WATER.defaultBlockState(), false);
@@ -47,7 +47,7 @@ public final class FishingScene {
 
         scene.overlay().showOutline(FISHERY, "fishery", util.select().fromTo(4, 0, 2, 4, 1, 4), 190);
         scene.overlay().showText(80)
-            .text("A fishery frames the bank the residents stand on.")
+            .text("A fishery marks out the bank where residents stand.")
             .colored(FISHERY)
             .pointAt(util.vector().topOf(4, 0, 3))
             .placeNearTarget()
@@ -56,7 +56,7 @@ public final class FishingScene {
 
         scene.overlay().showOutline(PonderPalette.RED, "water", util.select().fromTo(5, 0, 0, 8, 0, 8), 80);
         scene.overlay().showText(80)
-            .text("Never the water itself. Frame the bank, and the water within reach of it is what gets fished.")
+            .text("Not the water. They fish the water they can reach from the bank.")
             .colored(PonderPalette.RED)
             .pointAt(util.vector().topOf(6, 0, 3))
             .placeNearTarget()
@@ -69,7 +69,7 @@ public final class FishingScene {
         scene.overlay().showOutline(PonderPalette.GREEN, "second", util.select().fromTo(4, 0, 6, 4, 1, 7), 100);
         scene.overlay().showOutline(PonderPalette.GREEN, "second_spot", util.select().position(otherSpot), 100);
         scene.overlay().showText(90)
-            .text("Each fishery fishes the one block of water nearest its bank, and two fisheries never share one. If that block is already taken, the second fishery sits idle.")
+            .text("Each fishery fishes the nearest water block, and two never share one. If it is taken, the second fishery stays idle.")
             .pointAt(util.vector().topOf(spot))
             .placeNearTarget()
             .attachKeyFrame();
@@ -82,7 +82,7 @@ public final class FishingScene {
         fisher.hold(scene, new ItemStack(Items.FISHING_ROD));
         scene.idle(10);
         scene.overlay().showText(90)
-            .text("A rod is the one tool a cast asks for, and it has to be on the tool list on the Fishing page.")
+            .text("Fishers need a fishing rod allowed under Settings → Trade tools.")
             .pointAt(util.vector().topOf(4, 0, 3).add(0.0, 1.5, 0.0))
             .placeNearTarget()
             .attachKeyFrame();
@@ -92,7 +92,7 @@ public final class FishingScene {
         Vec3 bob = util.vector().topOf(spot).add(0.0, -0.1, 0.0);
         scene.overlay().showLine(FISHERY, hand, bob, 110);
         scene.overlay().showText(100)
-            .text("Then they stand there and wait out the bite. The line running to the float is how you tell fishing apart from idling.")
+            .text("Then they wait for a bite. The line to the bobber shows they are fishing, not idling.")
             .pointAt(bob)
             .placeNearTarget()
             .attachKeyFrame();
@@ -100,7 +100,7 @@ public final class FishingScene {
 
         fisher.hold(scene, new ItemStack(Items.COD));
         scene.overlay().showText(80)
-            .text("Practice shortens the wait: the Skilled Angler perk brings the bite on sooner.")
+            .text("The Skilled Angler perk makes fish bite sooner.")
             .pointAt(util.vector().topOf(4, 0, 3).add(0.0, 1.5, 0.0))
             .placeNearTarget()
             .attachKeyFrame();

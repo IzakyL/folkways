@@ -13,10 +13,14 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.Container;
+import net.minecraft.world.CompoundContainer;
+import net.minecraft.world.RandomizableContainer;
 import net.minecraft.world.WorldlyContainer;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.block.entity.ChestBlockEntity;
 import net.minecraft.world.level.block.ChestBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
@@ -66,19 +70,55 @@ public final class Containers {
     private Containers() {
     }
 
+    public interface Parts {
+        Container folkways$first();
+
+        Container folkways$second();
+    }
+
+    public interface Contents extends Container {
+        boolean known();
+    }
+
+    public static boolean known(Container container) {
+        if (container instanceof Contents contents) {
+            return contents.known();
+        }
+        if (container instanceof RandomizableContainer loot && loot.getLootTable() != null) {
+            return false;
+        }
+        if (container instanceof CompoundContainer) {
+            var halves = (Parts) container;
+            return known(halves.folkways$first()) && known(halves.folkways$second());
+        }
+        return true;
+    }
+
     public static Optional<Container> at(Level level, BlockPos pos) {
         if (!level.isLoaded(pos)) {
             return Optional.empty();
         }
         BlockState state = level.getBlockState(pos);
-        if (state.getBlock() instanceof ChestBlock chest) {
-            if (state.getValue(ChestBlock.TYPE) != ChestType.SINGLE
-                && !level.isLoaded(pos.relative(ChestBlock.getConnectedDirection(state)))) {
+        BlockEntity entity = blockEntity(level, pos).orElse(null);
+        if (state.getBlock() instanceof ChestBlock && entity instanceof ChestBlockEntity chest) {
+            if (state.getValue(ChestBlock.TYPE) == ChestType.SINGLE) {
+                return Optional.of(chest);
+            }
+            BlockPos other = pos.relative(ChestBlock.getConnectedDirection(state));
+            if (!level.isLoaded(other)) {
                 return Optional.empty();
             }
-            return Optional.ofNullable(ChestBlock.getContainer(chest, state, level, pos, true));
+            BlockState adjacent = level.getBlockState(other);
+            if (adjacent.getBlock() == state.getBlock()
+                    && adjacent.getValue(ChestBlock.TYPE) != ChestType.SINGLE
+                    && adjacent.getValue(ChestBlock.TYPE) != state.getValue(ChestBlock.TYPE)
+                    && adjacent.getValue(ChestBlock.FACING) == state.getValue(ChestBlock.FACING)
+                    && blockEntity(level, other).orElse(null) instanceof ChestBlockEntity partner) {
+                return Optional.of(state.getValue(ChestBlock.TYPE) == ChestType.RIGHT
+                    ? new CompoundContainer(chest, partner) : new CompoundContainer(partner, chest));
+            }
+            return Optional.of(chest);
         }
-        BlockEntity entity = level.getBlockEntity(pos);
         if (entity instanceof Container container) {
             return Optional.of(container);
         }
@@ -93,6 +133,18 @@ public final class Containers {
         return Optional.empty();
     }
 
+    public static Optional<BlockEntity> blockEntity(Level level, BlockPos at) {
+        if (!level.isLoaded(at)) {
+            return Optional.empty();
+        }
+        if (level instanceof ServerLevel server) {
+            var chunk = server.getChunkSource().getChunkNow(at.getX() >> 4, at.getZ() >> 4);
+            return chunk == null ? Optional.empty() : Optional.ofNullable(chunk.getBlockEntities().get(at))
+                .filter(entity -> !entity.isRemoved());
+        }
+        return Optional.ofNullable(level.getBlockEntity(at));
+    }
+
     public static boolean gone(Level level, BlockPos pos) {
         return Loaded.around(level, pos, 1) && !stores.test(level, pos);
     }
@@ -105,10 +157,16 @@ public final class Containers {
     }
 
     public static BlockPos anchor(Level level, BlockPos clicked) {
+        if (!level.isLoaded(clicked)) {
+            return clicked.immutable();
+        }
         return anchors.apply(level, clicked);
     }
 
     public static BlockPos chestAnchor(Level level, BlockPos clicked) {
+        if (!level.isLoaded(clicked)) {
+            return clicked.immutable();
+        }
         BlockState state = level.getBlockState(clicked);
         if (!(state.getBlock() instanceof ChestBlock)
             || state.getValue(ChestBlock.TYPE) == ChestType.SINGLE) {

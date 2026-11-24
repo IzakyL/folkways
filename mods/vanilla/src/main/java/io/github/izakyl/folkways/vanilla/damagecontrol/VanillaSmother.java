@@ -22,17 +22,11 @@ final class VanillaSmother implements SuppressionMethod {
 
     @Override
     public Optional<SuppressionSession> open(ServerLevel level, Worker who, WorldPos target) {
-        if (!reaches(level, who, target)) {
-            return Optional.empty();
-        }
         return Optional.of(new SuppressionSession() {
             @Override
             public Outcome suppress(ServerLevel world, BlockPos at) {
                 if (!FireSurvey.fire(world.getBlockState(at))) {
                     return Outcome.done();
-                }
-                if (!reaches(world, who, WorldPos.of(world, at))) {
-                    return Outcome.failed(DamageControlRefusal.NO_REACH);
                 }
                 remove(world, at);
                 return Outcome.done();

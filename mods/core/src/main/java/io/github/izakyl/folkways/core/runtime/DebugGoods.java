@@ -1,8 +1,8 @@
 package io.github.izakyl.folkways.core.runtime;
 
-import io.github.izakyl.folkways.core.front.api.notice.DebugText;
-import io.github.izakyl.folkways.core.front.api.notice.Line;
-import io.github.izakyl.folkways.core.inventory.api.port.PortReader.Entry;
+import io.github.izakyl.folkways.core.card.api.notice.DebugText;
+import io.github.izakyl.folkways.core.card.api.notice.Line;
+import io.github.izakyl.folkways.core.facility.api.control.PortReader.Entry;
 import io.github.izakyl.folkways.core.item.api.Goods;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import io.github.izakyl.folkways.core.plan.internal.Claim;

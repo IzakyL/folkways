@@ -1,0 +1,24 @@
+#Maximum decompressed bytes in one schematic cell.
+# Default: 1048576
+# Range: 16384 ~ 8388608
+decodeBytes = 1048576
+#Maximum distinct bit materials in one schematic cell.
+# Default: 256
+# Range: 1 ~ 4096
+materials = 128
+#Maximum time spent decoding and counting one schematic cell, in milliseconds.
+# Default: 1000
+# Range: 10 ~ 5000
+processingMillis = 1000
+#Maximum voxel payload reads in one blueprint operation, excluding previously validated content.
+# Default: 4096
+# Range: 1 ~ 65536
+blueprintReads = 4096
+#Maximum cumulative decoded bytes in one blueprint operation, excluding previously validated content.
+# Default: 16777216
+# Range: 16384 ~ 67108864
+blueprintBytes = 16777216
+#Maximum synchronous voxel processing time in one blueprint operation, in milliseconds.
+# Default: 500
+# Range: 10 ~ 5000
+blueprintMillis = 500

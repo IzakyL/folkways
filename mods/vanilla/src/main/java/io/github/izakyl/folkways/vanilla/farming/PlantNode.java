@@ -1,5 +1,7 @@
 package io.github.izakyl.folkways.vanilla.farming;
 
+import io.github.izakyl.folkways.core.work.api.LaborRefusal;
+import io.github.izakyl.folkways.core.facility.api.Facilities;
 import io.github.izakyl.folkways.core.item.api.Goods;
 import io.github.izakyl.folkways.core.work.api.Need;
 import io.github.izakyl.folkways.core.work.api.Outcome;
@@ -45,6 +47,9 @@ final class PlantNode extends FarmNode {
         if (!level.isLoaded(job.cell()) || !crop.roomAt(level, crop.standAt(job.cell()))) {
             return refuse(FarmRefusal.NOTHING_TO_WORK);
         }
+        if (job.cells().stream().anyMatch(cell -> Facilities.protectedAt(level, cell.above()))) {
+            return Outcome.failed(LaborRefusal.PROTECTED_FACILITY);
+        }
         boolean barren = false;
         for (BlockPos ground : job.cells()) {
             BlockPos base = ground.above();
@@ -64,7 +69,7 @@ final class PlantNode extends FarmNode {
                 barren = true;
                 continue;
             }
-            CropCare.of(level).tend(base, level.getBlockState(base), who.effects().value(FarmingContent.GROWTH));
+            CropCare.refresh(level).tend(base, level.getBlockState(base), who.effects().value(FarmingContent.GROWTH));
             heard.add(WorkNoise.placed(base, sown));
         }
         if (heard.isEmpty()) {

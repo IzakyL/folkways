@@ -1,6 +1,8 @@
 package io.github.izakyl.folkways.vanilla.combat;
 
 import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.combat.api.FireControl;
+import io.github.izakyl.folkways.core.combat.api.SpottedTargets.Spot;
 import io.github.izakyl.folkways.core.resident.api.Bodies;
 import io.github.izakyl.folkways.vanilla.FolkwaysVanillaConfig;
 import io.github.izakyl.folkways.vanilla.combat.weapon.ObservationGear;
@@ -21,14 +23,10 @@ import net.minecraft.util.Mth;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.phys.Vec3;
 
 /** Transient observations. Only a successful sight report may refresh a position or its age. */
 public final class SpottedTargets {
     public static final ResourceLocation ID = ResourceLocation.fromNamespaceAndPath("folkways_vanilla", "spotted_targets");
-
-    public record Spot(UUID target, int entityId, ResourceKey<Level> dimension, Vec3 position, long tick) {
-    }
 
     private record Key(ResourceKey<Level> dimension, UUID target) {
     }
@@ -193,6 +191,19 @@ public final class SpottedTargets {
                 spots.remove(entry.getKey());
             }
         }
+    }
+
+    public List<FireControl.Contact> contacts(MinecraftServer server) {
+        tick(server);
+        List<FireControl.Contact> contacts = new ArrayList<>();
+        for (Spot spot : spots.values()) {
+            ServerLevel level = server.getLevel(spot.dimension());
+            if (level != null && level.getEntity(spot.target()) instanceof Mob target
+                && target.getId() == spot.entityId() && target.position().distanceToSqr(spot.position()) <= 4) {
+                contacts.add(new FireControl.Contact(spot, target.getHealth(), 1, 0));
+            }
+        }
+        return List.copyOf(contacts);
     }
 
     public void clear() {

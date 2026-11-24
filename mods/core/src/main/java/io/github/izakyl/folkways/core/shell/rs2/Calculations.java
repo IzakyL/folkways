@@ -13,8 +13,8 @@ import com.refinedmods.refinedstorage.api.resource.list.MutableResourceListImpl;
 import com.refinedmods.refinedstorage.api.storage.root.RootStorageImpl;
 import com.refinedmods.refinedstorage.common.support.resource.ItemResource;
 import io.github.izakyl.folkways.core.item.api.Goods;
-import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import io.github.izakyl.folkways.core.shell.crafting.CraftQuotes;
+import io.github.izakyl.folkways.core.shell.crafting.NetworkExtensions;
 import io.github.izakyl.folkways.core.shell.crafting.PatternTimes;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -26,8 +26,8 @@ import java.util.concurrent.Executors;
 
 final class Calculations {
 
-    final CraftQuotes<Devices.NetworkKey> quotes = new CraftQuotes<>();
-    private final Map<Devices.NetworkKey, State> states = new HashMap<>();
+    final CraftQuotes<Rs2Devices.NetworkKey> quotes = new CraftQuotes<>();
+    private final Map<Rs2Devices.NetworkKey, State> states = new HashMap<>();
     private final PatternTimes times;
     private final Map<String, Set<String>> definitions = new HashMap<>();
     private final ExecutorService worker = Executors.newSingleThreadExecutor(task -> {
@@ -67,7 +67,7 @@ final class Calculations {
     private static final class State {
         private long revision = -1;
         private Map<String, Constraints> patterns = Map.of();
-        private final Map<CraftQuotes.Request<Devices.NetworkKey>, Pending> pending =
+        private final Map<CraftQuotes.Request<Rs2Devices.NetworkKey>, Pending> pending =
             new HashMap<>();
     }
 
@@ -75,7 +75,7 @@ final class Calculations {
         return PatternTimes.identity(pattern.id() + "/" + pattern.layout());
     }
 
-    void update(Devices.NetworkKey network, String savedNetwork, NetworkPort port, Set<ItemResource> craftables) {
+    void update(Rs2Devices.NetworkKey network, String savedNetwork, NetworkPort port, Set<ItemResource> craftables) {
         State state = states.computeIfAbsent(network, ignored -> new State());
         var crafting = port.crafting();
         Map<String, Constraints> patterns = new HashMap<>();
@@ -85,7 +85,7 @@ final class Calculations {
             var provider = crafting.getProviderByPattern(pattern);
             // RS2 has no CPU byte limit. Every participating pattern needs a connected executor with steps.
             int steps = provider == null ? 0 : provider.getSteps(pattern);
-            if (provider instanceof ColonyProvider) {
+            if (NetworkExtensions.isExternalProvider(provider)) {
                 colonyPatterns.add(pattern);
             }
             int priority = port.node().getNetwork().getComponent(
@@ -167,7 +167,7 @@ final class Calculations {
         }
     }
 
-    void retain(Set<Devices.NetworkKey> networks, Set<String> savedNetworks) {
+    void retain(Set<Rs2Devices.NetworkKey> networks, Set<String> savedNetworks) {
         states.entrySet().removeIf(entry -> {
             if (networks.contains(entry.getKey())) {
                 return false;

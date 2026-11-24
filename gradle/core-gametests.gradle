@@ -1,0 +1,83 @@
+// Compile Core's integration fixtures from Vanilla, where both production modules are available.
+// The launcher still loads these outputs in Core's module for package-private engine access.
+def core = project(":core")
+def suites = ["gameTestFixtures", "coreGametest", "coreCookeryTest",
+    "curiosTest", "accessoriesTest", "storageTest", "sophisticatedStorageTest", "sophisticatedBackpacksTest",
+    "drawersTest", "functionalTest", "storageLaborTest", "ae2Test", "ae2LaborTest", "rs2Test", "rs2LaborTest",
+    "networkLaborTest",
+    "createStorageTest", "tomsTest", "colossalTest", "qioTest",
+    "golemsTest", "chiselsandbitsTest", "cbcTest", "letItWalkTest"]
+
+suites.each { suite ->
+    def sources = sourceSets.create(suite)
+    def coreDir = [coreGametest: "gametest", coreCookeryTest: "cookeryTest"].get(suite, suite)
+    def coreTests = rootProject.file("tests/gametest/core/${coreDir}")
+    sources.java.srcDir(new File(coreTests, "java"))
+    sources.resources.srcDir(new File(coreTests, "resources"))
+    neoForge.addModdingDependenciesTo(sources)
+    configurations["${suite}CompileOnly"].extendsFrom configurations.compileOnly
+    configurations["${suite}Implementation"].extendsFrom configurations.implementation
+    dependencies.add("${suite}CompileOnly", files(core.sourceSets.main.compileClasspath))
+    dependencies.add("${suite}Implementation", core.sourceSets.main.output)
+    dependencies.add("${suite}Implementation", sourceSets.main.output)
+    if (suite != "gameTestFixtures") {
+        dependencies.add("${suite}Implementation", sourceSets.gameTestFixtures.output)
+    }
+}
+
+["sophisticatedStorageTest", "sophisticatedBackpacksTest", "drawersTest", "functionalTest",
+    "storageLaborTest", "createStorageTest", "tomsTest", "colossalTest", "qioTest"].each { suite ->
+    dependencies.add("${suite}Implementation", sourceSets.storageTest.output)
+}
+
+dependencies {
+    coreCookeryTestImplementation sourceSets.coreGametest.output
+    coreCookeryTestCompileOnly lib("kaleidoscope_cookery")
+    ["createStorage", "toms", "colossal", "qio"].each { suite ->
+        add("storageLaborTestImplementation", sourceSets["${suite}Test"].output)
+    }
+    ae2LaborTestImplementation sourceSets.ae2Test.output
+    rs2LaborTestImplementation sourceSets.rs2Test.output
+}
+
+tasks.named("processChiselsandbitsTestResources") {
+    from(sourceSets.gametest.resources.srcDirs) {
+        include "data/folkways_vanilla/folkways/pattern/test_bits.star"
+    }
+}
+
+tasks.named("compileCoreGametestJava", JavaCompile) {
+    // CURRENT is inlined into assertions; a version change must also rebuild otherwise unchanged tests.
+    inputs.file(core.file("src/main/java/io/github/izakyl/folkways/core/base/persist/upgrade/DataVersion.java"))
+        .withPropertyName("dataVersion")
+}
+
+// Compile and register only the requested Core fixtures in focused runs.
+def coreGameTestClasses = providers.gradleProperty("coreGameTestClasses").getOrElse("")
+if (coreGameTestClasses) {
+    def includes = coreGameTestClasses.split(",").collect { "**/${it.trim()}.java" }
+    ["coreGametest", "ae2Test", "rs2Test"].each { suite ->
+        def sources = sourceSets[suite]
+        def nativePort = suite in ["ae2Test", "rs2Test"]
+        sources.java.setIncludes(nativePort ? includes + ["**/NetworkRig.java"] : includes)
+        def focusedClasses = layout.buildDirectory.dir(
+            "classes/java/focusedGametest/${suite}/${coreGameTestClasses.hashCode()}")
+        tasks.named(sources.compileJavaTaskName, JavaCompile) {
+            destinationDirectory = focusedClasses
+        }
+        sources.output.classesDirs.setFrom(focusedClasses)
+    }
+}
+if (coreGameTestClasses || providers.gradleProperty("vanillaGameTestClasses").isPresent()
+    || providers.gradleProperty("accessoryProfile").isPresent() || project.findProperty("sableTests") == "true") {
+    def selectedFixtures = coreGameTestClasses.split(",").collect { it.trim() + ".java" }
+    sourceSets.gameTestFixtures.java.exclude {
+        it.name.endsWith("GameTests.java")
+            && !selectedFixtures.contains(it.name)
+    }
+    def focusedFixtures = layout.buildDirectory.dir("classes/java/focusedGameTestFixtures")
+    tasks.named("compileGameTestFixturesJava", JavaCompile) {
+        destinationDirectory = focusedFixtures
+    }
+    sourceSets.gameTestFixtures.output.classesDirs.setFrom(focusedFixtures)
+}

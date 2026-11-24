@@ -38,7 +38,7 @@ public final class OrdersScene {
     }
 
     public static void program(SceneBuilder scene, SceneBuildingUtil util) {
-        scene.title("orders", "Orders: name what you want kept, the colony works out the rest");
+        scene.title("orders", "Orders: say what to keep in stock");
         PonderScenery.openWorld(scene, util, PLATE);
         PonderScenery.grassGround(scene, util, PLATE);
 
@@ -61,21 +61,21 @@ public final class OrdersScene {
         Vec3 target = util.vector().topOf(targetChest);
         scene.overlay().showOutline(PonderPalette.OUTPUT, targetChest, util.select().position(targetChest), 90);
         scene.overlay().showText(80)
-            .text("An order keeps one item stocked in one container. Open one of the colony's chests, and the Orders page beside it files the draft into that chest.")
+            .text("An order keeps one item stocked in one container. Right-click one of the colony's chests with the book to open its card.")
             .pointAt(target)
             .placeNearTarget()
             .attachKeyFrame();
         scene.idle(90);
 
         scene.overlay().showText(90)
-            .text("The draft is an item, a Refill below mark, and a Fill to count.")
+            .text("Under Replenishment order, set the Item, a Min and a Target.")
             .pointAt(target)
             .placeNearTarget()
             .attachKeyFrame();
         scene.idle(100);
 
         scene.overlay().showText(100)
-            .text("Maintain files it as a standing order: once the chest drops below the refill mark, it is filled back up to the Fill to count. Deliver fills it to that count once, and the order is done.")
+            .text("Maintain keeps it stocked: below Min, it refills to Target. Once fills to Target a single time, then the order is done.")
             .pointAt(target)
             .placeNearTarget()
             .attachKeyFrame();
@@ -92,7 +92,7 @@ public final class OrdersScene {
         resident.hold(scene, ItemStack.EMPTY);
         scene.overlay().showOutline(PonderPalette.GREEN, craftingTable, util.select().position(craftingTable), 90);
         scene.overlay().showText(90)
-            .text("You order the finished goods. Fetching the grain and working it at a crafting table, stonecutter or smithing table of the colony's is the colony's business.")
+            .text("Order the finished goods. The colony fetches the materials and works them at its crafting table, stonecutter or smithing table.")
             .pointAt(util.vector().topOf(craftingTable))
             .placeNearTarget()
             .attachKeyFrame();
@@ -105,7 +105,7 @@ public final class OrdersScene {
         scene.world().modifyBlock(furnace, state -> state.setValue(BlockStateProperties.LIT, true), false);
         scene.overlay().showOutline(PonderPalette.FAST, furnace, util.select().position(furnace), 90);
         scene.overlay().showText(100)
-            .text("What must be smelted goes through a furnace, blast furnace or smoker of the colony's, kept fed from the fuel list on the Workshop page: coal and charcoal, to start with.")
+            .text("Smelting uses the colony's furnaces, blast furnaces and smokers, fed from the Fuel list in Settings: coal and charcoal by default.")
             .pointAt(util.vector().topOf(furnace))
             .placeNearTarget()
             .attachKeyFrame();
@@ -117,21 +117,21 @@ public final class OrdersScene {
 
         scene.overlay().showOutline(PonderPalette.RED, sourceChest, util.select().position(sourceChest), 90);
         scene.overlay().showText(90)
-            .text("Nobody goes out to dig for an order. If the stores hold neither the goods nor what they are made from, it waits.")
+            .text("No one goes mining for an order. If storage has neither the goods nor their materials, it waits.")
             .pointAt(util.vector().topOf(sourceChest))
             .placeNearTarget()
             .attachKeyFrame();
         scene.idle(100);
 
         scene.overlay().showText(80)
-            .text("To withdraw an order, open its chest and press Del beside it on the Orders page.")
+            .text("To remove an order, open the chest's card and click Del next to it under Orders here.")
             .pointAt(target)
             .placeNearTarget()
             .attachKeyFrame();
         scene.idle(90);
 
         scene.overlay().showText(100)
-            .text("Whitelists, blacklists and Allow storing apply only to ordinary resident storage. Orders bypass them, and you can change these settings at any time.")
+            .text("Item filter and Accept storage only limit what residents store there day to day. Orders always deliver.")
             .pointAt(target)
             .placeNearTarget()
             .attachKeyFrame();

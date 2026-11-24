@@ -54,7 +54,7 @@ test("bundled bits patterns compare geometry grain", async ({}, testInfo) => {
     await client.run(setup, undefined);
     for (const [name, cameras] of Object.entries(views)) {
       const original = readFileSync(
-        `mods/carving/src/main/resources/data/folkways_carving/folkways/pattern/${name}.star`, "utf8");
+        `mods/vanilla/src/main/resources/chiselsandbits/data/folkways_vanilla/folkways/pattern/${name}.star`, "utf8");
       for (const requested of final ? [undefined] : [16, 8, 4]) {
         const source = requested === undefined ? original : original.replace(/^grain\s*=.*\n/gm, "")
           .replace(/^(detail\s*=.*)$/m, `$1\ngrain = ${requested}`);

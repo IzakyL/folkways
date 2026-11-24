@@ -2,6 +2,8 @@ package io.github.izakyl.folkways.core.travel.api;
 
 import io.github.izakyl.folkways.core.colony.api.Colony;
 import io.github.izakyl.folkways.core.resident.api.Conveyance;
+import io.github.izakyl.folkways.core.resident.api.Locomotion;
+import io.github.izakyl.folkways.core.resident.api.RefusalKind;
 import java.util.List;
 import net.minecraft.resources.ResourceLocation;
 
@@ -24,4 +26,9 @@ public interface Passage {
     }
 
     Conveyance aboard(Hop hop);
+
+    /** A walking passage uses the traveller's own locomotion. */
+    default Conveyance aboard(Hop hop, Locomotion moving, double speed, RefusalKind lost) {
+        return aboard(hop);
+    }
 }

@@ -1,6 +1,15 @@
 package io.github.izakyl.folkways.vanilla.pasture;
 
+import io.github.izakyl.folkways.core.effect.Stat;
+import io.github.izakyl.folkways.core.effect.perk.Perk;
 import io.github.izakyl.folkways.core.extension.api.Declaring;
+import io.github.izakyl.folkways.core.front.api.Category;
+import io.github.izakyl.folkways.core.front.api.Delegation;
+import io.github.izakyl.folkways.core.front.api.Enrollment;
+import io.github.izakyl.folkways.core.front.api.HoldingKind;
+import io.github.izakyl.folkways.core.front.api.Registering;
+import io.github.izakyl.folkways.core.front.api.Schema;
+import io.github.izakyl.folkways.core.front.api.Shape;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import io.github.izakyl.folkways.core.vocation.api.Vocation;
 import io.github.izakyl.folkways.core.vocation.api.VocationGroup;
@@ -8,15 +17,6 @@ import io.github.izakyl.folkways.core.vocation.api.VocationSpec;
 import io.github.izakyl.folkways.core.vocation.api.Vocations;
 import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.core.work.api.Workload;
-import io.github.izakyl.folkways.core.effect.Stat;
-import io.github.izakyl.folkways.core.effect.perk.Perk;
-import io.github.izakyl.folkways.core.front.api.Delegation;
-import io.github.izakyl.folkways.core.front.api.Enrollment;
-import io.github.izakyl.folkways.core.front.api.Facing;
-import io.github.izakyl.folkways.core.front.api.Registering;
-import io.github.izakyl.folkways.core.front.api.Schema;
-import io.github.izakyl.folkways.core.front.api.Shape;
-import io.github.izakyl.folkways.core.front.api.panel.PageKind;
 import io.github.izakyl.folkways.vanilla.FolkwaysVanillaConfig;
 import java.util.List;
 import net.minecraft.core.registries.Registries;
@@ -94,9 +94,6 @@ public final class PastureContent {
         ResourceLocation.withDefaultNamespace("shears"),
         true);
 
-    private static final PageKind PAGE = PageKind.boarded(PASTURE, "folkways.page.pasture",
-        ResourceLocation.withDefaultNamespace("lead")).tools(HERDING);
-
     private static final VocationSpec VOCATION =
         new VocationSpec(HERDING, List.of(
                 new Perk(QUICK_HANDS, 3, Perk.Grant.haste(HERDING, FolkwaysVanillaConfig::herdingHaste)),
@@ -123,12 +120,14 @@ public final class PastureContent {
     }
 
     public static void enroll(Registering registering) {
-        registering.facing(ID, colony -> colony.service(ID, PasturePresence.class)
-            .map(value -> (Facing) value));
+        registering.holding(PASTURE,
+            colony -> colony.service(ID, PasturePresence.class).map(HoldingKind.class::cast));
+        registering.holding(APIARY,
+            colony -> colony.service(ID, PasturePresence.class).map(HoldingKind.class::cast));
         registering.enrollment(ID, new Enrollment(List.of(pen(),
             new Delegation(APIARY, new Shape.Volume(FolkwaysVanillaConfig.maxPastureCells()),
-                new Schema(List.of(PRODUCT)), ResourceLocation.withDefaultNamespace("beehive"))),
-            Schema.none(), List.of(PAGE)));
+                new Schema(List.of(PRODUCT)), ResourceLocation.withDefaultNamespace("beehive")).in(Category.FOOD)),
+            Schema.none()));
     }
 
     public static Vocation trade() {
@@ -137,6 +136,6 @@ public final class PastureContent {
 
     private static Delegation pen() {
         return new Delegation(PASTURE, new Shape.Volume(FolkwaysVanillaConfig.maxPastureCells()),
-            new Schema(List.of(ANIMAL, TARGET, SHEAR)), ResourceLocation.withDefaultNamespace("lead"));
+            new Schema(List.of(ANIMAL, TARGET, SHEAR)), ResourceLocation.withDefaultNamespace("lead")).in(Category.FOOD);
     }
 }

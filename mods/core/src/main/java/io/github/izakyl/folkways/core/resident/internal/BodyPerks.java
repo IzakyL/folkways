@@ -103,11 +103,13 @@ final class BodyPerks implements Perks {
     }
 
     public int level(ResourceLocation vocation) {
-        return track(vocation).level;
+        Track track = byVocation.get(vocation);
+        return track == null ? 0 : track.level;
     }
 
     public int xp(ResourceLocation vocation) {
-        return track(vocation).xp;
+        Track track = byVocation.get(vocation);
+        return track == null ? 0 : track.xp;
     }
 
     public int nextLevelXp(ResourceLocation vocation) {
@@ -116,7 +118,8 @@ final class BodyPerks implements Perks {
     }
 
     public Map<String, Integer> ranks(ResourceLocation vocation) {
-        return Map.copyOf(track(vocation).ranks);
+        Track track = byVocation.get(vocation);
+        return track == null ? Map.of() : Map.copyOf(track.ranks);
     }
 
     public Map<String, Integer> globalRanks() {

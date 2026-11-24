@@ -26,7 +26,11 @@ public final class Stowing {
                 for (Worker.Store store : who.within()) {
                     if (store.at().equals(into.pos())) {
                         if (StoreRule.stores(Stores.rulesAt((ServerLevel) who.body().level(), store.at()))) {
+                            int before = left.getCount();
                             left = Containers.insert(store.contents(), left);
+                            if (placement.reservations() != null && left.getCount() < before) {
+                                placement.reservations().stored(into, stack.copyWithCount(before - left.getCount()));
+                            }
                             if (who.body().level() instanceof ServerLevel level) {
                                 InventoryFeedback.store(level, store.at());
                             }
@@ -36,7 +40,11 @@ public final class Stowing {
                 }
             }
             if (!left.isEmpty()) {
+                int before = left.getCount();
                 left = Containers.insert(who.pack(), left);
+                if (placement.reservations() != null && left.getCount() < before) {
+                    placement.reservations().carried(who.resident().id(), stack.copyWithCount(before - left.getCount()));
+                }
             }
             who.spill(left);
         }

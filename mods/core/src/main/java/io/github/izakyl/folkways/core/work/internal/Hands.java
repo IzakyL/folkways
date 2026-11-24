@@ -1,7 +1,6 @@
 package io.github.izakyl.folkways.core.work.internal;
 
 import io.github.izakyl.folkways.core.inventory.api.Stash;
-import io.github.izakyl.folkways.core.inventory.internal.Stands;
 import io.github.izakyl.folkways.core.inventory.internal.Stores;
 import io.github.izakyl.folkways.core.resident.api.Body;
 import io.github.izakyl.folkways.core.resident.api.Resident;
@@ -10,8 +9,6 @@ import io.github.izakyl.folkways.core.work.api.Placement;
 import io.github.izakyl.folkways.core.work.api.ToolNeed;
 import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.core.work.support.Tools;
-import io.github.izakyl.folkways.core.world.api.Stand;
-import io.github.izakyl.folkways.core.world.api.WorldSpaces;
 import io.github.izakyl.folkways.core.effect.Effects;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -28,14 +25,12 @@ import net.minecraft.world.item.ItemStack;
 public final class Hands implements Worker {
 
     private final Body body;
-    private final Stands stands;
     private final Placement placement;
     private final Consumer<ItemEntity> spill;
     private final Supplier<List<Node>> route;
 
-    public Hands(Body body, Stands stands, Placement placement, Consumer<ItemEntity> spill, Supplier<List<Node>> route) {
+    public Hands(Body body, Placement placement, Consumer<ItemEntity> spill, Supplier<List<Node>> route) {
         this.body = body;
-        this.stands = stands;
         this.placement = placement;
         this.spill = spill;
         this.route = route;
@@ -68,9 +63,6 @@ public final class Hands implements Worker {
         }
         Set<Stash> reachable = new LinkedHashSet<>(placement.from());
         reachable.addAll(placement.into());
-        if (stands != null) {
-            reachable.addAll(stands.reach(Stand.at(WorldSpaces.at(body.mob()))));
-        }
         List<Store> found = new ArrayList<>();
         for (Stash stash : reachable) {
             if (!stash.pos().in(level)) {

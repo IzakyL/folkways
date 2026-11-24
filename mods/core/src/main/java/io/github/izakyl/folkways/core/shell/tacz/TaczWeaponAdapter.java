@@ -1,0 +1,95 @@
+package io.github.izakyl.folkways.core.shell.tacz;
+
+import com.tacz.guns.api.item.IAmmo;
+import io.github.izakyl.folkways.core.combat.api.WeaponAdapter;
+import io.github.izakyl.folkways.core.combat.api.WeaponAttack;
+import io.github.izakyl.folkways.core.combat.api.WeaponHands;
+import io.github.izakyl.folkways.core.work.api.Worker;
+import java.util.Optional;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.Container;
+import net.minecraft.world.item.ItemStack;
+
+final class TaczWeaponAdapter implements WeaponAdapter {
+
+    @Override
+    public boolean ranged() {
+        return true;
+    }
+
+    @Override
+    public double range() {
+        return TaczGuns.rangeCap();
+    }
+
+    @Override
+    public boolean accepts(ItemStack stack) {
+        return TaczGuns.supported(stack);
+    }
+
+    @Override
+    public boolean usable(Worker worker, ItemStack stack) {
+        return worker.body() instanceof WeaponHands
+            && accepts(stack)
+            && (TaczGuns.loaded(stack) > 0 || hasAmmo(worker, stack));
+    }
+
+    static boolean hasAmmo(Worker worker, ItemStack gun) {
+        return hasAmmo(worker.pack(), gun);
+    }
+
+    private static boolean hasAmmo(Container pack, ItemStack gun) {
+        for (int slot = 0; slot < pack.getContainerSize(); slot++) {
+            ItemStack ammo = pack.getItem(slot);
+            if (TaczAmmoInventory.ordinary(ammo) && ((IAmmo) ammo.getItem()).isAmmoOfGun(gun, ammo)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    @Override
+    public double range(Worker worker, ItemStack weapon) {
+        return TaczGuns.range(weapon);
+    }
+
+    @Override
+    public Optional<WeaponAttack> open(Worker worker) {
+        return open(worker, ItemStack.EMPTY);
+    }
+
+    @Override
+    public Optional<WeaponAttack> open(Worker worker, ItemStack selected) {
+        if (!(worker.body() instanceof WeaponHands body)
+            || body.hasActiveAttack() || body.weaponDrawn()
+            || worker.pack() != body.pack()
+            || !body.mob().isAlive()
+            || body.mob().isRemoved()
+            || !(body.mob().level() instanceof ServerLevel level)
+            || !level.getServer().isSameThread()) {
+            return Optional.empty();
+        }
+        for (int slot = 0; slot < body.pack().getContainerSize(); slot++) {
+            if (!selected.isEmpty() && body.pack().getItem(slot) != selected) {
+                continue;
+            }
+            if (!usable(worker, body.pack().getItem(slot))) {
+                continue;
+            }
+            TaczWeaponAttack attack = new TaczWeaponAttack(worker, this);
+            if (!body.drawWeapon(slot)) {
+                return Optional.empty();
+            }
+            body.beginAttack(attack);
+            try {
+                attack.draw();
+            } catch (RuntimeException | LinkageError failure) {
+                attack.stop();
+                body.holsterWeapon();
+                throw failure;
+            }
+            return Optional.of(attack);
+        }
+        return Optional.empty();
+    }
+}

@@ -17,10 +17,15 @@ import net.minecraft.nbt.Tag;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/** Exact, release-frozen id mappings supplied by each installed module's v3 steps. */
+/** Exact, release-frozen id mappings supplied by installed modules' upgrade steps. */
 public final class NamespaceIds {
+    private static final String LEGACY_NAMESPACES =
+        "folkways(?:_golems|_epicfight|_carving|_chiselsandbits|_cookery|_carts|_firearms)?:";
+    private static final Pattern LEGACY_ID = Pattern.compile(LEGACY_NAMESPACES);
+    private static final String MAPPED_NAMESPACES = "(?:" + LEGACY_NAMESPACES + "|folkways_core:|folkways_create:)";
+    private static final Pattern PREFIXED_ID = Pattern.compile(MAPPED_NAMESPACES);
     private static final Pattern TEXT_IDS = Pattern.compile(
-        "(?<![a-z0-9_./:*?-])folkways:[a-z0-9_./*?-]+(?![a-z0-9_./:*?-])");
+        "(?<![a-z0-9_./:*?-])" + MAPPED_NAMESPACES + "[a-z0-9_./*?-]+(?![a-z0-9_./:*?-])");
     private static final Logger LOGGER = LoggerFactory.getLogger("folkways-persist");
     private static final Map<String, String> IDS = new ConcurrentHashMap<>();
     private static final Set<String> WARNED = ConcurrentHashMap.newKeySet();
@@ -37,15 +42,28 @@ public final class NamespaceIds {
         });
     }
 
+    static boolean hasMapping(String id) {
+        return IDS.containsKey(id);
+    }
+
     public static String current(String id) {
-        return current(id, IDS);
+        String normalized = id;
+        // An unversioned consumer may see an id from before more than one namespace move.
+        for (int remaining = IDS.size(); remaining > 0; remaining--) {
+            String next = current(normalized, IDS);
+            if (next.equals(normalized)) {
+                break;
+            }
+            normalized = next;
+        }
+        return normalized;
     }
 
     private static String current(String id, Map<String, String> ids) {
         // Removed component entries use !<id> as their key in DataComponentPatch.
         String decoration = "";
-        if (id.startsWith("!") || id.startsWith("#") || id.startsWith("ifolkways:")
-                || id.startsWith("tfolkways:")) {
+        if (id.startsWith("!") || id.startsWith("#") || ((id.startsWith("i") || id.startsWith("t"))
+                && PREFIXED_ID.matcher(id.substring(1)).lookingAt())) {
             decoration = id.substring(0, 1);
         }
         String bare = id.substring(decoration.length());
@@ -53,7 +71,7 @@ public final class NamespaceIds {
         if (replacement != null) {
             return decoration + replacement;
         }
-        if (bare.startsWith("folkways:") && !IDS.containsKey(bare) && WARNED.add(bare)) {
+        if (LEGACY_ID.matcher(bare).lookingAt() && !IDS.containsKey(bare) && WARNED.add(bare)) {
             LOGGER.warn("Unknown legacy Folkways id {}; leaving it unchanged", bare);
         }
         return id;
@@ -63,13 +81,17 @@ public final class NamespaceIds {
         return TEXT_IDS.matcher(text).replaceAll(match -> Matcher.quoteReplacement(current(match.group())));
     }
 
+    public static String rewriteText(String text, Map<String, String> ids) {
+        return TEXT_IDS.matcher(text).replaceAll(match -> Matcher.quoteReplacement(current(match.group(), ids)));
+    }
+
     public static void rewrite(CompoundTag raw, Map<String, String> ids) {
         rewriteTag(raw, ids);
     }
 
     /** Normalize an unversioned value using only the exact tables of installed modules. */
     public static void rewrite(CompoundTag raw) {
-        rewrite(raw, IDS);
+        rewriteTag(raw, null);
     }
 
     private static Tag rewriteTag(Tag raw, Map<String, String> ids) {
@@ -80,7 +102,7 @@ public final class NamespaceIds {
             for (String key : new ArrayList<>(compound.getAllKeys())) {
                 Tag value = compound.get(key);
                 value = rewriteTag(value, ids);
-                String renamed = current(key, ids);
+                String renamed = ids == null ? current(key) : current(key, ids);
                 if (!key.equals(renamed)) {
                     // A current key supplied alongside a legacy key always wins.
                     if (!compound.contains(renamed)) {
@@ -97,7 +119,7 @@ public final class NamespaceIds {
             }
         } else if (raw instanceof StringTag string) {
             String value = string.getAsString();
-            String renamed = current(value, ids);
+            String renamed = ids == null ? current(value) : current(value, ids);
             if (!value.equals(renamed)) {
                 return StringTag.valueOf(renamed);
             }

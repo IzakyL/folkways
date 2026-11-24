@@ -52,7 +52,7 @@ public final class BuildScene {
     }
 
     public static void program(SceneBuilder scene, SceneBuildingUtil util) {
-        scene.title("building", "Building: draw it, and the colony raises it");
+        scene.title("building", "Building: draw it, and the colony builds it");
         PonderScenery.openWorld(scene, util, PLATE);
         PonderScenery.grassGround(scene, util, PLATE);
 
@@ -79,14 +79,14 @@ public final class BuildScene {
         scene.idle(20);
         scene.overlay().showOutline(PonderPalette.GREEN, site, site, 200);
         scene.overlay().showText(90)
-            .text("With the book marking out, frame the ground and pick Raise a building from what the box can become. A line drawn with the book offers it too.")
+            .text("Mark out a box or draw a line with the book, then right-click and choose Pattern.")
             .pointAt(util.vector().topOf(MIDDLE, 0, LOW))
             .placeNearTarget()
             .attachKeyFrame();
         scene.idle(100);
 
         scene.overlay().showText(90)
-            .text("Then choose a pattern and its few settings, down to the blocks it is made of. Folkways ships a few, data packs add more under folkways/pattern, and your own go in the folkways/pattern folder of your game.")
+            .text("Choose a pattern and its settings, down to the blocks it uses. Add your own patterns in the folkways/pattern folder or a data pack.")
             .pointAt(util.vector().topOf(MIDDLE, 0, LOW))
             .placeNearTarget()
             .attachKeyFrame();
@@ -103,7 +103,7 @@ public final class BuildScene {
         scene.idle(10);
         scene.world().destroyBlock(flower);
         scene.overlay().showText(80)
-            .text("Residents with the building trade take the order. First they clear what stands where the drawing wants empty space, working down from the top. Containers are emptied into the colony's stores before their blocks go.")
+            .text("Builders take the order. First they clear whatever is in the way, from the top down. Containers are emptied into storage first.")
             .pointAt(util.vector().topOf(grass.below()))
             .placeNearTarget()
             .attachKeyFrame();
@@ -116,7 +116,7 @@ public final class BuildScene {
 
         layer(scene, util, resident, 1);
         scene.overlay().showText(80)
-            .text("Then they lay it from the bottom up, a cell at a time, with blocks fetched from the colony's stores.")
+            .text("Then they build from the bottom up, with blocks from the colony's storage.")
             .pointAt(util.vector().topOf(LOW, 1, MIDDLE))
             .placeNearTarget()
             .attachKeyFrame();
@@ -126,7 +126,7 @@ public final class BuildScene {
         Selection owed = util.select().fromTo(LOW, WALL_TOP, LOW, HIGH, ROOF, HIGH);
         scene.overlay().showOutline(PonderPalette.WHITE, owed, owed, 90);
         scene.overlay().showText(90)
-            .text("While you hold the book, the blocks still to go show as ghosts, and a card over the site counts the cells laid and lists, under Still needs, what the rest will take.")
+            .text("Hold the book to see the missing blocks as ghosts. A card above the site shows progress and what it Still needs.")
             .pointAt(util.vector().topOf(MIDDLE, ROOF, MIDDLE))
             .placeNearTarget()
             .attachKeyFrame();
@@ -149,7 +149,7 @@ public final class BuildScene {
         resident.hold(scene, new ItemStack(Items.OAK_PLANKS, 25));
         scene.overlay().showOutline(PonderPalette.OUTPUT, scaffold, scaffold, 90);
         scene.overlay().showText(90)
-            .text("A cell with nowhere in reach to stand gets a column of scaffolding beside it, taken from the stores. Once that part is laid it comes down, and the scaffolding goes back.")
+            .text("Where a block is out of reach, they put up scaffolding from storage and take it down afterwards.")
             .pointAt(util.vector().topOf(SCAFFOLD_X, 2, MIDDLE))
             .placeNearTarget()
             .attachKeyFrame();
@@ -174,21 +174,21 @@ public final class BuildScene {
 
         scene.overlay().showOutline(PonderPalette.GREEN, site, site, 90);
         scene.overlay().showText(90)
-            .text("The Building page lists every build order with its cells done out of the total. Deleting one stops the work and takes any scaffolding it put up back down.")
+            .text("Build orders are listed under Facilities. Cancel on an order's card stops the work and removes its scaffolding.")
             .pointAt(util.vector().topOf(MIDDLE, ROOF, MIDDLE))
             .placeNearTarget()
             .attachKeyFrame();
         scene.idle(100);
 
         scene.overlay().showText(90)
-            .text("The mine is drawn all at once from the ground as it stands, and filed as one ordinary build order.")
+            .text("A mine is planned all at once from the ground as it stands, as one ordinary build order.")
             .pointAt(util.vector().topOf(MIDDLE, ROOF, MIDDLE))
             .placeNearTarget()
             .attachKeyFrame();
         scene.idle(100);
 
         scene.overlay().showText(70)
-            .text("In creative mode, a drawing you confirm stands up at once.")
+            .text("In creative mode, Build now places it instantly.")
             .pointAt(util.vector().topOf(MIDDLE, ROOF, MIDDLE))
             .placeNearTarget()
             .attachKeyFrame();

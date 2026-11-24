@@ -1,15 +1,19 @@
 package io.github.izakyl.folkways.core.work.internal;
 
+import io.github.izakyl.folkways.core.inventory.internal.StoreTransfers;
 import io.github.izakyl.folkways.core.FolkwaysConfig;
+import io.github.izakyl.folkways.core.facility.api.Facilities;
+import io.github.izakyl.folkways.core.facility.api.control.PartEndpoint;
 import io.github.izakyl.folkways.core.colony.api.Colonies;
 import io.github.izakyl.folkways.core.inventory.api.InventoryFeedback;
 import io.github.izakyl.folkways.core.inventory.api.Stash;
 import io.github.izakyl.folkways.core.inventory.api.StoreRule;
-import io.github.izakyl.folkways.core.inventory.api.port.Pull;
-import io.github.izakyl.folkways.core.inventory.api.port.StorePort;
-import io.github.izakyl.folkways.core.inventory.api.port.StorePort.Operation;
-import io.github.izakyl.folkways.core.inventory.api.port.StorePorts;
-import io.github.izakyl.folkways.core.inventory.api.port.TransferResult;
+import io.github.izakyl.folkways.core.facility.api.control.Pull;
+import io.github.izakyl.folkways.core.facility.api.control.ItemPort;
+import io.github.izakyl.folkways.core.facility.api.control.Port;
+import io.github.izakyl.folkways.core.facility.api.control.Port.Operation;
+import io.github.izakyl.folkways.core.inventory.api.port.StoreAccess;
+import io.github.izakyl.folkways.core.facility.api.control.TransferResult;
 import io.github.izakyl.folkways.core.inventory.internal.Stores;
 import io.github.izakyl.folkways.core.item.api.Containers;
 import io.github.izakyl.folkways.core.item.api.Goods;
@@ -27,7 +31,7 @@ import io.github.izakyl.folkways.core.work.api.Node;
 import io.github.izakyl.folkways.core.work.api.NodeSpec;
 import io.github.izakyl.folkways.core.work.api.Outcome;
 import io.github.izakyl.folkways.core.work.api.Recourse;
-import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.world.api.Stances;
 import io.github.izakyl.folkways.core.work.api.WorkBatch;
 import io.github.izakyl.folkways.core.work.api.WorkGesture;
 import io.github.izakyl.folkways.core.work.api.WorkSite;
@@ -35,7 +39,6 @@ import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.core.work.api.Workload;
 import io.github.izakyl.folkways.core.work.api.Xp;
 import io.github.izakyl.folkways.core.work.support.Staged;
-import io.github.izakyl.folkways.core.world.api.Reach;
 import io.github.izakyl.folkways.core.world.api.Stand;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
 import java.util.ArrayList;
@@ -60,6 +63,8 @@ public final class TransferNode implements Node, Staged {
     public sealed interface Endpoint {
         record Store(Stash stash) implements Endpoint { }
 
+        record Part(PartEndpoint endpoint) implements Endpoint { }
+
         record Pack(Optional<UUID> resident) implements Endpoint { }
 
         static Endpoint store(Stash stash) { return new Store(stash); }
@@ -81,7 +86,7 @@ public final class TransferNode implements Node, Staged {
     private final LongConsumer landed;
     private Optional<Delivery.Source> collection = Optional.empty();
     private boolean collecting;
-    private BiFunction<ServerLevel, Operation, Optional<StorePort>> portResolver;
+    private BiFunction<ServerLevel, Operation, Optional<ItemPort>> portResolver;
     private Optional<UUID> boundWorker = Optional.empty();
 
     public TransferNode(UUID id, Endpoint from, Endpoint to, Manifest goods, Stances stances,
@@ -98,7 +103,7 @@ public final class TransferNode implements Node, Staged {
 
     /** A private store obligation, using the usual atomic draw/restore and pack handling. */
     public static TransferNode obligation(NodeSpec spec, Stash store, List<ItemStack> goods, boolean take,
-            UUID worker, BiFunction<ServerLevel, Operation, Optional<StorePort>> resolver) {
+            UUID worker, BiFunction<ServerLevel, Operation, Optional<ItemPort>> resolver) {
         TransferNode node = new TransferNode(spec,
             take ? Endpoint.store(store) : Endpoint.pack(worker),
             take ? Endpoint.pack(worker) : Endpoint.store(store),
@@ -150,12 +155,26 @@ public final class TransferNode implements Node, Staged {
     // down is whatever the steps feeding it hand on, known only as the plan grows them. Done, it tells `landed` how
     // many it put down.
     public static TransferNode delivering(UUID id, Stash into, Need goods, Stances stances, LongConsumer landed) {
-        NodeSpec spec = NodeSpec.of(id, HaulWork.DOMAIN, new WorkSite.AtBlock(into.pos()), stances,
+        return delivering(id, Endpoint.store(into), into.pos(), goods, stances, landed);
+    }
+
+    public static TransferNode delivering(Delivery delivery, Need goods) {
+        return delivering(delivery.id(), destination(delivery), delivery.spec().site().where(),
+            goods, delivery.spec().stances(), delivery.arrived());
+    }
+
+    private static Endpoint destination(Delivery delivery) {
+        return delivery.destination().<Endpoint>map(Endpoint.Part::new)
+            .orElseGet(() -> Endpoint.store(new Stash(delivery.spec().site().where())));
+    }
+
+    private static TransferNode delivering(UUID id, Endpoint into, WorldPos at, Need goods,
+                                           Stances stances, LongConsumer landed) {
+        NodeSpec spec = NodeSpec.of(id, HaulWork.DOMAIN, new WorkSite.AtBlock(at), stances,
             Workload.Once.of(FolkwaysConfig.haulReachTicks(), HaulWork::haste))
             .needs(goods).vocation(HaulWork.trade()).gesture(WorkGesture.SWING).doing(Doings.STOWING, goods.spec())
             .done();
-        TransferNode delivery = new TransferNode(spec, Endpoint.pack(), Endpoint.store(into),
-            new Manifest(List.of(), List.of()), true, landed);
+        TransferNode delivery = new TransferNode(spec, Endpoint.pack(), into, new Manifest(List.of(), List.of()), true, landed);
         delivery.ordered = true;
         return delivery;
     }
@@ -169,8 +188,9 @@ public final class TransferNode implements Node, Staged {
                 source.stances(), Workload.Once.of(FolkwaysConfig.haulReachTicks(), HaulWork::haste))
             .leaves(List.of(load)).vocation(HaulWork.trade()).gesture(WorkGesture.SWING)
             .doing(Doings.FETCHING, load.spec()).done();
-        TransferNode take = new TransferNode(takeSpec, Endpoint.store(new Stash(source.at())), Endpoint.pack(),
-            cargo, false, count -> { });
+        Endpoint from = source instanceof Delivery.PartSource part ? new Endpoint.Part(part.endpoint())
+            : Endpoint.store(new Stash(source.at()));
+        TransferNode take = new TransferNode(takeSpec, from, Endpoint.pack(), cargo, false, count -> { });
         take.collection = Optional.of(source);
         take.collecting = true;
         NodeSpec putSpec = NodeSpec.of(delivery.id(), HaulWork.DOMAIN, delivery.spec().site(), delivery.spec().stances(),
@@ -178,7 +198,7 @@ public final class TransferNode implements Node, Staged {
             .leaves(List.of(new Amount(load.spec(), -load.count()))).vocation(HaulWork.trade()).gesture(WorkGesture.SWING)
             .doing(Doings.STOWING, load.spec()).done();
         TransferNode put = new TransferNode(putSpec, Endpoint.pack(),
-            Endpoint.store(new Stash(delivery.spec().site().where())), cargo, false, delivery.arrived());
+            destination(delivery), cargo, false, delivery.arrived());
         put.collecting = true;
         return Grown.then(take, put).byOneWorker();
     }
@@ -215,6 +235,8 @@ public final class TransferNode implements Node, Staged {
         resolved.ordered = ordered;
         resolved.portResolver = portResolver;
         resolved.boundWorker = boundWorker;
+        resolved.collection = collection;
+        resolved.collecting = collecting;
         return resolved;
     }
 
@@ -281,7 +303,7 @@ public final class TransferNode implements Node, Staged {
     @Override
     public boolean joins(Node done) {
         return done instanceof TransferNode other
-            && (from instanceof Endpoint.Store) == (other.from instanceof Endpoint.Store)
+            && fetching() == other.fetching()
             && store().equals(other.store());
     }
 
@@ -292,11 +314,11 @@ public final class TransferNode implements Node, Staged {
     }
 
     public boolean fetching() {
-        return from instanceof Endpoint.Store;
+        return !(from instanceof Endpoint.Pack);
     }
 
     private Endpoint store() {
-        return from instanceof Endpoint.Store ? from : to;
+        return fetching() ? from : to;
     }
 
     @Override
@@ -318,6 +340,7 @@ public final class TransferNode implements Node, Staged {
     private Optional<Container> inventory(Endpoint endpoint, ServerLevel level, Worker who) {
         return switch (endpoint) {
             case Endpoint.Store store -> Stores.at(level, store.stash().pos(), ordered && endpoint == to);
+            case Endpoint.Part ignored -> Optional.empty();
             case Endpoint.Pack pack -> pack.resident().isEmpty()
                 || pack.resident().get().equals(who.resident().id())
                 ? Optional.of(who.pack()) : Optional.empty();
@@ -330,12 +353,29 @@ public final class TransferNode implements Node, Staged {
         if (from instanceof Endpoint.Store store) {
             InventoryFeedback.store(level, store.stash().pos());
         }
-        if (collection.isPresent()) {
-            Delivery.Source source = collection.get();
+        if (from instanceof Endpoint.Part part) {
+            Port<ItemStack> port = part(level, part, Operation.TAKE).orElse(null);
+            if (port == null) {
+                return new Short(HaulRefusal.UNUSABLE);
+            }
+            ItemStack wanted = collection.orElseThrow().stack();
+            if (!Containers.insert(snapshot(who.pack()), wanted).isEmpty()) {
+                return new Short(HaulRefusal.NO_ROOM);
+            }
+            if (port.draw(level, who.body(), wanted, true).getCount() != wanted.getCount()) {
+                return new Short(HaulRefusal.NOTHING_TO_TAKE);
+            }
+            ItemStack taken = port.draw(level, who.body(), wanted, false);
+            return taken.isEmpty() ? new Short(HaulRefusal.NOTHING_TO_TAKE) : new Taken(List.of(taken));
+        }
+        if (collection.orElse(null) instanceof Delivery.SlotSource source) {
             if (!source.at().in(level) || !level.isLoaded(source.at().block(level))
                 || level.getBlockState(source.at().block(level)) != source.state()
                 || level.getBlockEntity(source.at().block(level)) != source.entity()) {
                 return new Short(HaulRefusal.NOTHING_TO_TAKE);
+            }
+            if (StoreAccess.unavailable(level, source.at().block(level))) {
+                return new Short(HaulRefusal.FACILITY_PART);
             }
             IItemHandler handler = level.getCapability(Capabilities.ItemHandler.BLOCK, source.at().block(level),
                 source.side().orElse(null));
@@ -358,11 +398,11 @@ public final class TransferNode implements Node, Staged {
             if (portResolver == null && !Stores.usable(level, store.stash().pos())) {
                 return new Short(HaulRefusal.UNUSABLE);
             }
-            StorePort port = port(level, store.stash(), who, Operation.TAKE).orElse(null);
+            ItemPort port = port(level, store.stash(), who, Operation.TAKE).orElse(null);
             if (port == null) {
                 return new Short(HaulRefusal.NOT_A_CONTAINER);
             }
-            if (!port.usability().usable()) {
+            if (!StoreAccess.usability(level, port).usable()) {
                 return new Short(HaulRefusal.UNUSABLE);
             }
             List<Pull> pulls = new ArrayList<>();
@@ -372,7 +412,8 @@ public final class TransferNode implements Node, Staged {
                 return new Short(HaulRefusal.NOTHING_CARRIED);
             }
             List<StoreRule> rules = Stores.rulesAt(level, store.stash().pos());
-            TransferResult simulated = port.take(level, pulls, rules, true);
+            boolean filterTake = portResolver == null && StoreAccess.localRules(level, port.anchor());
+            TransferResult simulated = StoreTransfers.take(port, level, pulls, rules, filterTake, true);
             if (simulated instanceof TransferResult.Refused refused) {
                 return new Short(refusal(refused.why()));
             }
@@ -386,7 +427,7 @@ public final class TransferNode implements Node, Staged {
                     return new Short(HaulRefusal.NO_ROOM);
                 }
             }
-            TransferResult result = port.take(level, pulls, rules, false);
+            TransferResult result = StoreTransfers.take(port, level, pulls, rules, filterTake, false);
             return result instanceof TransferResult.Done done ? new Taken(done.moved())
                 : new Short(refusal(((TransferResult.Refused) result).why()));
         }
@@ -428,10 +469,10 @@ public final class TransferNode implements Node, Staged {
     @Override
     public void restore(ServerLevel level, Worker who, List<ItemStack> goods) {
         if (collection.isEmpty() && from instanceof Endpoint.Store store) {
-            StorePort port = port(level, store.stash(), who, Operation.PUT).orElse(null);
+            ItemPort port = port(level, store.stash(), who, Operation.PUT).orElse(null);
             List<StoreRule> rules = Stores.rulesAt(level, store.stash().pos());
-            if (port != null && port.put(level, goods, rules, true, true).done()
-                && port.put(level, goods, rules, true, false).done()) {
+            if (port != null && StoreTransfers.put(port, level, goods, rules, true, true).done()
+                && StoreTransfers.put(port, level, goods, rules, true, false).done()) {
                 return;
             }
         }
@@ -451,18 +492,60 @@ public final class TransferNode implements Node, Staged {
     // Putting the goods down is the whole of the work, and it happens only if they all fit.
     @Override
     public Outcome commit(ServerLevel level, Worker who) {
+        if (to instanceof Endpoint.Part part) {
+            Port<ItemStack> port = part(level, part, Operation.PUT).orElse(null);
+            if (port == null) {
+                return Outcome.failed(HaulRefusal.UNUSABLE);
+            }
+            List<ItemStack> goods = who.supplied();
+            if (port instanceof ItemPort items) {
+                TransferResult simulated = items.put(level, goods, Optional.empty(), true);
+                if (simulated instanceof TransferResult.Refused refused) {
+                    return Outcome.failed(refusal(refused.why()));
+                }
+                TransferResult result = items.put(level, goods, Optional.empty(), false);
+                if (result instanceof TransferResult.Refused refused) {
+                    return Outcome.failed(refusal(refused.why()));
+                }
+            } else {
+                List<ItemStack> moved = new ArrayList<>();
+                List<ItemStack> unused = new ArrayList<>();
+                for (ItemStack stack : goods) {
+                    int fits = port.deposit(level, who.body(), stack, true).getCount();
+                    ItemStack placed = fits == 0 ? ItemStack.EMPTY
+                        : port.deposit(level, who.body(), stack.copyWithCount(fits), false);
+                    if (!placed.isEmpty()) {
+                        moved.add(placed);
+                    }
+                    if (placed.getCount() < stack.getCount()) {
+                        unused.add(stack.copyWithCount(stack.getCount() - placed.getCount()));
+                    }
+                }
+                if (moved.isEmpty()) {
+                    return Outcome.failed(HaulRefusal.NO_ROOM);
+                }
+                cargo.bind(moved);
+                return new Outcome.Done(List.of(), List.of(), Optional.of(new Xp(HaulWork.trade(), 1)), unused);
+            }
+            cargo.bind(goods);
+            return new Outcome.Done(List.of(), List.of(), Optional.of(new Xp(HaulWork.trade(), 1)));
+        }
         if (to instanceof Endpoint.Store store) {
+            if (portResolver == null && store.stash().pos().in(level)
+                    && StoreAccess.unavailable(level, store.stash().pos().block(level))) {
+                return Outcome.failed(HaulRefusal.FACILITY_PART);
+            }
             InventoryFeedback.store(level, store.stash().pos());
         }
         if (to instanceof Endpoint.Store store) {
             if (portResolver == null && !Stores.usable(level, store.stash().pos())) {
                 return Outcome.failed(HaulRefusal.UNUSABLE);
             }
-            StorePort port = port(level, store.stash(), who, Operation.PUT).orElse(null);
+            ItemPort port = port(level, store.stash(), who, Operation.PUT).orElse(null);
             if (port == null) {
                 return Outcome.failed(HaulRefusal.NOT_A_CONTAINER);
             }
-            if (!port.usability().usable()) {
+            if (!StoreAccess.usability(level, port).usable()) {
                 return Outcome.failed(HaulRefusal.UNUSABLE);
             }
             List<ItemStack> goods = who.supplied();
@@ -470,13 +553,16 @@ public final class TransferNode implements Node, Staged {
             if (directed && !ordered) {
                 rules = rules.stream().filter(rule -> !(rule instanceof StoreRule.Access)).toList();
             }
-            TransferResult simulated = port.put(level, goods, rules, ordered, true);
+            TransferResult simulated = StoreTransfers.put(port, level, goods, rules, ordered, true);
             if (simulated instanceof TransferResult.Refused refused) {
                 return Outcome.failed(refusal(refused.why()));
             }
-            TransferResult result = port.put(level, goods, rules, ordered, false);
+            TransferResult result = StoreTransfers.put(port, level, goods, rules, ordered, false);
             if (result instanceof TransferResult.Refused refused) {
                 return Outcome.failed(refusal(refused.why()));
+            }
+            if (who.placement() != null && who.placement().reservations() != null) {
+                who.placement().reservations().landed(who.placement().stowing(), store.stash(), goods);
             }
             cargo.bind(goods);
             return new Outcome.Done(List.of(), List.of(), Optional.of(new Xp(HaulWork.trade(), 1)));
@@ -497,6 +583,11 @@ public final class TransferNode implements Node, Staged {
         return new Outcome.Done(List.of(), List.of(), Optional.of(new Xp(HaulWork.trade(), 1)));
     }
 
+    private static Optional<Port<ItemStack>> part(ServerLevel level, Endpoint.Part part, Operation operation) {
+        return Facilities.part(level, part.endpoint())
+            .filter(port -> port.valid(level) && port.operations().contains(operation));
+    }
+
     private static HaulRefusal refusal(TransferResult.Why why) {
         return switch (why) {
             case NO_ROOM -> HaulRefusal.NO_ROOM;
@@ -507,7 +598,7 @@ public final class TransferNode implements Node, Staged {
         };
     }
 
-    private Optional<StorePort> port(ServerLevel level, Stash stash, Worker who, Operation operation) {
+    private Optional<ItemPort> port(ServerLevel level, Stash stash, Worker who, Operation operation) {
         if (portResolver != null) {
             return portResolver.apply(level, operation);
         }
@@ -516,7 +607,7 @@ public final class TransferNode implements Node, Staged {
             var observed = colony.inventory().snapshot().store(stash.pos());
             if (observed.isPresent()) {
                 if (!observed.get().usability().usable()
-                    || observed.get().aliases().stream().anyMatch(at -> StorePorts.condemned(at).isPresent())) {
+                    || observed.get().aliases().stream().anyMatch(at -> StoreAccess.observation(at).isPresent())) {
                     return Optional.empty();
                 }
                 aliases.addAll(observed.get().operations().keySet());
@@ -524,17 +615,17 @@ public final class TransferNode implements Node, Staged {
         }
         aliases.add(stash.pos());
         return aliases.stream().filter(at -> at.in(level))
-            .filter(at -> aliases.size() == 1 || Reach.withinReach(who.body().blockPosition(), at.block(level))
-                && Reach.inSight(level, who.body().blockPosition(), at.block(level)))
+            // Navigation already brought the worker to one of this node's stances: take the nearest access point
+            // without checking reach again.
             .sorted(Comparator.comparingDouble(at -> at.block(level).distSqr(who.body().blockPosition())))
-            .map(at -> StorePorts.at(level, at.block(level)))
+            .map(at -> StoreAccess.at(level, at.block(level)))
             .flatMap(Optional::stream)
-            .filter(port -> port.usability().usable() && port.operations().contains(operation))
+            .filter(port -> StoreAccess.usability(level, port).usable() && port.operations().contains(operation))
             .map(port -> port.proxyMembers().isEmpty() ? Optional.of(port)
                 : port.proxyMembers().orElseThrow().contains(stash.pos())
-                    ? StorePorts.at(level, stash.pos().block(level)) : Optional.<StorePort>empty())
+                    ? StoreAccess.at(level, stash.pos().block(level)) : Optional.<ItemPort>empty())
             .flatMap(Optional::stream)
-            .filter(port -> port.usability().usable() && port.operations().contains(operation)).findFirst();
+            .filter(port -> StoreAccess.usability(level, port).usable() && port.operations().contains(operation)).findFirst();
     }
 
     static SimpleContainer snapshot(Container container) {

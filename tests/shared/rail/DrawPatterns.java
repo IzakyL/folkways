@@ -1,5 +1,5 @@
 import io.github.izakyl.folkways.vanilla.build.draft.*;
-import io.github.izakyl.folkways.vanilla.build.Joints;
+import io.github.izakyl.folkways.core.work.api.Joints;
 import io.github.izakyl.folkways.core.front.api.Schema;
 import io.github.izakyl.folkways.core.front.api.Settings;
 import io.github.izakyl.folkways.core.item.api.ItemFilter;

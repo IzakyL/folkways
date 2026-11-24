@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.vanilla.groundwork;
 
-import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.world.api.Stances;
 import io.github.izakyl.folkways.core.work.api.WorkSite;
 import java.util.List;
 import net.minecraft.core.BlockPos;

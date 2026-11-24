@@ -1,7 +1,7 @@
 package io.github.izakyl.folkways.core.front.client;
 
-import io.github.izakyl.folkways.core.front.api.notice.DebugText;
-import io.github.izakyl.folkways.core.front.api.notice.Line;
+import io.github.izakyl.folkways.core.card.api.notice.DebugText;
+import io.github.izakyl.folkways.core.card.api.notice.Line;
 import io.github.izakyl.folkways.core.front.api.ui.Signs;
 import io.github.izakyl.folkways.core.front.api.ui.Signs.Sign;
 import java.util.ArrayList;
@@ -130,11 +130,11 @@ final class DebugCardLayout {
         }
     }
 
-    // The counts, white beside their items, in the goods' state colour instead.
+    // The counts, white over their items, in the goods' state colour instead.
     private static LookCardLayout.Laid tinted(LookCardLayout.Laid laid, int tint) {
         return new LookCardLayout.Laid(laid.width(), laid.height(), laid.pieces().stream()
-            .map(piece -> piece instanceof LookCardLayout.Piece.Text text && text.color() == Signs.COUNT_COLOR
-                ? new LookCardLayout.Piece.Text(text.x(), text.y(), text.text(), tint) : piece).toList());
+            .map(piece -> piece instanceof LookCardLayout.Piece.Count count
+                ? new LookCardLayout.Piece.Count(count.x(), count.y(), count.text(), tint) : piece).toList());
     }
 
     private void picture(LookCardLayout.Laid laid) {
@@ -167,6 +167,8 @@ final class DebugCardLayout {
                     case LookCardLayout.Piece.Icon icon ->
                         graphics.blitSprite(icon.sprite(), icon.x(), icon.y(), icon.width(), icon.height());
                     case LookCardLayout.Piece.Item item -> graphics.renderItem(item.stack(), item.x(), item.y());
+                    case LookCardLayout.Piece.Count count ->
+                        Signs.drawCount(graphics, font, count.text(), count.x(), count.y(), count.color(), 200.0F);
                 }
             }
             graphics.pose().popPose();

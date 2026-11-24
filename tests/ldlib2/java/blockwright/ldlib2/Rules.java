@@ -142,30 +142,27 @@ public final class Rules {
     }
 
     /**
-     * Where a wheel turn reaches the scroller that moves {@code node}: the clip of the ancestors from the root down
-     * to its nearest {@code ScrollerView}, leaving out what scrolls inside it. The full {@link #clipBox} also cuts by
-     * the node's own clipping row, which moves with the content; half out of the viewport, that leaves a sliver
-     * along its edge whose middle can miss the viewport altogether. Null when no scroller holds the node.
+     * Where a wheel turn can reach the node's scroller. If the nearest scroller is clipped away,
+     * aim at its visible outer scroller so the page can bring it into view.
      */
     public static Box wheelBox(Tree tree, Node node) {
         List<Node> ancestors = tree.ancestorsOf(node);
-        int scroller = -1;
         for (int at = ancestors.size() - 1; at >= 0; at--) {
-            if (ancestors.get(at).className.endsWith("ScrollerView")) {
-                scroller = at;
-                break;
+            Node ancestor = ancestors.get(at);
+            if (!ancestor.className.endsWith("ScrollerView")) {
+                continue;
+            }
+            Box box = contentBox(ancestor);
+            for (int outer = 0; outer < at; outer++) {
+                if (!ancestors.get(outer).overflowVisible) {
+                    box = box.intersect(contentBox(ancestors.get(outer)));
+                }
+            }
+            if (box.width() > 0 && box.height() > 0) {
+                return box;
             }
         }
-        if (scroller < 0) {
-            return null;
-        }
-        Box box = contentBox(ancestors.get(scroller));
-        for (int at = 0; at < scroller; at++) {
-            if (!ancestors.get(at).overflowVisible) {
-                box = box.intersect(contentBox(ancestors.get(at)));
-            }
-        }
-        return box;
+        return null;
     }
 
     private static boolean outside(double point, double low, double extent) {

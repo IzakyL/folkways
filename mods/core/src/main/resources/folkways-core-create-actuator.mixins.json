@@ -1,0 +1,8 @@
+{
+  "required": false,
+  "minVersion": "0.8.5",
+  "package": "io.github.izakyl.folkways.core.shell.create.actuator.mixin",
+  "plugin": "io.github.izakyl.folkways.core.shell.create.actuator.mixin.ActuatorMixinPlugin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": ["LinearActuatorRead", "RotationPropagatorAccess"]
+}

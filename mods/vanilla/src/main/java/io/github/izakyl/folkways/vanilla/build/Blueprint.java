@@ -2,10 +2,12 @@ package io.github.izakyl.folkways.vanilla.build;
 
 import io.github.izakyl.folkways.core.base.persist.Reader;
 import io.github.izakyl.folkways.core.base.persist.Writer;
+import io.github.izakyl.folkways.core.work.api.BlockData;
+import io.github.izakyl.folkways.core.work.api.Joint;
 import io.github.izakyl.folkways.core.work.api.StructureCompat;
+import io.github.izakyl.folkways.core.work.api.UnloadedBlock;
 import io.github.izakyl.folkways.core.world.api.StructurePayload;
 import io.github.izakyl.folkways.vanilla.build.draft.Drafting;
-import io.github.izakyl.folkways.vanilla.build.draft.Joint;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;

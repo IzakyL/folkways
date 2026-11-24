@@ -25,15 +25,14 @@ public final class DamageControlScene {
     }
 
     public static void program(SceneBuilder scene, SceneBuildingUtil util) {
-        scene.title("damage_control", "Damage control: put out fires and restore missing blocks");
+        scene.title("damage_control", "Damage control: fires and repairs");
         PonderScenery.openWorld(scene, util, 7);
         PonderScenery.grassGround(scene, util, 7);
         scene.world().setBlocks(util.select().fromTo(2, 1, 3, 4, 2, 3), Blocks.OAK_PLANKS.defaultBlockState(), false);
         scene.world().showSection(util.select().fromTo(2, 1, 3, 4, 2, 3), Direction.DOWN);
         scene.overlay().showOutline(PonderPalette.OUTPUT, "zone", util.select().fromTo(1, 1, 1, 5, 3, 5), 100);
         scene.overlay().showText(90)
-            .text("Hold the Colony Book, press V and choose Damage Control. Mark two corners and protect the area."
-                + " Allow residents to work in damage control; fleeing danger still comes first.")
+            .text("Mark two corners with the book, right-click and choose Damage control to protect the area. Residents need the Damage control trade; fleeing danger still comes first.")
             .pointAt(util.vector().centerOf(3, 1, 2))
             .placeNearTarget()
             .attachKeyFrame();
@@ -44,16 +43,13 @@ public final class DamageControlScene {
         scene.idle(20);
         scene.world().setBlock(util.grid().at(2, 1, 2), Blocks.AIR.defaultBlockState(), false);
         scene.overlay().showText(90)
-            .text("Workers smother nearby fire without placing water. With Create: FireFighting Additions"
-                + " installed, they prefer a hydrant cabinet with a hose, nozzle and water, or borrow"
-                + " and refill an extinguisher.")
+            .text("Workers smother nearby fires by hand. With Create: FireFighting Additions, they prefer a hydrant cabinet with a hose, nozzle and water, or borrow and refill an extinguisher.")
             .pointAt(util.vector().centerOf(2, 1, 2))
             .placeNearTarget()
             .attachKeyFrame();
         scene.idle(100);
         scene.overlay().showText(90)
-            .text("Right-click a protected area to open its zone settings. Use Reset baseline and enable repairs."
-                + " Hover the colored markers to inspect fires, missing blocks, conflicts and workers.")
+            .text("Right-click the area to open its card. Click Reset baseline, then turn on repairs. Hover the colored markers to see fires, missing blocks, conflicts and workers.")
             .pointAt(util.vector().centerOf(3, 2, 3))
             .placeNearTarget()
             .attachKeyFrame();
@@ -62,8 +58,7 @@ public final class DamageControlScene {
         scene.idle(30);
         scene.world().setBlock(util.grid().at(3, 2, 3), Blocks.OAK_PLANKS.defaultBlockState(), false);
         scene.overlay().showText(90)
-            .text("Containers, crops, fluids and machines stay out of the baseline. Different blocks are reported"
-                + " as conflicts. After remodelling, use Reset baseline in the zone settings.")
+            .text("Containers, crops, fluids and machines are not recorded. Changed blocks show as conflicts. After rebuilding, click Reset baseline again.")
             .pointAt(util.vector().centerOf(3, 2, 3))
             .placeNearTarget()
             .attachKeyFrame();

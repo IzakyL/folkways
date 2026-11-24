@@ -10,24 +10,26 @@ import com.refinedmods.refinedstorage.api.network.node.GraphNetworkComponent;
 import com.refinedmods.refinedstorage.api.network.storage.StorageNetworkComponent;
 import com.refinedmods.refinedstorage.api.storage.StateTrackedStorage;
 import com.refinedmods.refinedstorage.api.storage.Storage;
+import com.refinedmods.refinedstorage.api.storage.composite.CompositeAwareChild;
 import com.refinedmods.refinedstorage.api.storage.composite.CompositeStorage;
 import com.refinedmods.refinedstorage.api.storage.limited.LimitedStorage;
 import com.refinedmods.refinedstorage.common.api.storage.SerializableStorage;
+import com.refinedmods.refinedstorage.common.api.support.network.InWorldNetworkNodeContainer;
 import com.refinedmods.refinedstorage.common.storage.StorageTypes;
 import com.refinedmods.refinedstorage.common.storagemonitor.StorageMonitorBlockEntity;
 import com.refinedmods.refinedstorage.common.support.resource.ItemResource;
-import io.github.izakyl.folkways.core.inventory.api.StoreRule;
-import io.github.izakyl.folkways.core.inventory.api.port.PortIdentity;
-import io.github.izakyl.folkways.core.inventory.api.port.PortReader;
-import io.github.izakyl.folkways.core.inventory.api.port.Pull;
-import io.github.izakyl.folkways.core.inventory.api.port.Room;
-import io.github.izakyl.folkways.core.inventory.api.port.StorePort;
-import io.github.izakyl.folkways.core.inventory.api.port.StorePorts;
-import io.github.izakyl.folkways.core.inventory.api.port.TransferResult;
-import io.github.izakyl.folkways.core.inventory.api.port.Usability;
+import io.github.izakyl.folkways.core.facility.api.control.ItemPort;
+import io.github.izakyl.folkways.core.facility.api.control.PortIdentity;
+import io.github.izakyl.folkways.core.facility.api.control.PortReader;
+import io.github.izakyl.folkways.core.facility.api.control.Pull;
+import io.github.izakyl.folkways.core.facility.api.control.Room;
+import io.github.izakyl.folkways.core.facility.api.control.SlotWindow;
+import io.github.izakyl.folkways.core.facility.api.control.TransferResult;
+import io.github.izakyl.folkways.core.facility.api.control.TransformHint;
 import io.github.izakyl.folkways.core.item.api.Goods;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import io.github.izakyl.folkways.core.shell.crafting.CraftedPort;
+import io.github.izakyl.folkways.core.shell.crafting.ExternalRoom;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -40,10 +42,11 @@ import java.util.OptionalLong;
 import java.util.Set;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
 
-final class NetworkPort implements StorePort {
+public final class NetworkPort implements ItemPort {
 
     private final ServerLevel level;
     private final BlockPos pos;
@@ -62,7 +65,7 @@ final class NetworkPort implements StorePort {
         this.buffer = buffer;
     }
 
-    AbstractNetworkNode node() {
+    public AbstractNetworkNode node() {
         return node;
     }
 
@@ -107,10 +110,10 @@ final class NetworkPort implements StorePort {
         return filter().map(item::equals).orElse(true);
     }
 
-    StorePort delivery() {
+    public ItemPort delivery() {
         return new CraftedPort(this, (item, count, simulate) ->
             allowsCraft(ItemResource.ofItemStack(item)) ? storage().insert(ItemResource.ofItemStack(item), count,
-                simulate ? Action.SIMULATE : Action.EXECUTE, Devices.source(node)) : 0);
+                simulate ? Action.SIMULATE : Action.EXECUTE, Rs2Devices.source(node)) : 0);
     }
 
     void cancel(java.util.UUID task) {
@@ -122,26 +125,39 @@ final class NetworkPort implements StorePort {
     }
 
     @Override
-    public PortIdentity identity() {
-        WorldPos at = WorldPos.of(level, pos);
-        return node == null || node.getNetwork() == null ? PortIdentity.block(at)
-            : new PortIdentity(Devices.key(node.getNetwork()), at);
+    public WorldPos anchor() {
+        return identity().home();
     }
 
     @Override
-    public Usability usability() {
-        var condemned = StorePorts.condemned(WorldPos.of(level, pos));
-        if (condemned.isPresent()) {
-            return new Usability.Unusable(condemned.get(), true);
-        }
+    public PortIdentity identity() {
+        WorldPos at = WorldPos.of(level, pos);
+        return node == null || node.getNetwork() == null ? PortIdentity.block(at)
+            : new PortIdentity(Rs2Devices.key(node.getNetwork()), at);
+    }
+
+    @Override
+    public Optional<Component> unavailable(ServerLevel level) {
         if (buffer) {
-            return Usability.because(Devices.reason("buffer"));
+            return Optional.of(Rs2Devices.reason("buffer"));
         }
         if (node == null || node.getNetwork() == null) {
-            return Usability.because(Devices.reason("disconnected"));
+            return Optional.of(Rs2Devices.reason("disconnected"));
         }
         if (!node.isActive() || node.getNetwork().getComponent(EnergyNetworkComponent.class).getStored() == 0) {
-            return Usability.because(Devices.reason("unpowered"));
+            return Optional.of(Rs2Devices.reason("unpowered"));
+        }
+        if (level.getBlockEntity(pos) instanceof StorageMonitorBlockEntity monitor
+                && !(monitor.getConfiguredResource() instanceof ItemResource)) {
+            return Optional.of(Rs2Devices.reason("unconfigured"));
+        }
+        return Optional.empty();
+    }
+
+    @Override
+    public List<TransformHint> transforms() {
+        if (node == null || node.getNetwork() == null) {
+            return List.of();
         }
         for (var member : node.getNetwork().getComponent(GraphNetworkComponent.class).getContainers()) {
             var device = member.getNode();
@@ -150,15 +166,12 @@ final class NetworkPort implements StorePort {
                 || device instanceof ExternalStorageNetworkNode external && external.isActive()
                     && external.getStorageConfiguration().isVoidExcess();
             if (voids) {
-                return Usability.because(Devices.reason("voiding"));
+                return List.of(new TransformHint.Discard(Optional.empty(), TransformHint.Discard.Mode.NETWORK_EXCESS));
             }
         }
-        if (level.getBlockEntity(pos) instanceof StorageMonitorBlockEntity monitor
-                && !(monitor.getConfiguredResource() instanceof ItemResource)) {
-            return Usability.because(Devices.reason("unconfigured"));
-        }
-        return Usability.USABLE;
+        return List.of();
     }
+
 
     @Override
     public Set<Operation> operations() {
@@ -178,9 +191,17 @@ final class NetworkPort implements StorePort {
             .toList();
     }
 
+    long count(ItemSpec wanted) {
+        return stock().stream().filter(entry -> Goods.matches(entry.prototype(), wanted))
+            .mapToLong(PortReader.Entry::count).sum();
+    }
+
     @Override
-    public PortReader reader(ServerLevel world, List<StoreRule> rules) {
-        boolean usable = usability().usable();
+    public PortReader reader(ServerLevel world, Optional<SlotWindow> window) {
+        if (window.isPresent()) {
+            return PortReader.EMPTY;
+        }
+        boolean usable = valid(world);
         var cursor = (usable ? stock() : List.<PortReader.Entry>of()).iterator();
         return new PortReader() {
             private final List<Entry> entries = new ArrayList<>();
@@ -208,12 +229,14 @@ final class NetworkPort implements StorePort {
     Room.Pool room() {
         long items = 0;
         Map<ItemSpec, Long> limits = new LinkedHashMap<>();
+        ExternalRoom externalRoom = new ExternalRoom();
+        var source = Rs2Devices.source(node);
         Set<Storage> seen = Collections.newSetFromMap(new IdentityHashMap<>());
         for (var member : node.getNetwork().getComponent(GraphNetworkComponent.class).getContainers()) {
             if (member.getNode() instanceof StorageNetworkNode storage && storage.isActive()
                     && !storage.getStorageConfiguration().getAccessMode().isExtractOnly()) {
                 long free = roomIn(storage.getStorage(), seen);
-                items = free > Long.MAX_VALUE - items ? Long.MAX_VALUE : items + free;
+                items = ExternalRoom.add(items, free);
                 if (free > 0) {
                     for (var item : BuiltInRegistries.ITEM) {
                         ItemStack stack = item.getDefaultInstance();
@@ -222,16 +245,29 @@ final class NetworkPort implements StorePort {
                         }
                         ItemResource key = ItemResource.ofItemStack(stack);
                         if (storage.getStorageConfiguration().isAllowed(key)) {
-                            limits.merge(Goods.specOf(stack), free,
-                                (one, other) -> other > Long.MAX_VALUE - one ? Long.MAX_VALUE : one + other);
+                            limits.merge(Goods.specOf(stack), free, ExternalRoom::add);
                         }
                     }
                 }
+            } else if (member instanceof InWorldNetworkNodeContainer at
+                    && member.getNode() instanceof ExternalStorageNetworkNode external && external.isActive()
+                    && !external.getStorageConfiguration().getAccessMode().isExtractOnly()
+                    && !external.getStorageConfiguration().isVoidExcess()) {
+                var side = ExternalStorage.facing(at.getBlockState());
+                var world = level.getServer().getLevel(at.getPosition().dimension());
+                var storage = external.getStorage();
+                if (side != null && world != null && storage instanceof CompositeAwareChild child
+                        && seen.add(storage)) {
+                    BlockPos target = at.getLocalPosition().relative(side);
+                    externalRoom.add(world, target, side.getOpposite(), (stack, limit) ->
+                        child.compositeInsert(ItemResource.ofItemStack(stack), limit, Action.SIMULATE, source).amount());
+                }
             }
         }
+        items = ExternalRoom.add(items, externalRoom.mergeInto(limits));
         // Configured child proxies only support composite operations. Simulation must enter through the root.
         limits.replaceAll((goods, limit) -> Math.min(limit, storage().insert(
-            ItemResource.ofItemStack(Goods.display(goods)), limit, Action.SIMULATE, Devices.source(node))));
+            ItemResource.ofItemStack(Goods.display(goods)), limit, Action.SIMULATE, source)));
         return new Room.Pool(items, items, Optional.of(limits));
     }
 
@@ -254,41 +290,32 @@ final class NetworkPort implements StorePort {
             }
             return free;
         }
-        // External, creative and unknown providers contribute stock, but no promised item capacity.
+        // Creative and unknown disk providers contribute stock without a finite item capacity.
         return 0;
     }
 
     @Override
-    public TransferResult take(ServerLevel world, List<Pull> requested, List<StoreRule> rules, boolean simulate) {
-        if (!usability().usable()) {
+    public TransferResult take(ServerLevel world, List<Pull> requested, Optional<SlotWindow> window, boolean simulate) {
+        if (!valid(world)) {
             return new TransferResult.Refused(TransferResult.Why.UNUSABLE);
         }
-        if (!operations.contains(Operation.TAKE) || !StoreRule.takes(rules)
-                || rules.stream().anyMatch(StoreRule.Slots.class::isInstance)
-                || !requested.stream().allMatch(pull -> admits(rules, pull))) {
+        if (!operations.contains(Operation.TAKE)
+                || window.isPresent()) {
             return new TransferResult.Refused(TransferResult.Why.NOT_ALLOWED);
         }
-        return Transfers.take(level, pos, storage(), Devices.source(node), requested, this::allows, simulate);
+        return Transfers.take(level, pos, storage(), Rs2Devices.source(node), requested, this::allows, simulate);
     }
 
     @Override
-    public TransferResult put(ServerLevel world, List<ItemStack> goods, List<StoreRule> rules,
-                              boolean directed, boolean simulate) {
-        if (!usability().usable()) {
+    public TransferResult put(ServerLevel world, List<ItemStack> goods, Optional<SlotWindow> window, boolean simulate) {
+        if (!valid(world)) {
             return new TransferResult.Refused(TransferResult.Why.UNUSABLE);
         }
-        if (!operations.contains(Operation.PUT) || rules.stream().anyMatch(StoreRule.Slots.class::isInstance)
-                || goods.stream().anyMatch(stack -> !stack.isEmpty() && !allowsCraft(ItemResource.ofItemStack(stack)))
-                || !directed && (!StoreRule.stores(rules)
-                    || goods.stream().anyMatch(stack -> !StoreRule.admits(rules, stack)))) {
+        if (!operations.contains(Operation.PUT) || window.isPresent()
+                || goods.stream().anyMatch(stack -> !stack.isEmpty() && !allowsCraft(ItemResource.ofItemStack(stack)))) {
             return new TransferResult.Refused(TransferResult.Why.NOT_ALLOWED);
         }
-        return Transfers.put(level, pos, storage(), Devices.source(node), goods, room(), simulate);
+        return Transfers.put(level, pos, storage(), Rs2Devices.source(node), goods, room(), simulate);
     }
 
-    // On a network device the panel's item filter bounds taking as well as putting.
-    private static boolean admits(List<StoreRule> rules, Pull pull) {
-        return pull instanceof Pull.Exact exact ? StoreRule.admits(rules, exact.stack())
-            : StoreRule.admits(rules, ((Pull.Matching) pull).spec());
-    }
 }

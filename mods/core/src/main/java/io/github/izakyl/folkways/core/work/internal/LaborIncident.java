@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.core.work.internal;
 
-import io.github.izakyl.folkways.core.front.api.notice.DebugText;
+import io.github.izakyl.folkways.core.card.api.notice.DebugText;
 import io.github.izakyl.folkways.core.resident.api.Body;
 import io.github.izakyl.folkways.core.work.api.Node;
 import io.github.izakyl.folkways.core.work.api.PreemptReason;

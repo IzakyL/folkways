@@ -42,7 +42,7 @@ public final class FarmingScene {
     }
 
     public static void program(SceneBuilder scene, SceneBuildingUtil util) {
-        scene.title("farming", "Farming: draw a plot, and let it come back");
+        scene.title("farming", "Farming: mark a plot, and it keeps going");
         PonderScenery.openWorld(scene, util, PLATE);
         PonderScenery.grassGround(scene, util, PLATE);
         scene.world().setBlocks(util.select().fromTo(0, 0, 0, 0, 0, PLATE - 1),
@@ -56,7 +56,7 @@ public final class FarmingScene {
 
         scene.overlay().showOutline(PonderPalette.GREEN, plot, plot, 100);
         scene.overlay().showText(90)
-            .text("With the book marking out, click two opposite corners to frame a plot. Its settings say what it grows, wheat here, and whether residents pull up grass and flowers before hoeing; both are on to start.")
+            .text("Click two opposite corners, then right-click and choose Farm. On its card, choose the Crop, wheat here. Clear grass and Clear flowers start on.")
             .pointAt(util.vector().topOf(3, 0, 2))
             .placeNearTarget()
             .attachKeyFrame();
@@ -72,7 +72,7 @@ public final class FarmingScene {
             Blocks.FARMLAND.defaultBlockState().setValue(BlockStateProperties.MOISTURE, 7), false);
         scene.overlay().showOutline(PonderPalette.GREEN, wheatSoil, wheatSoil, 90);
         scene.overlay().showText(90)
-            .text("Residents hoe the ground inside the box. A hoe is the one tool a plot asks for, and the tool list on the Farming page has to allow it: an empty list allows none.")
+            .text("Residents hoe the ground inside. Farm must allow a hoe under Settings → Trade tools.")
             .pointAt(util.vector().topOf(2, 0, 1))
             .placeNearTarget()
             .attachKeyFrame();
@@ -82,7 +82,7 @@ public final class FarmingScene {
         resident.hold(scene, new ItemStack(Items.WHEAT_SEEDS, 4));
         scene.overlay().showOutline(PonderPalette.GREEN, wheatCrop, wheatCrop, 90);
         scene.overlay().showText(90)
-            .text("Then they sow it, and come back when the crop is ripe. Crops that don't need farmland, like cane or saplings, are sown without hoeing.")
+            .text("Then they sow, and come back when the crop is ripe. Crops that need no farmland, like cane or saplings, are planted without hoeing.")
             .pointAt(util.vector().topOf(2, 1, 1))
             .placeNearTarget()
             .attachKeyFrame();
@@ -99,7 +99,7 @@ public final class FarmingScene {
         }
         resident.hold(scene, new ItemStack(Items.WHEAT, 4));
         scene.overlay().showText(90)
-            .text("Most crops leave the soil bare once harvested, and the next round is sown on the same ground.")
+            .text("Most crops leave bare soil when harvested, and the next round is sown in place.")
             .pointAt(util.vector().topOf(2, 0, 1))
             .placeNearTarget()
             .attachKeyFrame();
@@ -123,9 +123,7 @@ public final class FarmingScene {
         resident.hold(scene, new ItemStack(Items.SUGAR_CANE, 2));
         scene.overlay().showOutline(PonderPalette.BLUE, caneBase, util.select().position(caneBase), 90);
         scene.overlay().showText(90)
-            .text("Sugar cane is cut once it stands three tall, bamboo at four, and only down to the bottom stalk. "
-                + "What stays keeps growing on its own. Bamboo is sown in single rows with an aisle left between, "
-                + "so nobody is walled in.")
+            .text("Sugar cane is cut at three tall and bamboo at four, leaving the bottom stalk to regrow. Bamboo goes in two rows with an aisle between.")
             .pointAt(util.vector().topOf(caneBase))
             .placeNearTarget()
             .attachKeyFrame();
@@ -150,7 +148,7 @@ public final class FarmingScene {
         resident.hold(scene, new ItemStack(Items.MELON_SLICE, 5));
         scene.overlay().showOutline(PonderPalette.BLUE, stem, util.select().position(stem), 90);
         scene.overlay().showText(90)
-            .text("Melons and pumpkins give up the fruit only. The vine is left standing and grows another one. Vines are sown a cell in from the edge of the plot, and the fruit grows in the ring left round them.")
+            .text("For melons and pumpkins, only the fruit is taken and the stem grows more. Stems go one block in from the edge, leaving room for fruit.")
             .pointAt(util.vector().topOf(stem))
             .placeNearTarget()
             .attachKeyFrame();
@@ -162,7 +160,7 @@ public final class FarmingScene {
         scene.idle(20);
         scene.overlay().showOutline(PonderPalette.OUTPUT, wood, wood, 120);
         scene.overlay().showText(90)
-            .text("A wood lot is a plot whose crop is a sapling. The same cycle: every log of the tree is felled with the leaves it holds up, all of it carried off, and a sapling goes back where one has room to grow. Dark oak goes in four to a square, and jungle and spruce can too.")
+            .text("A farm of saplings is a wood lot. Whole trees are felled with their leaves, and saplings are replanted. Dark oak, jungle and spruce can go in 2×2.")
             .pointAt(util.vector().topOf(TRUNK, 3, TRUNK_Z))
             .placeNearTarget()
             .attachKeyFrame();
@@ -195,7 +193,7 @@ public final class FarmingScene {
         resident.hold(scene, new ItemStack(Items.WHEAT, 4));
         scene.overlay().showOutline(PonderPalette.GREEN, wheatCrop, wheatCrop, 90);
         scene.overlay().showText(90)
-            .text("A farmer with the Replant perk resows as they harvest, using a seed from what the crop just dropped. It only works for crops cut down whole, like wheat, not for cane, fruit or trees.")
+            .text("A farmer with the Replant perk resows with seeds from the harvest. This only works for crops cut whole, like wheat.")
             .pointAt(util.vector().topOf(2, 1, 1))
             .placeNearTarget()
             .attachKeyFrame();

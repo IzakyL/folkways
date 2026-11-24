@@ -1,6 +1,7 @@
+import { createHash } from "node:crypto";
 import { expect, test } from "@playwright/test";
 import { defineTask, javaTask, screen, tick, world } from "@izakyl/blockwright-minecraft";
-import { clickElement } from "../ldlib2";
+import { clickElement, panelElements } from "../ldlib2";
 import {
   commandPos,
   foundColonyFast,
@@ -11,7 +12,8 @@ import {
   waitForGroundedPlayer,
   type Vec,
 } from "../shared/colony/colony-founding";
-import { boardAct, boardRows } from "../shared/ui/site-panel";
+import { BOOK_TABS, textUnder, waitForPresent } from "../shared/ui/book-cards";
+import { clickTab } from "../shared/ui/colony-pages";
 import { runColonyTask } from "../shared/colony/colony-tasks";
 import { mustCommand } from "../shared/ui/world-ui";
 import { launchPair, type E2EPair } from "../shared/harness/pair";
@@ -19,7 +21,6 @@ import { ensureOut, tracePath } from "../shared/harness/out-paths";
 import { seededServer } from "../shared/harness/mod-settings";
 import { BUDGET } from "../shared/harness/budgets";
 import { sampleWhileSprinting, settledAll, unwrapSettled } from "../shared/harness/tick-tools";
-import { waitForElement, softly } from "../shared/harness/bw-helpers";
 import { newRunId } from "../shared/harness/run-id";
 import { twins, type Stage } from "../shared/harness/stage";
 
@@ -29,12 +30,17 @@ const ORDER_COUNT = 8;
 const SMELT_INPUT = "minecraft:raw_iron";
 const SMELT_OUTPUT = "minecraft:iron_ingot";
 const POLICY_FUEL = "minecraft:oak_planks";
-const CRAFT_TAB = "folkways.page.wares";
-const CRAFT_PAGE = "folkways_vanilla.wares";
+const FUEL_CONTROL = "folkways.card.items.fuel";
+const WARES_SCOPE = createHash("md5").update("folkways_core:colony_settings/folkways_vanilla:wares").digest();
+WARES_SCOPE[6] = (WARES_SCOPE[6] & 0x0f) | 0x30;
+WARES_SCOPE[8] = (WARES_SCOPE[8] & 0x3f) | 0x80;
+const WARES_SCOPE_ID = WARES_SCOPE.toString("hex").replace(
+  /^(........)(....)(....)(....)(............)$/, "$1-$2-$3-$4-$5",
+);
 const BLOCKED_PHASE_TICKS = 800;
 const SMELT_PHASE_TICKS = 12_000;
 
-for (const stage of twins()) test(stage.title("smelting end-to-end: the fuel policy set through the real panel is what unblocks the furnace"), async ({}, testInfo) => {
+for (const stage of twins()) test(stage.title("smelting end-to-end: the fuel policy set through Settings is what unblocks the furnace"), async ({}, testInfo) => {
   test.setTimeout(BUDGET.standard);
   ensureOut("e2e");
   const runId = newRunId();
@@ -94,14 +100,10 @@ for (const stage of twins()) test(stage.title("smelting end-to-end: the fuel pol
         + ` coal and charcoal and neither was in storage — the furnace path is ignoring WaresContent.FUEL`,
     ).toBe(false);
 
-    const policy = await allowFuelViaPanel(server, client, playerName, founding.standBlock, stage,
+    await allowFuelViaSettings(server, client, playerName, founding.standBlock, stage,
       String(founding.evidence.colonyId));
     const smelted = await pollForOutput(server, watched, SMELT_PHASE_TICKS);
 
-    expect(
-      policy.entry_visible,
-      "the oak_planks rule never reached the fuel list — the picker's confirm did not reach the server (or was rejected)",
-    ).toBe(true);
     expect(
       smelted.found,
       `${SMELT_OUTPUT} never appeared after oak_planks was ticked in the fuel picker: nobody carried a plank`
@@ -116,32 +118,24 @@ for (const stage of twins()) test(stage.title("smelting end-to-end: the fuel pol
 
 });
 
-async function allowFuelViaPanel(
+async function allowFuelViaSettings(
   server: any, client: any, playerName: string, standBlock: Vec, stage: Stage, colonyId: string,
 ) {
-  const evidence: any = { item: POLICY_FUEL };
-  evidence.open_panel = await openColonyPanelViaBook(server, client, playerName, standBlock, stage);
-  evidence.click_craft_tab = await softly(() => clickElement(client, { id: CRAFT_TAB }));
-  await waitForElement(client, { idPattern: `folkways.board.edit.${CRAFT_PAGE}.*` }, { timeoutMs: 8_000 });
-  const fuel = await fuelEditToken(client);
-  evidence.fuel_edit = fuel;
-  // The fuel edit opens the item picker; oak planks are ticked there as one more rule, and confirmed.
-  evidence.pick_fuel = await pickViaSelector(client, fuel, POLICY_FUEL, "oak_planks");
-  await tick.sprint(server, 10);
-  const held = await runColonyTask(server, FUEL_RULES, { colony_id: colonyId });
-  evidence.rules = held.rules;
-  evidence.entry_visible = Array.isArray(held.rules) && held.rules.includes(POLICY_FUEL);
+  await openColonyPanelViaBook(server, client, playerName, standBlock, stage);
+  await clickTab(client, BOOK_TABS.settings);
+  const scope = `folkways.book.scope.${WARES_SCOPE_ID}`;
+  await waitForPresent(server, client, scope);
+  await clickElement(client, { id: scope });
+  await waitForPresent(server, client, FUEL_CONTROL);
+  expect(textUnder(await panelElements(client), FUEL_CONTROL)).toContain("Coal");
+  await pickViaSelector(client, FUEL_CONTROL, POLICY_FUEL, "*minecraft:oak_planks");
+
+  await expect.poll(async () => {
+    await tick.sprint(server, 5);
+    return (await runColonyTask(server, FUEL_RULES, { colony_id: colonyId })).rules;
+  }).toEqual(expect.arrayContaining(["minecraft:coal", "minecraft:charcoal", POLICY_FUEL]));
   await screen.dismiss(client);
   await tick.sprint(server, 10);
-  return evidence;
-}
-
-async function fuelEditToken(client: any): Promise<string> {
-  const rows = (await boardRows(client)).filter((row) => row.page === CRAFT_PAGE);
-  if (rows.length === 0) {
-    throw new Error("smelting: the Craft page has no rows");
-  }
-  return (await boardAct(client, "edit", CRAFT_PAGE, rows[0].row, 0)).id;
 }
 
 async function pollForOutput(server: any, watched: Vec[], maxTicks: number) {

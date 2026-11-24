@@ -8,7 +8,7 @@ import io.github.izakyl.folkways.core.runtime.LaborSnapshot;
 import io.github.izakyl.folkways.core.work.api.ReservedInput;
 import io.github.izakyl.folkways.core.work.internal.LaborIncident;
 import io.github.izakyl.folkways.core.front.api.ui.Pages;
-import io.github.izakyl.folkways.core.front.engine.charter.Charters;
+import io.github.izakyl.folkways.core.colony.charter.Charters;
 import java.util.Optional;
 import java.util.HashMap;
 import java.util.List;

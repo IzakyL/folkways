@@ -82,7 +82,7 @@ const SCALE: Scale = {
 
 const ALL_VOCATIONS = [
   "folkways_vanilla:farming", "folkways_vanilla:herding", "folkways_vanilla:building", "folkways_vanilla:crafting",
-  "folkways_core:hauling", "folkways_vanilla:fishing", "folkways_create:conducting", "folkways_create:dispatching",
+  "folkways_core:hauling", "folkways_vanilla:fishing", "folkways_vanilla:conducting", "folkways_vanilla:dispatching",
   // Human residents do not patrol: the golems keep the watch, and no human is kitted with a weapon for it.
   "folkways_vanilla:patrolling",
 ] as const;
@@ -237,7 +237,7 @@ test(`large colony: ${SCALE.residents} residents in a town on real terrain (refl
       member_cells: spec.members.length,
       bed_claims: spec.bedClaims?.length ?? 0,
     };
-    report.setup.reload = await forceReloadColony(server, playerUuid);
+    report.setup.reload = await reloadTown(server, playerUuid);
     await settle(server, 5);
     report.setup.zones_written = spec.zones.length;
     report.setup.zones_loaded = await zonesInWorld(server).catch((e: unknown) => ({ error: errorSummary(e) }));
@@ -251,7 +251,7 @@ test(`large colony: ${SCALE.residents} residents in a town on real terrain (refl
     const trains: Array<{ line: Line; rail: RailResult; first: Stop }> = [];
     if (net && net.lines.length) {
       report.setup.rail = { enabled: true, centre: net.centre, lines: [], refused: net.refused };
-      await runColonyTask(server, SELECT_TOWN, { player: playerName, colony: COLONY_ID });
+      await server.run(SELECT_TOWN, { player: playerName, colony: COLONY_ID });
       await tryCommand(server,
         `item replace entity ${playerName} inventory.0 with folkways_core:colony_book 1`);
       for (const [index, line] of net.lines.entries()) {
@@ -637,8 +637,8 @@ const SELECT_TOWN = defineTask<{ player: string; colony: string }, boolean>({
   name: "folkways.bench.select-town", side: "server",
   source: javaTask({ imports: [
     "io.github.izakyl.folkways.core.colony.api.Colonies",
-    "io.github.izakyl.folkways.core.front.engine.charter.Charters",
-    "io.github.izakyl.folkways.core.front.engine.charter.CurrentColony",
+    "io.github.izakyl.folkways.core.colony.charter.Charters",
+    "io.github.izakyl.folkways.core.colony.charter.CurrentColony",
   ], body: `
 var args = Args.of(ctx);
 var server = ctx.server();
@@ -650,19 +650,39 @@ return true;
 ` }),
 });
 
-async function forceReloadColony(server: MinecraftServer, playerUuid: string) {
-  try {
-    const removed = await reflect.invoke(server, {
-      target: { kind: "entity", uuid: playerUuid },
-      path: "level().getDataStorage().cache",
-      method: "remove",
-      args: ["folkways_colonies"],
-      argTypes: ["java.lang.Object"],
-    });
-    return { ok: removed?.found === true, ownerType: removed?.ownerType };
-  } catch (error) {
-    return { ok: false, error: errorSummary(error) };
+const OPEN_TOWN_REGISTRY = defineTask<{ colony: string }, { colonies: number }>({
+  name: "folkways.bench.open-town-registry", side: "server",
+  source: javaTask({ imports: [
+    "io.github.izakyl.folkways.core.colony.api.Colonies",
+    "io.github.izakyl.folkways.core.colony.internal.ColonyRuntime",
+  ], body: `
+var server = ctx.server();
+if (!Colonies.all(server).isEmpty()) {
+    throw Fail.invalid("the benchmark must seed an empty colony registry");
+}
+ColonyRuntime.opened(server);
+var id = UUID.fromString(Args.of(ctx).string("colony"));
+if (Colonies.of(server, id).isEmpty()) {
+    throw Fail.notFound("the seeded colony " + id + " was not loaded");
+}
+return Map.of("colonies", Colonies.all(server).size());
+` }),
+});
+
+async function reloadTown(server: MinecraftServer, playerUuid: string) {
+  const removed = await reflect.invoke(server, {
+    target: { kind: "entity", uuid: playerUuid },
+    path: "level().getDataStorage().cache",
+    method: "remove",
+    args: ["folkways_colonies"],
+    argTypes: ["java.lang.Object"],
+  });
+  if (!removed.found) {
+    throw new Error("could not evict the benchmark's empty colony save from Minecraft's cache");
   }
+  // The live registry is cached separately from Minecraft's saved data.
+  const opened = await server.run(OPEN_TOWN_REGISTRY, { colony: COLONY_ID });
+  return { ok: true, ownerType: removed.ownerType, ...opened };
 }
 
 // The game ticks a chunk's blocks only with a player within 128 blocks who is no spectator, and every camera of the
@@ -846,7 +866,8 @@ function residentNbt(uuid: string, colonyIA: string, trade: Trade, equipped: boo
       `{Slot:${trade.tools.length}b,Stack:{id:"minecraft:bread",count:${STARTING_BREAD}}}`].join(",")
     : "";
   return `{UUID:${uuidToSnbt(uuid)},PersistenceRequired:1b,`
-    + `"neoforge:attachments":{"folkways_core:body_state":{Colony:${colonyIA},Pack:{Items:[${items}]}},`
+    + `"neoforge:attachments":{"folkways_core:body_state":{Colony:${colonyIA},Pack:{Items:[${items}]},`
+    + `Perks:{vocations:{},global:{xp:0,level:0,labor_remainder:0,owned:[]}}},`
     + `"folkways_core:resident_capabilities":`
     + `{withheld:[${withheld}],keenness:{${priorities}}}}}`;
 }

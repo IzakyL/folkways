@@ -40,7 +40,7 @@ public final class WorkshopScene {
     }
 
     public static void program(SceneBuilder scene, SceneBuildingUtil util) {
-        scene.title("workshop", "The workshop: stations the colony works");
+        scene.title("workshop", "Workshop: the colony's stations");
         PonderScenery.openWorld(scene, util, PLATE);
         PonderScenery.grassGround(scene, util, PLATE);
 
@@ -68,14 +68,14 @@ public final class WorkshopScene {
         scene.idle(20);
         scene.overlay().showOutline(PonderPalette.GREEN, stations, stations, 90);
         scene.overlay().showText(90)
-            .text("Point the book at a crafting table, a stonecutter or a smithing table and it joins the colony as a station. A furnace, blast furnace or smoker joins the same way.")
+            .text("With Take in picked, left-click a crafting table, stonecutter or smithing table to add it as a station. Furnaces, blast furnaces and smokers work the same way.")
             .pointAt(util.vector().topOf(table))
             .placeNearTarget()
             .attachKeyFrame();
         scene.idle(100);
 
         scene.overlay().showText(80)
-            .text("A station needs a spot within reach and in sight of it for a resident to stand on. One walled in on every side is left out.")
+            .text("A station needs a spot within reach and in view where a resident can stand. A fully walled-in station is skipped.")
             .pointAt(util.vector().blockSurface(cutter, Direction.SOUTH))
             .placeNearTarget()
             .attachKeyFrame();
@@ -95,7 +95,7 @@ public final class WorkshopScene {
         resident.hold(scene, new ItemStack(Items.STICK, 4));
         scene.overlay().showOutline(PonderPalette.OUTPUT, table, util.select().position(table), 90);
         scene.overlay().showText(90)
-            .text("Residents with the crafting trade work them. They make what the colony's orders call for, and fetch the ingredients from its stores first.")
+            .text("Residents with the Craft trade work them, making what orders need with ingredients from storage.")
             .pointAt(util.vector().topOf(table))
             .placeNearTarget()
             .attachKeyFrame();
@@ -108,7 +108,7 @@ public final class WorkshopScene {
         scene.idle(20);
         resident.hold(scene, new ItemStack(Items.STONE_BRICKS, 1));
         scene.overlay().showText(80)
-            .text("The stonecutter works its own recipes. The smithing table is used for upgrades only, never for trims.")
+            .text("The stonecutter uses its own recipes. The smithing table is only used for upgrades, never trims.")
             .pointAt(util.vector().topOf(cutter))
             .placeNearTarget()
             .attachKeyFrame();
@@ -131,7 +131,7 @@ public final class WorkshopScene {
         scene.overlay().showOutline(PonderPalette.FAST, "furnaces",
             util.select().position(furnace).add(util.select().position(second)), 90);
         scene.overlay().showText(90)
-            .text("At a furnace they put in a load and come back for it once it is cooked. A large batch is shared out among the idle furnaces of the same kind.")
+            .text("At a furnace, they load a batch and come back when it is done. Big batches are split across idle furnaces of the same kind.")
             .pointAt(util.vector().topOf(second))
             .placeNearTarget()
             .attachKeyFrame();
@@ -146,7 +146,7 @@ public final class WorkshopScene {
         resident.hold(scene, ItemStack.EMPTY);
         scene.world().modifyBlock(second, state -> state.setValue(BlockStateProperties.LIT, true), false);
         scene.overlay().showText(90)
-            .text("A loaded furnace that has gone cold gets fuel one piece at a time, and only what is on the fuel list: coal and charcoal to begin with.")
+            .text("A loaded furnace that goes out gets one piece of fuel at a time, only from the Fuel list: coal and charcoal by default.")
             .pointAt(util.vector().topOf(second))
             .placeNearTarget()
             .attachKeyFrame();
@@ -159,7 +159,7 @@ public final class WorkshopScene {
         resident.hold(scene, new ItemStack(Items.IRON_INGOT, 8));
         scene.overlay().showOutline(PonderPalette.OUTPUT, furnace, util.select().position(furnace), 80);
         scene.overlay().showText(80)
-            .text("Anything left finished in a furnace that nobody is waiting on gets taken out too, so the next load has room.")
+            .text("Finished items nobody is waiting for are taken out too, to make room.")
             .pointAt(util.vector().topOf(furnace))
             .placeNearTarget()
             .attachKeyFrame();
@@ -170,7 +170,7 @@ public final class WorkshopScene {
 
         scene.overlay().showOutline(PonderPalette.GREEN, stations, stations, 90);
         scene.overlay().showText(90)
-            .text("The Workshop page counts the stations and lists each one, a furnace with the fuel in it or No fuel. The fuel list is the first row there.")
+            .text("Facilities lists every station; click one to open its card. The Fuel list is in Settings.")
             .pointAt(util.vector().topOf(furnace))
             .placeNearTarget()
             .attachKeyFrame();

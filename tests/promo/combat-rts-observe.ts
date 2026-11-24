@@ -207,9 +207,9 @@ export const READ_SERVER = defineTask<Context, ServerState>({
       "net.minecraft.server.MinecraftServer",
       "io.github.izakyl.folkways.core.colony.api.Colonies",
       "io.github.izakyl.folkways.core.resident.api.Bodies",
-      "io.github.izakyl.folkways.core.rts.combat.group.UnitGroups",
-      "io.github.izakyl.folkways.core.rts.combat.command.ResidentCommands",
-      "io.github.izakyl.folkways.core.rts.combat.control.CombatSelectionOwnership",
+      "io.github.izakyl.folkways.core.command.combat.group.UnitGroups",
+      "io.github.izakyl.folkways.core.command.combat.command.ResidentCommands",
+      "io.github.izakyl.folkways.core.command.combat.control.CombatSelectionOwnership",
     ],
     body: `
 var a = Args.of(ctx);
@@ -271,7 +271,7 @@ export const READ_CLIENT = defineTask<void, ClientState>({
       "java.util.LinkedHashMap",
       "java.util.ArrayList",
       "io.github.izakyl.folkways.core.front.api.ui.OverheadTools",
-      "io.github.izakyl.folkways.core.rts.combat.net.CombatPackets",
+      "io.github.izakyl.folkways.core.command.combat.net.CombatPackets",
     ],
     body: `
 var out = new LinkedHashMap<String, Object>();
@@ -394,7 +394,7 @@ const PROJECT = defineTask<Vec & { entity: string }, Pixel>({
     body: `
 var a = Args.of(ctx);
 var mc = Minecraft.getInstance();
-var type = Class.forName("io.github.izakyl.folkways.core.rts.client.CombatProjection");
+var type = Class.forName("io.github.izakyl.folkways.core.command.client.CombatProjection");
 var constructor = type.getDeclaredConstructor(Minecraft.class);
 constructor.setAccessible(true);
 var projection = constructor.newInstance(mc);

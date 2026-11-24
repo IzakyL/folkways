@@ -1,5 +1,6 @@
 package io.github.izakyl.folkways.core.shell.toms;
 
+import io.github.izakyl.folkways.core.facility.api.Ports;
 import com.tom.storagemod.block.AbstractStorageTerminalBlock;
 import com.tom.storagemod.block.AbstractStorageTerminalBlock.TerminalPos;
 import com.tom.storagemod.block.entity.InventoryCableConnectorBlockEntity;
@@ -11,9 +12,10 @@ import com.tom.storagemod.inventory.MultiInventoryAccess;
 import com.tom.storagemod.inventory.NetworkInventory;
 import com.tom.storagemod.inventory.PlatformFilteredInventoryAccess;
 import com.tom.storagemod.inventory.PlatformInventoryAccess.BlockInventoryAccess;
-import io.github.izakyl.folkways.core.inventory.api.port.StorePort;
-import io.github.izakyl.folkways.core.inventory.api.port.StorePorts;
+import io.github.izakyl.folkways.core.facility.api.control.ItemPort;
+import com.tom.storagemod.menu.StorageTerminalMenu;
 import io.github.izakyl.folkways.core.shell.mixin.TomsInventoryAccessor;
+import io.github.izakyl.folkways.core.shell.mixin.TomsTerminalMenuAccessor;
 import io.github.izakyl.folkways.core.shell.storage.NativeCells;
 import io.github.izakyl.folkways.core.shell.storage.ProxyPort;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
@@ -26,6 +28,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.inventory.AbstractContainerMenu;
 
 public final class TomsIntegration {
 
@@ -36,11 +39,28 @@ public final class TomsIntegration {
     }
 
     public static void install() {
-        StorePorts.register(ResourceLocation.fromNamespaceAndPath("folkways_core", "toms_storage"),
-            StorePorts.SPECIFIC, TomsIntegration::at);
+        Ports.registerItem(ResourceLocation.fromNamespaceAndPath("folkways_core", "toms_storage"),
+            Ports.SPECIFIC, TomsIntegration::at);
     }
 
-    private static Optional<StorePort> at(ServerLevel level, BlockPos pos) {
+    /** Whether a menu shows a storage or crafting terminal; true on either side. */
+    public static boolean terminal(AbstractContainerMenu menu) {
+        return menu instanceof StorageTerminalMenu;
+    }
+
+    /** The terminal block a server-side terminal menu shows, wireless terminals included. */
+    public static Optional<WorldPos> terminalAt(AbstractContainerMenu menu) {
+        if (!(menu instanceof StorageTerminalMenu)) {
+            return Optional.empty();
+        }
+        StorageTerminalBlockEntity terminal = ((TomsTerminalMenuAccessor) menu).folkways$terminal();
+        if (terminal == null || !(terminal.getLevel() instanceof ServerLevel level) || terminal.isRemoved()) {
+            return Optional.empty();
+        }
+        return Optional.of(WorldPos.of(level, terminal.getBlockPos()));
+    }
+
+    private static Optional<ItemPort> at(ServerLevel level, BlockPos pos) {
         WorldPos home = WorldPos.of(level, pos);
         ResourceLocation id = BuiltInRegistries.BLOCK.getKey(level.getBlockState(pos).getBlock());
         if (!id.getNamespace().equals("toms_storage")) {

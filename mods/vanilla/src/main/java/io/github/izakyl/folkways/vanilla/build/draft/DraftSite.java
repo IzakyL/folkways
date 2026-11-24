@@ -13,6 +13,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.Property;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.phys.Vec3;
 import net.starlark.java.annot.Param;
@@ -20,6 +21,7 @@ import net.starlark.java.annot.StarlarkBuiltin;
 import net.starlark.java.annot.StarlarkMethod;
 import net.starlark.java.eval.Dict;
 import net.starlark.java.eval.EvalException;
+import net.starlark.java.eval.Sequence;
 import net.starlark.java.eval.Starlark;
 import net.starlark.java.eval.StarlarkFloat;
 import net.starlark.java.eval.StarlarkInt;
@@ -162,6 +164,28 @@ public final class DraftSite implements StarlarkValue {
         return BlockClass.parse(of).matches(drawing.read(at.x(), at.y(), at.z()));
     }
 
+    @StarlarkMethod(name = "block_property", doc = "A block state property at a point, or None if absent.",
+        parameters = {@Param(name = "at"), @Param(name = "key")}, allowReturnNones = true)
+    public String blockProperty(Point at, String key) throws EvalException {
+        BlockState state = drawing.read(at.x(), at.y(), at.z());
+        Property<?> property = state.getBlock().getStateDefinition().getProperty(key);
+        return property == null ? null : propertyName(state, property);
+    }
+
+    private static <T extends Comparable<T>> String propertyName(BlockState state, Property<T> property) {
+        return property.getName(state.getValue(property));
+    }
+
+    @StarlarkMethod(name = "resolved_path", doc = "Record the effective ground points of this drawing.",
+        parameters = {@Param(name = "points")})
+    public void resolvedPath(Sequence<?> points) throws EvalException {
+        if (!(commission.hint() instanceof Hint.Path path) || points.size() != path.points().size()) {
+            throw Starlark.errorf("resolved_path needs one point per path mark");
+        }
+        drawing.resolvedPath(Sequence.cast(points, Point.class, "points").stream()
+            .map(point -> path.anchor().offset(point.pos())).toList());
+    }
+
     @StarlarkMethod(
         name = "probe",
         doc = "How many cells from a point, stepping up, down, north, south, east or west, until a cell of a kind."
@@ -193,7 +217,7 @@ public final class DraftSite implements StarlarkValue {
             + " share of its columns are under water, and the blocks its ground is most made of.",
         parameters = {@Param(name = "scope")})
     public Survey survey(Scope scope) throws EvalException {
-        BoundingBox box = scope.bounds();
+        BoundingBox box = Vocabulary.checkedScan(scope.bounds());
         List<Integer> heights = new ArrayList<>();
         int wet = 0;
         int columns = 0;
@@ -345,6 +369,9 @@ public final class DraftSite implements StarlarkValue {
                 throw Starlark.errorf("every steps at least one cell, got %d", spacing);
             }
             double next = offset.toInt("offset");
+            if (next < -Extent.MAX_EDGE) {
+                throw Starlark.errorf("path sampling starts at most %d cells before the mark", Extent.MAX_EDGE);
+            }
             double walked = 0.0D;
             List<Scope> found = new ArrayList<>();
             BlockPos last = null;
@@ -354,6 +381,9 @@ public final class DraftSite implements StarlarkValue {
                 double length = across(a, b);
                 boolean closing = at == cells.size() - 1;
                 while (length > 0.0D && next <= walked + length + (closing ? 1e-9 : -1e-9)) {
+                    if (found.size() >= Lattice.maxCells()) {
+                        throw Starlark.errorf("path sampling exceeds %d cells", Lattice.maxCells());
+                    }
                     double t = (next - walked) / length;
                     BlockPos cell = new BlockPos((int) Math.round(a.getX() + (b.getX() - a.getX()) * t),
                         (int) Math.round(a.getY() + (b.getY() - a.getY()) * t),
@@ -419,6 +449,9 @@ public final class DraftSite implements StarlarkValue {
                 }
                 int count = Math.max(Math.abs(b.getY() - a.getY()) + 1, (int) Math.ceil(usable / spacing));
                 Frame along = lying(a, b).frame();
+                if (count > Lattice.maxCells() - found.size()) {
+                    throw Starlark.errorf("path bays exceed %d cells", Lattice.maxCells());
+                }
                 for (int bay = 0; bay < count; bay++) {
                     Drafting.checkTime();
                     double start = usable * bay / count;

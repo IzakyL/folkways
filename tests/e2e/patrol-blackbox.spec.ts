@@ -14,13 +14,7 @@ import {
 import { aimAndWorldLeftClick, mustCommand, packHasItem } from "../shared/ui/world-ui";
 import { drainActionBar } from "../shared/ui/zone-receipt";
 import {
-  colonyFront,
-  colonyRegistry,
-  heldScroll,
-  KEY_LEFT_ALT,
-  KEY_LEFT_CONTROL,
-  markCorner,
-  setBookGesture,
+  colonyFront, colonyRegistry, heldScroll, KEY_LEFT_ALT, KEY_LEFT_CONTROL, markCorner, setBookGesture, chooseBookTool, handShapeTo, CARD_WINDOW,
 } from "../shared/ui/zone-tools";
 import { staffRoutePanel } from "../shared/ui/patrol-staffing";
 import { settlePanel } from "../shared/ui/site-panel";
@@ -39,7 +33,7 @@ const WARD_TICKS = 400;
 const WARD_RADIUS = 8;
 
 const PATROL = "folkways_vanilla:patrol";
-const PATROL_KIND = "folkways.zoneconfig.kind.folkways_vanilla.patrol";
+const PATROL_KIND = "kind:folkways_vanilla:patrol";
 const WEAPON = "minecraft:stone_sword";
 
 const WARDS = "io.github.izakyl.folkways.vanilla.patrol.Wards";
@@ -142,7 +136,7 @@ async function drawPatrolRoute(
 ) {
   const evidence: any = { route, points: [] };
   try {
-    evidence.mode = await setBookGesture(server, client, playerName, "line");
+    evidence.mode = await chooseBookTool(server, client, PATROL_KIND);
     await drainActionBar(client);
     for (const [index, point] of route.entries()) {
       evidence.points.push(await markCorner(server, client, point, new RegExp(`^Point ${index + 1} set down`),
@@ -154,13 +148,8 @@ async function drawPatrolRoute(
     expect(evidence.raise.bar?.text).toBe(`Point ${route.length} at ${last.x}, ${last.y + 1}, ${last.z}`);
     evidence.lower = await heldScroll(server, client, [KEY_LEFT_CONTROL, KEY_LEFT_ALT], -1);
     expect(evidence.lower.bar?.text).toBe(`Point ${route.length} at ${last.x}, ${last.y}, ${last.z}`);
-    evidence.open = await openColonyPanelViaBook(server, client, playerName, standBlock, stage);
-    await settlePanel(server, client);
-    await waitForElement(client, { id: PATROL_KIND }, { timeoutMs: 8_000 });
-    evidence.pick = await clickElement(client, { id: PATROL_KIND });
-    await settlePanel(server, client);
-    await waitForElement(client, { id: "folkways.zoneconfig.confirm" }, { timeoutMs: 8_000 });
-    evidence.confirm = await clickElement(client, { id: "folkways.zoneconfig.confirm" });
+    evidence.hand = await handShapeTo(server, client, PATROL_KIND);
+    evidence.card = await waitForElement(client, { id: CARD_WINDOW }, { timeoutMs: 8_000 });
     await tick.sprint(server, 10);
   } catch (error) {
     evidence.error = errorSummary(error);

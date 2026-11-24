@@ -5,6 +5,8 @@ import io.github.izakyl.folkways.core.work.api.WorkSite;
 import io.github.izakyl.folkways.core.work.api.Hold;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -15,6 +17,19 @@ public interface Workshop extends Refinement {
     UUID key();
 
     WorkSite site();
+
+    /** Display details supplied by a player-built processing facility. */
+    record FacilityDetails(UUID id, Component name, Optional<ResourceLocation> recipeType,
+                         List<WorkshopRecipes.Recipe> explicitRecipes) {
+
+        public FacilityDetails {
+            explicitRecipes = List.copyOf(explicitRecipes);
+        }
+    }
+
+    default Optional<FacilityDetails> facilityDetails() {
+        return Optional.empty();
+    }
 
     /** Optional durable continuation of an accepted external recipe, including its original operating supplies. */
     default Optional<CompoundTag> saveWork(Grown work, List<Hold> holds, HolderLookup.Provider registries) {
@@ -36,16 +51,6 @@ public interface Workshop extends Refinement {
      * Every offered node must declare the same worker and use WHEREVER stances. */
     default Optional<UUID> bearer() {
         return Optional.empty();
-    }
-
-    /**
-     * Whether the workshop owns the inventory at its site, excluding it from ordinary colony supply while
-     * retaining storage room.
-     * Pack-crafting workstations supplied by an enrolled store return false: their work uses the worker's pack,
-     * and the same block remains a store. Explicit {@code Colony.withhold} exclusions still apply.
-     */
-    default boolean withholdsStore() {
-        return true;
     }
 
     // Whether its offers for one ask are ways to the same goods that spoken for hold the same, and differ only in

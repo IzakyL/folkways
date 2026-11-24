@@ -10,6 +10,7 @@ import net.minecraft.client.renderer.RenderType;
 import net.minecraft.world.phys.AABB;
 import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 
+/** The passive marks modules keep over the colony's holdings, drawn as outlines and told when hovered. */
 final class ToolOverlay {
     private ToolOverlay() {
     }
@@ -20,8 +21,8 @@ final class ToolOverlay {
             || ColonyHighlightState.heldColonyId(minecraft.player) == null) {
             return Optional.empty();
         }
-        return OverheadTools.active().stream()
-            .flatMap(tool -> tool.marks().stream())
+        return OverheadTools.marks().stream()
+            .flatMap(source -> source.marks().stream())
             .filter(mark -> {
                 Aim aim = Aim.of(minecraft.player).in(minecraft.level, mark.min());
                 AABB box = AABB.encapsulatingFullBlocks(mark.min(), mark.max()).inflate(0.04D);
@@ -52,13 +53,13 @@ final class ToolOverlay {
         var buffers = minecraft.renderBuffers().bufferSource();
         pose.pushPose();
         pose.translate(-camera.x, -camera.y, -camera.z);
-        OverheadTools.all().forEach(tool -> {
-            for (OverheadTools.Mark mark : tool.marks()) {
+        OverheadTools.marks().forEach(source -> {
+            for (OverheadTools.Mark mark : source.marks()) {
                 Placed.drawAt(minecraft.level, pose, mark.min(),
                     event.getPartialTick().getGameTimeDeltaPartialTick(false), () -> {
                         int rgb = mark.color();
                         LevelRenderer.renderLineBox(pose,
-                            ModeOverlays.vertices(buffers.getBuffer(RenderType.lines()), tool.mode()),
+                            ModeOverlays.vertices(buffers.getBuffer(RenderType.lines()), OverheadTools.BUILD),
                             AABB.encapsulatingFullBlocks(mark.min(), mark.max()).inflate(0.035D),
                             ((rgb >> 16) & 255) / 255.0F,
                             ((rgb >> 8) & 255) / 255.0F,

@@ -1,13 +1,15 @@
 package io.github.izakyl.folkways.vanilla.build;
 
+import io.github.izakyl.folkways.core.facility.api.Facilities;
 import io.github.izakyl.folkways.core.resident.api.Doing;
 import io.github.izakyl.folkways.core.resident.api.Doings;
 import io.github.izakyl.folkways.core.vocation.api.Vocation;
 import io.github.izakyl.folkways.core.work.api.ActionSpec;
 import io.github.izakyl.folkways.core.work.api.Amount;
+import io.github.izakyl.folkways.core.work.api.BlockData;
 import io.github.izakyl.folkways.core.work.api.Need;
 import io.github.izakyl.folkways.core.work.api.Outcome;
-import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.world.api.Stances;
 import io.github.izakyl.folkways.core.work.api.StructureCompat;
 import io.github.izakyl.folkways.core.work.api.ToolUse;
 import io.github.izakyl.folkways.core.work.api.WorkAction;
@@ -39,6 +41,7 @@ abstract class BuildAction implements WorkAction {
     private Predicate<BlockPos> met = cell -> false;
     private Emptying emptying;
     private boolean onlyReplaceable;
+    private Predicate<BlockPos> demolition = cell -> false;
 
     BuildAction(BuildJob job) {
         this.job = job;
@@ -170,13 +173,26 @@ abstract class BuildAction implements WorkAction {
         return this;
     }
 
+    final BuildAction demolition(Predicate<BlockPos> cells) {
+        demolition = cells;
+        return this;
+    }
+
     final BuildAction emptying(Emptying emptying) {
         this.emptying = emptying;
         return this;
     }
 
     final Optional<BuildRefusal> obstruction(ServerLevel level) {
-        if (finished(level) || job.kind() != BuildJob.Kind.STRIP && job.kind() != BuildJob.Kind.LAY
+        if (finished(level)) {
+            return Optional.empty();
+        }
+        if (java.util.stream.Stream.concat(job.before().keySet().stream(), job.after().keySet().stream())
+                .map(cell -> cell.block(level)).anyMatch(cell -> !met.test(cell) && !demolition.test(cell)
+                    && Facilities.protectedAt(level, cell))) {
+            return Optional.of(BuildRefusal.PROTECTED_FACILITY);
+        }
+        if (job.kind() != BuildJob.Kind.STRIP && job.kind() != BuildJob.Kind.LAY
             && job.kind() != BuildJob.Kind.DRAIN && job.kind() != BuildJob.Kind.CARVE) {
             return Optional.empty();
         }

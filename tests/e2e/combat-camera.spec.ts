@@ -283,7 +283,7 @@ test("the personal tactical camera preference follows the account across colonie
     const settingBefore = (await panelElements(client)).find(element => element.id === GLOBAL_SETTING);
     expect(settingBefore?.displayed && settingBefore.active,
       "the Settings page must expose an actionable personal switch").toBe(true);
-    await clickElement(client, { id: GLOBAL_SETTING });
+    await clickElement(client, { id: GLOBAL_SETTING }, { scrollIntoView: true });
     await expect.poll(async () => (await camera(client)).global, {
       timeout: 10_000,
       message: "clicking the real book setting must update the personal camera flag immediately",
@@ -417,10 +417,19 @@ async function nativeWidgets(client: MinecraftClient) {
 }
 
 async function clickNativeLabel(client: MinecraftClient, wanted: RegExp) {
-  const widgets = await nativeWidgets(client);
-  const widget = nativeControl(widgets, wanted);
-  expect(widget, `Expected an enabled native config control matching ${wanted}`).toBeTruthy();
-  await input.click(client, { x: widget!.x + widget!.width / 2, y: widget!.y + widget!.height / 2 });
+  let aim: { x: number; y: number } | undefined;
+  await expect.poll(async () => {
+    const widget = nativeControl(await nativeWidgets(client), wanted);
+    if (!widget || widget.x <= 0 || widget.y <= 0 || widget.width <= 0 || widget.height <= 0) {
+      aim = undefined;
+      return false;
+    }
+    const next = { x: widget.x + widget.width / 2, y: widget.y + widget.height / 2 };
+    const settled = next.x === aim?.x && next.y === aim?.y;
+    aim = next;
+    return settled;
+  }, { message: `Expected a laid-out native config control matching ${wanted}` }).toBe(true);
+  await input.click(client, aim!);
   await frames(client, 2);
 }
 
@@ -467,6 +476,7 @@ const READ_CAMERA = defineTask<void, CameraReading>({
       "java.util.LinkedHashMap",
       "net.minecraft.client.Minecraft",
       "io.github.izakyl.folkways.core.front.engine.item.HeldBook",
+      "io.github.izakyl.folkways.core.front.client.BookTools",
       "io.github.izakyl.folkways.core.front.client.Overhead",
       "io.github.izakyl.folkways.core.front.client.PersonalCameraControls",
     ],
@@ -474,7 +484,7 @@ const READ_CAMERA = defineTask<void, CameraReading>({
 var state=Overhead.camera().orElse(null);var result=new LinkedHashMap<String,Object>();
 result.put("active",state!=null);result.put("account",String.valueOf(PersonalCameraControls.currentUserUUID()));
 result.put("global",PersonalCameraControls.globalTacticalControls());
-var mc=Minecraft.getInstance();result.put("gesture",mc.player==null?"":HeldBook.bound(mc.player).map(book->book.gesture().getSerializedName()).orElse(""));
+var mc=Minecraft.getInstance();result.put("gesture",mc.player==null?"":HeldBook.bound(mc.player).map(book->BookTools.gesture().getSerializedName()).orElse(""));
 if(state==null){result.put("tactical",false);result.put("tool","");result.put("x",0.0);result.put("y",0.0);result.put("z",0.0);
 result.put("focusPresent",false);result.put("focusX",0.0);result.put("focusY",0.0);result.put("focusZ",0.0);result.put("yaw",0.0);result.put("pitch",0.0);}
 else{var p=state.position();result.put("tactical",state.tactical());result.put("tool",state.tool().map(Object::toString).orElse(""));
@@ -592,7 +602,7 @@ const CURRENT_COLONY = defineTask<{ player: string }, string>({
   name: "folkways.combat-camera.current-colony",
   side: "server",
   source: javaTask({
-    imports: ["net.minecraft.server.MinecraftServer", "io.github.izakyl.folkways.core.front.engine.charter.CurrentColony"],
+    imports: ["net.minecraft.server.MinecraftServer", "io.github.izakyl.folkways.core.colony.charter.CurrentColony"],
     body: `var player=((MinecraftServer)ctx.server()).getPlayerList().getPlayerByName(Args.of(ctx).string("player"));if(player==null)throw new IllegalStateException("test player is offline");return CurrentColony.of(player).map(c->c.id().toString()).orElse("");`,
   }),
 });

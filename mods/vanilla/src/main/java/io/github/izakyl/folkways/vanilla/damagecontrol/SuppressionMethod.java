@@ -1,7 +1,7 @@
 package io.github.izakyl.folkways.vanilla.damagecontrol;
 
 import io.github.izakyl.folkways.core.colony.api.Colony;
-import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.world.api.Stances;
 import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.core.world.api.Reach;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
@@ -60,12 +60,6 @@ public interface SuppressionMethod {
             }
         }
         return Set.copyOf(cells);
-    }
-
-    default boolean reaches(ServerLevel level, Worker who, WorldPos target) {
-        return available(who) && who.body().getEyePosition()
-            .distanceToSqr(Vec3.atCenterOf(target.block(level))) <= range() * range()
-            && Reach.inSight(level, who.body().blockPosition(), target.block(level));
     }
 
     Optional<SuppressionSession> open(ServerLevel level, Worker who, WorldPos target);

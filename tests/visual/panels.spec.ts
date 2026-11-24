@@ -1,12 +1,14 @@
 import { launchPair, type E2EPair } from "../shared/harness/pair";
 import { expect, test } from "@playwright/test";
-import { camera, defineTask, input, javaTask, player, screen, tick, type MinecraftClient, type MinecraftServer } from "@izakyl/blockwright-minecraft";
-import { ancestorsOf, clickElement, panelElements, visibleBox } from "../ldlib2";
+import { camera, defineTask, input, javaTask, screen, tick, type MinecraftClient, type MinecraftServer } from "@izakyl/blockwright-minecraft";
+import { clickElement, panelElements } from "../ldlib2";
 import { foundColonyFast, openColonyPanelViaBook, optInViaBook, setBookGesture, waitForGroundedPlayer, type Vec } from "../shared/colony/colony-founding";
-import { boardActs, enterSitePanel } from "../shared/ui/site-panel";
+import { cardRows, facilityAt, openBlockCard, openFacilityInBook, waitForPresent } from "../shared/ui/book-cards";
+import { MARK_MEMBERS, runColonyTask } from "../shared/colony/colony-tasks";
+import { ORDERS_HERE, setMaintainDemandViaUI } from "../shared/colony/membership-optin";
 import { showVocationColumn } from "../shared/ui/vocation-groups";
 import { CONFIG_PATH, VisualRun } from "../shared/capture/visual-kit";
-import { discoverPages, capturePageWindows, clickTab } from "./ui-catalog";
+import { BOOK_PAGES, capturePageWindows, clickTab, openSettingsScope, ZONE_FIXTURES } from "./ui-catalog";
 import { LayoutProbe } from "../shared/capture/layout-lint";
 import { tracePath } from "../shared/harness/out-paths";
 import { seededOffThreadServer } from "../shared/harness/mod-settings";
@@ -14,7 +16,8 @@ import { BUDGET } from "../shared/harness/budgets";
 import { frames, safeAction, waitForAnyScreen, clickSlot, safeScreen, screenName, screenOpen, commandPos, tryCommand, waitForElement, clickUnverified, softly } from "../shared/harness/bw-helpers";
 import { newRunId } from "../shared/harness/run-id";
 import { waitForResourceReload } from "../shared/harness/resource-reload";
-import { stockColony, stockDispatch, stockRail } from "./colony-stock";
+import { stockDispatch, stockRail } from "./colony-stock";
+import { openEditor } from "../shared/ui/colony-pages";
 
 const BOOK_ITEM = "folkways_core:colony_book";
 const TARGET_RESIDENTS = 6;
@@ -22,7 +25,6 @@ const TARGET_RESIDENTS = 6;
 const SETTLE_TICKS = 200;
 const CITIZEN_ROW = "folkways.resident.row.";
 const FARMING = "folkways_vanilla.farming";
-const PERSON_PAGE = "folkways_vanilla.person";
 const BREAD_RESULT = "folkways.selector.result.minecraft.bread";
 const LOCALES = ["en_us", "zh_cn"] as const;
 const GUI_SCALE = 3;
@@ -40,6 +42,25 @@ mc.getLanguageManager().setSelected(code);
 mc.options.languageCode = code;
 mc.reloadResourcePacks();
 return Map.of("ok", true);
+`,
+  }),
+});
+
+// An equipment profile carrying a bow, so the equipment editor has an entry to open and a profile to assign.
+const EQUIPMENT_PROFILE = defineTask<void, { profile: string }>({
+  name: "folkways.panel-layout.equipment-profile",
+  side: "server",
+  timeoutMs: 20_000,
+  source: javaTask({
+    imports: ["io.github.izakyl.folkways.core.colony.api.Colonies",
+      "io.github.izakyl.folkways.core.equipment.api.EquipmentProfile",
+      "io.github.izakyl.folkways.core.equipment.api.EquipmentProfiles",
+      "io.github.izakyl.folkways.core.item.api.ItemSpec", "net.minecraft.world.item.Items"],
+    body: `
+var profiles = EquipmentProfiles.of(Colonies.all(ctx.server()).getFirst());
+var profile = profiles.create("Archers");
+profiles.add(profile.id(), EquipmentProfile.Entry.carried(ItemSpec.of(Items.BOW), 1, 1));
+return Map.of("profile", profile.id().toString());
 `,
   }),
 });
@@ -108,6 +129,15 @@ test("panels and item models on camera", async ({}, testInfo) => {
       worldState: { item: BOOK_ITEM, pitch: 25 },
     });
 
+    await openColonyPanelViaBook(server, client, playerName, origin);
+    await waitForElement(client, { id: "folkways.colony.create" }, { timeoutMs: 8000 });
+    await run.shot(client, "founding", {
+      subject: "Blank colony book: create a colony", worldState: {}, hard: true,
+    });
+    await screen.dismiss(client);
+
+    const founding = await foundColonyFast(server, client, playerName, { origin, residentCount: TARGET_RESIDENTS });
+    run.note("colony", { origin: founding.origin, residents: founding.residents, stand: founding.standBlock });
     await setBookGesture(server, client, playerName, "box");
     await tryCommand(server, `tp ${playerName} ${wall.x + 0.5} ${wall.y} ${wall.z} 180 25`);
     await tick.sprint(server, 10);
@@ -129,17 +159,8 @@ test("panels and item models on camera", async ({}, testInfo) => {
     });
     await setBookGesture(server, client, playerName, "point");
 
-    await openColonyPanelViaBook(server, client, playerName, origin);
-    await waitForElement(client, { id: "folkways.colony.create" }, { timeoutMs: 8000 });
-    await run.shot(client, "founding", {
-      subject: "Blank colony book: create a colony", worldState: {}, hard: true,
-    });
-    await screen.dismiss(client);
-
-    const founding = await foundColonyFast(server, client, playerName, { origin, residentCount: TARGET_RESIDENTS });
-    run.note("colony", { origin: founding.origin, residents: founding.residents, stand: founding.standBlock });
     const colonyId = String(founding.evidence.colonyId);
-    const stocked = await stockColony(server, playerName, colonyId, founding.origin);
+    const stocked = await stockBookPages(server, client, playerName, colonyId, founding.origin);
     run.note("stocked", stocked);
     run.note("dispatch", await stockDispatch(server, playerName, colonyId, founding.origin));
     const rail = await stockRail(server, client, playerName, founding.origin, founding.standBlock);
@@ -148,78 +169,52 @@ test("panels and item models on camera", async ({}, testInfo) => {
     await screen.dismiss(client);
     const eye = { x: founding.origin.x + 2, y: founding.origin.y + 30, z: founding.origin.z - 1 };
     await run.shot(client, "04-colony-overview", {
-      subject: "Top-down: a small founded colony with beds, stores, stations, fields, pens, a pond and two build sites",
+      subject: "Top-down: a founded colony with beds, stores, stations, and transport facilities",
       worldState: { origin: founding.origin, residents: founding.residents },
       camera: { dimension: "minecraft:overworld", position: eye, yaw: 0, pitch: 90, fov: 70 },
     });
     await safeAction(() => camera.reset(client));
 
+    run.note("equipment", await server.run(EQUIPMENT_PROFILE, undefined));
     await openColonyPanelViaBook(server, client, playerName, founding.standBlock);
     await clickTab(client, "folkways.tab.settings");
     await safeAction(() => frames(client, 2));
-    await clickElement(client, { id: "folkways.settings.reset_layout" });
+    await clickElement(client, { id: "folkways.settings.reset_layout" }, { scrollIntoView: true });
     await safeAction(() => frames(client, 3));
     run.note("panel_tokens", await tokensOf(client));
     const expectedWindows = (await panelElements(client)).map(element => element.id)
       .filter((id): id is string => !!id?.startsWith("folkways.window.close."));
     const probe = new LayoutProbe(client);
-    const tabs = await discoverPages(server, playerName);
-    run.note("discovered_pages", tabs);
-    for (const [index, tab] of tabs.entries()) {
+    const tabs = BOOK_PAGES;
+    run.note("book_pages", tabs);
+    for (const tab of tabs) {
       await clickTab(client, tab.token);
       await tick.sprint(server, 5);
       await safeAction(() => frames(client, 3));
-      if (tab.name === FARMING) {
-        await expect.poll(async () => {
-          await tick.sprint(server, 100);
-          await frames(client, 3);
-          return (await panelElements(client)).some(element => /^\d+ cells ·/.test(element.text ?? ""));
-        }, { timeout: 30_000, message: "farm plots must be scanned before capture" }).toBe(true);
-      }
       await run.shot(client, `page-${tab.name}`, {
         subject: `Colony panel · ${tab.name} tab layout`,
         worldState: { tab: tab.name, token: tab.token, tokens: await tokensOf(client) },
         hard: true,
       });
       await run.lint(probe, `tab:${tab.name}`);
-      if (tab.name === "folkways_vanilla.farming" || tab.name === "folkways_vanilla.damage_control") {
-        const elements = await panelElements(client);
-        const visible = elements.filter(element => visibleBox(elements, element)
-          && [element, ...ancestorsOf(elements, element)].every(one => one.displayed && one.visible));
-        const navigation = elements.find(element => element.id === "folkways.navigation")!;
-        const labels = visible.filter(element => element.className.endsWith(".Label")
-          && element.x >= navigation.x + navigation.width
-          && (tab.name === "folkways_vanilla.farming" ? /^\d+ cells ·/.test(element.text ?? "")
-            : element.text === "Damage Control"));
-        expect(labels.length, `${tab.name} must expose the inspected text`).toBeGreaterThan(0);
-        for (const label of labels) {
-          expect(label.width, `${tab.name}: ${label.text}`).toBeGreaterThanOrEqual(await probe.measure(label.text!));
-        }
-      }
       await capturePageWindows(server, client, run, tab);
+      if (tab.token === "folkways.tab.facilities") {
+        const facility = await facilityAt(server, playerName, stocked.stores[0]);
+        expect(facility, "the stocked chest must have a facility card").not.toBeNull();
+        await openFacilityInBook(server, client, facility!);
+        await run.shot(client, "page-facilities-store-card", {
+          subject: "The Facilities page opens a store's card beside the book",
+          worldState: { facility, tokens: await tokensOf(client) }, hard: true,
+        });
+        await clickUnverified(client, { id: "folkways.window.close.book_card" });
+        await frames(client, 4);
+      }
     }
 
-    // This registered secondary page has no navigation entry, so open it through the shell's existing handler.
-    await client.run(defineTask<void, boolean>({
-      name: "folkways.visual.open-sentry-window", side: "client",
-      source: javaTask({ imports: ["net.minecraft.client.Minecraft", "net.minecraft.resources.ResourceLocation",
-        "net.minecraft.world.entity.player.Player", "io.github.izakyl.folkways.core.front.ui.screen.ColonyShell"], body: `
-var open = ColonyShell.class.getDeclaredMethod("openPage", Player.class, ResourceLocation.class);
-open.setAccessible(true);
-open.invoke(null, Minecraft.getInstance().player, ResourceLocation.parse("folkways_vanilla:sentry_posts"));
-return true;
-` }),
-    }));
-    await waitForElement(client, { id: "folkways.window.close.folkways_vanilla.sentry_posts" });
-    await run.shot(client, "sentry-posts-window", {
-      subject: "Registered sentry posts window", worldState: {}, hard: true,
-    });
-    await clickUnverified(client, { id: "folkways.window.close.folkways_vanilla.sentry_posts" });
-
-    if (await run.hover(client, "folkways.panel.orders")) {
+    if (await run.hover(client, "folkways.tab.metrics")) {
       await run.shot(client, "05-0-tab-hover", {
         subject: "Hovering a tab: page name and ponder hint on one line, drawn at the cursor",
-        worldState: { token: "folkways.panel.orders" },
+        worldState: { token: "folkways.tab.metrics" },
       });
     }
 
@@ -263,6 +258,54 @@ return true;
       await safeAction(() => frames(client, 2));
     }
 
+    // The Residents page opens the colony-wide editors, each in a window beside the book.
+    await clickTab(client, "folkways.tab.residents");
+    await safeAction(() => frames(client, 3));
+    await run.shot(client, "05-2-residents-editors", {
+      subject: "Residents page: a button for each colony-wide editor (default work, equipment and vehicle profiles, name and look pools) above the roster",
+      worldState: { tokens: await tokensOf(client) }, hard: true,
+    });
+    await openEditor(client, "folkways_vanilla.looks");
+    await clickElement(client, { id: "folkways.pool.looks.choose" });
+    await frames(client, 3);
+    await run.shot(client, "05-6-person-looks", {
+      subject: "Look pool window: a face and a toggle per entry, with the Residents page still behind it so both can be seen side by side",
+      worldState: { tokens: await tokensOf(client) },
+      hard: true,
+    });
+    await run.lint(probe, "window:looks");
+    await clickElement(client, { id: "folkways.pool.looks.close" });
+    await closeWindow(server, client, "folkways_vanilla.looks");
+
+    await openEditor(client, "folkways_vanilla.names");
+    await run.shot(client, "05-6b-person-names", {
+      subject: "Name pool window: given names or surnames a page at a time with a delete button each, a field to add one, and the data pack sets that replace the pool",
+      worldState: { tokens: await tokensOf(client) },
+    });
+    await run.lint(probe, "window:names");
+    await closeWindow(server, client, "folkways_vanilla.names");
+
+    await openEditor(client, "folkways_core.equipment");
+    await clickElement(client, { id: "folkways.equipment.profile.0" }, { scrollIntoView: true });
+    await tick.sprint(server, 3);
+    await waitForPresent(server, client, "folkways.equipment.carried.0");
+    await clickElement(client, { id: "folkways.equipment.carried.0" }, { scrollIntoView: true });
+    await frames(client, 4);
+    await run.shot(client, "05-6c-equipment-entry", {
+      subject: "Equipment profiles: a profile's carried bow opened in the entry window beside the editor",
+      worldState: { tokens: await tokensOf(client) }, hard: true,
+    });
+    await run.lint(probe, "window:equipment");
+    await closeWindow(server, client, "equipment_entry");
+    await clickElement(client, { id: "folkways.equipment.assign_residents" }, { scrollIntoView: true });
+    await frames(client, 4);
+    await run.shot(client, "05-6d-equipment-residents", {
+      subject: "Equipment profiles: every resident with the profile they wear, each a button choosing another",
+      worldState: { tokens: await tokensOf(client) },
+    });
+    await closeWindow(server, client, "equipment_residents");
+    await closeWindow(server, client, "folkways_core.equipment");
+
     await clickTab(client, "folkways.tab.settings");
     await safeAction(() => frames(client, 2));
     if (await run.hover(client, "folkways.metrics.raze")) {
@@ -271,7 +314,7 @@ return true;
         worldState: { token: "folkways.metrics.raze" },
       });
     }
-    await clickElement(client, { id: "folkways.metrics.raze" });
+    await clickElement(client, { id: "folkways.metrics.raze" }, { scrollIntoView: true });
     await softly(() => waitForElement(client, { id: "folkways.metrics.raze.confirm" }, { timeoutMs: 8_000 }));
     await safeAction(() => frames(client, 3));
     await run.shot(client, "05-5b-metrics-raze-confirm", {
@@ -283,59 +326,21 @@ return true;
     await clickElement(client, { id: "folkways.metrics.raze.back" });
     await safeAction(() => frames(client, 2));
 
-    await clickTab(client, "folkways.page.person");
+    await openSettingsScope(server, client, "folkways_vanilla:composting", "folkways.card.flag.enabled");
     await tick.sprint(server, 5);
     await safeAction(() => frames(client, 3));
-    const opens = await boardActs(client, "open", PERSON_PAGE);
-    run.note("person_acts", { open: opens.map((act) => act.id) });
-    expect(
-      opens.length,
-      "the human residents page should have Open buttons for the name pool and then the look pool (PersonPresence always draws both). "
-        + `There are fewer, so the board act token no longer matches. The page had: ${JSON.stringify(await tokensOf(client))}`,
-    ).toBeGreaterThan(1);
-    const looksOpen = opens[1];
-    await clickElement(client, { id: looksOpen.id });
-    await tick.sprint(server, 5);
-    await safeAction(() => frames(client, 3));
-    await clickElement(client, { id: "folkways.pool.looks.choose" });
-    await frames(client, 3);
-    await run.shot(client, "05-6-person-looks", {
-      subject: "Look pool window: a face and a toggle per entry, with the person page still behind it so both can be seen side by side",
-      worldState: { via: looksOpen.id, tokens: await tokensOf(client) },
-      hard: true,
+    await run.shot(client, "05-8-settings-compost", {
+      subject: "Settings · Composting: the switch and default seed reserve, then a row per seed kind with its own reserve",
+      worldState: { tokens: await tokensOf(client) }, hard: true,
     });
-    await run.lint(probe, "window:looks");
-    await clickElement(client, { id: "folkways.pool.looks.close" });
-    await clickUnverified(client, { id: "folkways.window.close.folkways_vanilla.looks" });
-    await expect.poll(async () => (await panelElements(client))
-      .find(element => element.id === "folkways.window.folkways_vanilla.looks")?.displayed,
-      { timeout: 5_000 }).toBe(false);
-    await tick.sprint(server, 5);
-    await safeAction(() => frames(client, 3));
 
-    await clickElement(client, { id: opens[0].id });
-    await tick.sprint(server, 5);
-    await safeAction(() => frames(client, 3));
-    await run.shot(client, "05-7-person-names", {
-      subject: "Name pool window: given names or surnames a page at a time with a delete button each, a field to add one, and the data pack sets that replace the pool",
-      worldState: { via: opens[0].id, tokens: await tokensOf(client) },
-    });
-    await run.lint(probe, "window:names");
-    await clickUnverified(client, { id: "folkways.window.close.folkways_vanilla.names" });
-    await expect.poll(async () => (await panelElements(client))
-      .find(element => element.id === "folkways.window.folkways_vanilla.names")?.displayed,
-      { timeout: 5_000 }).toBe(false);
-    await tick.sprint(server, 5);
-    await safeAction(() => frames(client, 3));
-
-    await clickTab(client, "folkways.page.wares");
-    await safeAction(() => frames(client, 2));
-    await clickElement(client, { id: "folkways.settings.open.tool.folkways_vanilla.crafting.folkways_vanilla.wares" });
+    const tools = await openSettingsScope(server, client, "folkways_vanilla:building", "folkways.card.items.tool");
+    await clickElement(client, tools, { scrollIntoView: true });
     await softly(() => waitForElement(client, { id: "folkways.selector.close" }, { timeoutMs: 8_000 }));
     await tick.sprint(server, 5);
     await safeAction(() => frames(client, 3));
     await run.shot(client, "05-7-settings-tool", {
-      subject: "Workshop · tool list: the item picker, a folder for each mod and, in it, each tag; the rules held below",
+      subject: "Building tools: the item picker, a folder for each mod and, in it, each tag; the rules held below",
       worldState: { tokens: await tokensOf(client) },
     });
     await run.lint(probe, "window:selector-tree");
@@ -375,41 +380,21 @@ return true;
     await tryCommand(server, `setblock ${commandPos(chest)} minecraft:chest{Items:[]}`);
     await tick.sprint(server, 3);
     await optInViaBook(server, client, playerName, chest, "chest");
-    await tryCommand(server, `tp ${playerName} ${chest.x + 0.5} ${chest.y} ${chest.z + 1.5} 180 30`);
-    await tick.sprint(server, 5);
-    await screen.dismiss(client);
-    await safeAction(() =>
-      player.useBlock(client, { x: chest.x, y: chest.y, z: chest.z }, { face: "up" }),
-    );
-    await waitForAnyScreen(client, 8_000);
-    await safeAction(() => frames(client, 3));
-    await run.shot(client, "08-container-node-entry", {
-      subject: "The book used on a colony chest opens that chest's own window instead of the chest screen",
-      worldState: { chest, screen: screenName(await safeScreen(client)), tokens: await tokensOf(client) },
-      hard: true,
-    });
-    await enterSitePanel(server, client);
-    await safeAction(() => frames(client, 3));
-    await run.shot(client, "08b-container-site-panel", {
-      subject: "The chest's window: its board and the button that takes it out of the colony",
-      worldState: { chest, screen: screenName(await safeScreen(client)), tokens: await tokensOf(client) },
-      hard: true,
+    await openBlockCard(server, client, playerName, chest);
+    await run.shot(client, "08-container-card", {
+      subject: "Using the book on a colony chest opens its facility card with storage controls",
+      worldState: { chest, tokens: await tokensOf(client) }, hard: true,
     });
     await run.lint(probe, "page:site");
     await screen.dismiss(client);
 
-    // The first store holds three orders: its window lists them all.
+    // The first store holds three orders, each listed on its card.
     const store = stocked.stores[0];
-    await tryCommand(server, `tp ${playerName} ${store.x + 0.5} ${store.y} ${store.z + 1.5} 180 30`);
-    await tick.sprint(server, 5);
-    await safeAction(() =>
-      player.useBlock(client, { x: store.x, y: store.y, z: store.z }, { face: "up" }),
-    );
-    await waitForAnyScreen(client, 8_000);
-    await enterSitePanel(server, client);
-    await safeAction(() => frames(client, 3));
-    await run.shot(client, "08c-store-site-panel-orders", {
-      subject: "A store with three orders: its window lists each order on its board",
+    await openBlockCard(server, client, playerName, store);
+    await waitForPresent(server, client, `folkways.card.rows.${ORDERS_HERE}.2`);
+    expect(await cardRows(client, ORDERS_HERE)).toHaveLength(3);
+    await run.shot(client, "08c-store-card-orders", {
+      subject: "A store with three orders: its card lists each order",
       worldState: { store, screen: screenName(await safeScreen(client)), tokens: await tokensOf(client) },
       hard: true,
     });
@@ -428,8 +413,7 @@ return true;
     // The tabs above are linted in English at the default scale. Players run Chinese, whose words do not break, on
     // a large interface: 1280x720 at scale 3 is 427 wide, about what 1920x1080 at its automatic scale 4 leaves.
     // There the list of pages folds behind the menu button and the cards go one to a line, and a label that only
-    // fits in English must still not draw over its neighbour. A queue at its cap tells the longest line the person
-    // page has: that nobody new is coming.
+    // fits in English must still fit beside its neighbours. Advance time to fill the Residents page queue.
     await tryCommand(server, "time add 240000");
     await tick.sprint(server, 200);
     for (const code of LOCALES) {
@@ -447,14 +431,15 @@ return true;
       await screen.dismiss(client);
     }
     run.expectTaken([
-      ...tabs.map((tab, index) => `page-${tab.name}`),
-      "05-1c-citizen-window", "05-5b-metrics-raze-confirm", "05-6-person-looks",
+      ...tabs.map((tab) => `page-${tab.name}`),
+      "05-1c-citizen-window", "05-2-residents-editors", "05-6-person-looks", "05-6b-person-names",
+      "05-6c-equipment-entry", "05-6d-equipment-residents", "05-5b-metrics-raze-confirm", "05-8-settings-compost",
       "05-7-settings-tool", "06-item-selector", "06a-item-selector-hover",
-      "08b-container-site-panel", "08c-store-site-panel-orders",
+      "page-facilities-store-card", "08-container-card", "08c-store-card-orders",
     ]);
     run.expectLinted([
       ...tabs.map((tab) => `tab:${tab.name}`),
-      "window:citizen", "window:looks", "window:names", "window:selector-tree", "window:selector",
+      "window:citizen", "window:looks", "window:names", "window:equipment", "window:selector-tree", "window:selector",
       "page:raze-confirm", "page:site",
       ...LOCALES.flatMap((code) => tabs.map((tab) => `${code}@${GUI_SCALE}:${tab.name}`)),
     ]);
@@ -467,6 +452,48 @@ return true;
     await pair?.teardown(testInfo);
   }
 });
+
+async function stockBookPages(
+  server: MinecraftServer, client: MinecraftClient, player: string, colonyId: string, origin: Vec,
+) {
+  const at = (x: number, z: number) => ({ x: origin.x + x, y: origin.y, z: origin.z + z });
+  const stores = [at(0, 3), at(2, 3), at(4, 3)];
+  const stations = [at(0, 6), at(2, 6)];
+  for (const [block, state] of [
+    [stores[0], `minecraft:chest{Items:[{Slot:0b,id:"minecraft:bread",count:8}]}`],
+    [stores[1], `minecraft:chest{Items:[{Slot:0b,id:"minecraft:oak_planks",count:64}]}`],
+    [stores[2], `minecraft:chest{Items:[{Slot:0b,id:"minecraft:iron_ingot",count:16}]}`],
+    [stations[0], "minecraft:furnace"],
+    [stations[1], "minecraft:crafting_table"],
+  ] as const) {
+    await tryCommand(server, `setblock ${commandPos(block)} ${state}`);
+  }
+  await runColonyTask(server, MARK_MEMBERS, {
+    player, colony_id: colonyId, cells: [...stores, ...stations].flatMap(block => [block.x, block.y, block.z]),
+  });
+  for (const [store, item, total, low] of [
+    [stores[0], "minecraft:bread", 64, 16],
+    [stores[1], "minecraft:oak_planks", 192, 64],
+    [stores[2], "minecraft:iron_ingot", 32, 8],
+    [stores[0], "minecraft:cooked_mutton", 32, 8],
+    [stores[0], "minecraft:baked_potato", 48, 12],
+  ] as const) {
+    await setMaintainDemandViaUI(server, client, player, store, item, total, undefined, low);
+  }
+  await screen.dismiss(client);
+  await tryCommand(server, `tp ${player} ${commandPos(at(-12, -10))}`);
+  await tick.sprint(server, 5);
+  const { zones } = await runColonyTask(server, ZONE_FIXTURES, { player });
+  return { stores, stations, zones };
+}
+
+async function closeWindow(server: MinecraftServer, client: MinecraftClient, id: string) {
+  await clickUnverified(client, { id: `folkways.window.close.${id}` });
+  await expect.poll(async () => (await panelElements(client))
+    .find(element => element.id === `folkways.window.${id}`)?.displayed ?? false, { timeout: 5_000 }).toBe(false);
+  await tick.sprint(server, 3);
+  await safeAction(() => frames(client, 3));
+}
 
 function firstToken(tokens: string[], prefix: string): string | null {
   return tokens.find((token) => token.startsWith(prefix) && token.split(".").length === prefix.split(".").length) ?? null;

@@ -326,7 +326,7 @@ async function cancelAndRejoin(pair: E2EPair, evidence: Evidence, oldIdentity: s
 }
 
 const PAIRING = defineTask<void, PairingRecord[]>({ name: "folkways.epicfight.geo.observe-wire-pairing", side: "any", thread: "worker", settle: false,
-  source: javaTask({ imports: ["io.github.izakyl.folkways.epicfight.AnimationPairingEvidence"],
+  source: javaTask({ imports: ["io.github.izakyl.folkways.core.shell.epicfight.AnimationPairingEvidence"],
     body: `return AnimationPairingEvidence.snapshot();` }) });
 const CONNECTION = defineTask<void, Connection>({ name: "folkways.epicfight.geo.observe-live-connection", side: "client", settle: false,
   source: javaTask({ imports: ["java.util.Map", "net.minecraft.client.Minecraft"], body: `
@@ -335,7 +335,7 @@ return Map.of("connected",mc.getConnection()!=null&&mc.getConnection().getConnec
  "identity",mc.getConnection()==null?"":Integer.toHexString(System.identityHashCode(mc.getConnection().getConnection())),
  "screen",mc.screen==null?"":mc.screen.getClass().getSimpleName(),"overlay",mc.getOverlay()==null?"":mc.getOverlay().getClass().getSimpleName(),"pending",pending.get(mc)!=null);` }) });
 const GUARD = defineTask<void, Guard>({ name: "folkways.epicfight.geo.observe-reload-guard", side: "client", thread: "worker", settle: false,
-  source: javaTask({ imports: ["io.github.izakyl.folkways.epicfight.client.AnimationPairingReloadGuard"],
+  source: javaTask({ imports: ["io.github.izakyl.folkways.core.shell.epicfight.client.AnimationPairingReloadGuard"],
     body: `return AnimationPairingReloadGuard.snapshot();` }) });
 const PREPARATION_GATE = defineTask<{ action: "start" | "state" | "release" }, Gate>({
   name: "folkways.epicfight.geo.real-resource-preparation-gate", side: "client", settle: false,
@@ -373,7 +373,7 @@ function assertGeo(draw: Draw) {
   expect(draw.resource && draw.textureResource).toBe(true);
   expect(draw.armor).toEqual(ARMOR);
   expect(draw.mode, "a fallback skin or vanilla biped cannot satisfy GEO acceptance").toBe("converted_geo");
-  expect(draw.mesh).toMatch(/^folkways_epicfight:resident_geo\//);
+  expect(draw.mesh).toMatch(/^folkways_vanilla:resident_geo\//);
   expect(draw.texture).toBe(TEXTURE);
   expect(draw.sourceRenderer).toBe("io.github.izakyl.folkways.vanilla.person.ResidentGeoBackend");
   expect(draw.entryScale).toBeGreaterThan(0);
@@ -422,7 +422,7 @@ const SERVER_IMPORTS = ["java.util.UUID", "java.util.List", "java.util.Map", "ja
   "io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutProfiles", "io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutProfile",
   "io.github.izakyl.folkways.core.combat.api.Loadouts",
   "io.github.izakyl.folkways.vanilla.patrol.PatrolContent", "io.github.izakyl.folkways.vanilla.patrol.PatrolStaffing",
-  "io.github.izakyl.folkways.core.item.api.ItemSpec", "io.github.izakyl.folkways.epicfight.ResidentEpicFightPatch",
+  "io.github.izakyl.folkways.core.item.api.ItemSpec", "io.github.izakyl.folkways.vanilla.epicfight.ResidentEpicFightPatch",
   "yesman.epicfight.api.animation.types.AttackAnimation"];
 const SETUP = defineTask<Vec, Scene>({ name: "folkways.epicfight.geo.real-fixture", side: "server", source: javaTask({ imports: SERVER_IMPORTS, body: `
 var a=Args.of(ctx);var level=((MinecraftServer)ctx.server()).overworld();var colony=Colonies.mint(level.getServer());
@@ -473,8 +473,8 @@ const DRAW = defineTask<Scene, Draw>({ name: "folkways.epicfight.geo.production-
   "java.util.List", "java.util.LinkedHashMap", "net.minecraft.client.Minecraft", "net.minecraft.world.entity.EquipmentSlot",
   "net.minecraft.core.registries.BuiltInRegistries", "io.github.izakyl.folkways.vanilla.person.ResidentEntity",
   "io.github.izakyl.folkways.vanilla.person.look.ResidentLook", "io.github.izakyl.folkways.vanilla.person.look.ResidentLooks",
-  "io.github.izakyl.folkways.epicfight.ResidentEpicFightPatch", "io.github.izakyl.folkways.epicfight.client.ResidentGeoMeshes",
-  "io.github.izakyl.folkways.epicfight.client.ResidentRenderEvidence"], body: `
+  "io.github.izakyl.folkways.vanilla.epicfight.ResidentEpicFightPatch", "io.github.izakyl.folkways.vanilla.epicfight.client.ResidentGeoMeshes",
+  "io.github.izakyl.folkways.vanilla.epicfight.client.ResidentRenderEvidence"], body: `
 var a=Args.of(ctx);var mc=Minecraft.getInstance();var out=new LinkedHashMap<String,Object>();out.put("present",false);out.put("overlay",mc.getOverlay()!=null);out.put("screen",mc.screen==null?"":mc.screen.getClass().getSimpleName());
 for(var entity:mc.level.entitiesForRendering())if(entity.getUUID().toString().equals(a.string("resident"))&&entity instanceof ResidentEntity body){
  out.put("present",true);out.put("patch",ResidentEpicFightPatch.of(body)!=null);

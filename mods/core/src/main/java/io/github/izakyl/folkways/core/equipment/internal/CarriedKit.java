@@ -6,13 +6,12 @@ import io.github.izakyl.folkways.core.colony.api.Equipment;
 import io.github.izakyl.folkways.core.colony.api.Sweep;
 import io.github.izakyl.folkways.core.combat.api.Combatant;
 import io.github.izakyl.folkways.core.combat.api.Loadouts;
-import io.github.izakyl.folkways.core.equipment.api.EquipmentProfile;
 import io.github.izakyl.folkways.core.equipment.api.EquipmentKits;
+import io.github.izakyl.folkways.core.equipment.api.EquipmentProfile;
 import io.github.izakyl.folkways.core.equipment.api.EquipmentProfiles;
 import io.github.izakyl.folkways.core.equipment.api.GearSlots;
-import io.github.izakyl.folkways.core.front.api.Facing;
+import io.github.izakyl.folkways.core.facility.api.control.SlotSnapshot;
 import io.github.izakyl.folkways.core.inventory.api.InventorySnapshot;
-import io.github.izakyl.folkways.core.inventory.api.SlotSnapshot;
 import io.github.izakyl.folkways.core.item.api.Goods;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import io.github.izakyl.folkways.core.plan.api.Delivery;
@@ -27,10 +26,10 @@ import io.github.izakyl.folkways.core.work.api.Need;
 import io.github.izakyl.folkways.core.work.api.Node;
 import io.github.izakyl.folkways.core.work.api.NodeSpec;
 import io.github.izakyl.folkways.core.work.api.Outcome;
-import io.github.izakyl.folkways.core.work.api.Stances;
 import io.github.izakyl.folkways.core.work.api.WorkSite;
 import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.core.work.api.Workload;
+import io.github.izakyl.folkways.core.world.api.Stances;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
@@ -51,7 +50,7 @@ import net.minecraft.world.item.ItemStack;
  * fewer than its threshold are held and keeps asking until it is full; the ordinary fetch planner supplies it. Units
  * removed from native child slots return to the pack, from where ordinary hauling returns them.
  */
-public final class CarriedKit implements Facing {
+public final class CarriedKit {
     record EntryKey(UUID resident, UUID entry) {
     }
 
@@ -405,31 +404,32 @@ public final class CarriedKit implements Facing {
         }
     }
 
-    List<Component> details(Body body) {
-        List<Component> lines = new ArrayList<>();
+    /** One line of the resident card's equipment, with the items it stands for drawn in slots beneath it. */
+    record Detail(Component text, List<ItemStack> items) {
+        static Detail line(Component text) {
+            return new Detail(text, List.of());
+        }
+    }
+
+    List<Detail> details(Body body) {
+        List<Detail> lines = new ArrayList<>();
         profiles.assigned(body.id()).ifPresent(profile -> lines.add(
-            Component.translatable("folkways.equipment.profile", profile.name())));
+            Detail.line(Component.translatable("folkways.equipment.profile", profile.name()))));
         for (var group : io.github.izakyl.folkways.core.equipment.api.GearSlots.groups()) {
             List<ItemStack> stacks = GearSlots.in(group.id()).stream().map(gear -> gear.worn(body))
-                .filter(stack -> !stack.isEmpty()).toList();
+                .filter(stack -> !stack.isEmpty()).map(ItemStack::copy).toList();
             if (!stacks.isEmpty()) {
-                lines.add(group.name());
-                for (ItemStack stack : stacks) {
-                    lines.add(Component.translatable("folkways.equipment.held", stack.getCount(),
-                        stack.getHoverName()));
-                }
+                lines.add(new Detail(group.name(), stacks));
             }
         }
-        lines.add(Component.translatable("folkways.equipment.inventory_cells", body.pack().ownCells(),
-            body.pack().getContainerSize() - body.pack().ownCells()));
-        for (ItemStack stack : body.pack().contents()) {
-            lines.add(Component.translatable("folkways.equipment.held", stack.getCount(), stack.getHoverName()));
-        }
+        lines.add(new Detail(Component.translatable("folkways.equipment.inventory_cells", body.pack().ownCells(),
+            body.pack().getContainerSize() - body.pack().ownCells()),
+            body.pack().contents().stream().map(ItemStack::copy).toList()));
         KitCapabilities capabilities = KitProviders.capabilities(body);
-        capabilities.abilities().forEach((id, value) -> lines.add(Component.translatable(
-            "folkways.equipment.ability", Component.translatable("folkways.kits.ability." + id.getPath()), value)));
-        capabilities.workstations().forEach(station -> lines.add(Component.translatable(
-            "folkways.equipment.workstation", station.station().getName())));
+        capabilities.abilities().forEach((id, value) -> lines.add(Detail.line(Component.translatable(
+            "folkways.equipment.ability", Component.translatable("folkways.kits.ability." + id.getPath()), value))));
+        capabilities.workstations().forEach(station -> lines.add(Detail.line(Component.translatable(
+            "folkways.equipment.workstation", station.station().getName()))));
         return List.copyOf(lines);
     }
 }

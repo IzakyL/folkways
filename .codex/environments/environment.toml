@@ -24,6 +24,14 @@ for directory in node_modules .blockwright-store; do
     exit 1
   fi
 done
+
+# Secrets such as live provider keys stay in the main checkout's .env; a worktree without one links to it.
+if [ -e "$worktree_root/.env" ] || [ -L "$worktree_root/.env" ]; then
+  printf 'Keeping existing %s\n' "$worktree_root/.env"
+elif [ -f "$source_root/.env" ]; then
+  ln -s "$source_root/.env" "$worktree_root/.env"
+  printf 'Linked %s -> %s\n' "$worktree_root/.env" "$source_root/.env"
+fi
 '''
 
 [[actions]]

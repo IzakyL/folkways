@@ -3,6 +3,7 @@ package io.github.izakyl.folkways.core.work.api;
 import io.github.izakyl.folkways.core.inventory.api.Stash;
 import io.github.izakyl.folkways.core.resident.api.Body;
 import io.github.izakyl.folkways.core.resident.api.RefusalKind;
+import io.github.izakyl.folkways.core.world.api.Stances;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -41,6 +42,14 @@ public interface Node extends WorkAction {
     }
 
     default Optional<UUID> worker() {
+        return Optional.empty();
+    }
+
+    /** Concrete stock drawn directly by a workshop node. */
+    record StockDraw(Stash source, Amount goods) {
+    }
+
+    default Optional<StockDraw> stockDraw() {
         return Optional.empty();
     }
 

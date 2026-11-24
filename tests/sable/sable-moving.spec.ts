@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { tick, world } from "@izakyl/blockwright-minecraft";
 import { foundColonyFast, foundingBox, optInViaBook, waitForGroundedPlayer, type Vec } from "../shared/colony/colony-founding";
-import { deliverOrderViaSitePanel } from "../shared/colony/membership-optin";
+import { deliverOrderViaCard } from "../shared/colony/membership-optin";
 import { addressRoundTrip, driveShip, residentsAboard } from "../shared/colony/sable-probe";
 import { launchPair, type E2EPair } from "../shared/harness/pair";
 import { ensureOut, tracePath } from "../shared/harness/out-paths";
@@ -57,7 +57,7 @@ test("a colony aboard a Sable ship keeps everyone aboard and its work going whil
     await tick.sprint(server, 5);
     await optInViaBook(server, client, playerName, source, "chest", stage);
     await optInViaBook(server, client, playerName, target, "chest", stage);
-    await deliverOrderViaSitePanel(server, client, playerName, target, ITEM, ORDERED, stage);
+    await deliverOrderViaCard(server, client, playerName, target, ITEM, ORDERED, stage);
 
     // The player steps off onto the ground and watches the ship go.
     await tryCommand(server, `tp ${playerName} ${origin.x + 0.5} ${origin.y} ${origin.z - 30.5}`);

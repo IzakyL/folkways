@@ -90,6 +90,10 @@ def runs_of(marks):
         start += length
     return {"runs": runs, "length": start}
 
+def low_normal(run):
+    x, z = -run["uz"], run["ux"]
+    return (-x, -z) if x > 0 or (x == 0 and z > 0) else (x, z)
+
 def centreline(site, width):
     marks = []
     heights = []
@@ -112,10 +116,10 @@ def centreline(site, width):
     for i in range(len(marks)):
         before = runs[max(0, i - 1)]
         after = runs[min(len(runs) - 1, i)]
-        nx = -before["uz"] - after["uz"]
-        nz = before["ux"] + after["ux"]
-        scale = 0.5 / (1.0 + before["ux"] * after["ux"] + before["uz"] * after["uz"])
-        shifted.append((marks[i][0] + nx * scale, marks[i][1] + nz * scale))
+        ax, az = low_normal(before)
+        bx, bz = low_normal(after)
+        scale = 0.5 / (1.0 + ax * bx + az * bz)
+        shifted.append((marks[i][0] + (ax + bx) * scale, marks[i][1] + (az + bz) * scale))
     line = runs_of(shifted)
     line["heights"] = heights
     return line

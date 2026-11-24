@@ -118,7 +118,7 @@ final class Quest {
 
     private State probeGoal(long now) {
         BlockPos goal = unprobed.pollFirst();
-        Reading read = search(goal.asLong(), Set.of(ask.start()), ask.start());
+        TerrainReading read = search(goal.asLong(), Set.of(ask.start()), ask.start());
         if (read == null) {
             return State.GAVE_UP;
         }
@@ -150,7 +150,7 @@ final class Quest {
             return guessed ? State.GAVE_UP : denied(PathfindingLoad.Denial.FRONTIER);
         }
         closed.add(here.id());
-        Reading read = search(net.cellOf(here.id()), goals, nearestGoal(here.id()));
+        TerrainReading read = search(net.cellOf(here.id()), goals, nearestGoal(here.id()));
         if (read == null) {
             return State.GAVE_UP;
         }
@@ -181,7 +181,7 @@ final class Quest {
         return net.joinsAny(origin, ends, now);
     }
 
-    private void seal(Reading read, int at) {
+    private void seal(TerrainReading read, int at) {
         if (read.swept().enclosed() && read.on() instanceof Ground.Open) {
             net.seal(at, read.swept().ground());
         }
@@ -240,8 +240,8 @@ final class Quest {
         }
     }
 
-    private Reading search(long from, Set<BlockPos> arriving, BlockPos aim) {
-        Optional<Reading> read = Look.at(level, ask.realm(), roamer, from, arriving, aim, false);
+    private TerrainReading search(long from, Set<BlockPos> arriving, BlockPos aim) {
+        Optional<TerrainReading> read = Look.at(level, ask.realm(), roamer, from, arriving, aim, false);
         if (read.isEmpty()) {
             gone = true;
             return null;
@@ -252,7 +252,7 @@ final class Quest {
         return read.get();
     }
 
-    private boolean harvest(Reading read, int from, int carried, boolean offering, long now) {
+    private boolean harvest(TerrainReading read, int from, int carried, boolean offering, long now) {
         Sweep.Swept swept = read.swept();
         int previous = from;
         BlockPos last = BlockPos.of(net.cellOf(from));

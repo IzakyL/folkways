@@ -1,5 +1,5 @@
-import { drainActionBar, readActionBar } from "../ui/zone-receipt";
-import { boardActs, scrollCellIntoView, wheelCell, type BoardAct } from "../ui/site-panel";
+import { scrollCellIntoView, wheelCell } from "../ui/site-panel";
+import { BOOK_TABS, cardRows, panelSection } from "../ui/book-cards";
 import { showVocationColumn } from "../ui/vocation-groups";
 import {
   input,
@@ -261,7 +261,7 @@ export async function foundColonyFast(
   await tick.sprint(server, 5);
 
   let residents = await countResidents(server);
-  for (let call = 0; call < ADMIT_CALLS && residents < n; call++) {
+  for (let call = 0; call < n + ADMIT_CALLS && residents < n; call++) {
     const admitted = await runColonyTask(server, ADMIT_SETTLERS, {
       player: playerName,
       colony_id: colonyId,
@@ -323,12 +323,32 @@ export async function createColonyViaBook(server: MinecraftServer, client: Minec
 
 export type BookGesture = "point" | "box" | "line";
 
-// In English or in Chinese, as the client is set: the promo films run in Chinese.
-const GESTURE_RECEIPT: Record<BookGesture, RegExp> = {
-  point: /^(Book: taking blocks and bodies in|书：点选)$/,
-  box: /^(Book: marking out ground|书：圈地)$/,
-  line: /^(Book: drawing a line|书：画线)$/,
-};
+const GESTURES: BookGesture[] = ["point", "box", "line"];
+
+type BookEntry = { key: string; gesture: BookGesture; open: boolean; category: string };
+type BookState = { gesture: BookGesture; picked: string; ready: boolean; entries: BookEntry[] };
+
+/**
+ * The held book's gesture, what the view from above has picked for a shape (empty when nothing drawn that way is), and
+ * everything the book can be set to, read without touching it.
+ */
+export const BOOK_TOOLBAR = defineTask<undefined, BookState>({
+  name: "folkways.shared.book-toolbar",
+  side: "client",
+  timeoutMs: 20_000,
+  source: javaTask({
+    imports: ["io.github.izakyl.folkways.core.front.client.BookTools"],
+    body: `
+var entries = new ArrayList<Object>();
+for (var entry : BookTools.entries()) {
+    entries.add(Map.of("key", entry.key(), "gesture", entry.gesture().getSerializedName(),
+        "open", entry.unavailable().isEmpty(), "category", entry.category().id().toString()));
+}
+return Map.of("gesture", BookTools.gesture().getSerializedName(), "ready", BookTools.ready(),
+    "picked", BookTools.picked().map(BookTools.Entry::key).orElse(""), "entries", entries);
+`,
+  }),
+});
 
 const STANDING_EYE_HEIGHT = 1.5;
 
@@ -350,35 +370,98 @@ async function standUp(client: MinecraftClient, timeoutMs = 5_000): Promise<numb
   }
 }
 
-export async function setBookGesture(server: MinecraftServer, client: MinecraftClient, playerName: string, gesture: BookGesture) {
-  const step: any = { gesture, attempts: [] };
+/** The key of a kind of holding (`kind:<delegation>`), of an offer (`offer:<id>`), or `point`. */
+export function bookToolKey(id: string): string {
+  return id === "point" || id.startsWith("kind:") || id.startsWith("offer:") ? id : `kind:${id}`;
+}
+
+/** The picker row that hands a drawn shape to an entry: `folkways.book.pick.<namespace>.<path>`. */
+export function bookPickToken(key: string): string {
+  return `folkways.book.pick.${key.replace(/^(kind|offer):/, "").replace(/[:/]/g, ".")}`;
+}
+
+/** What each client's next use of the book on a whole shape hands it to, as a player would pick it then. */
+const pendingPicks = new WeakMap<MinecraftClient, string>();
+
+/** The entry {@link chooseBookTool} last chose for this client, which the book's picker is answered with. */
+export function pendingBookPick(client: MinecraftClient): string | undefined {
+  return pendingPicks.get(client);
+}
+
+/**
+ * Turns the held book to a gesture with sneak and the wheel, as a player does: down turns on to the next of point,
+ * box and line, up turns back.
+ */
+async function turnBook(server: MinecraftServer, client: MinecraftClient, gesture: BookGesture) {
+  const step: any = { gesture, scrolls: [] };
   await waitForResourceReload(client);
   await safeAction(() => screen.dismiss(client));
+  let bar = await client.run(BOOK_TOOLBAR, undefined);
+  if (bar.gesture === gesture) {
+    step.already = true;
+    return step;
+  }
   step.sneak = await safeAction(() => input.key(client, { keybind: "key.sneak", action: "press" }));
   try {
-    for (let attempt = 1; attempt <= 4; attempt++) {
-      await drainActionBar(client);
-      await safeAction(() => frames(client, 20));
-      await tick.sprint(server, 10);
-      const scroll = await safeAction(() => input.scroll(client, { yOffset: 1 }));
-      await tick.sprint(server, 5);
-      const bar = await readActionBar(client);
-      step.attempts.push({ attempt, scroll, bar });
-      if (GESTURE_RECEIPT[gesture].test(bar.text) && bar.remaining_ticks > 0) {
-        step.switched = true;
-        break;
-      }
+    for (let attempt = 0; attempt < 6 && bar.gesture !== gesture; attempt++) {
+      const ahead = (GESTURES.indexOf(gesture) - GESTURES.indexOf(bar.gesture) + GESTURES.length) % GESTURES.length;
+      const yOffset = ahead === 1 ? -1 : 1;
+      await safeAction(() => frames(client, 4));
+      step.scrolls.push(await safeAction(() => input.scroll(client, { yOffset })));
+      await tick.sprint(server, 2);
+      bar = await client.run(BOOK_TOOLBAR, undefined);
     }
   } finally {
     await safeAction(() => input.key(client, { keybind: "key.sneak", action: "release" }));
   }
-  if (step.switched) {
-    step.eye_height = await standUp(client);
-    return step;
+  if (bar.gesture !== gesture) {
+    throw new Error(`setBookGesture(${gesture}): the book stayed on ${bar.gesture} after ${JSON.stringify(step.scrolls)}`);
   }
-  throw new Error(
-    `setBookGesture(${gesture}): the action bar never reported this mode - sneak press receipt ${JSON.stringify(step.sneak)}, `
-      + `then ${JSON.stringify(step.attempts)}`);
+  step.eye_height = await standUp(client);
+  return step;
+}
+
+/**
+ * Readies the held book for an entry, as a player does in their own eyes: it turns to the gesture the entry is drawn
+ * with, and the entry is remembered to be picked when the book is next used on a whole shape ({@link pickShape}).
+ * `target` is a key from {@link bookToolKey}, or a delegation id.
+ */
+export async function chooseBookTool(server: MinecraftServer, client: MinecraftClient, target: string) {
+  const key = bookToolKey(target);
+  const bar = await client.run(BOOK_TOOLBAR, undefined);
+  const entry = bar.entries.find((candidate) => candidate.key === key && candidate.open);
+  if (!entry) {
+    throw new Error(`chooseBookTool(${key}): the book offers no such entry it can pick: ${JSON.stringify(bar)}`);
+  }
+  const step = await turnBook(server, client, entry.gesture);
+  if (key === "point") {
+    pendingPicks.delete(client);
+  } else {
+    pendingPicks.set(client, key);
+  }
+  return { key, ...step };
+}
+
+/** Turns the held book to a gesture; what a shape becomes is then picked when the book is used on it. */
+export async function setBookGesture(server: MinecraftServer, client: MinecraftClient, _playerName: string, gesture: BookGesture) {
+  pendingPicks.delete(client);
+  return turnBook(server, client, gesture);
+}
+
+/**
+ * Answers the book's picker after the book was used on a whole shape, scrolling to the entry's row as needed.
+ * With `optional`, a picker that does not open in a few seconds is no error.
+ */
+export async function pickShape(client: MinecraftClient, key: string, options: { optional?: boolean } = {}) {
+  const id = bookPickToken(key);
+  const window = { id: "folkways.window.folkways_book_pick" };
+  const shown = await softly(() => waitForElement(client, window, { timeoutMs: options.optional ? 3_000 : 8_000 }));
+  if (isSafeFailure(shown) || !shown) {
+    if (options.optional) return { key, id, picker: false };
+    throw new Error(`pickShape(${key}): the book's picker never opened`);
+  }
+  const click = await clickElement(client, { id }, { scrollIntoView: true });
+  return { key, id, picker: true, click: summarize(click) };
 }
 
 export async function optInViaBook(server: MinecraftServer, client: MinecraftClient, playerName: string, target: Vec, kind: "bed" | "chest" | "worksite",
@@ -649,23 +732,23 @@ async function selectorMiss(client: MinecraftClient, error: unknown, evidence: u
     + `\nselector element tree right now: ${JSON.stringify(seen)}`);
 }
 
-const SETTLERS_TAB = "folkways.page.person";
-const SETTLERS_BOARD = "folkways_vanilla.person";
+// The settler queue's row in the person module's section of the Residents page, and its admit act.
+const SETTLERS_SECTION = panelSection("folkways_vanilla:person", "RESIDENTS");
 
 async function admitAct(
   server: MinecraftServer, client: MinecraftClient, attempts = 20,
-): Promise<BoardAct> {
-  let seen: BoardAct[] = [];
+): Promise<string> {
+  let seen: string[] = [];
   for (let attempt = 0; attempt < attempts; attempt++) {
-    seen = await boardActs(client, "admit", SETTLERS_BOARD);
+    seen = (await cardRows(client, undefined, SETTLERS_SECTION)).flatMap(row => row.acts);
     if (seen.length > 0) {
       return seen[0];
     }
     await safeAction(() => frames(client, 3));
     await tick.sprint(server, 5);
   }
-  throw new Error(`admit: no Board.Act.Admit on the ${SETTLERS_TAB} page`
-    + ` (admit actions read: ${JSON.stringify(seen.map((one) => one.id))})`);
+  throw new Error(`admit: no admit act in the settlers' section of the Residents page`
+    + ` (acts read: ${JSON.stringify(seen)})`);
 }
 
 export async function admitSettlers(
@@ -682,18 +765,18 @@ export async function admitSettlers(
   if (residents >= target) return residents;
 
   await openColonyPanelViaBook(server, client, playerName, standBlock, stage);
-  await softly(() => clickElement(client, { id: SETTLERS_TAB }));
+  await softly(() => clickElement(client, { id: BOOK_TABS.residents }));
 
   for (let round = 0; round < rounds && residents < target; round++) {
     const before = residents;
     const act = await admitAct(server, client);
-    const press = await softly(() => clickElement(client, { id: act.id }));
+    const press = await softly(() => clickElement(client, { id: act }, { scrollIntoView: true }));
     residents = await sprintUntilResidentCountRises(server, before);
     if (residents === before) {
       await tryCommand(server, `time add ${TICKS_PER_DAY}`);
       await tick.sprint(server, GATHER_TICKS);
     }
-    if (evidence) evidence.steps.push({ admitRound: round, act: act.id, press, residents });
+    if (evidence) evidence.steps.push({ admitRound: round, act, press, residents });
   }
   await screen.dismiss(client);
   return residents;

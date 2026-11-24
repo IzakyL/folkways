@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { chat, defineTask, input, javaTask, player, screen, tick, type MinecraftClient } from "@izakyl/blockwright-minecraft";
-import { ancestorsOf, clickElement, panelElements, waitForElement, type Element } from "../ldlib2";
+import { ancestorsOf, clickElement, panelElements, type Element } from "../ldlib2";
 import { clickTab } from "../shared/ui/colony-pages";
 import { launchPair, type E2EPair } from "../shared/harness/pair";
 import { ensureOut, tracePath } from "../shared/harness/out-paths";
@@ -12,8 +12,8 @@ import { frames } from "../shared/harness/bw-helpers";
 const SETUP = defineTask<Record<string, never>, boolean>({
   name: "folkways.sidebar.setup", side: "server",
   source: javaTask({ imports: [
-    "io.github.izakyl.folkways.core.front.engine.charter.Charters",
-    "io.github.izakyl.folkways.core.front.engine.charter.CurrentColony",
+    "io.github.izakyl.folkways.core.colony.charter.Charters",
+    "io.github.izakyl.folkways.core.colony.charter.CurrentColony",
     "io.github.izakyl.folkways.core.front.engine.registry.FolkwaysItems",
     "net.minecraft.world.item.ItemStack", "net.minecraft.world.InteractionHand",
   ], body: `
@@ -180,7 +180,6 @@ test("the book's debug toggle sends bounded diagnostics only while enabled, and 
       await player.useItem(client);
       await screen.waitFor(client, "ModularUIContainerScreen", { timeoutMs: 15_000 });
       await clickTab(client, "folkways.tab.settings");
-      await waitForElement(client, { id: "folkways.settings.debug_logs" }, { timeoutMs: 10_000 });
     };
     await server.run(SETUP, {});
     await tick.step(server, 3);
@@ -190,7 +189,7 @@ test("the book's debug toggle sends bounded diagnostics only while enabled, and 
     await server.run(INCIDENT, { count: 1, key: "disabled-path-probe", other: false });
     expect((await messages()).some(line => line.includes("disabled-path-probe"))).toBe(false);
     await openSettings();
-    await clickElement(client, { id: "folkways.settings.debug_logs" });
+    await clickElement(client, { id: "folkways.settings.debug_logs" }, { scrollIntoView: true });
     await expect.poll(() => server.run(ENABLED, {})).toBe(true);
     await chat.waitFor(client, "No active planning site", { includeExisting: true, timeoutMs: 15_000 });
     const before = waiting(await messages());
@@ -211,7 +210,7 @@ test("the book's debug toggle sends bounded diagnostics only while enabled, and 
     await tick.sprint(server, 100);
     await chat.waitFor(client, "grouped occurrences: 18", { includeExisting: true, timeoutMs: 10_000 });
     await openSettings();
-    await clickElement(client, { id: "folkways.settings.debug_logs" });
+    await clickElement(client, { id: "folkways.settings.debug_logs" }, { scrollIntoView: true });
     await expect.poll(() => server.run(ENABLED, {})).toBe(false);
     const stopped = waiting(await messages());
     await tick.sprint(server, 210);

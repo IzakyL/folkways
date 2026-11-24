@@ -9,7 +9,7 @@ import io.github.izakyl.folkways.core.resident.api.Body;
 import io.github.izakyl.folkways.core.world.api.Footing;
 import io.github.izakyl.folkways.core.front.api.Endorsed;
 import io.github.izakyl.folkways.core.front.api.Endorsement;
-import io.github.izakyl.folkways.core.front.api.notice.Attempt;
+import io.github.izakyl.folkways.core.card.api.notice.Attempt;
 import io.github.izakyl.folkways.core.front.engine.Enrollments;
 import java.util.Optional;
 import net.minecraft.core.BlockPos;
@@ -38,11 +38,12 @@ public final class Endorsements {
 
     public static Attempt called(ServerLevel level, Colony colony, Player by,
             ResourceLocation kind) {
-        ColonyView view = ColonyViews.of(colony, level).orElse(null);
+        boolean creative = by.isCreative();
+        ColonyView view = creative ? colony.view(level) : ColonyViews.of(colony, level).orElse(null);
         if (view == null) {
             return Attempt.refused(EndorsementRefusal.NO_ROOM_IN_THE_WORLD);
         }
-        BlockPos doorstep = doorstep(level, view).orElse(null);
+        BlockPos doorstep = doorstep(level, view).orElseGet(() -> creative ? by.blockPosition() : null);
         if (doorstep == null) {
             return Attempt.refused(EndorsementRefusal.NO_ROOM_IN_THE_WORLD);
         }

@@ -16,7 +16,5 @@ public interface InventorySources extends InventoryDiscovery {
 
     Collection<WorldPos> storesIn(ResourceKey<Level> dimension);
 
-    Collection<WorldPos> withheldIn(ResourceKey<Level> dimension);
-
     Collection<Workshop> workshopsIn(ResourceKey<Level> dimension);
 }

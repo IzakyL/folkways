@@ -1,8 +1,10 @@
 package io.github.izakyl.folkways.vanilla.build;
 
 import io.github.izakyl.folkways.core.item.api.Goods;
+import io.github.izakyl.folkways.core.work.api.BlockData;
+import io.github.izakyl.folkways.core.work.api.Joints;
 import io.github.izakyl.folkways.core.work.api.Outcome;
-import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.world.api.Stances;
 import io.github.izakyl.folkways.core.work.api.StructureCompat;
 import io.github.izakyl.folkways.core.work.api.ToolNeed;
 import io.github.izakyl.folkways.core.work.api.WorkNoise;

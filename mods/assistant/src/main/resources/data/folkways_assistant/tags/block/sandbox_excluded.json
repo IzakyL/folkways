@@ -1,0 +1,121 @@
+{
+  "values": [
+    "minecraft:command_block",
+    "minecraft:chain_command_block",
+    "minecraft:repeating_command_block",
+    "minecraft:structure_block",
+    "minecraft:jigsaw",
+    {
+      "id": "create:track",
+      "required": false
+    },
+    {
+      "id": "create:fake_track",
+      "required": false
+    },
+    {
+      "id": "create:track_station",
+      "required": false
+    },
+    {
+      "id": "create:track_signal",
+      "required": false
+    },
+    {
+      "id": "create:track_observer",
+      "required": false
+    },
+    {
+      "id": "create:packager",
+      "required": false
+    },
+    {
+      "id": "create:repackager",
+      "required": false
+    },
+    {
+      "id": "create:stock_link",
+      "required": false
+    },
+    {
+      "id": "create:stock_ticker",
+      "required": false
+    },
+    {
+      "id": "create:redstone_requester",
+      "required": false
+    },
+    {
+      "id": "create:package_frogport",
+      "required": false
+    },
+    {
+      "id": "create:factory_gauge",
+      "required": false
+    },
+    {
+      "id": "create:white_postbox",
+      "required": false
+    },
+    {
+      "id": "create:orange_postbox",
+      "required": false
+    },
+    {
+      "id": "create:magenta_postbox",
+      "required": false
+    },
+    {
+      "id": "create:light_blue_postbox",
+      "required": false
+    },
+    {
+      "id": "create:yellow_postbox",
+      "required": false
+    },
+    {
+      "id": "create:lime_postbox",
+      "required": false
+    },
+    {
+      "id": "create:pink_postbox",
+      "required": false
+    },
+    {
+      "id": "create:gray_postbox",
+      "required": false
+    },
+    {
+      "id": "create:light_gray_postbox",
+      "required": false
+    },
+    {
+      "id": "create:cyan_postbox",
+      "required": false
+    },
+    {
+      "id": "create:purple_postbox",
+      "required": false
+    },
+    {
+      "id": "create:blue_postbox",
+      "required": false
+    },
+    {
+      "id": "create:brown_postbox",
+      "required": false
+    },
+    {
+      "id": "create:green_postbox",
+      "required": false
+    },
+    {
+      "id": "create:red_postbox",
+      "required": false
+    },
+    {
+      "id": "create:black_postbox",
+      "required": false
+    }
+  ]
+}

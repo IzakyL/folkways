@@ -20,10 +20,10 @@ public final class Threats {
             && mob.isAlive()
             && !mob.isRemoved()
             && Bodies.of(mob).flatMap(body -> body.colonyId()).isEmpty()
-            && !mob.isAlliedTo(resident)
+            && (resident == null || !mob.isAlliedTo(resident))
             && (!(mob instanceof Spider)
             || mob.getLightLevelDependentMagicValue() < .5F
             || mob.getTarget() != null && mob.getTarget().isAlive())
-            && (!(mob instanceof NeutralMob neutral) || mob.getTarget() == resident || neutral.isAngryAt(resident));
+            && (!(mob instanceof NeutralMob neutral) || resident != null && (mob.getTarget() == resident || neutral.isAngryAt(resident)));
     }
 }

@@ -1,8 +1,11 @@
 package io.github.izakyl.folkways.vanilla.wares;
 
+import io.github.izakyl.folkways.core.facility.api.Contribution;
+import io.github.izakyl.folkways.core.facility.api.DefinedFacilities;
+import io.github.izakyl.folkways.core.front.api.HoldingKind;
+import io.github.izakyl.folkways.core.inventory.api.StoreWorkstations;
 import io.github.izakyl.folkways.core.resident.api.Bodies;
 import io.github.izakyl.folkways.core.resident.api.KitProviders;
-import io.github.izakyl.folkways.core.inventory.api.StoreWorkstations;
 
 import io.github.izakyl.folkways.core.colony.api.Closing;
 import io.github.izakyl.folkways.core.colony.api.Colony;
@@ -10,7 +13,8 @@ import io.github.izakyl.folkways.core.colony.api.ColonyView;
 import io.github.izakyl.folkways.core.colony.api.Sweep;
 import io.github.izakyl.folkways.core.inventory.api.InventorySnapshot;
 import io.github.izakyl.folkways.core.inventory.api.port.Usability;
-import io.github.izakyl.folkways.core.inventory.api.port.StorePorts;
+import io.github.izakyl.folkways.core.facility.api.Facilities;
+import io.github.izakyl.folkways.core.inventory.api.port.StoreAccess;
 import net.minecraft.ChatFormatting;
 import io.github.izakyl.folkways.core.inventory.api.Stash;
 import io.github.izakyl.folkways.core.item.api.BlockNames;
@@ -18,17 +22,16 @@ import io.github.izakyl.folkways.core.item.api.Containers;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import io.github.izakyl.folkways.core.plan.api.Grown;
 import io.github.izakyl.folkways.core.plan.api.Workshop;
-import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.world.api.Stances;
 import io.github.izakyl.folkways.core.world.api.Reach;
 import io.github.izakyl.folkways.core.world.api.Stand;
 import io.github.izakyl.folkways.core.world.api.StandGeometry;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
-import io.github.izakyl.folkways.core.front.api.Facing;
+import io.github.izakyl.folkways.core.front.api.GhostSource;
 import io.github.izakyl.folkways.core.front.api.Fronts;
 import io.github.izakyl.folkways.core.front.api.Placard;
-import io.github.izakyl.folkways.core.front.api.notice.Line;
-import io.github.izakyl.folkways.core.front.api.notice.Sentence;
-import io.github.izakyl.folkways.core.front.api.panel.Board;
+import io.github.izakyl.folkways.core.card.api.notice.Line;
+import io.github.izakyl.folkways.core.card.api.notice.Sentence;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -40,19 +43,13 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.Container;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.crafting.AbstractCookingRecipe;
-import net.minecraft.world.item.crafting.RecipeType;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 
-final class WaresPresence implements Facing {
+final class WaresPresence implements GhostSource, HoldingKind {
 
     private final Colony colony;
 
@@ -97,30 +94,36 @@ final class WaresPresence implements Facing {
             ServerLevel level = view.level();
             List<Workshop> here = new ArrayList<>();
             for (BlockPos pos : view.blocks(WaresContent.STATION)) {
-                if (!level.isLoaded(pos)) {
+                Optional<StationPrefab> nativeStation = StationPrefab.at(level, pos);
+                if (nativeStation.isEmpty()) {
                     continue;
                 }
+                StationPrefab prefab = nativeStation.get();
+                WorldPos at = prefab.site();
                 BlockState state = level.getBlockState(pos);
-                if (!Stations.isStation(state)) {
-                    continue;
-                }
-                WorldPos at = WorldPos.of(level, pos);
                 StationHost host = stations.get(at);
                 if (host == null) {
                     Optional<Stances> footings = Stances.of(level, Reach.workableCells(level, pos));
                     if (footings.isEmpty()) {
                         continue;
                     }
-                    host = hostFor(at, state.getBlock(), footings.get());
+                    host = prefab.host(footings.get(), spokenFor, kin, sweep::nudge);
                     stations.put(at, host);
                 }
-                here.add(host.frozen(recipes, level, fuel));
+                for (Contribution projection : prefab.offering(host, recipes, fuel).projections(level, Map.of())) {
+                    if (projection instanceof Contribution.Workshop work) {
+                        here.add(work.workshop());
+                    }
+                }
                 standing.add(at);
                 upkeep(level, host, at, state, fuel, cold, stranded);
             }
             for (BlockPos pos : view.blocks(WaresContent.STORE)) {
+                if (StoreAccess.unavailable(level, pos)) {
+                    continue;
+                }
                 Set<StoreWorkstations.Capability> capabilities = StoreWorkstations.at(level, pos);
-                if (capabilities.isEmpty()) {
+                if (capabilities.isEmpty() || DefinedFacilities.covers(level, WorldPos.of(level, pos))) {
                     continue;
                 }
                 WorldPos at = WorldPos.of(level, pos);
@@ -129,6 +132,11 @@ final class WaresPresence implements Facing {
                 if (footings.isEmpty()) {
                     continue;
                 }
+                var container = Facilities.container(level, at).filter(store -> !store.network());
+                if (container.isEmpty()) {
+                    continue;
+                }
+                List<Workshop> offers = new ArrayList<>();
                 Block block = level.getBlockState(pos).getBlock();
                 for (StoreWorkstations.Capability capability : capabilities) {
                     // A separately enrolled vanilla station already offers this same capability.
@@ -139,13 +147,19 @@ final class WaresPresence implements Facing {
                     PackCraftHost host = storeStations.get(key);
                     if (host == null || !host.stances().equals(footings.get())) {
                         host = new PackCraftHost(at, block, capability, footings.get(), world ->
-                            colony.claims(WaresContent.STORE).stream()
+                            !StoreAccess.unavailable(world, at.block(world))
+                                && colony.claims(WaresContent.STORE).stream()
                                 .anyMatch(claim -> claim.what().singleCell().filter(at::equals).isPresent())
-                                && StoreWorkstations.at(world, at.block(world)).contains(capability), true);
+                                && StoreWorkstations.at(world, at.block(world)).contains(capability));
                         storeStations.put(key, host);
                     }
-                    here.add(host.frozen(recipes, level, fuel));
+                    offers.add(host.frozen(recipes, level, fuel));
                     provided.add(key);
+                }
+                for (Contribution projection : container.get().withWorkshops(offers).projections(level, Map.of())) {
+                    if (projection instanceof Contribution.Workshop work) {
+                        here.add(work.workshop());
+                    }
                 }
             }
             for (var resident : view.residents()) {
@@ -210,85 +224,13 @@ final class WaresPresence implements Facing {
         upkeep.clear();
     }
 
-    @Override
-    public Optional<Board> board(ResourceLocation page, ColonyView view) {
-        if (!page.equals(WaresContent.ID)) {
-            return Optional.empty();
-        }
-        ServerLevel level = view.level();
-        List<Board.Row> rows = new ArrayList<>();
-        rows.add(new Board.Row(new ItemStack(BuiltInRegistries.ITEM.get(WaresContent.FUEL.icon())),
-            Component.translatable(WaresContent.FUEL.nameKey()),
-            Component.empty(),
-            List.of(new Board.Act.Edit(WaresContent.FUEL.key()))));
-        Optional<ItemSpec> fuel = fuel();
-        int here = 0;
-        for (WorldPos cell : stations.keySet()) {
-            if (!cell.in(level) || !level.isLoaded(cell.block(level))) {
-                continue;
-            }
-            // The fuel is said for every station at once: the stations follow under a heading of their own.
-            if (here++ == 0) {
-                rows.add(Board.Row.heading(Component.translatable("folkways.page.wares.stations")));
-            }
-            BlockState state = level.getBlockState(cell.block(level));
-            rows.add(new Board.Row(new ItemStack(state.getBlock()),
-                BlockNames.of(state.getBlock()),
-                fuelLine(level, cell.block(level)),
-                List.of(new Board.Act.Ping(cell.block(level)))).told(Hearths.told(level, cell.block(level), fuel)));
-        }
-        for (var store : colony.inventory().snapshot().stores().values()) {
-            if (!store.dimension().equals(level.dimension()) || !store.labor()) {
-                continue;
-            }
-            BlockPos at = store.stash().pos().block(level);
-            Component name = level.isLoaded(at) ? BlockNames.at(level, at) : store.block()
-                .map(BuiltInRegistries.BLOCK::get).map(BlockNames::of)
-                .orElse(Component.translatable("folkways.store.title"));
-            Component detail = Component.empty();
-            if (store.usability() instanceof Usability.Unusable unusable) {
-                name = name.copy().withStyle(ChatFormatting.GRAY);
-                detail = Component.translatable("folkways.store.unusable", unusable.reason())
-                    .withStyle(ChatFormatting.GRAY);
-            }
-            ItemStack icon = level.isLoaded(at) ? BlockNames.pictureAt(level, at)
-                : store.block().map(BuiltInRegistries.BLOCK::get).map(ItemStack::new).orElse(ItemStack.EMPTY);
-            rows.add(new Board.Row(icon, name, detail, List.of(new Board.Act.Ping(at))).wide());
-        }
-        for (StoreStation station : storeStations.keySet()) {
-            WorldPos cell = station.at();
-            if (!cell.in(level) || !level.isLoaded(cell.block(level))) {
-                continue;
-            }
-            if (here++ == 0) {
-                rows.add(Board.Row.heading(Component.translatable("folkways.page.wares.stations")));
-            }
-            rows.add(new Board.Row(new ItemStack(station.block()), BlockNames.of(station.block()),
-                Component.translatable("folkways.wares.store_workstation", station.capability().station().getName()),
-                List.of(new Board.Act.Ping(cell.block(level)))));
-        }
-        return Optional.of(new Board(
-            List.of(new Board.Figure("folkways.page.wares.stations",
-                Component.literal(Integer.toString(here)))),
-            rows,
-            Optional.of(Component.translatable("folkways.page.wares.empty"))));
-    }
-
-    private static Component fuelLine(ServerLevel level, BlockPos at) {
-        Optional<Container> machine = Machines.at(level, at);
-        if (machine.isEmpty() || machine.get().getContainerSize() <= Machines.FUEL_SLOT) {
-            return Component.empty();
-        }
-        ItemStack held = machine.get().getItem(Machines.FUEL_SLOT);
-        return held.isEmpty()
-            ? Component.translatable("folkways.page.wares.cold")
-            : Component.translatable("folkways.page.wares.fuelled", held.getCount(),
-                held.getHoverName());
-    }
-
     // A cooker looked at tells its load and fuel turning and how far through it is; a store, what it holds most of.
     @Override
-    public List<Line> blockLines(BlockPos at, ColonyView view) {
+    public List<Line> lines(Held held, ColonyView view) {
+        return statusLines(held.site().block(view.level()), view);
+    }
+
+    private List<Line> statusLines(BlockPos at, ColonyView view) {
         ServerLevel level = view.level();
         if (stations.containsKey(WorldPos.of(level, at))) {
             List<Line> lines = new ArrayList<>();
@@ -300,17 +242,21 @@ final class WaresPresence implements Facing {
             return List.copyOf(lines);
         }
         BlockPos anchor = Containers.anchor(level, at);
-        if (!view.blocks(WaresContent.STORE).contains(anchor)) {
+        if (!view.blocks(WaresContent.STORE).contains(anchor) || StoreAccess.attached(level, anchor)) {
             return List.of();
         }
+        Optional<Component> part = usedBy(level, anchor);
+        if (part.isPresent()) {
+            return List.of(Line.text(part.get()));
+        }
         WorldPos where = WorldPos.of(level, anchor);
-        var port = StorePorts.at(level, anchor);
+        var port = StoreAccess.at(level, anchor);
         InventorySnapshot snapshot = colony.inventory().snapshot();
         List<Line> lines = new ArrayList<>();
         Optional<List<WorldPos>> members = port.flatMap(value -> value.proxyMembers());
         if (members.isPresent()) {
             // An access point holds nothing itself: it tells what its members hold together, each counted once.
-            if (port.get().usability() instanceof Usability.Unusable unusable) {
+            if (StoreAccess.usability(level, port.get()) instanceof Usability.Unusable unusable) {
                 lines.add(unusable(unusable));
             } else {
                 lines.add(Line.text(Component.translatable("folkways.store.proxy.members", members.get().size())));
@@ -325,9 +271,9 @@ final class WaresPresence implements Facing {
                     pending = true;
                 }
             }
-            if (!held.isEmpty() || !pending && port.get().usability().usable()) {
+            if (!held.isEmpty() || !pending && StoreAccess.usability(level, port.get()).usable()) {
                 lines.add(StoreContents.of(held.values()));
-            } else if (pending && port.get().usability().usable()) {
+            } else if (pending && StoreAccess.usability(level, port.get()).usable()) {
                 lines.add(Line.text(Component.translatable("folkways.settlers.checking_stock")));
             }
             return List.copyOf(lines);
@@ -337,7 +283,7 @@ final class WaresPresence implements Facing {
             colony.inventory().ensureObserved(Stash.at(where));
         }
         Usability usability = observed.map(InventorySnapshot.Store::usability)
-            .or(() -> port.map(value -> value.usability())).orElse(Usability.USABLE);
+            .or(() -> port.map(value -> StoreAccess.usability(level, value))).orElse(Usability.USABLE);
         if (usability instanceof Usability.Unusable unusable) {
             lines.add(unusable(unusable));
         }
@@ -352,6 +298,15 @@ final class WaresPresence implements Facing {
                 capability.station().getName())));
         }
         return List.copyOf(lines);
+    }
+
+    private Optional<Component> usedBy(ServerLevel level, BlockPos at) {
+        return StoreAccess.owningPart(level, at).map(id -> {
+            Component name = DefinedFacilities.of(colony).flatMap(facilities -> facilities.facility(id))
+                .<Component>map(facility -> Component.literal(facility.name()))
+                .orElseGet(() -> Component.translatable("folkways.store.facility"));
+            return Component.translatable("folkways.store.used_by", name);
+        });
     }
 
     private static Line unusable(Usability.Unusable unusable) {
@@ -371,14 +326,14 @@ final class WaresPresence implements Facing {
                 continue;
             }
             BlockPos at = cell.block(level);
-            placards.add(placard(level, at, at, blockLines(at, view)));
+            placards.add(placard(level, at, at, statusLines(at, view)));
         }
         for (BlockPos anchor : view.blocks(WaresContent.STORE)) {
-            if (!level.isLoaded(anchor)) {
+            if (!level.isLoaded(anchor) || StoreAccess.attached(level, anchor)) {
                 continue;
             }
             placards.add(placard(level, anchor, WaresPlugin.otherHalf(level, anchor, level.getBlockState(anchor))
-                .orElse(anchor), blockLines(anchor, view)));
+                .orElse(anchor), statusLines(anchor, view)));
         }
         return List.copyOf(placards);
     }
@@ -394,12 +349,5 @@ final class WaresPresence implements Facing {
 
     private Optional<ItemSpec> fuel() {
         return Fronts.of(colony).settings(WaresContent.ID).items(WaresContent.FUEL.key());
-    }
-
-    private StationHost hostFor(WorldPos at, Block block, Stances footings) {
-        RecipeType<? extends AbstractCookingRecipe> cooks = Stations.COOKERS.get(block);
-        return cooks == null
-            ? new PackCraftHost(at, block, footings)
-            : new CookHost(at, block, cooks, footings, spokenFor, kin, sweep::nudge);
     }
 }

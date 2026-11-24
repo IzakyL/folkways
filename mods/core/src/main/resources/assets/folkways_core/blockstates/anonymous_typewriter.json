@@ -1,0 +1,19 @@
+{
+  "variants": {
+    "facing=north": {
+      "model": "folkways_core:block/anonymous_typewriter"
+    },
+    "facing=east": {
+      "model": "folkways_core:block/anonymous_typewriter",
+      "y": 90
+    },
+    "facing=south": {
+      "model": "folkways_core:block/anonymous_typewriter",
+      "y": 180
+    },
+    "facing=west": {
+      "model": "folkways_core:block/anonymous_typewriter",
+      "y": 270
+    }
+  }
+}

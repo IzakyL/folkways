@@ -13,9 +13,10 @@ public final class DamageControlPlugin {
         bus.addListener(DamageControlCommands::register);
         bus.addListener(Declaring.class, DamageControlContent::declare);
         bus.addListener(Registering.class, DamageControlContent::enroll);
+        bus.addListener(Registering.class, DamageControlPresence::enrollPanel);
         if (FMLEnvironment.dist.isClient()) {
             bus.addListener(DamageControlScene::declare);
-            bus.addListener(DamageControlTool::install);
+            bus.addListener(DamageControlMarks::install);
         }
     }
 }

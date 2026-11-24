@@ -1,0 +1,10 @@
+{
+  "required": true,
+  "minVersion": "0.8.5",
+  "package": "io.github.izakyl.folkways.core.shell.cookery.mixin",
+  "plugin": "io.github.izakyl.folkways.core.shell.cookery.CookeryMixinPlugin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": ["ChoppingBoardInputMixin"],
+  "client": ["TableBlockEntityRenderMixin"],
+  "injectors": {"defaultRequire": 1}
+}

@@ -12,7 +12,7 @@ export async function tapV(client: MinecraftClient) {
 
 /** Clicks the RTS chip on the open overhead toolbar; the #rts profile registers it. */
 export async function pickRtsTool(client: MinecraftClient) {
-  const chip = (await screen.widgets(client)).find(widget => /^RTS$/.test(widget.label?.trim() ?? ""));
+  const chip = (await screen.widgets(client)).find(widget => /^(Control|控制)$/.test(widget.label?.trim() ?? ""));
   expect(chip, "the overhead toolbar must expose the RTS tool").toBeTruthy();
   await screen.clickWidget(client, { label: chip!.label });
 }

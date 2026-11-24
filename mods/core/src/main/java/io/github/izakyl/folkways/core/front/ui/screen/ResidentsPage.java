@@ -12,18 +12,11 @@ import com.lowdragmc.lowdraglib2.gui.ui.event.UIEvents;
 import dev.vfyjxf.taffy.style.AlignItems;
 import dev.vfyjxf.taffy.style.FlexDirection;
 import dev.vfyjxf.taffy.style.FlexWrap;
+import io.github.izakyl.folkways.core.card.api.notice.Notice;
+import io.github.izakyl.folkways.core.card.api.notice.Sentence;
 import io.github.izakyl.folkways.core.colony.api.Colony;
-import io.github.izakyl.folkways.core.resident.api.Body;
-import io.github.izakyl.folkways.core.resident.api.Licences;
-import io.github.izakyl.folkways.core.shell.neoforge.FolkwaysAttachments;
-import io.github.izakyl.folkways.core.vocation.api.Keenness;
-import io.github.izakyl.folkways.core.vocation.api.Vocation;
-import io.github.izakyl.folkways.core.vocation.api.VocationGroup;
-import io.github.izakyl.folkways.core.vocation.api.Vocations;
 import io.github.izakyl.folkways.core.effect.perk.PerkPool;
-import io.github.izakyl.folkways.core.front.api.Facing;
-import io.github.izakyl.folkways.core.front.api.notice.Notice;
-import io.github.izakyl.folkways.core.front.api.notice.Sentence;
+import io.github.izakyl.folkways.core.front.api.ResidentLines;
 import io.github.izakyl.folkways.core.front.api.ui.Bay;
 import io.github.izakyl.folkways.core.front.api.ui.Children;
 import io.github.izakyl.folkways.core.front.api.ui.Draw;
@@ -36,10 +29,19 @@ import io.github.izakyl.folkways.core.front.api.ui.PriorityTable;
 import io.github.izakyl.folkways.core.front.api.ui.Rows;
 import io.github.izakyl.folkways.core.front.api.ui.SignLine;
 import io.github.izakyl.folkways.core.front.api.ui.Tokens;
+import io.github.izakyl.folkways.core.front.engine.Enrollments;
 import io.github.izakyl.folkways.core.front.engine.authority.ColonyAuthority;
 import io.github.izakyl.folkways.core.front.engine.authority.OwnedResident;
 import io.github.izakyl.folkways.core.front.engine.colony.Residents;
+import io.github.izakyl.folkways.core.front.engine.operation.ResidentChanges;
 import io.github.izakyl.folkways.core.front.ui.panel.Inlays;
+import io.github.izakyl.folkways.core.resident.api.Body;
+import io.github.izakyl.folkways.core.resident.api.Licences;
+import io.github.izakyl.folkways.core.resident.internal.FolkwaysAttachments;
+import io.github.izakyl.folkways.core.vocation.api.Keenness;
+import io.github.izakyl.folkways.core.vocation.api.Vocation;
+import io.github.izakyl.folkways.core.vocation.api.VocationGroup;
+import io.github.izakyl.folkways.core.vocation.api.Vocations;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -128,7 +130,10 @@ public final class ResidentsPage implements Draw {
             rows.add(row);
             table.addChildren(row.element);
         }
-        ScrollerView matrix = Rows.fills(Rows.wideBox());
+        // The roster takes its full height and scrolls only sideways: the book page around it scrolls it up and down,
+        // with the editors and sections above it.
+        ScrollerView matrix = Rows.wideBox();
+        matrix.layout(layout -> layout.flexShrink(0));
         matrix.addScrollViewChild(table);
 
         Label empty = Rows.text(Component.translatable("folkways.ui.residents.empty"));
@@ -157,7 +162,6 @@ public final class ResidentsPage implements Draw {
         Tokens.name(search, "folkways.resident.search");
 
         UIElement page = Rows.page().addChildren(Rows.strip().addChildren(search), empty, unmatched, matrix);
-        page.layout(layout -> layout.flexGrow(1).flexShrink(1).minHeight(0));
 
         page.addSyncValue(DataBindingBuilder.tagS2C(() -> rosterTag(player))
             .onSyncReceived(tag -> {
@@ -391,8 +395,8 @@ public final class ResidentsPage implements Draw {
         Optional<Colony> colony = Pages.colonyOf(player);
         Optional<ServerLevel> level = Pages.levelOf(player);
         if (colony.isPresent() && level.isPresent()) {
-            for (Facing facing : Facing.all(colony.get())) {
-                marks = marks.then(facing.nameMarks(body.get().id(), colony.get().view(level.get())));
+            for (ResidentLines linesSource : Enrollments.residentLines(colony.get()).values()) {
+                marks = marks.then(linesSource.nameMarks(body.get().id(), colony.get().view(level.get())));
             }
         }
         tag.put("marks", marks.save());
@@ -497,12 +501,7 @@ public final class ResidentsPage implements Draw {
             return;
         }
         Vocation vocation = Vocations.all().get(trade);
-        owned(player, resident).ifPresent(owned -> {
-            Body body = owned.entity();
-            Licences licences = body.licences();
-            licences.trade(vocation).ifPresent(known -> change.accept(licences, known));
-            body.mob().setData(FolkwaysAttachments.LICENCES, licences);
-        });
+        owned(player, resident).ifPresent(owned -> ResidentChanges.work(owned.entity(), vocation, change));
     }
 
     private static void editGroup(Player player, State state, int row, Consumer<Licences> change) {
@@ -515,10 +514,7 @@ public final class ResidentsPage implements Draw {
     }
 
     private static void rename(Player player, State state) {
-        owned(player, state.selected).ifPresent(owned -> {
-            String name = state.typed.trim();
-            owned.entity().mob().setCustomName(name.isEmpty() ? null : Component.literal(name));
-        });
+        owned(player, state.selected).ifPresent(owned -> ResidentChanges.rename(owned.entity(), state.typed));
     }
 
     // Fills the rows with the residents the search lets through and says how many it let through.

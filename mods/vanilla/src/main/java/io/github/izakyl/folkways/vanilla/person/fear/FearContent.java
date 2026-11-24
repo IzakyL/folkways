@@ -12,7 +12,7 @@ public final class FearContent {
 
     public static void declare(Declaring declaring) {
         FearPresence fear = new FearPresence();
-        declaring.urges(ID, (colony, who, view) -> fear.urges(who, view));
+        declaring.urges(ID, fear::urges);
     }
 
 }

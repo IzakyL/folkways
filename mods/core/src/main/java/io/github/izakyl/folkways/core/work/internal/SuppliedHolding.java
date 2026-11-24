@@ -8,6 +8,7 @@ import io.github.izakyl.folkways.core.work.api.Node;
 import io.github.izakyl.folkways.core.work.api.Placement;
 import io.github.izakyl.folkways.core.work.api.PreemptReason;
 import io.github.izakyl.folkways.core.work.api.SoftPreempt;
+import io.github.izakyl.folkways.core.world.api.Stances;
 import io.github.izakyl.folkways.core.work.api.WorkHolding;
 import java.util.Objects;
 import java.util.Optional;
@@ -47,6 +48,7 @@ final class SuppliedHolding implements WorkHolding {
         HoldingStep step = advance(context);
         if (step instanceof HoldingStep.Done || step instanceof HoldingStep.Failed) {
             result = step;
+            approach.rise(context);
         }
         return step;
     }
@@ -58,7 +60,8 @@ final class SuppliedHolding implements WorkHolding {
                 return step;
             }
             try {
-                context.body().locomotion().stand(context.body().mob(), node.mountedWork());
+                context.body().locomotion().stand(context.body().mob(),
+                    node.mountedWork() || node.spec().stances() instanceof Stances.Seat);
                 holding = Objects.requireNonNull(node.acquire(new HoldingContext(context.level(), context.body(),
                     context.worker(), context.actions(), context.settlement(), context.holdings(), joining)));
             } catch (RuntimeException | LinkageError broken) {
@@ -82,6 +85,7 @@ final class SuppliedHolding implements WorkHolding {
     @Override
     public void hardRelease(HoldingContext context, Disposition result, PreemptReason reason) {
         execution().hardRelease(context, result, reason);
+        approach.rise(context);
     }
 
     @Override

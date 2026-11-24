@@ -7,7 +7,7 @@ import io.github.izakyl.folkways.core.resident.api.Doings;
 import io.github.izakyl.folkways.core.resident.api.Going;
 import io.github.izakyl.folkways.core.resident.api.RefusalKind;
 import io.github.izakyl.folkways.core.vocation.api.Vocations;
-import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.world.api.Stances;
 import io.github.izakyl.folkways.core.work.api.WorkExertion;
 import io.github.izakyl.folkways.core.work.support.WorkStances;
 import io.github.izakyl.folkways.core.world.api.Realm;

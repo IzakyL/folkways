@@ -90,7 +90,12 @@ public final class Commit {
             throw broken;
         }
         switch (outcome) {
-            case Outcome.Done done -> done.unused().forEach(stack -> giveBack(who, stack));
+            case Outcome.Done done -> {
+                if (node instanceof Node planned && who.placement() != null && who.placement().settlement() != null) {
+                    who.placement().settlement().drawn(planned.id());
+                }
+                done.unused().forEach(stack -> giveBack(who, stack));
+            }
             case Outcome.Failed ignored -> undo.run();
         }
         return outcome;

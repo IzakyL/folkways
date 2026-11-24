@@ -1,17 +1,17 @@
 package io.github.izakyl.folkways.core.inventory.internal;
 
-import io.github.izakyl.folkways.core.inventory.api.SlotSnapshot;
-import io.github.izakyl.folkways.core.inventory.api.StoreRule;
-import io.github.izakyl.folkways.core.inventory.api.port.PortIdentity;
-import io.github.izakyl.folkways.core.inventory.api.port.PortReader;
-import io.github.izakyl.folkways.core.inventory.api.port.Pull;
-import io.github.izakyl.folkways.core.inventory.api.port.Room;
-import io.github.izakyl.folkways.core.inventory.api.port.StorePort;
-import io.github.izakyl.folkways.core.inventory.api.port.StorePorts;
-import io.github.izakyl.folkways.core.inventory.api.port.TransferResult;
-import io.github.izakyl.folkways.core.inventory.api.port.Usability;
+import io.github.izakyl.folkways.core.facility.api.control.SlotWindow;
+import io.github.izakyl.folkways.core.facility.api.Ports;
+import io.github.izakyl.folkways.core.facility.api.control.SlotSnapshot;
+import io.github.izakyl.folkways.core.facility.api.control.PortIdentity;
+import io.github.izakyl.folkways.core.facility.api.control.PortReader;
+import io.github.izakyl.folkways.core.facility.api.control.Pull;
+import io.github.izakyl.folkways.core.facility.api.control.Room;
+import io.github.izakyl.folkways.core.facility.api.control.ItemPort;
+import io.github.izakyl.folkways.core.facility.api.control.TransferResult;
 import io.github.izakyl.folkways.core.item.api.Containers;
 import io.github.izakyl.folkways.core.item.api.Goods;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -26,7 +26,7 @@ import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.item.ItemStack;
 
 // Native slots retain their copy, simulate, and whole-inventory writeback semantics.
-public final class SlotPort implements StorePort {
+public final class SlotPort implements ItemPort {
 
     private static final ClassValue<Boolean> CUSTOM_LIMIT = new ClassValue<>() {
         @Override
@@ -59,13 +59,13 @@ public final class SlotPort implements StorePort {
     }
 
     @Override
-    public PortIdentity identity() {
-        return identity;
+    public WorldPos anchor() {
+        return identity().home();
     }
 
     @Override
-    public Usability usability() {
-        return Usability.USABLE;
+    public PortIdentity identity() {
+        return identity;
     }
 
     @Override
@@ -74,7 +74,7 @@ public final class SlotPort implements StorePort {
     }
 
     @Override
-    public PortReader reader(ServerLevel level, List<StoreRule> rules) {
+    public PortReader reader(ServerLevel level, Optional<SlotWindow> window) {
         return new PortReader() {
             private final List<SlotSnapshot> slots = new ArrayList<>();
             private final List<Entry> entries = new ArrayList<>();
@@ -88,7 +88,7 @@ public final class SlotPort implements StorePort {
             public boolean step(int budget) {
                 while (slots.size() < container.getContainerSize() && budget-- > 0) {
                     int slot = slots.size();
-                    int accessible = Stores.accessibleSlot(rules, container.getContainerSize(), slot);
+                    int accessible = window.map(range -> range.accessibleSlot(slot)).orElse(slot);
                     ItemStack stack = container.getItem(slot);
                     int limit = stack.isEmpty() ? container.getMaxStackSize() : container.getMaxStackSize(stack);
                     slots.add(observation == null ? new SlotSnapshot(slot, accessible, stack, limit)
@@ -137,11 +137,8 @@ public final class SlotPort implements StorePort {
     }
 
     @Override
-    public TransferResult take(ServerLevel level, List<Pull> requested, List<StoreRule> rules, boolean simulate) {
-        if (!StoreRule.takes(rules)) {
-            return new TransferResult.Refused(TransferResult.Why.NOT_ALLOWED);
-        }
-        Container accessible = Stores.kept(container, rules, true).orElse(null);
+    public TransferResult take(ServerLevel level, List<Pull> requested, Optional<SlotWindow> window, boolean simulate) {
+        Container accessible = Stores.window(container, window).orElse(null);
         if (accessible == null) {
             return new TransferResult.Refused(TransferResult.Why.NOTHING_TO_TAKE);
         }
@@ -166,18 +163,14 @@ public final class SlotPort implements StorePort {
         }
         if (!simulate) {
             copy(taken, accessible);
-            StorePorts.changed(level, identity.home().block(level));
+            Ports.changed(level, identity.home().block(level));
         }
         return new TransferResult.Done(moved);
     }
 
     @Override
-    public TransferResult put(ServerLevel level, List<ItemStack> goods, List<StoreRule> rules,
-                              boolean directed, boolean simulate) {
-        if (!directed && !StoreRule.stores(rules)) {
-            return new TransferResult.Refused(TransferResult.Why.NOT_ALLOWED);
-        }
-        Container accessible = Stores.kept(container, rules, directed).orElse(null);
+    public TransferResult put(ServerLevel level, List<ItemStack> goods, Optional<SlotWindow> window, boolean simulate) {
+        Container accessible = Stores.window(container, window).orElse(null);
         if (accessible == null) {
             return new TransferResult.Refused(TransferResult.Why.NO_ROOM);
         }
@@ -189,7 +182,7 @@ public final class SlotPort implements StorePort {
         }
         if (!simulate) {
             copy(placed, accessible);
-            StorePorts.changed(level, identity.home().block(level));
+            Ports.changed(level, identity.home().block(level));
         }
         return new TransferResult.Done(goods);
     }

@@ -63,10 +63,14 @@ final class Stalls {
         met.keySet().removeIf(one -> one.where().equals(where));
     }
 
-    // What is to be told now, when it is not what was told last.
     Optional<List<Stall>> changed(long now) {
+        return changed(now, List.of());
+    }
+
+    // What is to be told now, when it is not what was told last.
+    Optional<List<Stall>> changed(long now, List<Stall> immediate) {
         met.values().removeIf(tally -> now - tally.last >= FORGET_TICKS);
-        Set<Stall> standing = new LinkedHashSet<>();
+        Set<Stall> standing = new LinkedHashSet<>(immediate);
         planned.forEach((stall, since) -> {
             if (now - since >= SETTLE_TICKS) {
                 standing.add(stall);

@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.core.front.engine.colony;
 
-import io.github.izakyl.folkways.core.front.api.notice.NoticeKind;
+import io.github.izakyl.folkways.core.card.api.notice.NoticeKind;
 import java.util.Locale;
 
 public enum LookNotice implements NoticeKind {

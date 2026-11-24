@@ -3,7 +3,6 @@ package io.github.izakyl.folkways.vanilla.patrol;
 import io.github.izakyl.folkways.core.world.api.WorldSpaces;
 import io.github.izakyl.folkways.vanilla.FolkwaysVanillaConfig;
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -17,6 +16,7 @@ import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.event.entity.living.MobSpawnEvent;
 import net.neoforged.neoforge.event.server.ServerStoppedEvent;
+import net.neoforged.neoforge.event.tick.LevelTickEvent;
 
 // Where patrollers have lately stood watch, and until when. Monsters that would spawn of their own
 // accord within a ward's reach do not; spawners, eggs and summons are left alone. Wards are not saved:
@@ -71,14 +71,9 @@ public final class Wards {
         }
         long now = level.getGameTime();
         boolean found = false;
-        for (Iterator<Map.Entry<BlockPos, List<Ward>>> held = in.entrySet().iterator(); held.hasNext(); ) {
-            Map.Entry<BlockPos, List<Ward>> ward = held.next();
-            if (ward.getValue().stream().noneMatch(part -> part.until() > now)) {
-                held.remove();
-                continue;
-            }
+        for (Map.Entry<BlockPos, List<Ward>> ward : in.entrySet()) {
             if (found) {
-                continue;
+                break;
             }
             BlockPos stop = ward.getKey();
             BlockPos near = asSeenFrom(level, stop, at);
@@ -121,6 +116,23 @@ public final class Wards {
         return WorldSpaces.containing(level, stop)
             .map(frame -> BlockPos.containing(frame.toLocal(Vec3.atCenterOf(at))).offset(frame.storageOrigin()))
             .orElse(at);
+    }
+
+    static void refresh(ServerLevel level) {
+        Map<BlockPos, List<Ward>> in = HELD.get(level.dimension());
+        if (in == null) {
+            return;
+        }
+        long now = level.getGameTime();
+        in.replaceAll((at, wards) -> wards.stream().filter(ward -> ward.until() > now).toList());
+        in.values().removeIf(List::isEmpty);
+    }
+
+    @SubscribeEvent
+    public static void tick(LevelTickEvent.Post event) {
+        if (event.getLevel() instanceof ServerLevel level) {
+            refresh(level);
+        }
     }
 
     @SubscribeEvent

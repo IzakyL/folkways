@@ -256,7 +256,7 @@ const STOCK_COLONY = defineTask<Record<string, any>, Record<string, any>>({
       "io.github.izakyl.folkways.core.vocation.api.Keenness",
       "io.github.izakyl.folkways.core.item.api.ItemFilter",
       "io.github.izakyl.folkways.core.vocation.api.Vocations",
-      "io.github.izakyl.folkways.core.front.engine.colony.ColonyBoards",
+      "io.github.izakyl.folkways.core.front.engine.colony.HeldFacilities",
       "io.github.izakyl.folkways.core.front.engine.colony.ColonyFront",
       "io.github.izakyl.folkways.core.front.engine.colony.ColonyGround",
       "io.github.izakyl.folkways.core.front.engine.colony.ColonySettings",
@@ -326,9 +326,12 @@ for (Object raw : args.list("demands")) {
     front.setSetting(OrdersContent.ID, "low", new Value.Count(((Number) demand.get("low")).intValue()));
     front.setSetting(OrdersContent.ID, "count", new Value.Count(((Number) demand.get("count")).intValue()));
     front.setSetting(OrdersContent.ID, "rank", new Value.Count(0));
-    var attempt = ColonyBoards.act(level, colony, OrdersContent.ID, Optional.of(at), "maintain")
-        .orElseThrow(() -> Fail.invalid("no maintain act at " + at.toShortString()));
-    if (attempt.refusal().isPresent()) throw Fail.invalid("maintain " + item + " refused: " + attempt.refusal().get().key());
+    var held = HeldFacilities.at(level, colony, at).orElseThrow(
+        () -> new IllegalStateException("No held container at " + at));
+    var problems = held.run(player, "maintain", Map.of());
+    if (!problems.isEmpty()) {
+        throw new IllegalStateException("Order at " + at + " refused: " + problems);
+    }
     orders.add(item.toString());
 }
 out.put("orders", orders);

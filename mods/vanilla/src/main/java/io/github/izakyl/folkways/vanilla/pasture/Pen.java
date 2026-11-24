@@ -1,7 +1,7 @@
 package io.github.izakyl.folkways.vanilla.pasture;
 
 import io.github.izakyl.folkways.core.colony.api.ColonyView;
-import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.world.api.Stances;
 import io.github.izakyl.folkways.core.world.api.Reach;
 import io.github.izakyl.folkways.core.world.api.Realm;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
@@ -87,11 +87,12 @@ record Pen(UUID zone, Livestock keeps, int target, boolean shear, WorldPos ancho
     }
 
     boolean holds(Entity animal) {
-        var local = WorldSpaces.relative(animal.level(), anchor.realm(), animal.position());
-        if (local.isEmpty()) {
-            return false;
-        }
-        return holds(new WorldPos(anchor.realm(), BlockPos.containing(local.get())));
+        return locate(animal).filter(this::holds).isPresent();
+    }
+
+    Optional<WorldPos> locate(Entity subject) {
+        return WorldSpaces.relative(subject.level(), anchor.realm(), subject.position())
+            .map(local -> anchor.at(BlockPos.containing(local)));
     }
 
     boolean holds(WorldPos cell) {
@@ -112,8 +113,8 @@ record Pen(UUID zone, Livestock keeps, int target, boolean shear, WorldPos ancho
 
     // A keeper works a big pen from inside it, on its own ground, and a small one from outside, over the fence. A
     // pen whose ground is not one closed piece is worked from the ground marked out, as if it were whole.
-    Optional<Stances> workplaces(ServerLevel level, Entity subject, Enclosure enclosure) {
-        BlockPos at = WorldSpaces.at(subject).block(level);
+    Optional<Stances> workplaces(ServerLevel level, Entity subject, WorldPos position, Enclosure enclosure) {
+        BlockPos at = position.block(level);
         if (enclosure.small()) {
             // Footings aboard are in storage cells, so the line of sight must end at the subject's storage position.
             Vec3 center = subject.getBoundingBox().getCenter();

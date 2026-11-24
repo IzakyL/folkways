@@ -1,6 +1,7 @@
 package io.github.izakyl.folkways.core.front.client;
 
 import com.lowdragmc.lowdraglib2.gui.ui.ModularUI;
+import com.lowdragmc.lowdraglib2.gui.ui.UIElement;
 import io.github.izakyl.folkways.core.front.api.ui.ItemDrops;
 import java.util.ArrayList;
 import java.util.List;
@@ -60,9 +61,22 @@ public final class FilterTargets {
         if (stack.isEmpty()) {
             return false;
         }
-        for (Target target : of(screen)) {
-            if (target.contains(mouseX, mouseY) && target.accepts(stack)) {
-                target.drop(stack);
+        List<Target> under = of(screen).stream()
+            .filter(target -> target.contains(mouseX, mouseY) && target.accepts(stack)).toList();
+        if (under.isEmpty()) {
+            return false;
+        }
+        // Where targets overlap, as a picker's list over the card button that opened it, the one drawn on top takes it.
+        ModularUI ui = ModularUI.of(screen);
+        UIElement hit = ui == null ? null : ui.hitTestAtScreen(mouseX, mouseY);
+        under.stream().filter(target -> target instanceof Element element && holds(element.target().element(), hit))
+            .findFirst().orElse(under.getFirst()).drop(stack);
+        return true;
+    }
+
+    private static boolean holds(UIElement target, UIElement hit) {
+        for (UIElement at = hit; at != null; at = at.getParent()) {
+            if (at == target) {
                 return true;
             }
         }

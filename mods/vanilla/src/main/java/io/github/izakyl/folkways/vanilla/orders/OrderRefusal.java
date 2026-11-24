@@ -6,7 +6,17 @@ public enum OrderRefusal implements RefusalKind.Named {
 
     TOO_MANY,
 
+    NO_ITEM,
+
     UNKNOWN_ITEM,
 
-    NOT_A_CONTAINER;
+    NOT_A_CONTAINER,
+
+    NO_COUNT,
+
+    TOO_LARGE,
+
+    STANDING,
+
+    COUNTING;
 }

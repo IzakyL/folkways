@@ -116,9 +116,12 @@ const language = defineTask({
   source: javaTask({ imports: ["net.minecraft.client.Minecraft"], body: `
 var args = Args.of(ctx);
 var minecraft = (Minecraft) ctx.client();
-minecraft.getLanguageManager().setSelected(args.string("locale"));
-minecraft.options.languageCode = args.string("locale");
-minecraft.reloadResourcePacks();
+var locale = args.string("locale");
+var manager = minecraft.getLanguageManager();
+manager.setSelected(locale);
+minecraft.options.languageCode = locale;
+// The tower fixture needs translated strings from the active packs.
+manager.onResourceManagerReload(minecraft.getResourceManager());
 return true;
 ` }),
 });
@@ -204,9 +207,6 @@ try {
   assert.equal(evidence.scan.staffed, 1);
   for (const locale of ["en_us", "zh_cn", "zh_hk", "zh_tw"]) {
     await game.client.run(language, { locale });
-    await game.client.waitUntil({ clock: "frame", timeoutMs: 30000,
-      check: `return ((net.minecraft.client.Minecraft) ctx.client()).getOverlay() == null
-        ? true : Wait.pending("resource reload");` });
     await game.server.run(open, at);
     await game.client.waitUntil({ clock: "frame", timeoutMs: 20000,
       check: `var minecraft = (net.minecraft.client.Minecraft) ctx.client();
@@ -267,4 +267,7 @@ try {
   }
   evidence.close = await game?.close();
   await writeFile(path.join(out, "tower-client-evidence.json"), JSON.stringify(evidence, null, 2));
+}
+if (!process.exitCode) {
+  console.log("Airline tower client fixture passed in all four locales.");
 }

@@ -1,5 +1,6 @@
 package io.github.izakyl.folkways.vanilla.build.draft;
 
+import io.github.izakyl.folkways.core.script.api.Profile;
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -14,7 +15,7 @@ import org.slf4j.Logger;
 public record PatternLibraryPacket(Map<ResourceLocation, String> sources) implements CustomPacketPayload {
 
     static final int MAX_PATTERNS = 256;
-    static final int MAX_SOURCE = 131_072;
+    static final int MAX_SOURCE = Profile.MAX_PATTERN_SOURCE;
     static final int MAX_LIBRARY_BYTES = 900_000;
 
     public static final Type<PatternLibraryPacket> TYPE = new Type<>(

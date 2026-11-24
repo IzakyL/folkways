@@ -1,15 +1,30 @@
 package io.github.izakyl.folkways.core.front.api;
 
 import io.github.izakyl.folkways.core.world.api.StructurePayload;
+import io.netty.buffer.ByteBuf;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.UUIDUtil;
+import net.minecraft.network.codec.ByteBufCodecs;
+import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 
 public record Ghost(BlockPos pos, BlockState state, StructurePayload payload, Optional<UUID> order, int payloadHash) {
+
+    public static final int MAX_PREVIEW_GHOSTS = 2048;
+
+    public static final StreamCodec<ByteBuf, Ghost> STREAM_CODEC = StreamCodec.composite(
+        BlockPos.STREAM_CODEC, Ghost::pos,
+        ByteBufCodecs.VAR_INT.map(Block::stateById, Block::getId), Ghost::state,
+        ByteBufCodecs.COMPOUND_TAG.map(StructurePayload::new, StructurePayload::tag), Ghost::payload,
+        UUIDUtil.STREAM_CODEC.apply(ByteBufCodecs::optional), Ghost::order,
+        ByteBufCodecs.VAR_INT, Ghost::payloadHash,
+        Ghost::new);
 
     public Ghost(BlockPos pos, BlockState state, StructurePayload payload) {
         this(pos, state, payload, Optional.empty(), 0);

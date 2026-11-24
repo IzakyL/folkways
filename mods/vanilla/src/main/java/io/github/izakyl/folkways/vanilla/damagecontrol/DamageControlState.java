@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.vanilla.damagecontrol;
 
-import io.github.izakyl.folkways.core.front.api.notice.Line;
+import io.github.izakyl.folkways.core.card.api.notice.Line;
 import io.netty.handler.codec.DecoderException;
 import java.util.ArrayList;
 import java.util.List;

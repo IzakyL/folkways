@@ -45,7 +45,7 @@ public final class HousingScene {
         scene.world().showSection(util.select().fromTo(0, 0, 0, 7, 4, 7), Direction.DOWN);
         scene.idle(15);
         scene.overlay().showText(125)
-            .text("Enclose the beds under a roof, with a door residents can walk through. Every open floor cell needs light of at least 8. Without these, or with fewer than four floor blocks per bed, it is only a basic bed.")
+            .text("Put beds in an enclosed room with a roof and a door residents can walk through. Every floor block needs light level 8. Otherwise, or with under 4 floor blocks per bed, it is a Basic bed.")
             .pointAt(util.vector().centerOf(door)).placeNearTarget().attachKeyFrame();
         scene.idle(135);
         // Open a cutaway after showing the enclosure.
@@ -57,20 +57,20 @@ public final class HousingScene {
         scene.world().setBlock(util.grid().at(2, 1, 2), Blocks.CHEST.defaultBlockState(), false);
         scene.world().setBlock(util.grid().at(4, 1, 3), Blocks.RED_CARPET.defaultBlockState(), false);
         scene.overlay().showText(115)
-            .text("A suitable dormitory has at least four floor blocks per bed. For comfortable housing, allow six per bed, no more than four beds, and at least two furnishing kinds.")
+            .text("A Suitable dormitory has 4 floor blocks per bed. Comfortable housing needs 6 per bed, at most 4 beds and 2 kinds of furnishing.")
             .pointAt(util.vector().topOf(3, 0, 3)).placeNearTarget().attachKeyFrame();
         scene.idle(125);
         scene.world().setBlocks(util.select().fromTo(3, 1, 4, 3, 1, 5), Blocks.AIR.defaultBlockState(), false);
         scene.world().setBlock(util.grid().at(5, 1, 2), Blocks.BOOKSHELF.defaultBlockState(), false);
         scene.overlay().showOutline(PonderPalette.GREEN, "room", util.select().fromTo(2, 0, 2, 5, 0, 5), 140);
         scene.overlay().showText(140)
-            .text("An excellent bedroom allows up to two beds, with nine floor blocks per bed and at least three furnishing kinds. Storage, carpet, decoration and tables are the four kinds; extra copies of one kind do not count again.")
+            .text("An Excellent bedroom needs 9 per bed, at most 2 beds and 3 kinds of furnishing, one of them decoration. The kinds are storage, carpets, decoration, tables and lighting; copies of one kind count once.")
             .pointAt(util.vector().topOf(3, 0, 3)).placeNearTarget().attachKeyFrame();
         scene.idle(150);
         scene.world().setBlock(util.grid().at(5, 1, 3), Blocks.FURNACE.defaultBlockState(), false);
         scene.overlay().showOutline(PonderPalette.RED, "furnace", util.select().position(5, 1, 3), 110);
         scene.overlay().showText(110)
-            .text("Keep production blocks out of an excellent bedroom. A crafting table or furnace bars the top grade even when there is enough space and furniture. Hold the book to read each bed's grade and advice.")
+            .text("Keep work blocks such as crafting tables and furnaces out of an Excellent bedroom. Hold the book to read each bed's grade and advice.")
             .pointAt(util.vector().topOf(5, 1, 3)).placeNearTarget().attachKeyFrame();
         scene.idle(120);
         scene.world().setBlock(util.grid().at(5, 1, 3), Blocks.AIR.defaultBlockState(), false);
@@ -78,14 +78,14 @@ public final class HousingScene {
         scene.effects().emitParticles(resident.at().add(0, 2.1, 0),
             scene.effects().simpleParticleEmitter(ParticleTypes.HAPPY_VILLAGER, Vec3.ZERO), 0.3F, 10);
         scene.overlay().showText(125)
-            .text("The glyph after a resident's name shows his mood: sad below 40, neutral from 40 to 69, happy from 70. With the book held, happy or angry sparks show when a reason turns into a bonus or penalty.")
+            .text("The icon after a resident's name shows mood: sad below 40, neutral from 40, happy from 70. With the book held, sparks show when something raises or lowers it.")
             .pointAt(resident.at().add(0, 1.5, 0)).placeNearTarget().attachKeyFrame();
         scene.idle(45);
         scene.effects().emitParticles(resident.at().add(0, 2.1, 0),
             scene.effects().simpleParticleEmitter(ParticleTypes.ANGRY_VILLAGER, Vec3.ZERO), 0.2F, 10);
         scene.idle(90);
         scene.overlay().showText(110)
-            .text("Mood changes work speed gradually: ×0.75 at mood 0, normal speed at 60, and ×1.15 at 100. Better housing helps, along with food, rest, company and recreation.")
+            .text("Mood sets work speed: ×0.75 at 0, normal at 60, ×1.15 at 100. Food, rest, housing, company and recreation all help.")
             .pointAt(resident.at().add(0, 1.5, 0)).placeNearTarget().attachKeyFrame();
         scene.idle(120);
     }

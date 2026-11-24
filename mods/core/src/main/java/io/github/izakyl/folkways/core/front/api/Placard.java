@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.core.front.api;
 
-import io.github.izakyl.folkways.core.front.api.notice.Line;
+import io.github.izakyl.folkways.core.card.api.notice.Line;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;

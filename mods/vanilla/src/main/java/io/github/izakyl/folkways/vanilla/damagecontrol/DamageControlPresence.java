@@ -2,11 +2,23 @@ package io.github.izakyl.folkways.vanilla.damagecontrol;
 
 import io.github.izakyl.folkways.core.base.persist.Reader;
 import io.github.izakyl.folkways.core.base.persist.Writer;
+import io.github.izakyl.folkways.core.card.api.Card;
+import io.github.izakyl.folkways.core.card.api.notice.Attempt;
+import io.github.izakyl.folkways.core.card.api.notice.Line;
+import io.github.izakyl.folkways.core.card.api.notice.Notice;
 import io.github.izakyl.folkways.core.colony.api.Closing;
 import io.github.izakyl.folkways.core.colony.api.Colony;
 import io.github.izakyl.folkways.core.colony.api.ColonyView;
 import io.github.izakyl.folkways.core.colony.api.Sweep;
-import io.github.izakyl.folkways.core.inventory.api.InventorySnapshot;
+import io.github.izakyl.folkways.core.effect.Effects;
+import io.github.izakyl.folkways.core.facility.api.DefinedFacilities;
+import io.github.izakyl.folkways.core.front.api.ColonyPanel;
+import io.github.izakyl.folkways.core.front.api.FrontView;
+import io.github.izakyl.folkways.core.front.api.Fronts;
+import io.github.izakyl.folkways.core.front.api.HoldingKind;
+import io.github.izakyl.folkways.core.front.api.Registering;
+import io.github.izakyl.folkways.core.front.api.ZoneView;
+import io.github.izakyl.folkways.core.front.engine.colony.ColonyStalls;
 import io.github.izakyl.folkways.core.plan.api.Grown;
 import io.github.izakyl.folkways.core.resident.api.Bodies;
 import io.github.izakyl.folkways.core.resident.api.Body;
@@ -14,25 +26,15 @@ import io.github.izakyl.folkways.core.resident.api.Resident;
 import io.github.izakyl.folkways.core.work.api.Ending;
 import io.github.izakyl.folkways.core.work.api.Node;
 import io.github.izakyl.folkways.core.work.api.Placement;
+import io.github.izakyl.folkways.core.work.api.SchematicPrinter;
 import io.github.izakyl.folkways.core.work.api.Stall;
 import io.github.izakyl.folkways.core.work.api.ToolNeed;
 import io.github.izakyl.folkways.core.work.api.WorkSite;
 import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.core.world.api.StructureSnapshots;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
-import io.github.izakyl.folkways.core.effect.Effects;
-import io.github.izakyl.folkways.core.front.api.Facing;
-import io.github.izakyl.folkways.core.front.api.FrontView;
-import io.github.izakyl.folkways.core.front.api.Fronts;
-import io.github.izakyl.folkways.core.front.api.ZoneView;
-import io.github.izakyl.folkways.core.front.api.notice.Attempt;
-import io.github.izakyl.folkways.core.front.api.notice.Line;
-import io.github.izakyl.folkways.core.front.api.notice.Notice;
-import io.github.izakyl.folkways.core.front.api.panel.Board;
-import io.github.izakyl.folkways.core.front.engine.colony.ColonyStalls;
 import io.github.izakyl.folkways.vanilla.FolkwaysVanillaConfig;
 import io.github.izakyl.folkways.vanilla.build.MaintenanceOrders;
-import io.github.izakyl.folkways.vanilla.build.SchematicPlacement;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Iterator;
@@ -49,8 +51,8 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.Container;
-import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -59,7 +61,8 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 
-final class DamageControlPresence implements Facing {
+final class DamageControlPresence implements HoldingKind, ColonyPanel {
+    static final String RECORD = "record";
     private record Repair(UUID zone, long revision, Node node) {
     }
 
@@ -85,8 +88,6 @@ final class DamageControlPresence implements Facing {
     private int responsesLeft;
     private int surveyTurn;
     private final Map<WorldPos, DamageControlRefusal> refusals = new LinkedHashMap<>();
-    private InventorySnapshot.Version fluidVersion;
-    private final Map<UUID, Integer> fluids = new LinkedHashMap<>();
     private boolean closed;
 
     DamageControlPresence(Colony colony) {
@@ -233,7 +234,7 @@ final class DamageControlPresence implements Facing {
                 if (!absent.containsKey(zone.at(pos))) {
                     continue;
                 }
-                SchematicPlacement.adapter()
+                SchematicPrinter.adapter()
                     .launch(cell -> recorded.getOrDefault(cell, Blocks.AIR.defaultBlockState()), pos)
                     .filter(launch -> launch.produces().stream()
                         .allMatch(cell -> absent.containsKey(zone.at(cell))))
@@ -460,17 +461,7 @@ final class DamageControlPresence implements Facing {
             .tag());
     }
 
-    @Override
-    public Attempt act(ResourceLocation page, String action, Optional<BlockPos> at, ColonyView view) {
-        if (!page.equals(DamageControlContent.ID) || !action.startsWith("record:")) {
-            return Attempt.went();
-        }
-        UUID id;
-        try {
-            id = UUID.fromString(action.substring(7));
-        } catch (IllegalArgumentException invalid) {
-            return Attempt.refused(DamageControlRefusal.UNSUPPORTED);
-        }
+    Attempt record(UUID id, ColonyView view) {
         Optional<? extends ZoneView> found = Fronts.of(colony).zonesIn(view.level()).stream()
             .filter(zone -> zone.id().equals(id) && zone.delegation().equals(DamageControlContent.ID))
             .findFirst();
@@ -501,78 +492,38 @@ final class DamageControlPresence implements Facing {
         return Attempt.went();
     }
 
+    static void enrollPanel(Registering event) {
+        event.panel(DamageControlContent.ID, colony -> colony.service(DamageControlContent.ID,
+            DamageControlPresence.class).map(ColonyPanel.class::cast));
+    }
+
     @Override
-    public Optional<Board> board(ResourceLocation page, ColonyView view) {
-        if (!page.equals(DamageControlContent.ID)) {
-            return Optional.empty();
+    public List<Card.Row> rows(Page page, ColonyView view) {
+        if (page != Page.OVERVIEW) {
+            return List.of();
         }
-        List<Board.Row> rows = new ArrayList<>();
-        for (ZoneView zone : Fronts.of(colony).zonesIn(view.level())) {
-            if (!zone.delegation().equals(DamageControlContent.ID) || zone.cells().isEmpty()) {
+        List<Card.Row> rows = new ArrayList<>();
+        for (WorldPos fire : knownFires.getOrDefault(view.dimension(), List.of())) {
+            if (!fire.in(view.level())) {
                 continue;
             }
-            BlockPos at = zone.cells().iterator().next();
-            if (baselines.containsKey(zone.id()) && baselines.get(zone.id()).unsupported() > 0) {
-                rows.add(Board.Row.of(ItemStack.EMPTY,
-                    Component.translatable("folkways.page.damage_control.unsupported",
-                        baselines.get(zone.id()).unsupported()), Component.empty()).note());
-            }
-            rows.add(new Board.Row(new ItemStack(Items.WATER_BUCKET),
-                Component.translatable("folkways.page.damage_control.zone", at.toShortString()),
-                Component.translatable("folkways.page.damage_control.status", fires(zone),
-                    missing.getOrDefault(zone.id(), Map.of()).size(),
-                    conflicts.getOrDefault(zone.id(), Set.of()).size(),
-                    baselines.containsKey(zone.id()) ? baselines.get(zone.id()).cells().size() : 0),
-                List.of(new Board.Act.Ping(at))));
+            BlockPos at = fire.block(view.level());
+            DamageControlRefusal refusal = refusals.get(fire);
+            List<Line> details = refusal == null ? List.of()
+                : List.of(Line.text(Component.translatable(refusal.translationKey())));
+            rows.add(Card.Row.of(new ItemStack(Items.WATER_BUCKET),
+                Line.text(Component.translatable("folkways.page.damage_control.fire", at.toShortString())),
+                details).at(at));
         }
-        refusals.forEach((where, why) -> {
-            if (where.in(view.level())) {
-                rows.add(new Board.Row(ItemStack.EMPTY, Component.translatable(why.translationKey()),
-                    Component.empty(), List.of(new Board.Act.Ping(where.block(view.level())))));
-            }
-        });
         for (Stall stall : colony.stallsIn(view.dimension())) {
             if (stall.doing().equals(DamageControlContent.REPAIRING)
                 || stall.doing().equals(DamageControlContent.REFILLING)
                 || stall.doing().equals(DamageControlContent.EXTINGUISHING)) {
-                rows.add(Board.Row.of(ItemStack.EMPTY, Component.translatable(stall.why().translationKey()),
-                    Component.empty()));
+                rows.add(Card.Row.of(ItemStack.EMPTY,
+                    Line.text(Component.translatable(stall.why().translationKey())), List.of()));
             }
         }
-        return Optional.of(new Board(List.of(
-            new Board.Figure("folkways.page.damage_control.fires", Component.literal("" + fires().size())),
-            new Board.Figure("folkways.page.damage_control.workers", Component.literal("" + incidents.workers())),
-            new Board.Figure("folkways.page.damage_control.fluid", fluid(view))), rows,
-            Optional.of(Component.translatable("folkways.page.damage_control.empty"))));
-    }
-
-    private Component fluid(ColonyView view) {
-        InventorySnapshot snapshot = colony.inventory().snapshot();
-        boolean pending = false;
-        for (var resident : view.residents()) {
-            var observed = snapshot.residents().get(resident.id());
-            if (observed == null || observed.state() != InventorySnapshot.State.OBSERVED) {
-                colony.inventory().ensureObservedResident(resident.id());
-                pending = true;
-            }
-        }
-        if (pending) {
-            return Component.translatable("folkways.settlers.checking_stock");
-        }
-        InventorySnapshot.Version version = snapshot.version();
-        if (fluidVersion == null || !fluidVersion.epoch().equals(version.epoch())
-            || fluidVersion.contents() != version.contents() || fluidVersion.topology() != version.topology()) {
-            fluids.clear();
-            for (InventorySnapshot.Resident resident : snapshot.residents().values()) {
-                SimpleContainer pack = new SimpleContainer(resident.pack().size());
-                resident.pack().forEach(slot -> pack.setItem(slot.physicalSlot(), slot.stackCopy()));
-                fluids.put(resident.resident(), SuppressionMethods.all().stream()
-                    .mapToInt(method -> method.fluid(pack)).max().orElse(0));
-            }
-            fluidVersion = version;
-        }
-        return Component.literal(Integer.toString(
-            view.residents().stream().mapToInt(resident -> fluids.getOrDefault(resident.id(), 0)).sum()));
+        return List.copyOf(rows);
     }
 
     DamageControlState state(ColonyView view) {
@@ -591,7 +542,7 @@ final class DamageControlPresence implements Facing {
                     flags |= 1 << (bit + 1);
                 }
             }
-            List<Line> lines = new ArrayList<>(zoneLines(zone, view));
+            List<Line> lines = new ArrayList<>(zoneStatus(zone));
             lines.add(Line.text(Component.translatable(baselines.containsKey(zone.id())
                 ? "folkways.damage_control.baseline.recorded" : "folkways.damage_control.baseline.empty")));
             var snapshot = baselines.get(zone.id());
@@ -688,11 +639,33 @@ final class DamageControlPresence implements Facing {
     }
 
     @Override
-    public List<Line> zoneLines(ZoneView zone, ColonyView view) {
-        return zone.delegation().equals(DamageControlContent.ID)
-            ? List.of(Line.text(Component.translatable("folkways.page.damage_control.status", fires(zone),
-                missing.getOrDefault(zone.id(), Map.of()).size(),
-                conflicts.getOrDefault(zone.id(), Set.of()).size(),
-                baselines.containsKey(zone.id()) ? baselines.get(zone.id()).cells().size() : 0))) : List.of();
+    public List<Card.Element> elements() {
+        return List.of(new Card.Element.Button(RECORD, Optional.empty(), Map.of(),
+            Optional.of(new Card.Label("folkways.page.damage_control.reset", true))));
+    }
+
+    @Override
+    public Optional<List<DefinedFacilities.Problem>> act(HoldingKind.Held held, ServerPlayer by, String routine,
+            Map<String, io.github.izakyl.folkways.core.facility.api.control.Value> arguments) {
+        if (!routine.equals(RECORD)) {
+            return Optional.empty();
+        }
+        Attempt attempt = record(held.id(), colony.view(by.serverLevel()));
+        return Optional.of(attempt.refusal()
+            .map(why -> List.of(new DefinedFacilities.Problem("routine", why)))
+            .orElse(List.of()));
+    }
+
+    @Override
+    public List<Line> lines(HoldingKind.Held held, ColonyView view) {
+        return held.zone().filter(zone -> zone.delegation().equals(DamageControlContent.ID))
+            .map(zone -> zoneStatus(zone)).orElse(List.of());
+    }
+
+    private List<Line> zoneStatus(ZoneView zone) {
+        return List.of(Line.text(Component.translatable("folkways.page.damage_control.status", fires(zone),
+            missing.getOrDefault(zone.id(), Map.of()).size(),
+            conflicts.getOrDefault(zone.id(), Set.of()).size(),
+            baselines.containsKey(zone.id()) ? baselines.get(zone.id()).cells().size() : 0)));
     }
 }

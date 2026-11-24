@@ -199,11 +199,11 @@ const RELEASE = defineTask<{ handles: string[] }, { released: number }>({
   source: javaTask({ imports: IMPORTS, body: "return Ldlib2.release(ctx, Args.of(ctx));" }),
 });
 
-const ATTACHED = defineTask<{ ui: string; element: string } & Record<string, unknown>, boolean>({
-  name: "ldlib2.attached",
+const STILL_AIMED = defineTask<{ ui: string; element: string; x: number; y: number } & Record<string, unknown>, boolean>({
+  name: "ldlib2.stillAimed",
   side: "client",
   modules: [LDLIB2],
-  source: javaTask({ imports: IMPORTS, body: "return Ldlib2.attached(ctx, Args.of(ctx));" }),
+  source: javaTask({ imports: IMPORTS, body: "return Ldlib2.stillAimed(ctx, Args.of(ctx));" }),
 });
 
 /** Waits for the element's target, runs `act` on it, then releases the handles the target pinned for itself. */
@@ -477,7 +477,7 @@ export interface ClickElementResult {
  * Waits (in the game) until the element is actionable, puts the cursor on its centre, then presses only
  * once LDLib2's hovered element is inside the element's subtree (re-checked each frame while an earlier
  * hover lingers, until `timeoutMs`), and checks LDLib2 handed the mouse-down to that subtree.
- * A target detached before mouse-down is resolved again within the same budget. The press and
+ * A target moved or removed before mouse-down is resolved again within the same budget. The press and
  * the check use the ModularUI pinned by handle, so a button that replaces the screen on mouse-down is still
  * judged by the UI it was aimed at. Handles pinned only for the click are released when it finishes, so a
  * handle in `press.observed` may no longer resolve.
@@ -521,13 +521,13 @@ export async function clickElement(
           if (!isMinecraftError(error, "hover-mismatch")) {
             throw error;
           }
-          // No press was sent. Re-resolve only a detached target; a live overlap must still fail.
-          const attached = await client.run(ATTACHED, {
-            ...panelArgs(options), ui: target.ui, element: target.subtree[0],
-          });
+          // No press was sent. If the layout moved the target, reacquire its coordinates and verify the hover again.
           if (Date.now() - started < timeoutMs) {
-            if (!attached) {
-              console.info(`LDLib2 replaced ${target.label} before mouse-down; resolving its selector again`);
+            const stillAimed = await client.run(STILL_AIMED, {
+              ...panelArgs(options), ui: target.ui, element: target.subtree[0], x, y,
+            });
+            if (!stillAimed) {
+              console.info(`LDLib2 moved or replaced ${target.label} before mouse-down; resolving its selector again`);
               return undefined;
             }
             continue;

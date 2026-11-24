@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.core.inventory.internal;
 
-import io.github.izakyl.folkways.core.inventory.api.SlotSnapshot;
+import io.github.izakyl.folkways.core.facility.api.control.SlotSnapshot;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;

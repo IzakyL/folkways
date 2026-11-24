@@ -4,13 +4,17 @@ import { copyFileSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import { ancestorsOf, clickElement, hoverElement, panelElements, typeIntoElement } from "../ldlib2";
 import {
-  foundColonyFast, foundingBox, openColonyPanelViaBook, setBookGesture, waitForGroundedPlayer, type Vec,
+  chooseBookTool, foundColonyFast, foundingBox, openColonyPanelViaBook, waitForGroundedPlayer, type Vec,
 } from "../shared/colony/colony-founding";
 import { CONFIG_PATH, VisualRun } from "../shared/capture/visual-kit";
 import { QUIET_TOASTS } from "../shared/capture/ponder";
-import { clickTab, discoverPages, OPEN_ZONE, ZONE_FIXTURES } from "./ui-catalog";
-import { markBox } from "../shared/ui/zone-tools";
-import { boardActs, settlePanel } from "../shared/ui/site-panel";
+import { BOOK_PAGES, clickTab, openSettingsScope, ZONE_FIXTURES } from "./ui-catalog";
+import { openCardOf, waitForPresent } from "../shared/ui/book-cards";
+import { openResidentDetail } from "../shared/ui/colony-pages";
+import { markCorner, useBook } from "../shared/ui/zone-tools";
+import { FIRST_CORNER, ZONE_MARKED, drainActionBar } from "../shared/ui/zone-receipt";
+import { aimAndWorldLeftClick } from "../shared/ui/world-ui";
+import { settlePanel } from "../shared/ui/site-panel";
 import { launchPair, type E2EPair } from "../shared/harness/pair";
 import { tracePath } from "../shared/harness/out-paths";
 import { seededOffThreadServer } from "../shared/harness/mod-settings";
@@ -66,35 +70,6 @@ const NARROW = defineTask<void, boolean>({
   source: javaTask({ imports: ["net.minecraft.client.Minecraft"], body: `
 var mc=Minecraft.getInstance();mc.getWindow().setWindowed(640,800);mc.options.guiScale().set(2);mc.resizeDisplay();
 return true;
-` }),
-});
-
-// Two loadout profiles, one assigned, and a patrol route whose staffing editor is left open.
-const LOADOUTS = defineTask<{ player: string }, { route: string }>({
-  name: "folkways.visual.picker-review.loadouts", side: "server",
-  source: javaTask({ imports: [
-    "io.github.izakyl.folkways.core.front.api.ui.Pages",
-    "io.github.izakyl.folkways.core.front.ui.screen.ColonyShell",
-    "io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutProfiles",
-    "io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutProfile",
-    "io.github.izakyl.folkways.vanilla.patrol.PatrolContent",
-    "io.github.izakyl.folkways.core.api.colony.Held",
-    "io.github.izakyl.folkways.core.api.terms.WorldPos",
-    "io.github.izakyl.folkways.core.api.terms.ItemSpec", "net.minecraft.world.item.Items",
-  ], body: `
-var player=ctx.server().getPlayerList().getPlayerByName(Args.of(ctx).string("player"));
-var colony=Pages.colonyOf(player).orElseThrow();var level=player.serverLevel();
-var profiles=LoadoutProfiles.of(colony);
-var melee=profiles.create("Melee guard");var ranged=profiles.create("Bow guard");
-profiles.add(melee.id(),LoadoutProfile.Entry.weapon(ItemSpec.of(Items.IRON_SWORD)));
-profiles.add(ranged.id(),LoadoutProfile.Entry.weapon(ItemSpec.of(Items.BOW)));
-var residents=colony.residents().stream().map(resident->resident.id()).sorted().toList();
-profiles.assign(List.of(residents.get(0)),Optional.of(melee.id()));
-var at=player.blockPosition().offset(3,0,-3);
-var route=colony.hold(PatrolContent.BEAT,new Held.Line(List.of(WorldPos.of(level,at),
- WorldPos.of(level,at.offset(8,0,0))))).orElseThrow();
-ColonyShell.editSelection(player,route.id());
-return Map.of("route",route.id().toString());
 ` }),
 });
 
@@ -226,12 +201,15 @@ test("every picker dialog on camera", async ({}, testInfo) => {
       await settle(5);
       await expectPicker("HeldBlueprints");
       await shot("held-blueprints", "HeldBlueprints: the blueprint shelf on a screen of its own, from the placing tool");
+      await typeIntoElement(client, { id: "folkways.blueprints.search" }, "hut");
+      await settle();
+      await shot("held-blueprints-search", "Blueprint library filtered to hut");
       await safeAction(() => screen.dismiss(client));
     });
 
-    // Every page's own openers: settings of items or of a choice, and the board's edit acts.
+    // Every page's own openers: item and choice settings.
     let toolTaken = false;
-    const pages = await discoverPages(server, player);
+    const pages = BOOK_PAGES;
     run.note("pages", pages);
     for (const page of pages) {
       await scene(`page-${page.name}`, async () => {
@@ -239,7 +217,7 @@ test("every picker dialog on camera", async ({}, testInfo) => {
         await clickTab(client, page.token);
         await settle(5);
         const openers = (await shown()).filter(element => element.className.endsWith(".Button")
-          && /^folkways\.(settings\.(open|value)\.|board\.edit\.)/.test(element.id!));
+          && /^folkways\.card\.(items\.|choice\..*\.open$)/.test(element.id!));
         const taken: Record<string, number> = {};
         for (const opener of openers) {
           const id = opener.id!;
@@ -261,9 +239,10 @@ test("every picker dialog on camera", async ({}, testInfo) => {
 
     await scene("settings-tools", async () => {
       await panel();
-      await clickTab(client, "folkways.page.build");
+      await clickTab(client, "folkways.tab.settings");
       await settle();
-      await click("folkways.settings.open.tool.folkways_vanilla.building.folkways_vanilla.build");
+      await openSettingsScope(server, client, "folkways_vanilla:building", "folkways.card.items.tool");
+      await click("folkways.card.items.tool");
       await expectPicker("tools");
       await click("folkways.selector.folder.minecraft");
       await shot("settings-tools-folder", "SettingsPage tools: the minecraft folder opened, a folder per tag");
@@ -274,39 +253,13 @@ test("every picker dialog on camera", async ({}, testInfo) => {
 
     await scene("rule-tooltip", async () => {
       await panel();
-      await clickTab(client, "folkways.page.wares");
+      await clickTab(client, "folkways.tab.settings");
       await settle();
-      await click("folkways.board.edit.folkways_vanilla.wares.0.0");
+      await openSettingsScope(server, client, "folkways_vanilla:wares", "folkways.card.items.fuel");
+      await click("folkways.card.items.fuel");
       await expectPicker("fuel");
       await hoverElement(client, { id: "folkways.selector.rule.0" }, { hoverFrames: 15 });
       await run.shot(client, "rule-tooltip", { subject: "A rule held: hovering it names the item it is", worldState: {}, hard: true });
-    });
-
-    await scene("blueprints-page", async () => {
-      await panel();
-      await clickTab(client, "folkways.page.build");
-      await click("folkways.board.open.folkways_vanilla.build.0.0");
-      await waitForElement(client, { id: "folkways.blueprints.choose" }, { timeoutMs: 8_000 });
-      await click("folkways.blueprints.choose");
-      await expectPicker("blueprints");
-      await shot("blueprints-page", "BlueprintsPage: the shelf, own and shared roots, a preview beside");
-      await typeIntoElement(client, { id: "folkways.blueprints.search" }, "hut");
-      await settle();
-      await shot("blueprints-page-search", "BlueprintsPage: a search for hut");
-    });
-
-    await scene("looks-page", async () => {
-      await panel();
-      await clickTab(client, "folkways.page.person");
-      const opens = await boardActs(client, "open", "folkways_vanilla.person");
-      await click(opens[1].id);
-      await waitForElement(client, { id: "folkways.pool.looks.choose" });
-      await click("folkways.pool.looks.choose");
-      await expectPicker("looks pool");
-      await shot("looks-page", "LooksPage: the look pool, a box per look, folders per source, a model beside");
-      await typeIntoElement(client, { id: "folkways.pool.looks.search" }, "steve");
-      await settle();
-      await shot("looks-page-search", "LooksPage: a search for steve; ticks staged until Confirm (LookPoolEdits)");
     });
 
     await scene("person-inlay", async () => {
@@ -314,85 +267,35 @@ test("every picker dialog on camera", async ({}, testInfo) => {
       await clickTab(client, "folkways.tab.residents");
       const row = (await shown()).find(element => element.id!.startsWith("folkways.resident.name."));
       if (!row) throw new Error("no resident name to open");
-      await click(row.id!);
-      await waitForElement(client, { id: "folkways.resident.look.change" }, { timeoutMs: 8_000 });
+      await openResidentDetail(server, client, row.id!);
+      await waitForPresent(server, client, "folkways.resident.look.change");
       await click("folkways.resident.look.change");
       await expectPicker("look change");
       await shot("person-inlay-look", "PersonInlay: Change look opens LookPicker, one look, a model beside");
     });
 
-    let route = "";
-    await scene("staffing", async () => {
-      await panel();
-      route = (await server.run(LOADOUTS, { player })).route;
-      await waitForElement(client, { id: "folkways.staffing.allowed" }, { timeoutMs: 8_000 });
-      await settle();
-      await click("folkways.staffing.allowed");
-      await expectPicker("staffing");
-      await shot("staffing-allowed", "StaffingPanel: loadouts allowed on a patrol route, several ticked");
-    });
-    run.note("route", route);
-
-    const loadouts = async () => {
-      await panel();
-      await clickTab(client, "folkways.equipment.title");
-      await settle(5);
-      const profile = (await shown()).find(element => element.id === "folkways.equipment.profile.0");
-      if (profile) await click(profile.id!);
-    };
-    await scene("loadouts-add", async () => {
-      await loadouts();
-      await click("folkways.equipment.add");
-      await expectPicker("equipment carried add");
-      await shot("loadouts-add", "EquipmentPage: + Add opens the item picker for a carried entry");
-    });
-    await scene("loadouts-weapon", async () => {
-      await loadouts();
-      await click("folkways.equipment.slot.folkways_core.mainhand");
-      await expectPicker("equipment weapon hand");
-      await shot("loadouts-add-weapon", "EquipmentPage: an empty weapon hand opens its picker");
-    });
-    await scene("loadouts-assignment", async () => {
-      await loadouts();
-      await click("folkways.equipment.assign_residents");
-      await waitForElement(client, { id: "folkways.equipment.resident.0" }, { timeoutMs: 8_000 });
-      await click("folkways.equipment.resident.0");
-      await expectPicker("equipment assignment");
-      await shot("loadouts-assignment", "EquipmentPage: a resident's profile, one immediate pick");
-    });
-
-    await scene("compost-page", async () => {
-      await panel();
-      await clickTab(client, "folkways.page.compost_settings");
-      await settle(5);
-      await shot("compost-page", "CompostPage: no dialog of its own; resets ride Picker.Asking");
-    });
-
     await scene("zone-settings", async () => {
-      await panel();
-      const fixtures = await server.run(ZONE_FIXTURES, { player });
-      const taken = new Set<string>();
-      for (const zone of fixtures.zones) {
-        await server.run(OPEN_ZONE, { player, zone: zone.id });
-        await waitForElement(client, { id: "folkways.selection.back" }, { timeoutMs: 8_000 });
-        await settle(5);
-        const openers = (await shown()).filter(element => element.className.endsWith(".Button")
-          && element.id!.startsWith("folkways.zoneconfig.value."));
-        for (const opener of openers) {
-          if (taken.has(opener.id!)) continue;
-          await click(opener.id!);
-          const picker = await openPicker();
-          if (picker) {
-            taken.add(opener.id!);
-            await shot(`zone-settings-${zone.type.replace(/[:/]/g, ".")}-${token(opener.id!)}`,
-              `ZoneSettings of ${zone.type}: ${opener.id} opens ${picker}`, { zone });
-            await closePickers();
-          }
+      await screen.dismiss(client);
+      const { zones } = await server.run(ZONE_FIXTURES, { player });
+      const controls = [
+        ["folkways_vanilla:farm", "folkways.card.choice.crop.open"],
+        ["folkways_vanilla:ground", "folkways.card.items.block"],
+      ] as const;
+      for (const [kind, opener] of controls) {
+        const zone = zones.find(zone => zone.type === kind);
+        if (!zone) {
+          throw new Error(`no fixture for ${kind}`);
         }
-        await safeAction(() => screen.dismiss(client));
-        await tick.sprint(server, 3);
+        await openCardOf(server, client, player, zone.id);
+        await waitForPresent(server, client, opener);
+        await click(opener);
+        const picker = await expectPicker(opener);
+        await shot(`zone-settings-${token(kind)}-${token(opener)}`,
+          `Facility card for ${kind}: ${opener} opens ${picker}`, { zone });
+        await closePickers();
+        await screen.dismiss(client);
+        await settle();
       }
-      if (taken.size === 0) throw new Error("no zone setting opened a picker");
     });
 
     await scene("drafts", async () => {
@@ -403,21 +306,15 @@ test("every picker dialog on camera", async ({}, testInfo) => {
       await tryCommand(server, `fill ${commandPos({ ...min, x: min.x - 2, z: min.z - 2 })} ${commandPos({ ...max, x: max.x + 2, y: min.y, z: max.z + 2 })} minecraft:smooth_stone`);
       await tryCommand(server, `item replace entity ${player} weapon.mainhand with ${BOOK_ITEM}`);
       await tick.sprint(server, 3);
-      await setBookGesture(server, client, player, "box");
+      await chooseBookTool(server, client, "offer:folkways_vanilla:draft");
       const post = { ...max, y: origin.y };
       await tryCommand(server, `fill ${commandPos(post)} ${commandPos(max)} minecraft:glass`);
-      await markBox(server, client, player, { x: min.x - 1.5, y: origin.y, z: max.z + 2.5 }, min, max);
+      await drainActionBar(client);
+      await markCorner(server, client, min, FIRST_CORNER, () => aimAndWorldLeftClick(server, client, player, min));
+      await markCorner(server, client, max, ZONE_MARKED, () => aimAndWorldLeftClick(server, client, player, max));
       await tryCommand(server, `fill ${commandPos(post)} ${commandPos(max)} minecraft:air`);
-      await openColonyPanelViaBook(server, client, player, founding.standBlock);
+      await useBook(client);
       await settlePanel(server, client);
-      await waitForElement(client, { id: "folkways.zoneconfig.kind.folkways_vanilla.farm" }, { timeoutMs: 8_000 });
-      await click("folkways.zoneconfig.kind.folkways_vanilla.farm");
-      await waitForElement(client, { id: "folkways.draft.value.crop" }, { timeoutMs: 8_000 });
-      await click("folkways.draft.value.crop");
-      await expectPicker("draft crop");
-      await shot("draft-settings-crop", "DraftSettings: a new farm's crop, chosen before the zone is made");
-      await closePickers();
-      await click("folkways.zoneconfig.offer.folkways_vanilla.draft");
       await waitForElement(client, { id: "folkways.draft.choose" }, { timeoutMs: 8_000 });
       await click("folkways.draft.choose");
       await expectPicker("draft patterns");
@@ -472,31 +369,6 @@ test("every picker dialog on camera", async ({}, testInfo) => {
       await shot("narrow-selector-window", "Narrow: SelectorWindow inside a 640x800 window at GUI scale 2");
       await click("folkways.selector.close");
     });
-    await scene("narrow-looks", async () => {
-      await panel();
-      await clickTab(client, "folkways.page.person");
-      const opens = await boardActs(client, "open", "folkways_vanilla.person");
-      await click(opens[1].id);
-      await waitForElement(client, { id: "folkways.pool.looks.choose" });
-      await click("folkways.pool.looks.choose");
-      await expectPicker("narrow looks");
-      await shot("narrow-looks-page", "Narrow: LooksPage pool, the preview beside the list");
-    });
-    await scene("narrow-loadouts-add", async () => {
-      await loadouts();
-      await click("folkways.equipment.add");
-      await expectPicker("narrow equipment carried add");
-      await shot("narrow-loadouts-add", "Narrow: EquipmentPage carried item picker");
-    });
-    await scene("narrow-staffing", async () => {
-      await panel();
-      await server.run(OPEN_ZONE, { player, zone: route });
-      await waitForElement(client, { id: "folkways.staffing.allowed" }, { timeoutMs: 8_000 });
-      await click("folkways.staffing.allowed");
-      await expectPicker("narrow staffing");
-      await shot("narrow-staffing-allowed", "Narrow: StaffingPanel allowed loadouts");
-    });
-
     run.note("failures", failures);
     if (failures.length > 0) throw new Error(`Scenes not reached:\n${failures.join("\n")}`);
   } catch (error) {

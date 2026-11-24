@@ -119,7 +119,7 @@ def start_of(station):
     return station["a"]
 
 def lane(run, width):
-    return run.sized(width = width, anchor = "center", parity = "low")
+    return run.sized(width = width, anchor = "center", parity = "world_low")
 
 def ground(site, run, width, z0, z1):
     found = site.survey(lane(run, width).at(z = z0).sized(depth = z1 - z0 + 1))
@@ -149,7 +149,7 @@ def root(value):
 
 def square_at(site, distance, size):
     cell = site.path.every(100000, offset = int(distance))[0]
-    return cell.sized(width = size, depth = size, anchor = "center", parity = "low")
+    return cell.sized(width = size, depth = size, anchor = "center", parity = "world_low")
 
 def ring(scope, gaps):
     edge = hollow(scope)

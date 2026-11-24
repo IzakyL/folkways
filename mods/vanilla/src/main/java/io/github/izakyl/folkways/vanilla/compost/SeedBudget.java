@@ -1,7 +1,7 @@
 package io.github.izakyl.folkways.vanilla.compost;
 
-import io.github.izakyl.folkways.core.inventory.api.port.PortReader.Entry;
-import io.github.izakyl.folkways.core.inventory.api.SlotSnapshot;
+import io.github.izakyl.folkways.core.facility.api.control.PortReader.Entry;
+import io.github.izakyl.folkways.core.facility.api.control.SlotSnapshot;
 import io.github.izakyl.folkways.core.inventory.api.StoreReadings;
 import java.util.AbstractList;
 import io.github.izakyl.folkways.core.item.api.Goods;

@@ -6,7 +6,6 @@ import io.github.izakyl.folkways.core.world.api.Closures;
 import io.github.izakyl.folkways.core.world.api.Realm;
 import io.github.izakyl.folkways.core.world.api.Structures;
 import java.util.LinkedHashSet;
-import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.LongPredicate;
@@ -19,17 +18,17 @@ final class Look {
     private Look() {
     }
 
-    static Optional<Reading> at(ServerLevel level, Realm realm, Roamer roamer, long from,
+    static Optional<TerrainReading> at(ServerLevel level, Realm realm, Roamer roamer, long from,
                                 Set<BlockPos> arriving, BlockPos aim, boolean wide) {
         return at(level, realm, roamer, from, arriving, aim, wide, Sweep.MOST_VISITED);
     }
 
-    static Optional<Reading> at(ServerLevel level, Realm realm, Roamer roamer, long from,
+    static Optional<TerrainReading> at(ServerLevel level, Realm realm, Roamer roamer, long from,
                                 Set<BlockPos> arriving, BlockPos aim, boolean wide, int limit) {
         return at(level, realm, roamer, from, arriving, cell -> false, aim, wide, limit);
     }
 
-    static Optional<Reading> at(ServerLevel level, Realm realm, Roamer roamer, long from,
+    static Optional<TerrainReading> at(ServerLevel level, Realm realm, Roamer roamer, long from,
                                 Set<BlockPos> arriving, LongPredicate landing, BlockPos aim, boolean wide,
                                 int limit) {
         Ground standing = Ground.of(level, realm).orElse(null);
@@ -50,25 +49,18 @@ final class Look {
         }
         LongPredicate local = here instanceof Ground.Open ? landing
             : storage -> here.toLocal(BlockPos.of(storage)).map(cell -> landing.test(cell.asLong())).orElse(false);
-        return Optional.of(new Reading(here, Sweep.from(region, roamer.body(),
-            roamer.locomotion().newEvaluator(Search.from(at)), ends, local, shut(level, here), here.toStorage(aim),
+        return Optional.of(new TerrainReading(here, Sweep.from(region, roamer.body(),
+            roamer.locomotion().newEvaluator(Search.from(at)), ends, local, shut(level, realm, here), here.toStorage(aim),
             wide, limit)));
     }
 
-    // Closures stand on the open ground of the level, never aboard.
-    private static LongPredicate shut(ServerLevel level, Ground here) {
-        List<Closures.Closed> closed = Closures.in(level);
-        if (closed.isEmpty() || !(here instanceof Ground.Open)) {
+    private static LongPredicate shut(ServerLevel level, Realm realm, Ground here) {
+        var boxes = Closures.in(level).stream().filter(one -> one.realm().equals(realm))
+            .map(Closures.Closed::box).toList();
+        if (boxes.isEmpty()) {
             return cell -> false;
         }
-        return cell -> {
-            BlockPos at = BlockPos.of(cell);
-            for (Closures.Closed one : closed) {
-                if (one.holds(at)) {
-                    return true;
-                }
-            }
-            return false;
-        };
+        return cell -> here.toLocal(BlockPos.of(cell))
+            .filter(at -> boxes.stream().anyMatch(box -> box.isInside(at))).isPresent();
     }
 }

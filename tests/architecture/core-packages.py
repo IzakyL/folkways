@@ -15,6 +15,86 @@ NON_CODE = re.compile(r'"""[\s\S]*?"""|"(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\'|//
 REFERENCE = re.compile(r"\bio\.github\.izakyl\.folkways\.core(?:\.[A-Za-z_$][\w$]*)+")
 # Core's infrastructure (entry point, configs, persistence, UI, effects) sits beside the domain, open to every module.
 INFRASTRUCTURE = {"base", "front", "effect", "library", "upgrade"}
+COLONY_API = {"colony.charter.Charters"}
+# Native adapter entry points used by Vanilla gameplay.
+NATIVE_ADAPTER_API = {
+    "shell.ae2.Ae2Devices",
+    "shell.ae2.Ae2Integration",
+    "shell.ae2.NetworkPort",
+    "shell.carts.CartClearance",
+    "shell.crafting.NetworkDeviceSettings",
+    "shell.crafting.ColonyRecipes",
+    "shell.create.CreateMod",
+    "shell.create.FolkwaysCreateConfig",
+    "shell.create.build.CreateHandoffTool",
+    "shell.create.build.CreateSchematicDraft",
+    "shell.create.build.CreateSchematicPlacement",
+    "shell.create.build.CreateTrack",
+    "shell.create.dispatch.CreateLayout",
+    "shell.create.dispatch.CreatePackageNetwork",
+    "shell.create.dispatch.MailGate",
+    "shell.create.dispatch.PackageNetwork",
+    "shell.create.dispatch.PackageNetworks",
+    "shell.create.elevator.CabinMovement",
+    "shell.create.elevator.CabinPathRegion",
+    "shell.create.elevator.CreateElevatorNetwork",
+    "shell.create.elevator.ElevatorApproach",
+    "shell.create.elevator.ElevatorBinding",
+    "shell.create.elevator.ElevatorDeck",
+    "shell.create.elevator.ElevatorNetwork",
+    "shell.create.elevator.ElevatorOutlines",
+    "shell.create.elevator.ElevatorRef",
+    "shell.create.firefighting.HoseSessions",
+    "shell.create.firefighting.Hydrants",
+    "shell.create.firefighting.NativeExtinguisher",
+    "shell.create.firefighting.NativeHose",
+    "shell.create.firefighting.NativeHoseSession",
+    "shell.create.firefighting.NativeSprayBridge",
+    "shell.create.firefighting.ResidentHydrantBinding",
+    "shell.create.firefighting.ResidentSprayPacket",
+    "shell.create.firefighting.ResidentSprayVisuals",
+    "shell.create.firefighting.SprayFootings",
+    "shell.create.rail.RailOperations",
+    "shell.create.rail.domain.Berth",
+    "shell.create.rail.domain.Boarding",
+    "shell.create.rail.domain.CreateRailGraph",
+    "shell.create.rail.domain.CreateTransitNetwork",
+    "shell.create.rail.domain.Departures",
+    "shell.create.rail.domain.RailRefusal",
+    "shell.create.rail.domain.SeatRef",
+    "shell.create.rail.domain.TimetableFault",
+    "shell.create.rail.domain.Trackways",
+    "shell.create.rail.domain.TrainCrew",
+    "shell.create.rail.domain.TransitNetwork",
+    "shell.create.rail.domain.TransitNetworks",
+    "shell.create.rail.domain.TransitSnapshot",
+    "shell.create.transport.PassengerLanding",
+
+    "shell.rs2.NetworkPort",
+    "shell.rs2.Rs2Devices",
+    "shell.rs2.Rs2Integration",
+    "shell.tacz.TaczAmmoInventory",
+    "shell.tacz.TaczDischargeGuard",
+    "shell.tacz.TaczGuns",
+    "shell.toms.TomsIntegration",
+    "shell.warfare.DirectVehicleMotion",
+    "shell.warfare.VehicleBoarding",
+    "shell.warfare.VehicleCatapults",
+    "shell.warfare.VehicleController",
+    "shell.warfare.VehicleGuns",
+    "shell.warfare.VehicleSeats",
+    "shell.warfare.VehicleTraffic",
+    "shell.warfare.WarfareAirfields",
+    "shell.warfare.WarfareAmmo",
+    "shell.warfare.WarfareBallistics",
+    "shell.warfare.WarfareBreech",
+    "shell.warfare.WarfareDrive",
+    "shell.warfare.WarfareMount",
+    "shell.warfare.WarfareTrigger",
+    "shell.warfare.WarfareVehicles",
+    "shell.warfare.WarfareWeapon",
+    "shell.warfare.WarfareWeapons",
+}
 
 
 def domain(path):
@@ -75,10 +155,14 @@ def main():
     args = parser.parse_args()
     units = []
     types = {}
+    violations = []
     for path, source in sources(args.ref):
+        code = NON_CODE.sub(lambda match: "\n" * match.group().count("\n"), source)
+        for match in re.finditer(r"\bio\.github\.izakyl\.folkways\.vanilla\.", code):
+            line = code.count("\n", 0, match.start()) + 1
+            violations.append(f"Core dependency on Vanilla: {path}:{line}")
         if not domain(path):
             continue
-        code =NON_CODE.sub(lambda match: "\n" * match.group().count("\n"), source)
         package = re.search(r"\bpackage\s+([\w.]+)\s*;", code).group(1)
         types[f"{package}.{Path(path).stem}"] = package
         units.append((path, package, code))
@@ -96,7 +180,6 @@ def main():
                 edge = f"{package.removeprefix(PREFIX)} -> {target.removeprefix(PREFIX)}"
                 evidence.setdefault(edge, []).append(f"{path}:{code.count(chr(10), 0, match.start()) + 1}")
     cycles = [[name.removeprefix(PREFIX) for name in group] for group in components(graph)]
-    violations = []
     for package, targets in graph.items():
         parts = package.removeprefix(PREFIX).split(".")
         for target in targets:
@@ -109,7 +192,7 @@ def main():
                        for part in target.removeprefix(PREFIX).split(".")):
                     edge = f"{package.removeprefix(PREFIX)} -> {target.removeprefix(PREFIX)}"
                     violations.append(f"API dependency {edge}: {', '.join(evidence[edge])}")
-    for module in ["vanilla", "cookery", "create", "firearms", "golems"]:
+    for module in ["vanilla"]:
         for path, source in sources(args.ref, f"mods/{module}/src/main/java"):
             code = NON_CODE.sub(lambda match: "\n" * match.group().count("\n"), source)
             for match in REFERENCE.finditer(code):
@@ -119,7 +202,9 @@ def main():
                 target = types.get(name) or (match.group() if match.group() in graph else None)
                 if target:
                     parts = target.removeprefix(PREFIX).split(".")
-                    if "api" not in parts and parts[:2] != ["work", "support"]:
+                    if ("api" not in parts and parts[:2] != ["work", "support"]
+                            and name.removeprefix(PREFIX) not in COLONY_API
+                            and not (module == "vanilla" and name.removeprefix(PREFIX) in NATIVE_ADAPTER_API)):
                         line = code.count(chr(10), 0, match.start()) + 1
                         violations.append(f"Plugin dependency {path}:{line} -> {target.removeprefix(PREFIX)}")
     domain_cycles = [group for group in cycles if len({name.split(".")[0] for name in group}) > 1]

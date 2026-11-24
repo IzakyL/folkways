@@ -1,6 +1,7 @@
 package io.github.izakyl.folkways.vanilla.build.draft;
 
-import io.github.izakyl.folkways.core.front.api.notice.Notice;
+import io.github.izakyl.folkways.core.card.api.notice.Notice;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -9,24 +10,26 @@ import net.minecraft.network.chat.Component;
 
 public sealed interface Drawn {
 
-    record Ready(BlockPos corner, Draft draft, Map<String, Double> reports) implements Drawn {
+    record Ready(BlockPos corner, Draft draft, Map<String, Double> reports, List<BlockPos> resolvedPath)
+            implements Drawn {
 
         public Ready {
             corner = corner.immutable();
             Objects.requireNonNull(draft, "draft");
             reports = Map.copyOf(reports);
+            resolvedPath = List.copyOf(resolvedPath);
         }
 
         public Ready(BlockPos corner, Draft draft) {
-            this(corner, draft, Map.of());
+            this(corner, draft, Map.of(), List.of());
         }
 
         Ready joining(Draft joined) {
-            return new Ready(corner, joined, reports);
+            return new Ready(corner, joined, reports, resolvedPath);
         }
 
-        Ready counting(Map<String, Double> counted) {
-            return counted.isEmpty() ? this : new Ready(corner, draft, counted);
+        Ready withDetails(Derivation drawing) {
+            return new Ready(corner, draft, drawing.reports(), drawing.resolvedPath());
         }
     }
 

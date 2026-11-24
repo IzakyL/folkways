@@ -12,6 +12,7 @@ import java.util.Optional;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.navigation.ScreenRectangle;
 import net.minecraft.network.chat.Component;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -19,7 +20,10 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.RenderGuiEvent;
 import net.neoforged.neoforge.client.event.ScreenEvent;
 
-/** The keys that do something right now, listed down the edge of the screen: with the book in hand, and in its panels. */
+/**
+ * The keys that do something right now, listed down the edge of the screen: with the book in hand, and in its panels.
+ * A key that presses a button on screen is worn in that button's corner instead ({@link KeyBadge}).
+ */
 @EventBusSubscriber(modid = FolkwaysCoreMod.CORE_ID, bus = EventBusSubscriber.Bus.GAME, value = Dist.CLIENT)
 public final class KeyHints {
 
@@ -60,23 +64,32 @@ public final class KeyHints {
         if (cues.isEmpty()) {
             return;
         }
+        Font font = minecraft.font;
+        int width = CueLines.width(font, cues);
         int height = graphics.guiHeight();
-        int bottomInset = OverheadTools.selectedHandler().map(OverheadTools.Handler::bottomInset).orElse(0);
-        int top = OverheadScreen.hintsTop();
-        int available = Math.max(0, height - Math.max(0, bottomInset) - top - MARGIN);
+        int top = OverheadScreen.hintsTop(MARGIN + width + PADDING);
+        // Down the left edge, short of whatever the selected tool's own controls hold below or beside it.
+        int bottom = OverheadScreen.hintsBottom(height);
+        bottom = Math.min(bottom, height - MARGIN
+            - Math.max(0, OverheadTools.selectedHandler().map(OverheadTools.Handler::bottomInset).orElse(0)));
+        for (ScreenRectangle area : OverheadTools.selectedHandler().map(OverheadTools.Handler::reserved)
+                .orElse(List.of())) {
+            if (area.left() < MARGIN + width + PADDING && area.right() > MARGIN - PADDING && area.top() > top) {
+                bottom = Math.min(bottom, area.top() - MARGIN);
+            }
+        }
+        int available = Math.max(0, bottom - top);
         int cueHeight = cues.size() * CueLines.LINE;
         float scale = Math.min(1.0F, available / (float) cueHeight);
         if (scale <= 0.0F) {
             return;
         }
 
-        Font font = minecraft.font;
-        int width = CueLines.width(font, cues);
-        int bottom = cues.size() * CueLines.LINE - (CueLines.LINE - KeyGlyph.HEIGHT);
+        int foot = cues.size() * CueLines.LINE - (CueLines.LINE - KeyGlyph.HEIGHT);
         graphics.pose().pushPose();
         graphics.pose().translate(MARGIN, top, 0.0F);
         graphics.pose().scale(scale, scale, 1.0F);
-        graphics.fill(-PADDING, -PADDING, width + PADDING, bottom + PADDING, BED);
+        graphics.fill(-PADDING, -PADDING, width + PADDING, foot + PADDING, BED);
         CueLines.draw(graphics, font, cues, 0, 0);
         graphics.pose().popPose();
     }
@@ -110,8 +123,6 @@ public final class KeyHints {
             Overhead.on() && OverheadTools.selectedHandler().map(OverheadTools.Handler::compactHints).orElse(false);
         if (book.colonyId() == null) {
             cues.add(Cue.of("folkways.keys.open", Cue.Key.USE));
-        } else if (OverheadTools.active().isPresent()) {
-            marking(minecraft, cues);
         } else if (HeldPlacement.holding()) {
             placing(cues);
         } else {
@@ -122,21 +133,20 @@ public final class KeyHints {
             if (!toolCues.isEmpty()) {
                 cues.addAll(toolCues);
             } else {
-                switch (book.gesture()) {
+                switch (BookTools.gesture()) {
                     case POINT -> pointing(minecraft, cues);
                     case BOX -> marking(minecraft, cues);
                     case LINE -> lining(minecraft, cues);
                 }
             }
         }
-        if (!compactToolHints) {
-            cues.add(
-                Overhead.on()
-                ? Cue.of("folkways.keys.gesture", Cue.Key.TAB)
-                : Cue.of("folkways.keys.gesture", Cue.Key.SNEAK, Cue.Key.WHEEL));
+        // From above the tools are buttons: Tab and the wheel over them are worn on the buttons they press.
+        if (!Overhead.on() && book.colonyId() != null) {
+            cues.add(Cue.of("folkways.keys.gesture", Cue.Key.SNEAK, Cue.Key.WHEEL));
         }
         if (Overhead.on() && !compactToolHints) {
-            cues.add(Cue.of("folkways.keys.overhead.fly", Cue.Key.WALK));
+            cues.add(Overhead.edgeScroll() ? Cue.of("folkways.keys.overhead.edge")
+                : Cue.of("folkways.keys.overhead.fly", Cue.Key.WALK));
             cues.add(Cue.of("folkways.keys.overhead.up", Cue.Key.JUMP));
             cues.add(Cue.of("folkways.keys.overhead.down", Cue.Key.SNEAK));
             if (Overhead.tacticalControls()) {
@@ -153,16 +163,22 @@ public final class KeyHints {
         return cues;
     }
 
-    // With a preview out in the world, going back into the window is where it is built.
-    private static Cue setup() {
-        return OverheadTools.active().isPresent() ? Cue.of("folkways.keys.tool.use", Cue.Key.USE)
-            : Cue.of(ShapePreview.showing() ? "folkways.keys.setup.preview" : "folkways.keys.setup", Cue.Key.USE);
+    // An offer with its preview out in the world is confirmed in its panel. From above the shape becomes what was
+    // picked among the tools, by its own button, which wears the key; otherwise the book asks what it should become.
+    private static void setup(List<Cue> cues) {
+        if (ShapePreview.showing()) {
+            cues.add(Cue.of("folkways.keys.setup.preview", Cue.Key.USE));
+        } else if (!Overhead.on()) {
+            cues.add(Cue.of("folkways.keys.choose", Cue.Key.USE));
+        }
     }
 
-    // From above, sneak only takes the camera down, and the drawing is let go with a key of its own.
-    private static Cue discard() {
-        return Overhead.on() ? Cue.of("folkways.keys.discard", Cue.Key.BACKSPACE)
-            : Cue.of("folkways.keys.discard", Cue.Key.SNEAK, Cue.Key.CLICK);
+    // From above the drawing is let go by a button of its own, which wears its key; sneak there only takes the camera
+    // down.
+    private static void discard(List<Cue> cues) {
+        if (!Overhead.on()) {
+            cues.add(Cue.of("folkways.keys.discard", Cue.Key.SNEAK, Cue.Key.CLICK));
+        }
     }
 
     private static void placing(List<Cue> cues) {
@@ -170,9 +186,12 @@ public final class KeyHints {
             Component.translatable("folkways.keys.place", name), Cue.Key.CLICK)));
         cues.add(Cue.of(Component.translatable("folkways.keys.place.reach", HeldPlacement.reach()),
             Cue.Key.MODIFIER, Cue.Key.WHEEL));
-        cues.add(Cue.of("folkways.keys.place.turn", Cue.Key.ALTERNATE, Cue.Key.WHEEL));
-        cues.add(Cue.of("folkways.keys.place.flip", Cue.Key.MODIFIER, Cue.Key.ALTERNATE, Cue.Key.WHEEL));
-        cues.add(discard());
+        // From above, turning and flipping have buttons, which wear these keys.
+        if (!Overhead.on()) {
+            cues.add(Cue.of("folkways.keys.place.turn", Cue.Key.ALTERNATE, Cue.Key.WHEEL));
+            cues.add(Cue.of("folkways.keys.place.flip", Cue.Key.MODIFIER, Cue.Key.ALTERNATE, Cue.Key.WHEEL));
+        }
+        discard(cues);
     }
 
     private static void pointing(Minecraft minecraft, List<Cue> cues) {
@@ -185,12 +204,12 @@ public final class KeyHints {
 
     private static void marking(Minecraft minecraft, List<Cue> cues) {
         if (ZoneSelection.marked().isPresent()) {
-            cues.add(setup());
+            setup(cues);
             cues.add(Cue.of("folkways.keys.push", Cue.Key.MODIFIER, Cue.Key.WHEEL));
             cues.add(Cue.of("folkways.keys.push.far", Cue.Key.ALTERNATE, Cue.Key.WHEEL));
             cues.add(Cue.of("folkways.keys.shift", Cue.Key.MODIFIER, Cue.Key.ALTERNATE, Cue.Key.WHEEL));
             cues.add(Cue.of("folkways.keys.restart", Cue.Key.CLICK));
-            cues.add(discard());
+            discard(cues);
             return;
         }
         boolean cornered = ZoneSelection.drafting();
@@ -198,7 +217,11 @@ public final class KeyHints {
         cues.add(Cue.of("folkways.keys.corner.air", Cue.Key.MODIFIER, Cue.Key.CLICK));
         cues.add(Cue.of(Component.translatable("folkways.keys.reach", ZoneSelection.reach()),
             Cue.Key.MODIFIER, Cue.Key.WHEEL));
-        cues.add(cornered ? discard() : opening(minecraft));
+        if (cornered) {
+            discard(cues);
+        } else {
+            cues.add(opening(minecraft));
+        }
     }
 
     private static void lining(Minecraft minecraft, List<Cue> cues) {
@@ -215,16 +238,13 @@ public final class KeyHints {
         cues.add(Cue.of("folkways.keys.point.across", Cue.Key.ALTERNATE, Cue.Key.WHEEL));
         cues.add(Cue.of("folkways.keys.point.raise", Cue.Key.MODIFIER, Cue.Key.ALTERNATE, Cue.Key.WHEEL));
         if (PathSelection.drawn().isPresent()) {
-            cues.add(setup());
+            setup(cues);
         }
-        cues.add(discard());
+        discard(cues);
     }
 
     /** What the use key opens when nothing is being drawn: the zone or path aimed at, or else the colony's panel. */
     private static Cue opening(Minecraft minecraft) {
-        if (OverheadTools.active().isPresent()) {
-            return Cue.of("folkways.keys.tool.use", Cue.Key.USE);
-        }
         boolean aimed = ZoneSelection.aimedZone(minecraft.player).isPresent()
             || PathSelection.aimedPath(minecraft).isPresent();
         return Cue.of(aimed ? "folkways.keys.settings" : "folkways.keys.panel", Cue.Key.USE);

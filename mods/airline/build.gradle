@@ -9,12 +9,10 @@ ext.modName = "folkways-airline"
 apply from: rootProject.file("gradle/mod.gradle")
 evaluationDependsOn(":core")
 evaluationDependsOn(":vanilla")
-evaluationDependsOn(":create")
 
 dependencies {
     api project(":vanilla")
-    implementation project(":create")
     compileOnly lib("create")
     compileOnly lib("sable"), lib("sable-companion")
-    gametestImplementation project(":core").sourceSets.gameTestFixtures.output
+    gametestImplementation project(":vanilla").sourceSets.gameTestFixtures.output
 }

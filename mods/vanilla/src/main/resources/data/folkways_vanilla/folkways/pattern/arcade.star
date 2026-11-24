@@ -310,13 +310,13 @@ def draw(site):
     for j in range(len(runs) + 1):
         if (j > 0 and j < len(runs)) or at_ends:
             spot = runs[j].sized(depth = 1) if j < len(runs) else runs[j - 1].at(z = runs[j - 1].depth).sized(depth = 1)
-            room = spot.sized(width = side, depth = side, anchor = "center", parity = "low")
+            room = spot.sized(width = side, depth = side, anchor = "center", parity = "world_low")
             rooms.append(room.at(y = level_of(site, room) - room.origin.y))
         else:
             rooms.append(None)
     out = []
     for j in range(len(runs)):
-        lane = runs[j].sized(width = width, anchor = "center", parity = "low")
+        lane = runs[j].sized(width = width, anchor = "center", parity = "world_low")
         back = half + 1 if rooms[j] != None else 0
         front = half if rooms[j + 1] != None else 0
         if lane.depth - back - front < site.count("bay"):

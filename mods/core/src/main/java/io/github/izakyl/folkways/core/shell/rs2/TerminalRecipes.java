@@ -7,6 +7,7 @@ import com.refinedmods.refinedstorage.api.storage.Storage;
 import com.refinedmods.refinedstorage.common.api.grid.Grid;
 import com.refinedmods.refinedstorage.common.grid.GridData;
 import io.github.izakyl.folkways.core.FolkwaysCoreMod;
+import io.github.izakyl.folkways.core.shell.crafting.NetworkExtensions;
 import io.github.izakyl.folkways.core.shell.crafting.TerminalPreferences;
 import java.util.HashSet;
 import java.util.List;
@@ -68,7 +69,7 @@ public final class TerminalRecipes {
         visible.removeIf(key -> {
             var patterns = crafting.getPatternsByOutput(key);
             return !patterns.isEmpty() && patterns.stream()
-                .allMatch(pattern -> crafting.getProviderByPattern(pattern) instanceof ColonyProvider);
+                .allMatch(pattern -> NetworkExtensions.isExternalProvider(crafting.getProviderByPattern(pattern)));
         });
         return new GridData(data.active(), data.resources(), Set.copyOf(visible));
     }

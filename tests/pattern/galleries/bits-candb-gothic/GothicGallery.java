@@ -1,8 +1,28 @@
+import blockwright.minecraft.core.Sync;
+import dev.blockwright.api.Context;
+import io.github.izakyl.folkways.vanilla.build.draft.Chosen;
+import io.github.izakyl.folkways.vanilla.build.draft.Commission;
+import io.github.izakyl.folkways.vanilla.build.draft.DraftTemplate;
+import io.github.izakyl.folkways.vanilla.build.draft.Drafting;
+import io.github.izakyl.folkways.vanilla.build.draft.Drawn;
+import io.github.izakyl.folkways.vanilla.build.draft.Hint;
+import io.github.izakyl.folkways.vanilla.build.draft.Patterns;
+import io.github.izakyl.folkways.vanilla.build.draft.World;
+import java.io.ByteArrayOutputStream;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.NbtIo;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.level.block.Blocks;
 
 public final class Task {
 
     public static Object run(Context ctx) throws Exception {
-        var pattern = Patterns.find(ResourceLocation.parse("folkways_carving:gothic_cloister")).orElseThrow();
+        var pattern = Patterns.find(ResourceLocation.parse("folkways_vanilla:gothic_cloister")).orElseThrow();
         var defaults = new CompoundTag();
         for (var setting : pattern.knobs().settings()) {
             if (setting instanceof io.github.izakyl.folkways.core.front.api.Schema.Setting.Items items) {
@@ -30,7 +50,7 @@ public final class Task {
         for (var scene : scenes) {
             long started = System.nanoTime();
             var drawn = Drafting.draw(pattern, new Commission(scene,
-                Chosen.load(pattern.knobs(), defaults), World.NONE, Direction.SOUTH, 0)).join();
+                Chosen.normalize(pattern.knobs(), defaults), World.NONE, Direction.SOUTH, 0)).join();
             long millis = (System.nanoTime() - started) / 1_000_000;
             if (!(drawn instanceof Drawn.Ready ready)) {
                 throw new AssertionError(drawn.toString());

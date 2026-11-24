@@ -3,7 +3,7 @@ package io.github.izakyl.folkways.core.front.engine.colony;
 import io.github.izakyl.folkways.core.colony.api.Colony;
 import io.github.izakyl.folkways.core.inventory.api.ColonyInventory;
 import io.github.izakyl.folkways.core.inventory.api.InventorySnapshot;
-import io.github.izakyl.folkways.core.inventory.api.SlotSnapshot;
+import io.github.izakyl.folkways.core.facility.api.control.SlotSnapshot;
 import io.github.izakyl.folkways.core.item.api.Goods;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import java.util.HashMap;

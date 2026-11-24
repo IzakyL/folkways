@@ -5,14 +5,12 @@ import {
   tryCommand,
   safeScreen,
   screenName,
-  setBookGesture,
   waitForGroundedPlayer,
 } from "../shared/colony/colony-founding";
-import { aimAndLeftClick, colonyRegistry, createMarkedZone, markCorner, zoneCount } from "../shared/ui/zone-tools";
-import { FIRST_CORNER, ZONE_MARKED } from "../shared/ui/zone-receipt";
 import { input, screen, tick } from "@izakyl/blockwright-minecraft";
 import { clickElement, hoverElement, panelElements, elementLabel, elementsAtPoint } from "../ldlib2";
-import { frames, waitForElement } from "../shared/harness/bw-helpers";
+import { BOOK_PAGES } from "../shared/ui/colony-pages";
+import { frames } from "../shared/harness/bw-helpers";
 import { launchPair, type E2EPair } from "../shared/harness/pair";
 import { ensureOut, tracePath } from "../shared/harness/out-paths";
 import { seededServer } from "../shared/harness/mod-settings";
@@ -26,11 +24,10 @@ const LESSONS = [
   { lesson: "residents", tab: "folkways.tab.residents" },
   { lesson: "colony_panel", tab: "folkways.tab.metrics" },
   { lesson: "basics", tab: "folkways.tab.lessons" },
-  { lesson: "person", tab: "folkways.page.person" },
-  { lesson: "wares", tab: "folkways.page.wares" },
-  { lesson: "build", tab: "folkways.page.build" },
-  { lesson: "orders", tab: "folkways.panel.orders" },
-  { lesson: "pasture", tab: "folkways.page.pasture" },
+  { lesson: "colony_panel", tab: "folkways.tab.overview" },
+  { lesson: "colony_panel", tab: "folkways.tab.facilities" },
+  { lesson: "colony_panel", tab: "folkways.tab.settings" },
+  { lesson: "colony_panel", tab: "folkways.tab.members" },
 ] as const;
 
 // The Lessons page is a tree; farming's folder holds one scene, so it is a row of its own under its open category.
@@ -40,16 +37,7 @@ const SHELF = {
   scene: "folkways.lessons.scene.folkways_vanilla.farming",
 } as const;
 
-// A page a domain draws itself replaces the core's table; one it does not keeps it.
-const CRAFT_PAGE = "folkways_vanilla.wares";
-const CRAFT_TAB = "folkways.page.wares";
-const PASTURE_TAB = "folkways.page.pasture";
-const CRAFT_ROW = `folkways.board.row.${CRAFT_PAGE}.0`;
-const CRAFT_EDIT = `folkways.board.edit.${CRAFT_PAGE}.0.0`;
-const PASTURE_BOARD = /^folkways\.board\.[a-z]+\.folkways_vanilla\.pasture\./;
-const PEN_LINE = /^\d+ total · retain 4 · \d+ grown$/;
-
-test("every colony panel tab draws its own page and opens its own ponder lesson", async ({}, testInfo) => {
+test("fixed colony book tabs and the Lessons tree open their Ponder scenes", async ({}, testInfo) => {
   test.setTimeout(BUDGET.quick);
   ensureOut("e2e");
 
@@ -58,7 +46,7 @@ test("every colony panel tab draws its own page and opens its own ponder lesson"
   let server: any;
   let client: any;
   try {
-    // The base profile: the optional Cookery extension and its native mod are absent.
+    // The base profile: Kaleidoscope Cookery is absent, so Vanilla's cookery integration and its lessons are off.
     pair = await launchPair({
       config: "blockwright.toml",
       server: { trace: tracePath("e2e", "ponder-probe-server"), instance: seededServer(`ponder-server-${runId}`) },
@@ -74,32 +62,9 @@ test("every colony panel tab draws its own page and opens its own ponder lesson"
     const founding = await foundColonyFast(server, client, playerName, { origin, residentCount: 1 });
     const standBlock = founding.standBlock;
 
-    // One pasture, so its page has a pen to draw.
-    const ground = origin.y - 1;
-    const min = { x: origin.x, y: ground, z: origin.z + 8 };
-    const max = { x: origin.x + 1, y: ground, z: origin.z + 9 };
-    const standInside = { x: max.x, y: origin.y, z: max.z };
-    await setBookGesture(server, client, playerName, "box");
-    await markCorner(server, client, min, FIRST_CORNER,
-      () => aimAndLeftClick(server, client, playerName, standInside, min));
-    await markCorner(server, client, max, ZONE_MARKED,
-      () => aimAndLeftClick(server, client, playerName, standInside, max));
-    await createMarkedZone(server, client, playerName, standBlock, "pasture");
-    await tick.sprint(server, 240);
-    expect(await zoneCount(server, await colonyRegistry(server))).toBe(1);
-
     await openColonyPanelViaBook(server, client, playerName, standBlock);
-    await clickElement(client, { id: CRAFT_TAB }, { scrollIntoView: true });
-    await waitForElement(client, { id: CRAFT_ROW }, { timeoutMs: 15_000 });
-    await clickElement(client, { id: PASTURE_TAB }, { scrollIntoView: true });
-    const penLine = await waitForElement(client, { text: "grown" }, { timeoutMs: 15_000 });
-    const tokens = (await panelElements(client))
-      .map((element) => element.id)
-      .filter((id): id is string => typeof id === "string");
-    expect(tokens).toContain(CRAFT_ROW);
-    expect(tokens).toContain(CRAFT_EDIT);
-    expect(tokens.filter((token) => PASTURE_BOARD.test(token)).length).toBeGreaterThan(0);
-    expect(penLine?.text ?? "").toMatch(PEN_LINE);
+    expect((await panelElements(client)).filter(element => element.id?.startsWith("folkways.tab."))
+      .map(element => element.id)).toEqual(BOOK_PAGES.map(page => page.token));
 
     for (const { lesson, tab: token } of LESSONS) {
       await screen.dismiss(client);
@@ -138,11 +103,11 @@ test("every colony panel tab draws its own page and opens its own ponder lesson"
     await openColonyPanelViaBook(server, client, playerName, standBlock);
     await clickElement(client, { id: SHELF.tab }, { scrollIntoView: true });
     await frames(client, 2);
-    // Without the optional extension there is no kitchen: no lesson folder, no page.
+    // Without Kaleidoscope Cookery there is no kitchen: no kitchen lesson folder.
     const shelf = await panelElements(client);
-    expect(shelf.some((element) => element.id === "folkways.lessons.folder.folkways_cookery.cookery")).toBe(false);
+    expect(shelf.some((element) => element.id === "folkways.lessons.folder.folkways_vanilla.cookery")).toBe(false);
     expect(shelf.some((element) => element.id === "folkways.page.cookery"),
-      "the kitchen page belongs to the optional Folkways extension").toBe(false);
+      "the kitchen lesson needs Kaleidoscope Cookery installed").toBe(false);
     expect(shelf.some((element) => element.id === SHELF.category)).toBe(true);
     expect(shelf.some((element) => element.id === "folkways.lessons.folder.folkways_vanilla.farming"),
       "a folder of one scene is no folder to unfold").toBe(false);

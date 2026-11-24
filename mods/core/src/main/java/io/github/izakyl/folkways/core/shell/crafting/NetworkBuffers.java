@@ -1,18 +1,22 @@
 package io.github.izakyl.folkways.core.shell.crafting;
 
 import io.github.izakyl.folkways.core.base.persist.Reader;
+import io.github.izakyl.folkways.core.card.api.Card;
+import io.github.izakyl.folkways.core.card.api.notice.Line;
 import io.github.izakyl.folkways.core.colony.api.Colony;
 import io.github.izakyl.folkways.core.colony.api.ColonyView;
-import io.github.izakyl.folkways.core.front.api.Facing;
-import io.github.izakyl.folkways.core.front.api.panel.Board;
+import io.github.izakyl.folkways.core.facility.api.control.ItemPort;
+import io.github.izakyl.folkways.core.facility.api.control.Port;
+import io.github.izakyl.folkways.core.facility.api.control.PortIdentity;
+import io.github.izakyl.folkways.core.facility.api.control.PortReader;
+import io.github.izakyl.folkways.core.facility.api.control.Pull;
+import io.github.izakyl.folkways.core.facility.api.control.SlotWindow;
+import io.github.izakyl.folkways.core.facility.api.control.TransferResult;
+import io.github.izakyl.folkways.core.facility.api.control.TransformHint;
+import io.github.izakyl.folkways.core.front.api.ColonyPanel;
 import io.github.izakyl.folkways.core.inventory.api.Stash;
 import io.github.izakyl.folkways.core.inventory.api.StoreRule;
-import io.github.izakyl.folkways.core.inventory.api.port.PortIdentity;
-import io.github.izakyl.folkways.core.inventory.api.port.PortReader;
-import io.github.izakyl.folkways.core.inventory.api.port.Pull;
-import io.github.izakyl.folkways.core.inventory.api.port.StorePort;
-import io.github.izakyl.folkways.core.inventory.api.port.TransferResult;
-import io.github.izakyl.folkways.core.inventory.api.port.Usability;
+import io.github.izakyl.folkways.core.inventory.api.port.StoreAccess;
 import io.github.izakyl.folkways.core.item.api.Containers;
 import io.github.izakyl.folkways.core.item.api.Goods;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
@@ -27,13 +31,14 @@ import io.github.izakyl.folkways.core.work.api.Ending;
 import io.github.izakyl.folkways.core.work.api.Hold;
 import io.github.izakyl.folkways.core.work.api.Node;
 import io.github.izakyl.folkways.core.work.api.NodeSpec;
-import io.github.izakyl.folkways.core.work.api.Stances;
 import io.github.izakyl.folkways.core.work.api.WorkGesture;
 import io.github.izakyl.folkways.core.work.api.WorkSite;
 import io.github.izakyl.folkways.core.work.api.Workload;
-import io.github.izakyl.folkways.core.work.internal.TransferNode;
+import io.github.izakyl.folkways.core.work.support.Transfers;
 import io.github.izakyl.folkways.core.world.api.Reach;
+import io.github.izakyl.folkways.core.world.api.Stances;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
+import io.github.izakyl.folkways.core.world.api.WorldSpaces;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -55,24 +60,27 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.item.ItemStack;
 
-/** Accepted inputs belong to the colony. Network task cancellation never changes this ledger. */
-public final class NetworkBuffers implements Facing {
+/**
+ * Buffers for colony crafting through AE2/RS2 network devices. Accepted inputs belong to the colony.
+ * Network task cancellation never changes this ledger.
+ */
+public final class NetworkBuffers implements ColonyPanel {
 
     private static final Map<UUID, Set<NetworkBuffers>> ACTIVE = new LinkedHashMap<>();
 
-    public record Access(StorePort port, Object network, StorePort delivery, Consumer<UUID> cancel) {
-        public Access(StorePort port, Object network, StorePort delivery) {
+    public record Access(ItemPort port, Object network, ItemPort delivery, Consumer<UUID> cancel) {
+        public Access(ItemPort port, Object network, ItemPort delivery) {
             this(port, network, delivery, task -> { });
         }
     }
 
     private static final class Batch {
         private final UUID id;
-        private final WorldPos device;
+        private final WorldPos networkDevice;
         private String recipe;
         private final List<ItemStack> goods = new ArrayList<>();
         private final List<ItemStack> received = new ArrayList<>();
-        private final Set<WorldPos> devices = new LinkedHashSet<>();
+        private final Set<WorldPos> networkDevices = new LinkedHashSet<>();
         private final Set<UUID> commissions = new LinkedHashSet<>();
         private Object network;
         private UUID worker;
@@ -87,11 +95,11 @@ public final class NetworkBuffers implements Facing {
         private final List<Node> active = new ArrayList<>();
         private final Set<WorldPos> workingAt = new HashSet<>();
 
-        Batch(UUID id, WorldPos device, String recipe) {
+        Batch(UUID id, WorldPos networkDevice, String recipe) {
             this.id = id;
-            this.device = device;
+            this.networkDevice = networkDevice;
             this.recipe = recipe;
-            devices.add(device);
+            networkDevices.add(networkDevice);
         }
     }
 
@@ -110,11 +118,11 @@ public final class NetworkBuffers implements Facing {
         ACTIVE.computeIfAbsent(colony.id(), ignored -> new HashSet<>()).add(this);
         for (var raw : colony.kept(owner).getList("batches", Tag.TAG_COMPOUND)) {
             CompoundTag data = (CompoundTag) raw;
-            var device = WorldPos.load(Reader.of(data.getCompound("device")));
-            if (device.isEmpty() || !data.hasUUID("id")) {
+            var networkDevice = WorldPos.load(Reader.of(data.getCompound("device")));
+            if (networkDevice.isEmpty() || !data.hasUUID("id")) {
                 continue;
             }
-            Batch batch = new Batch(data.getUUID("id"), device.get(), data.getString("recipe"));
+            Batch batch = new Batch(data.getUUID("id"), networkDevice.get(), data.getString("recipe"));
             for (var task : data.getList("commissions", Tag.TAG_INT_ARRAY)) {
                 batch.commissions.add(NbtUtils.loadUUID(task));
             }
@@ -139,7 +147,7 @@ public final class NetworkBuffers implements Facing {
                 batch.goods.forEach(stack -> batch.received.add(stack.copy()));
             }
             for (var at : data.getList("devices", Tag.TAG_COMPOUND)) {
-                WorldPos.load(Reader.of((CompoundTag) at)).ifPresent(batch.devices::add);
+                WorldPos.load(Reader.of((CompoundTag) at)).ifPresent(batch.networkDevices::add);
             }
             batches.add(batch);
         }
@@ -191,7 +199,7 @@ public final class NetworkBuffers implements Facing {
         return body.licences().of(Vocations.required(Vocations.NETWORK_SERVICE)).isPresent();
     }
 
-    public boolean canAccept(WorldPos device, Object network, String recipe, List<ItemStack> inputs) {
+    public boolean canAccept(WorldPos networkDevice, Object network, String recipe, List<ItemStack> inputs) {
         if (inputs.isEmpty() || network == null) {
             return false;
         }
@@ -199,7 +207,7 @@ public final class NetworkBuffers implements Facing {
         if (entry.isEmpty()) {
             return false;
         }
-        var pending = batches.stream().filter(batch -> !batch.returning && batch.device.equals(device)
+        var pending = batches.stream().filter(batch -> !batch.returning && batch.networkDevice.equals(networkDevice)
             && batch.recipe.equals(recipe) && network.equals(batch.network) && collecting(batch)).findFirst();
         if (pending.isPresent() && entry.get().prepare(pending.get().runs + 1)
                 .filter(change -> change.holds().stream().allMatch(Hold::mayTake)).isPresent()) {
@@ -209,12 +217,13 @@ public final class NetworkBuffers implements Facing {
             && free(change.replacement().nodes()).isPresent()).isPresent();
     }
 
-    public boolean accept(WorldPos device, Object network, String recipe, List<ItemStack> inputs) {
-        if (!canAccept(device, network, recipe, inputs)) {
+    public boolean accept(WorldPos networkDevice, Object network, String recipe, List<ItemStack> inputs) {
+        if (!canAccept(networkDevice, network, recipe, inputs)) {
             return false;
         }
         // Combine uncollected iterations through the workshop's own sizing, so a furnace prices fuel for the load.
-        var pending = batches.stream().filter(batch -> batch.device.equals(device) && batch.recipe.equals(recipe)
+        var pending = batches.stream().filter(batch -> batch.networkDevice.equals(networkDevice)
+            && batch.recipe.equals(recipe)
             && network.equals(batch.network) && collecting(batch)).findFirst();
         if (pending.isPresent() && !inputs.isEmpty()) {
             Batch batch = pending.get();
@@ -247,7 +256,7 @@ public final class NetworkBuffers implements Facing {
         if (worker.isEmpty() || inputs.isEmpty() || !reserve(work.orElseThrow().holds())) {
             return false;
         }
-        Batch batch = new Batch(UUID.randomUUID(), device, recipe);
+        Batch batch = new Batch(UUID.randomUUID(), networkDevice, recipe);
         batch.network = network;
         NetworkTask.current().ifPresent(batch.commissions::add);
         batch.worker = worker.get().id();
@@ -259,15 +268,15 @@ public final class NetworkBuffers implements Facing {
             batch.received.add(stack.copy());
         });
         access.stream().filter(at -> at.network().equals(network))
-            .forEach(at -> batch.devices.add(at.port().identity().home()));
+            .forEach(at -> batch.networkDevices.add(at.port().identity().home()));
         batches.add(batch);
         save();
         return true;
     }
 
     /** RS2 has already withdrawn these stacks when an execute call is rejected. Keep them until return succeeds. */
-    public void recover(WorldPos device, Object network, List<ItemStack> inputs) {
-        Batch batch = new Batch(UUID.randomUUID(), device, "");
+    public void recover(WorldPos networkDevice, Object network, List<ItemStack> inputs) {
+        Batch batch = new Batch(UUID.randomUUID(), networkDevice, "");
         batch.network = network;
         batch.returning = true;
         NetworkTask.current().ifPresent(batch.commissions::add);
@@ -281,8 +290,9 @@ public final class NetworkBuffers implements Facing {
             .saveWork(batch.work, batch.holds, server.registryAccess())).ifPresent(data -> batch.continuation = data);
     }
 
-    public long count(WorldPos device, ItemStack item) {
-        return batches.stream().filter(batch -> batch.device.equals(device)).flatMap(batch -> batch.goods.stream())
+    public long count(WorldPos networkDevice, ItemStack item) {
+        return batches.stream().filter(batch -> batch.networkDevice.equals(networkDevice))
+            .flatMap(batch -> batch.goods.stream())
             .filter(stack -> ItemStack.isSameItemSameComponents(stack, item)).mapToLong(ItemStack::getCount).sum();
     }
 
@@ -294,12 +304,12 @@ public final class NetworkBuffers implements Facing {
         boolean changed = false;
         for (Batch batch : List.copyOf(batches)) {
             var connected = access.stream().filter(at -> at.network().equals(batch.network)
-                || batch.devices.contains(at.port().identity().home())).findFirst();
+                || batch.networkDevices.contains(at.port().identity().home())).findFirst();
             if (connected.isPresent()) {
                 batch.network = connected.get().network();
                 for (var at : access) {
                     if (at.network().equals(batch.network)) {
-                        changed |= batch.devices.add(at.port().identity().home());
+                        changed |= batch.networkDevices.add(at.port().identity().home());
                     }
                 }
             }
@@ -395,7 +405,7 @@ public final class NetworkBuffers implements Facing {
                 boolean take = stage == 0;
                 var target = access.stream().filter(at -> at.network().equals(batch.network))
                     .map(Access::port).filter(at -> at.operations().contains(take
-                        ? StorePort.Operation.TAKE : StorePort.Operation.PUT))
+                        ? Port.Operation.TAKE : Port.Operation.PUT))
                     .filter(at -> take ? StoreRule.takes(colony.storeRules(at.identity().home()))
                         : StoreRule.stores(colony.storeRules(at.identity().home())))
                     .filter(at -> at.identity().home().in(worker.get().mob().level()))
@@ -424,7 +434,7 @@ public final class NetworkBuffers implements Facing {
                         Workload.Once.of(10)).leaves(leaves)
                     .vocation(Vocations.required(Vocations.NETWORK_SERVICE)).gesture(WorkGesture.SWING)
                     .doing(take ? Doings.FETCHING : Doings.STOWING);
-                remaining.add(TransferNode.obligation(spec.done(), new Stash(at), goods, take, batch.worker,
+                remaining.add(Transfers.obligation(spec.done(), new Stash(at), goods, take, batch.worker,
                     (world, operation) -> port(batch, at, operation).map(nativePort -> take
                         ? new BufferPort(batch, nativePort) : nativePort)));
                 stages.put(remaining.getLast().id(), stage);
@@ -468,13 +478,13 @@ public final class NetworkBuffers implements Facing {
 
     private boolean returnInputs(Batch batch) {
         for (Access at : access) {
-            StorePort port = at.port();
-            if (!at.network().equals(batch.network) || !port.operations().contains(StorePort.Operation.PUT)) {
+            ItemPort port = at.port();
+            if (!at.network().equals(batch.network) || !port.operations().contains(Port.Operation.PUT)) {
                 continue;
             }
             var level = port.identity().home().level(server);
-            if (level.isPresent() && port.put(level.get(), batch.goods, List.of(), true, true).done()
-                && port.put(level.get(), batch.goods, List.of(), true, false).done()) {
+            if (level.isPresent() && port.put(level.get(), batch.goods, Optional.empty(), true).done()
+                && port.put(level.get(), batch.goods, Optional.empty(), false).done()) {
                 batch.goods.clear();
                 return true;
             }
@@ -482,12 +492,12 @@ public final class NetworkBuffers implements Facing {
         return false;
     }
 
-    private Optional<StorePort> port(Batch batch, WorldPos at, StorePort.Operation operation) {
+    private Optional<ItemPort> port(Batch batch, WorldPos at, Port.Operation operation) {
         return access.stream().filter(value -> value.network().equals(batch.network))
-            .map(value -> operation == StorePort.Operation.PUT ? value.delivery() : value.port())
+            .map(value -> operation == Port.Operation.PUT ? value.delivery() : value.port())
             .filter(value -> value.identity().home().equals(at))
-            .filter(value -> at.level(server).map(level -> colony.storesIn(level.dimension()).contains(at)).orElse(false)
-                && value.usability().usable() && value.operations().contains(operation)).findFirst();
+            .filter(value -> at.level(server).filter(level -> colony.storesIn(level.dimension()).contains(at)
+                && StoreAccess.usability(level, value).usable()).isPresent() && value.operations().contains(operation)).findFirst();
     }
 
     private Optional<Grown> work(Batch batch) {
@@ -547,7 +557,7 @@ public final class NetworkBuffers implements Facing {
         for (Batch batch : batches) {
             CompoundTag data = new CompoundTag();
             data.putUUID("id", batch.id);
-            data.put("device", batch.device.save());
+            data.put("device", batch.networkDevice.save());
             data.putString("recipe", batch.recipe);
             ListTag commissions = new ListTag();
             batch.commissions.forEach(task -> commissions.add(NbtUtils.createUUID(task)));
@@ -567,9 +577,9 @@ public final class NetworkBuffers implements Facing {
             ListTag received = new ListTag();
             batch.received.forEach(stack -> received.add(stack.save(server.registryAccess())));
             data.put("received", received);
-            ListTag devices = new ListTag();
-            batch.devices.forEach(at -> devices.add(at.save()));
-            data.put("devices", devices);
+            ListTag networkDevices = new ListTag();
+            batch.networkDevices.forEach(at -> networkDevices.add(at.save()));
+            data.put("devices", networkDevices);
             saved.add(data);
         }
         CompoundTag data = new CompoundTag();
@@ -578,22 +588,22 @@ public final class NetworkBuffers implements Facing {
     }
 
     @Override
-    public Optional<Board> board(ResourceLocation page, ColonyView view) {
-        if (!page.toString().equals("folkways_vanilla:wares") || batches.isEmpty()) {
-            return Optional.empty();
+    public List<Card.Row> rows(Page page, ColonyView view) {
+        if (page != Page.STOCK || batches.isEmpty()) {
+            return List.of();
         }
-        List<Board.Row> rows = new ArrayList<>();
-        rows.add(Board.Row.heading(Component.translatable("folkways.network.pending")));
+        List<Card.Row> rows = new ArrayList<>();
         for (Batch batch : batches) {
             List<ItemStack> goods = batch.goods.isEmpty() ? recipes.find(batch.recipe).stream()
                 .flatMap(entry -> entry.recipe().outputs().stream()).map(amount -> Goods.display(amount.spec()))
                 .toList() : batch.goods;
             for (ItemStack stack : goods) {
-                rows.add(Board.Row.of(stack.copy(), stack.getHoverName(), Component.translatable(
-                    "folkways.network.buffer", stack.getCount(), batch.device.toString())));
+                Card.Row row = Card.Row.of(stack, Line.text(stack.getHoverName()), List.of(Line.text(
+                    Component.translatable("folkways.network.buffer", stack.getCount(), batch.networkDevice))));
+                rows.add(WorldSpaces.storage(view.level(), batch.networkDevice).map(row::at).orElse(row));
             }
         }
-        return Optional.of(Board.of(rows));
+        return List.copyOf(rows);
     }
 
     // The normal pack-keeping mechanism protects obligations from idle unloading and unrelated colony work.
@@ -657,13 +667,18 @@ public final class NetworkBuffers implements Facing {
         save();
     }
 
-    private final class BufferPort implements StorePort {
+    private final class BufferPort implements ItemPort {
         private final Batch batch;
-        private final StorePort nativePort;
+        private final ItemPort nativePort;
 
-        BufferPort(Batch batch, StorePort nativePort) {
+        BufferPort(Batch batch, ItemPort nativePort) {
             this.batch = batch;
             this.nativePort = nativePort;
+        }
+
+        @Override
+        public WorldPos anchor() {
+            return identity().home();
         }
 
         @Override
@@ -672,8 +687,13 @@ public final class NetworkBuffers implements Facing {
         }
 
         @Override
-        public Usability usability() {
-            return nativePort.usability();
+        public Optional<Component> unavailable(ServerLevel level) {
+            return nativePort.unavailable(level);
+        }
+
+        @Override
+        public List<TransformHint> transforms() {
+            return nativePort.transforms();
         }
 
         @Override
@@ -682,13 +702,13 @@ public final class NetworkBuffers implements Facing {
         }
 
         @Override
-        public PortReader reader(ServerLevel level, List<StoreRule> rules) {
+        public PortReader reader(ServerLevel level, Optional<SlotWindow> window) {
             throw new UnsupportedOperationException("obligation buffers are never colony stock");
         }
 
         @Override
-        public TransferResult take(ServerLevel level, List<Pull> requested, List<StoreRule> rules, boolean simulate) {
-            if (!StoreRule.takes(rules) || !usability().usable()) {
+        public TransferResult take(ServerLevel level, List<Pull> requested, Optional<SlotWindow> window, boolean simulate) {
+            if (window.isPresent() || !valid(level)) {
                 return new TransferResult.Refused(TransferResult.Why.NOT_ALLOWED);
             }
             SimpleContainer contents = new SimpleContainer(batch.goods.size());
@@ -721,8 +741,10 @@ public final class NetworkBuffers implements Facing {
         }
 
         @Override
-        public TransferResult put(ServerLevel level, List<ItemStack> goods, List<StoreRule> rules,
-                boolean directed, boolean simulate) {
+        public TransferResult put(ServerLevel level, List<ItemStack> goods, Optional<SlotWindow> window, boolean simulate) {
+            if (window.isPresent()) {
+                return new TransferResult.Refused(TransferResult.Why.NOT_ALLOWED);
+            }
             if (!simulate) {
                 goods.forEach(stack -> batch.goods.add(stack.copy()));
                 save();

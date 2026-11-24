@@ -1,17 +1,23 @@
 package io.github.izakyl.folkways.vanilla.build.draft;
 
-import io.github.izakyl.folkways.core.item.api.ItemFilter;
-import io.github.izakyl.folkways.core.item.api.ItemSpec;
-import io.github.izakyl.folkways.core.work.api.StructureCompat;
-import io.github.izakyl.folkways.core.work.api.Voxelizer;
 import io.github.izakyl.folkways.core.front.api.Schema;
 import io.github.izakyl.folkways.core.front.api.Settings;
-import io.github.izakyl.folkways.core.front.api.notice.Notice;
+import io.github.izakyl.folkways.core.card.api.notice.Notice;
+import io.github.izakyl.folkways.core.item.api.ItemFilter;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
+import io.github.izakyl.folkways.core.script.api.Profile;
+import io.github.izakyl.folkways.core.script.api.ScriptFault;
+import io.github.izakyl.folkways.core.script.api.ScriptRuntime;
+import io.github.izakyl.folkways.core.work.api.Joint;
+import io.github.izakyl.folkways.core.work.api.Joints;
+import io.github.izakyl.folkways.core.work.api.StructureCompat;
+import io.github.izakyl.folkways.core.work.api.Voxelizer;
+import io.github.izakyl.folkways.vanilla.FolkwaysVanillaConfig;
 import io.github.izakyl.folkways.vanilla.build.BlueprintUploads;
-import io.github.izakyl.folkways.vanilla.build.Joints;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.math.BigInteger;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -22,6 +28,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import net.minecraft.SharedConstants;
@@ -31,19 +38,14 @@ import net.minecraft.nbt.NbtIo;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
+import net.starlark.java.eval.AllocationBudget;
 import net.starlark.java.eval.Dict;
 import net.starlark.java.eval.EvalException;
 import net.starlark.java.eval.Module;
-import net.starlark.java.eval.Mutability;
 import net.starlark.java.eval.Sequence;
 import net.starlark.java.eval.Starlark;
 import net.starlark.java.eval.StarlarkCallable;
 import net.starlark.java.eval.StarlarkInt;
-import net.starlark.java.eval.StarlarkSemantics;
-import net.starlark.java.eval.StarlarkThread;
-import net.starlark.java.syntax.FileOptions;
-import net.starlark.java.syntax.ParserInput;
-import net.starlark.java.syntax.SyntaxError;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -53,13 +55,6 @@ public record Pattern(ResourceLocation id, Schema knobs, Face face, Set<String> 
     public static final int DEFAULT_GRAIN = 8;
 
     private static final Logger LOGGER = LoggerFactory.getLogger("folkways-patterns");
-
-    private static final long LOAD_STEPS = 200_000L;
-    // A drawing has no step limit of its own: it runs on a drafting thread, over the part of the world its pattern
-    // captured, until it is done or its time is up (see Drafting).
-
-    private static final StarlarkSemantics SEMANTICS =
-        StarlarkSemantics.builder().setBool("-allow_recursion", true).build();
 
     private static final String KNOBS = "knobs";
     private static final String LANG = "lang";
@@ -85,9 +80,20 @@ public record Pattern(ResourceLocation id, Schema knobs, Face face, Set<String> 
         }
     }
 
+    private static Profile profile(int seconds) {
+        return Profile.draftPattern(Duration.ofSeconds(seconds), Vocabulary.predeclared(), Pattern::libraryId,
+            (id, message) -> LOGGER.info("{}: {}", id, message));
+    }
+
     // Read on its own, a pattern still loads the libraries this game has installed.
     public static Optional<Pattern> parse(ResourceLocation id, String source) {
         return parse(id, source, INSTALLED);
+    }
+
+    public static Pattern inline(ResourceLocation id, String source) {
+        var diagnostics = new ArrayList<String>();
+        return parse(id, source, INSTALLED, diagnostics::add, true).orElseThrow(() ->
+            new IllegalArgumentException(diagnostics.isEmpty() ? "Define draw(site)." : diagnostics.getFirst()));
     }
 
     public static Optional<Pattern> parse(ResourceLocation id, String source,
@@ -99,16 +105,23 @@ public record Pattern(ResourceLocation id, Schema knobs, Face face, Set<String> 
     // refused hears why a pattern did not load, for the shelf to show.
     public static Optional<Pattern> parse(ResourceLocation id, String source,
             Function<ResourceLocation, Optional<String>> libraries, Consumer<String> refused) {
-        try (Mutability mutability = Mutability.create("pattern", id)) {
-            Map<ResourceLocation, Module> loaded = new LinkedHashMap<>();
-            Module module = execute(id, source, libraries, mutability, loaded, new LinkedHashSet<>());
+        return parse(id, source, libraries, refused, false);
+    }
+
+    private static Optional<Pattern> parse(ResourceLocation id, String source,
+            Function<ResourceLocation, Optional<String>> libraries, Consumer<String> refused, boolean inline) {
+        try {
+            ScriptRuntime runtime = new ScriptRuntime(profile(FolkwaysVanillaConfig.drawSeconds()));
+            ScriptRuntime.Loaded loaded =
+                ScriptRuntime.result(runtime.submit(() -> runtime.load(id, source, libraries)));
+            Module module = loaded.module();
             Object drawing = module.getGlobal(DRAW);
             if (drawing == null) {
                 return Optional.empty();
             }
             String detail = detail(module.getGlobal("detail"));
             Pattern pattern = new Pattern(id, schema(module.getGlobal(KNOBS)),
-                new Face(offered(module.getGlobal(KNOBS)), words(module, loaded)),
+                new Face(offered(module.getGlobal(KNOBS)), words(module, loaded.libraries())),
                 accepts(module.getGlobal(ACCEPTS)), phases(module.getGlobal(PHASES)),
                 Capture.parse(module.getGlobal(CAPTURE)), detail, grain(module.getGlobal("grain"), detail), drawing);
             Set<ResourceLocation> unloaded = pattern.unloaded();
@@ -116,55 +129,22 @@ public record Pattern(ResourceLocation id, Schema knobs, Face face, Set<String> 
                 LOGGER.warn("{}: needs {}, which this game has not loaded", id, unloaded);
             }
             return Optional.of(pattern);
-        } catch (SyntaxError.Exception | EvalException | RuntimeException broken) {
-            LOGGER.error("{}: {}", id, broken.getMessage());
-            refused.accept(String.valueOf(broken.getMessage()));
-            return Optional.empty();
-        } catch (InterruptedException interrupted) {
-            Thread.currentThread().interrupt();
+        } catch (EvalException | RuntimeException broken) {
+            String detail = broken.getMessage();
+            if (broken instanceof ScriptFault fault) {
+                if (inline && fault.kind() == ScriptFault.Kind.MEMORY) {
+                    throw fault;
+                }
+                if (fault.kind() == ScriptFault.Kind.TIMEOUT) {
+                    detail = "Pattern load timed out";
+                } else if (fault.location() != null) {
+                    detail = fault.location() + ": " + fault.detail();
+                }
+            }
+            LOGGER.error("{}: {}", id, detail);
+            refused.accept(String.valueOf(detail));
             return Optional.empty();
         }
-    }
-
-    private static Module execute(ResourceLocation id, String source,
-            Function<ResourceLocation, Optional<String>> libraries, Mutability mutability,
-            Map<ResourceLocation, Module> loaded, Set<ResourceLocation> loading)
-            throws SyntaxError.Exception, EvalException, InterruptedException {
-        loading.add(id);
-        StarlarkThread thread = new StarlarkThread(mutability, SEMANTICS);
-        thread.setMaxExecutionSteps(LOAD_STEPS);
-        thread.setPrintHandler((printing, message) -> LOGGER.info("{}: {}", id, message));
-        thread.setLoader(written -> {
-            ResourceLocation wanted = libraryId(written);
-            if (wanted == null) {
-                return null;
-            }
-            Module done = loaded.get(wanted);
-            if (done != null) {
-                return done;
-            }
-            if (loading.contains(wanted)) {
-                throw new IllegalStateException(id + " loads " + wanted + ", which is still loading: a load cycle");
-            }
-            Optional<String> text = libraries.apply(wanted);
-            if (text.isEmpty()) {
-                return null;
-            }
-            try {
-                Module library = execute(wanted, text.get(), libraries, mutability, loaded, loading);
-                loaded.put(wanted, library);
-                return library;
-            } catch (SyntaxError.Exception | EvalException broken) {
-                throw new IllegalStateException(wanted + ": " + broken.getMessage(), broken);
-            } catch (InterruptedException interrupted) {
-                Thread.currentThread().interrupt();
-                return null;
-            }
-        });
-        Module module = Module.withPredeclared(SEMANTICS, Vocabulary.predeclared());
-        Starlark.execFile(ParserInput.fromString(source, id.toString()), FileOptions.DEFAULT, module, thread);
-        loading.remove(id);
-        return module;
     }
 
     static ResourceLocation libraryId(String written) {
@@ -231,11 +211,23 @@ public record Pattern(ResourceLocation id, Schema knobs, Face face, Set<String> 
     }
 
     public Drawn drawOn(Commission commission) {
-        Derivation drawing = new Derivation(commission, area(commission.hint()), phases, face);
-        return run(commission, drawing, draw);
+        return Drafting.draw(this, commission).join();
     }
 
-    private Drawn run(Commission commission, Derivation drawing, Object fn) {
+    CompletableFuture<Drawn> submitDrawing(Commission commission, int seconds) {
+        Area area = area(commission.hint());
+        Commission snapshot = new Commission(commission.hint(), commission.settings(),
+            commission.world().snapshot(area), commission.facing(), commission.seed());
+        // Drawings retain their time limit without a step budget of their own.
+        Profile loading = profile(seconds);
+        ScriptRuntime runtime = new ScriptRuntime(loading.withLimits(0, loading.time(), 0));
+        return runtime.submit(() -> {
+            Derivation drawing = new Derivation(snapshot, area, phases, face);
+            return run(runtime, snapshot, drawing);
+        });
+    }
+
+    private Drawn run(ScriptRuntime runtime, Commission commission, Derivation drawing) {
         if (!accepts(commission.hint())) {
             String kind = commission.hint().kind();
             return new Drawn.Refused(DraftRefusal.WRONG_MARK, kind,
@@ -248,19 +240,18 @@ public record Pattern(ResourceLocation id, Schema knobs, Face face, Set<String> 
         if (!missing.isEmpty()) {
             return Drawn.refused(DraftRefusal.UNKNOWN_BLOCK, named(missing));
         }
-        try (Mutability mutability = Mutability.create("draw", id);
-                var processing = detail.equals("bits") ? Voxelizer.installed().orElseThrow().drawing()
-                    : StructureCompat.processing()) {
-            StarlarkThread thread = new StarlarkThread(mutability, SEMANTICS);
-            thread.setPrintHandler((printing, message) -> LOGGER.info("{}: {}", id, message));
-            long began = System.nanoTime();
-            List<Massing.Part> parts;
-            try {
-                parts = drawing.derive(thread, fn, new DraftSite(drawing));
-            } finally {
-                LOGGER.info("{}: drew in {} steps, {} ms", id, thread.getExecutedSteps(),
-                    (System.nanoTime() - began) / 1_000_000);
-            }
+        try (var processing = detail.equals("bits") ? Voxelizer.installed().orElseThrow().drawing()
+                : StructureCompat.processing()) {
+            List<Massing.Part> parts = runtime.run(id, thread -> {
+                long began = System.nanoTime();
+                try {
+                    return drawing.derive(thread, draw, new DraftSite(drawing));
+                } finally {
+                    LOGGER.info("{}: drew in {} steps, {} ms, {} counted bytes", id, thread.getExecutedSteps(),
+                        (System.nanoTime() - began) / 1_000_000, AllocationBudget.currentCountedBytes());
+                }
+            });
+            // Fitting runs after Starlark, under the drawing deadline and geometry limits.
             if (parts.isEmpty()) {
                 return Drawn.refused(DraftRefusal.NOTHING_DRAWN);
             }
@@ -274,7 +265,7 @@ public record Pattern(ResourceLocation id, Schema knobs, Face face, Set<String> 
             Drawn.Ready ready = laid;
             if (!drawing.joints().isEmpty()) {
                 if (!Joints.installed()) {
-                    return Drawn.refused(DraftRefusal.UNKNOWN_BLOCK, JOINER);
+                    return Drawn.refused(DraftRefusal.JOINER_UNAVAILABLE, JOINER);
                 }
                 Drawn joined = joined(laid, commission.hint().anchor(), drawing.joints());
                 if (!(joined instanceof Drawn.Ready fastened)) {
@@ -290,16 +281,19 @@ public record Pattern(ResourceLocation id, Schema knobs, Face face, Set<String> 
                     return Drawn.refused(DraftRefusal.SITE_TOO_LARGE, "voxel drawing exceeds the upload limit");
                 }
             }
-            return ready.counting(drawing.reports());
-        } catch (io.github.izakyl.folkways.core.work.api.StructureCompat.Failure failed) {
+            return ready.withDetails(drawing);
+        } catch (StructureCompat.Failure failed) {
             return Drawn.refused(DraftRefusal.UNSUPPORTED_PAYLOAD);
-        } catch (EvalException stopped) {
+        } catch (ScriptFault stopped) {
+            if (stopped.getCause() instanceof StructureCompat.Failure) {
+                return Drawn.refused(DraftRefusal.UNSUPPORTED_PAYLOAD);
+            }
+            if (stopped.kind() != ScriptFault.Kind.EVAL || !(stopped.getCause() instanceof EvalException)) {
+                throw stopped;
+            }
             DraftRefusal why = drawing.stoppedFor();
-            return new Drawn.Refused(why == null ? DraftRefusal.PATTERN_FAILED : why, stopped.getMessage(),
+            return new Drawn.Refused(why == null ? DraftRefusal.PATTERN_FAILED : why, stopped.location() == null ? stopped.detail() : stopped.location() + ": " + stopped.detail(),
                 drawing.explanation());
-        } catch (InterruptedException interrupted) {
-            Thread.currentThread().interrupt();
-            return Drawn.refused(DraftRefusal.PATTERN_FAILED, "interrupted");
         }
     }
 

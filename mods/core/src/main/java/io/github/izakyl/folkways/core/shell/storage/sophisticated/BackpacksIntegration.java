@@ -1,7 +1,7 @@
 package io.github.izakyl.folkways.core.shell.storage.sophisticated;
 
+import io.github.izakyl.folkways.core.facility.api.Ports;
 import io.github.izakyl.folkways.core.resident.api.KitProviders;
-import io.github.izakyl.folkways.core.inventory.api.port.StorePorts;
 import java.util.Optional;
 import net.minecraft.resources.ResourceLocation;
 import net.p3pp3rf1y.sophisticatedbackpacks.backpack.BackpackBlockEntity;
@@ -19,8 +19,8 @@ public final class BackpacksIntegration {
         SophisticatedWorkstations.install("sophisticated_backpacks", (level, pos) ->
             level.getBlockEntity(pos) instanceof BackpackBlockEntity storage
                 ? Optional.of(storage.getBackpackWrapper()) : Optional.empty());
-        StorePorts.register(ResourceLocation.fromNamespaceAndPath("folkways_core", "sophisticated_backpacks"),
-            StorePorts.SPECIFIC, (level, pos) -> level.getBlockEntity(pos) instanceof BackpackBlockEntity backpack
+        Ports.registerItem(ResourceLocation.fromNamespaceAndPath("folkways_core", "sophisticated_backpacks"),
+            Ports.SPECIFIC, (level, pos) -> level.getBlockEntity(pos) instanceof BackpackBlockEntity backpack
                 ? Optional.of(SophisticatedPort.create(level, pos, backpack.getBackpackWrapper(), () -> false))
                 : Optional.empty());
     }

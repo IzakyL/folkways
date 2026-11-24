@@ -4,14 +4,14 @@ import com.mojang.blaze3d.platform.InputConstants;
 import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.front.api.ui.ModeOverlays;
 import io.github.izakyl.folkways.core.front.api.ui.OverheadTools;
-import io.github.izakyl.folkways.core.front.engine.charter.CurrentColony;
-import io.github.izakyl.folkways.core.front.engine.item.BookGestures;
+import io.github.izakyl.folkways.core.colony.charter.CurrentColony;
 import io.github.izakyl.folkways.core.front.engine.item.HeldBook;
-import io.github.izakyl.folkways.core.front.engine.net.SetBookGesturePacket;
 import io.github.izakyl.folkways.core.front.engine.net.ToggleColonyMemberPacket;
 import io.github.izakyl.folkways.core.front.engine.net.ToggleColonyResidentPacket;
+import io.github.izakyl.folkways.core.front.engine.net.UseBookPacket;
 import io.github.izakyl.folkways.core.front.engine.net.ZoneSnapshot;
-import io.github.izakyl.folkways.core.front.ui.screen.Desk;
+import net.minecraft.core.BlockPos;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import net.minecraft.client.Minecraft;
@@ -72,9 +72,10 @@ public final class FolkwaysClientGameEvents {
         alternateDown = false;
         Overhead.forget();
         OverheadTools.reset();
+        BookTools.reset();
         ModeOverlays.reset();
-        Desk.forget();
         ShapePreview.clear();
+        ShapePreview.showConfirmation(List.of());
         HeldPlacement.clear();
         CurrentColony.forgetOnClient();
     }
@@ -85,11 +86,7 @@ public final class FolkwaysClientGameEvents {
         Minecraft minecraft = Minecraft.getInstance();
         Optional<UUID> colony = minecraft.player == null ? Optional.empty()
             : HeldBook.bound(minecraft.player).map(HeldBook::colonyId);
-        OverheadTools.all().forEach(tool -> tool.backgroundTick(colony));
-        if (OverheadTools.active().isPresent()) {
-            HeldBook.bound(Minecraft.getInstance().player).ifPresent(book ->
-                OverheadTools.active().orElseThrow().tick(book.colonyId()));
-        }
+        OverheadTools.marks().forEach(marks -> marks.tick(colony));
         ColonyHighlightState.tick();
         ZoneSelection.tick();
         PathSelection.tick();
@@ -112,23 +109,20 @@ public final class FolkwaysClientGameEvents {
         }
     }
 
-    /** The book's left click on whatever is aimed at, by its gesture. */
+    /** The book's left click on whatever is aimed at, by the gesture the book is turned to. */
     static boolean click(Minecraft minecraft) {
         Optional<HeldBook> book = HeldBook.bound(minecraft.player);
         if (book.isEmpty()) {
             return false;
         }
-        if (OverheadTools.active().isPresent()) {
-            return ZoneSelection.handleLeftClick();
-        }
         if (Overhead.on() && OverheadTools.selected().isPresent()) {
             return true;
         }
-        // A shape held to be set down takes the click, whatever the book's gesture.
+        // A shape held to be set down takes the click, whatever the book has picked.
         if (HeldPlacement.holding()) {
             return HeldPlacement.handleLeftClick();
         }
-        return switch (book.get().gesture()) {
+        return switch (BookTools.gesture()) {
             case POINT -> toggleMember(minecraft, book.get());
             case BOX -> ZoneSelection.handleLeftClick();
             case LINE -> PathSelection.handleLeftClick();
@@ -138,20 +132,33 @@ public final class FolkwaysClientGameEvents {
     /** The book used from the view from above, where the game's own use key does not reach it. */
     static boolean use(Minecraft minecraft) {
         Optional<HeldBook> book = HeldBook.bound(minecraft.player);
-        if (book.isEmpty() || minecraft.gameMode == null) {
+        if (book.isEmpty()) {
             return false;
-        }
-        if (OverheadTools.active().isPresent()) {
-            OverheadTools.active().orElseThrow().use(OverheadTools.box(), ToolOverlay.aimed());
-            return true;
         }
         if (Overhead.on() && OverheadTools.selected().isPresent()) {
             OverheadTools.selected().orElseThrow().open().run();
             return true;
         }
-        aimOpening(minecraft);
-        minecraft.gameMode.useItem(minecraft.player, book.get().hand());
+        useBook(minecraft, book.get());
         return true;
+    }
+
+    /**
+     * A whole shape drawn is handed over, asking what it becomes; otherwise what the colony holds where the book is
+     * aimed opens on its card, and anything else opens the colony's panel. A shape half drawn keeps the use key.
+     */
+    private static void useBook(Minecraft minecraft, HeldBook book) {
+        if (BookTools.hand() || BookTools.justHanded()) {
+            return;
+        }
+        if (BookTools.drafting()) {
+            return;
+        }
+        Aim aim = Aim.of(minecraft.player);
+        Optional<BlockPos> block = aim.block(minecraft.player).map(hit -> hit.getBlockPos().immutable());
+        Optional<UUID> holding = ZoneSelection.aimedZone(minecraft.player).map(ZoneSnapshot::id)
+            .or(() -> PathSelection.aimedPath(minecraft));
+        PacketDistributor.sendToServer(new UseBookPacket(book.colonyId(), block, holding));
     }
 
     private static boolean toggleMember(Minecraft minecraft, HeldBook book) {
@@ -171,24 +178,20 @@ public final class FolkwaysClientGameEvents {
         return true;
     }
 
+    // The bound book's use key is the book's own: the server is told what it was used on, not the block.
     @SubscribeEvent
     public static void onUse(InputEvent.InteractionKeyMappingTriggered event) {
         Minecraft minecraft = Minecraft.getInstance();
-        if (!event.isUseItem() || minecraft.screen != null || minecraft.player == null
-            || HeldBook.bound(minecraft.player).isEmpty()) {
+        if (!event.isUseItem() || minecraft.screen != null || minecraft.player == null) {
             return;
         }
-        aimOpening(minecraft);
-    }
-
-    // The zone or path aimed at is the one the panel opens on, unless something is being drawn.
-    private static void aimOpening(Minecraft minecraft) {
-        if (ZoneSelection.drafting() || PathSelection.drafting()) {
+        Optional<HeldBook> book = HeldBook.bound(minecraft.player);
+        if (book.isEmpty() || book.get().hand() != event.getHand()) {
             return;
         }
-        ZoneSelection.aimedZone(minecraft.player).map(ZoneSnapshot::id)
-            .or(() -> PathSelection.aimedPath(minecraft))
-            .ifPresent(ZoneSelection::openOn);
+        event.setCanceled(true);
+        event.setSwingHand(false);
+        useBook(minecraft, book.get());
     }
 
     @SubscribeEvent
@@ -202,30 +205,30 @@ public final class FolkwaysClientGameEvents {
         }
     }
 
-    /** The wheel turned with the book in hand: with sneak it changes the gesture, with the other keys it adjusts. */
+    /** The wheel turned with the book in hand: with sneak it turns the gesture, with the other keys it adjusts. */
     static boolean scroll(Minecraft minecraft, double delta) {
         Optional<HeldBook> book = HeldBook.any(minecraft.player);
         if (book.isEmpty()) {
             return false;
         }
-        if (Overhead.on() && OverheadTools.selected().isPresent() && OverheadTools.active().isEmpty()) {
+        if (Overhead.on() && OverheadTools.selected().isPresent()) {
+            return false;
+        }
+        if (book.get().colonyId() == null) {
             return false;
         }
         if (sneakDown(minecraft.player)) {
-            PacketDistributor.sendToServer(
-                new SetBookGesturePacket(book.get().hand(), BookGestures.next(book.get().gesture())));
+            // The wheel turned down turns the book on to its next gesture, as it walks on along the hotbar.
+            BookTools.cycleGesture(delta < 0.0D ? 1 : -1);
             return true;
         }
-        if (book.get().colonyId() == null || !(modifierDown || alternateDown)) {
+        if (!(modifierDown || alternateDown)) {
             return false;
-        }
-        if (OverheadTools.active().isPresent()) {
-            return ZoneSelection.handleScroll(delta);
         }
         if (HeldPlacement.holding()) {
             return HeldPlacement.handleScroll(delta, modifierDown, alternateDown);
         }
-        return switch (book.get().gesture()) {
+        return switch (BookTools.gesture()) {
             case POINT -> false;
             case BOX -> ZoneSelection.handleScroll(delta);
             case LINE -> PathSelection.handleScroll(delta);

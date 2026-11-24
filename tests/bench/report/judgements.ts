@@ -226,12 +226,12 @@ export const NEVER_HERE = new Set([
   "NO_ROOM_IN_THE_WORLD", "NOBODY_TAKES_ANYONE_IN", "HELD_ELSEWHERE", "NOBODY_WAITING", "NOT_ON_THE_ROSTER",
   "SITE_TOO_LARGE", "NOTHING_TO_BUILD_WITH", "NOTHING_DRAWN", "PATTERN_FAILED", "UNSUPPORTED_PAYLOAD",
   "INVALID_FILL", "ORDER_TOO_LARGE", "ORDER_UNAVAILABLE",
-  "NO_GROUND", "UNLOADED", "READ_TOO_FAR", "TIMED_OUT", "WRONG_MARK",
+  "NO_GROUND", "UNLOADED", "READ_TOO_FAR", "TIMED_OUT", "MEMORY_LIMIT", "WRONG_MARK", "JOINER_UNAVAILABLE",
   "NO_WATER", "SWITCHED_OFF",
   // The bench creates no protected volumes or damage-control incidents.
   "NO_REACH", "CONFLICT", "NOT_LOADED", "UNSUPPORTED", "BUSY",
   "STATION_CHANGED", "RECIPE_CHANGED", "NO_HEAT_SOURCE",
-  "UNSAFE_GROWTH_AREA", "AREA_CHANGED", "SOURCE_CHANGED", "OUT_OF_REACH",
+  "UNSAFE_GROWTH_AREA", "AREA_CHANGED", "SOURCE_CHANGED",
   "FOUNDER_ONLY", "NO_SUCH_PLAYER", "ALREADY_MEMBER", "NOT_MEMBER", "ALREADY_INVITED", "NOT_INVITED",
   "LAST_MEMBER", "KEPT_BY_TEAM", "TEAM_OWNER_ONLY", "NO_PARTY", "BAD_NAME",
   "TOO_LARGE", "SETTLED_FOR_GOOD",
@@ -239,15 +239,24 @@ export const NEVER_HERE = new Set([
   "MISSING_VOXELIZER",
   // The bench installs no cart lines.
   "NO_CART", "NO_HORSE", "NOT_HITCHED", "NOT_AT_STATION", "NOT_ABOARD", "NOWHERE_TO_PLACE",
-  // This fixture installs no AE2 or RS2 network and uses only safe stores with unrestricted admission.
-  "NO_DEVICE", "NO_STOCK", "CPU_BUSY", "TASK_BUSY", "CALCULATION_FAILED", "MISSING_INPUTS", "SUBMISSION_FAILED", "CANCELED",
+  // This fixture uses only safe stores with unrestricted admission.
   "NOT_ALLOWED", "UNUSABLE", "NOT_A_DEVICE", "LIMIT",
+  // The fixture enrols its stores and stations separately before work starts.
+  "FACILITY_PART",
+  // Standing orders are loaded with item IDs; only filing an empty order draft can refuse this way.
+  "NO_ITEM",
+  // The bench does not submit terminal requests or cancel them against live stock.
+  "NO_COUNT", "STANDING", "NOT_A_STORE", "NOT_A_MEMBER", "UNKNOWN", "NOT_ORDERABLE", "NO_MEMBER", "NO_REQUEST",
   // Only a player toggling a member behind a store proxy reaches this.
   "PROXY_MEMBER",
+  // The bench drives no colony facilities.
+  "GONE", "REFUSED", "UNSETTLED", "INVALID",
+  "POST_UNAVAILABLE", "SEQUENCE_STEPS", "SEQUENCE_STANCE", "POST_GOODS_MISSING",
+  "POSITION_RESPONSE", "POSITION_TRAVEL", "POSITION_UNREACHED", "SEQUENCE_INTERRUPTED",
 ]);
 
 export const PASSING = new Set([
-  // The new place-based planning stalls report shortages; they do not mean a task crashed.
+  // Place-based planning stalls report shortages; they do not mean a task crashed.
   "NO_SOURCE", "NO_ROOM_FOR", "NO_WAY_FOR", "NO_ONE_MAKES",
   "NOT_A_CONTAINER", "NOTHING_TO_TAKE", "NOTHING_CARRIED", "NO_ROOM",
   "PACK_FULL", "NOTHING_FREE",
@@ -256,6 +265,8 @@ export const PASSING = new Set([
   "BEAST_GONE", "NOT_FEEDABLE", "STILL_STANDING", "HERD_CHANGED",
   "NOTHING_TO_WORK",
   "EMPTYING_CONTAINER", "NO_ROOM_TO_EMPTY", "UNREADABLE_CONTAINER",
+  // A request can retry once the inventory scan has observed its destination.
+  "COUNTING",
   "CELL_NOT_LOADED",
   "NO_PORT", "NOTHING_ARRIVED", "NO_SUPPLY", "REQUEST_REJECTED", "SEAT_TAKEN", "SEAT_GONE", "NOT_PACKED", "PORT_FULL",
   "NOTHING_TO_MEND_WITH", "NOTHING_TO_EAT", "NOT_ON_THE_BOOKS",
@@ -269,6 +280,8 @@ export const PASSING = new Set([
   "WAITS_ON_ITSELF", "NO_ONE_FIT", "BEFORE_NOT_DONE", "OCCUPIED", "RUN_MISSED", "LINE_WITHDRAWN",
   // A carving requotes and retries when the world changed under its quote.
   "MATERIALS_CHANGED",
+  // Work skips a cell holding a facility rather than breaking it; a rider left by a vanished train is freed and replans.
+  "PROTECTED_FACILITY", "STRANDED",
   "NO_SOURCE", "NO_ROOM_FOR", "NO_WAY_FOR", "NO_ONE_MAKES",
 ]);
 

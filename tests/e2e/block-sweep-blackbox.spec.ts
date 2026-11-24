@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { defineTask, javaTask, tick } from "@izakyl/blockwright-minecraft";
 import { clickElement, panelElements, type Element } from "../ldlib2";
 import { commandPos, createColonyViaBook, isColonyMember, tryCommand, waitForGroundedPlayer } from "../shared/colony/colony-founding";
-import { markBox, openBookPage, setBookGesture } from "../shared/ui/zone-tools";
+import { chooseBookTool, markBox, useBook } from "../shared/ui/zone-tools";
 import { drainActionBar, readActionBar } from "../shared/ui/zone-receipt";
 import { settlePanel } from "../shared/ui/site-panel";
 import { launchPair, type E2EPair } from "../shared/harness/pair";
@@ -14,7 +14,7 @@ import { newRunId } from "../shared/harness/run-id";
 import { GROUND, around, twins, type Vec } from "../shared/harness/stage";
 
 const BOOK_ITEM = "folkways_core:colony_book";
-const OFFER = "folkways.zoneconfig.offer.folkways_core.sweep";
+const OFFER = "offer:folkways_core:sweep";
 const STORES = "folkways.sweep.kind.folkways_vanilla.store";
 const STATIONS = "folkways.sweep.kind.folkways_vanilla.station";
 const TAKE = "folkways.sweep.take";
@@ -35,7 +35,7 @@ const SWEEP_LEDGER = defineTask<{ player: string; cells: Vec[] }, SweepLedger>({
       "io.github.izakyl.folkways.core.colony.api.Colonies",
       "io.github.izakyl.folkways.core.colony.api.Claimed",
       "io.github.izakyl.folkways.core.world.api.WorldPos",
-      "io.github.izakyl.folkways.core.front.engine.charter.CurrentColony",
+      "io.github.izakyl.folkways.core.colony.charter.CurrentColony",
       "net.minecraft.core.BlockPos",
     ],
     body: `
@@ -102,7 +102,7 @@ const MIXED_SWEEPS = [
   ...twins().map(stage => ({ stage, config: stage.config, name: "composter",
     block: "minecraft:composter", owner: "folkways_vanilla:compost", title: "Composter" })),
   { stage: GROUND, config: "blockwright.toml#cookery", name: "cookery-stove",
-    block: "kaleidoscope_cookery:stove", owner: "folkways_cookery:stove", title: "Stove" },
+    block: "kaleidoscope_cookery:stove", owner: "folkways_vanilla:stove", title: "Stove" },
 ];
 
 for (const scene of MIXED_SWEEPS) test(scene.stage.title(`a mixed ${scene.name} point and chest box enrolls both shapes without taking another colony's members`), async ({}, testInfo) => {
@@ -159,12 +159,10 @@ for (const scene of MIXED_SWEEPS) test(scene.stage.title(`a mixed ${scene.name} 
 
     const pointToken = `folkways.sweep.kind.${scene.owner.replace(":", ".")}`;
     const open = async (corner: Vec, count: string, untick?: string) => {
-      await setBookGesture(server, client, playerName, "box");
+      await chooseBookTool(server, client, OFFER);
       const marked = await markBox(server, client, playerName, standAt, first, corner, stage);
       expect(marked.marked.text, "solid corner blocks define the mixed box").toMatch(/marked$/);
-      await openBookPage(server, client, playerName, origin, stage);
-      await waitForElement(client, { id: OFFER }, { timeoutMs: 8_000 });
-      await clickElement(client, { id: OFFER });
+      await useBook(client);
       await settlePanel(server, client);
       await waitForElement(client, { id: pointToken }, { timeoutMs: 8_000 });
       await waitForElement(client, { id: STORES }, { timeoutMs: 8_000 });

@@ -232,7 +232,7 @@ def draw(site):
             break
         run = run.rotate(1)
     run = run.sized(height = 1).at(y = -run.origin.y)
-    band = run.sized(width = width, anchor = "center", parity = "low")
+    band = run.sized(width = width, anchor = "center", parity = "world_low")
     span = band.depth - 1
     seen = {}
     middle = (width - 1) // 2

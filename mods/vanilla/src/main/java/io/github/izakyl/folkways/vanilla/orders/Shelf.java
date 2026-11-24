@@ -70,14 +70,6 @@ record Shelf(WorldPos into, Optional<Admitting> admitting, boolean take, boolean
         return new Shelf(into, next, take, store);
     }
 
-    Shelf toggle(String mode) {
-        return switch (mode) {
-            case "take" -> new Shelf(into, admitting, !take, store);
-            case "store" -> new Shelf(into, admitting, take, !store);
-            default -> throw new IllegalArgumentException(mode);
-        };
-    }
-
     boolean bare() {
         return admitting.isEmpty() && take && store;
     }

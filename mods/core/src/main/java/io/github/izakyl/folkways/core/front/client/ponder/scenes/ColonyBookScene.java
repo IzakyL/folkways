@@ -28,7 +28,7 @@ public final class ColonyBookScene {
     }
 
     public static void program(SceneBuilder scene, SceneBuildingUtil util) {
-        scene.title("colony_book", "A colony is the blocks you mark");
+        scene.title("colony_book", "A colony is the blocks you take in");
         PonderScenery.openWorld(scene, util, PLATE);
         PonderScenery.grassGround(scene, util, PLATE);
 
@@ -56,7 +56,7 @@ public final class ColonyBookScene {
 
         scene.overlay()
             .showText(70)
-            .text("A colony book is crafted from a plain book. It is how you reach your colonies, not what makes them yours.")
+            .text("Craft a Colony Book from a plain book. It opens your colonies; losing it loses nothing.")
             .pointAt(ground)
             .attachKeyFrame();
         scene.idle(80);
@@ -65,14 +65,14 @@ public final class ColonyBookScene {
         scene.idle(55);
         scene.overlay()
             .showText(100)
-            .text("A right click opens the colony panel. Before you keep any colony it offers one button, New Colony. Press it, and you are the new colony's founder.")
+            .text("Right-click to open the book. With no colony yet, click New Colony to found one.")
             .pointAt(ground)
             .attachKeyFrame();
         scene.idle(110);
 
         scene.overlay()
             .showText(60)
-            .text("The colony goes with you, not the book: any colony book opens it. Click the title of the panel to switch between your colonies, or to found another.")
+            .text("The colony belongs to you, not the book: any Colony Book opens it. Click the title to switch colonies or found another.")
             .pointAt(ground)
             .attachKeyFrame();
         scene.idle(70);
@@ -82,7 +82,7 @@ public final class ColonyBookScene {
         scene.overlay().showOutline(PonderPalette.GREEN, "storage", chestArea, 70);
         scene.overlay()
             .showText(70)
-            .text("Left click a chest with the book and it joins the colony as storage. Click it again to take it back out.")
+            .text("Left-click a chest with the book to add it as storage. Click again to remove it.")
             .pointAt(util.vector().blockSurface(chest, Direction.SOUTH))
             .placeNearTarget()
             .attachKeyFrame();
@@ -97,7 +97,7 @@ public final class ColonyBookScene {
         scene.overlay().showOutline(PonderPalette.GREEN, "sites", sites, 90);
         scene.overlay()
             .showText(90)
-            .text("Besides containers, only blocks some part of Folkways puts to use can join: a work station, a bed. What each is for is shown where it is used.")
+            .text("Besides containers, you can take in blocks the colony uses, such as work stations and beds.")
             .pointAt(util.vector().topOf(table))
             .placeNearTarget()
             .attachKeyFrame();
@@ -108,7 +108,7 @@ public final class ColonyBookScene {
         scene.overlay().showOutline(PonderPalette.RED, "refused", refused, 70);
         scene.overlay()
             .showText(70)
-            .text("Anything else is refused: the colony has no use for it.")
+            .text("Other blocks are refused.")
             .pointAt(util.vector().blockSurface(log, Direction.WEST))
             .placeNearTarget()
             .attachKeyFrame();
@@ -122,7 +122,7 @@ public final class ColonyBookScene {
         scene.idle(35);
         scene.overlay()
             .showText(80)
-            .text("Bodies take the same click. Pointed at one of your own residents, it lets them go.")
+            .text("Creatures work the same way. Click one of your residents to let them go.")
             .pointAt(resident.at().add(0, 1.8, 0))
             .placeNearTarget()
             .attachKeyFrame();
@@ -131,7 +131,7 @@ public final class ColonyBookScene {
         scene.overlay().showOutline(PonderPalette.GREEN, "storage", chestArea.copy().add(sites), 100);
         scene.overlay()
             .showText(100)
-            .text("A colony is not a patch of ground you fence off. It is the blocks you marked yourself.")
+            .text("A colony is not fenced-off land. It is the blocks you took in.")
             .pointAt(ground)
             .attachKeyFrame();
         scene.idle(110);

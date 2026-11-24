@@ -5,15 +5,15 @@ import { defineTask, javaTask, type MinecraftServer, type TaskTemplate } from "@
 
 const IMPORTS = [
   "io.github.izakyl.folkways.core.colony.api.Colony",
-  "io.github.izakyl.folkways.core.shell.neoforge.FolkwaysAttachments",
+  "io.github.izakyl.folkways.core.resident.internal.FolkwaysAttachments",
   "io.github.izakyl.folkways.core.front.engine.colony.ColonyGround",
   "io.github.izakyl.folkways.core.front.engine.colony.Endorsements",
   "io.github.izakyl.folkways.core.front.engine.colony.MemberToggle",
-  "io.github.izakyl.folkways.core.front.engine.charter.Charters",
-  "io.github.izakyl.folkways.core.front.engine.charter.CurrentColony",
+  "io.github.izakyl.folkways.core.colony.charter.Charters",
+  "io.github.izakyl.folkways.core.colony.charter.CurrentColony",
   "io.github.izakyl.folkways.core.front.engine.item.ColonyBookItem",
-  "io.github.izakyl.folkways.core.front.api.notice.Attempt",
-  "io.github.izakyl.folkways.core.front.api.notice.Notice",
+  "io.github.izakyl.folkways.core.card.api.notice.Attempt",
+  "io.github.izakyl.folkways.core.card.api.notice.Notice",
   "io.github.izakyl.folkways.vanilla.person.PersonBody",
   "io.github.izakyl.folkways.vanilla.person.PersonContent",
   "net.minecraft.core.BlockPos",
@@ -181,14 +181,18 @@ if (presence == null) {
 Object queue = open(presence.getClass().getDeclaredField("settlers")).get(presence);
 java.lang.reflect.Field waiting = open(queue.getClass().getDeclaredField("waiting"));
 int cap = ((Number) open(queue.getClass().getDeclaredMethod("cap")).invoke(queue)).intValue();
-int seeded = Math.min(Math.max(0, want), cap);
-waiting.setInt(queue, seeded);
+boolean creative = player.isCreative();
+int target = Math.min(Math.max(0, want), cap);
+int seeded = creative ? 0 : target;
+if (!creative) {
+    waiting.setInt(queue, seeded);
+}
 
 ResourceLocation kind = PersonBody.ID;
 List<Object> rounds = new ArrayList<Object>();
 int admitted = 0;
 boolean pending = false;
-for (int round = 0; round < seeded; round++) {
+for (int round = 0; round < target; round++) {
     Attempt attempt = Endorsements.called(level, colony, player, kind);
     String refusal = refusalKey(attempt);
     Map<String, Object> one = new LinkedHashMap<String, Object>();
@@ -216,8 +220,8 @@ out.put("pending", Boolean.valueOf(pending));
 out.put("waiting_left", Integer.valueOf(waiting.getInt(queue)));
 out.put("roster", Integer.valueOf(colony.residents().size()));
 out.put("rounds", rounds);
-if (admitted != seeded && !pending) {
-    throw new TaskException("refused", "admitted " + admitted + " of " + seeded + " settlers", out);
+if (admitted != target && !pending) {
+    throw new TaskException("refused", "admitted " + admitted + " of " + target + " settlers", out);
 }
 return Sync.stamp(out);
 `,

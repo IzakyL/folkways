@@ -52,7 +52,7 @@ const IMPORTS = [
   "io.github.izakyl.folkways.vanilla.person.PersonContent",
   "io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutProfiles",
   "io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutProfile",
-  "io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutRegistry",
+  "io.github.izakyl.folkways.core.combat.api.Loadouts",
   "io.github.izakyl.folkways.vanilla.patrol.SentryPosts",
   "io.github.izakyl.folkways.vanilla.patrol.PatrolStaffing",
   "net.minecraft.core.BlockPos",
@@ -70,7 +70,7 @@ const IMPORTS = [
   "com.atsuishio.superbwarfare.data.gun.GunProp",
   "com.atsuishio.superbwarfare.entity.vehicle.base.VehicleEntity",
   "com.atsuishio.superbwarfare.entity.vehicle.MortarEntity",
-  "io.github.izakyl.folkways.firearms.warfare.WarfareStations",
+  "io.github.izakyl.folkways.vanilla.warfare.WarfareStations",
 ];
 
 const CAST = defineTask<Record<string, any>, any>({
@@ -137,7 +137,7 @@ if (station) {
     var data = GunData.from(gun);
     ammo = data.selectedAmmoConsumer().stack().copyWithCount(64);
 }
-var provider = LoadoutRegistry.using(gun).orElseThrow();
+var provider = Loadouts.using(gun).orElseThrow();
 var profiles = LoadoutProfiles.of(colony);
 var profile = profiles.create("Promo " + id);
 profiles.replace(new LoadoutProfile(profile.id(), profile.name(), List.of(

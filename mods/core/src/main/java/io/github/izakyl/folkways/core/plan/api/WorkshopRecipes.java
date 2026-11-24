@@ -9,7 +9,10 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
+import java.util.function.Function;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.level.ServerLevel;
 
@@ -23,7 +26,18 @@ public final class WorkshopRecipes {
         }
     }
 
+    private static Function<Refinement.Change, Optional<Refinement.Change>> expander;
+
     private WorkshopRecipes() {
+    }
+
+    public static void install(Function<Refinement.Change, Optional<Refinement.Change>> installed) {
+        expander = Objects.requireNonNull(installed);
+    }
+
+    /** Expands a workshop offer into concrete work and retains its reservations. */
+    public static Optional<Refinement.Change> prepare(Refinement.Change offer) {
+        return expander.apply(offer);
     }
 
     public static Set<ItemSpec> products(ServerLevel level) {

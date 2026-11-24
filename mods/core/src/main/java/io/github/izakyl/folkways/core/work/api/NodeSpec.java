@@ -4,6 +4,7 @@ import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import io.github.izakyl.folkways.core.resident.api.Doing;
 import io.github.izakyl.folkways.core.resident.api.Doings;
 import io.github.izakyl.folkways.core.vocation.api.Vocation;
+import io.github.izakyl.folkways.core.world.api.Stances;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;

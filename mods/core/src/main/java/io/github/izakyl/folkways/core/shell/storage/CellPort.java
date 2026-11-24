@@ -1,16 +1,17 @@
 package io.github.izakyl.folkways.core.shell.storage;
 
-import io.github.izakyl.folkways.core.inventory.api.SlotSnapshot;
-import io.github.izakyl.folkways.core.inventory.api.StoreRule;
-import io.github.izakyl.folkways.core.inventory.api.port.PortIdentity;
-import io.github.izakyl.folkways.core.inventory.api.port.PortReader;
-import io.github.izakyl.folkways.core.inventory.api.port.Pull;
-import io.github.izakyl.folkways.core.inventory.api.port.Room;
-import io.github.izakyl.folkways.core.inventory.api.port.StorePort;
-import io.github.izakyl.folkways.core.inventory.api.port.StorePorts;
-import io.github.izakyl.folkways.core.inventory.api.port.TransferResult;
-import io.github.izakyl.folkways.core.inventory.api.port.Usability;
+import io.github.izakyl.folkways.core.facility.api.control.TransformHint;
+import io.github.izakyl.folkways.core.facility.api.control.SlotWindow;
+import io.github.izakyl.folkways.core.facility.api.Ports;
+import io.github.izakyl.folkways.core.facility.api.control.SlotSnapshot;
+import io.github.izakyl.folkways.core.facility.api.control.PortIdentity;
+import io.github.izakyl.folkways.core.facility.api.control.PortReader;
+import io.github.izakyl.folkways.core.facility.api.control.Pull;
+import io.github.izakyl.folkways.core.facility.api.control.Room;
+import io.github.izakyl.folkways.core.facility.api.control.ItemPort;
+import io.github.izakyl.folkways.core.facility.api.control.TransferResult;
 import io.github.izakyl.folkways.core.item.api.Goods;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.HashMap;
@@ -29,7 +30,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 
 /** Native cells with audited setters: plan the entire batch on copies before touching any live cell. */
-public class CellPort implements StorePort {
+public class CellPort implements ItemPort {
 
     public interface Cell {
 
@@ -65,21 +66,26 @@ public class CellPort implements StorePort {
 
     private final PortIdentity identity;
     private final List<Cell> cells;
-    private final Supplier<Usability> verdict;
+    private final Supplier<StorageTraits> traits;
     private final boolean slots;
     private final LongSupplier settingsRevision;
 
-    public CellPort(PortIdentity identity, List<Cell> cells, Supplier<Usability> verdict, boolean slots) {
-        this(identity, cells, verdict, slots, () -> 0L);
+    public CellPort(PortIdentity identity, List<Cell> cells, Supplier<StorageTraits> traits, boolean slots) {
+        this(identity, cells, traits, slots, () -> 0L);
     }
 
-    public CellPort(PortIdentity identity, List<Cell> cells, Supplier<Usability> verdict, boolean slots,
+    public CellPort(PortIdentity identity, List<Cell> cells, Supplier<StorageTraits> traits, boolean slots,
                     LongSupplier settingsRevision) {
         this.identity = identity;
         this.cells = List.copyOf(cells);
-        this.verdict = verdict;
+        this.traits = traits;
         this.slots = slots;
         this.settingsRevision = settingsRevision;
+    }
+
+    @Override
+    public WorldPos anchor() {
+        return identity().home();
     }
 
     @Override
@@ -88,9 +94,13 @@ public class CellPort implements StorePort {
     }
 
     @Override
-    public Usability usability() {
-        return StorePorts.condemned(identity.home()).<Usability>map(reason -> new Usability.Unusable(reason, true))
-            .orElseGet(verdict);
+    public Optional<Component> unavailable(ServerLevel level) {
+        return traits.get().unavailable();
+    }
+
+    @Override
+    public List<TransformHint> transforms() {
+        return traits.get().transforms();
     }
 
     @Override
@@ -100,9 +110,9 @@ public class CellPort implements StorePort {
 
     @Override
     public OptionalLong revision() {
-        Usability current = usability();
+        StorageTraits current = traits.get();
         long signature = 31L * current.hashCode() + settingsRevision.getAsLong();
-        if (!current.usable()) {
+        if (current.unavailable().isPresent()) {
             return OptionalLong.of(signature);
         }
         // Native IO can change an unregistered network member, away from this access point's change events.
@@ -118,13 +128,12 @@ public class CellPort implements StorePort {
         return OptionalLong.of(signature);
     }
 
-    private boolean accessible(int index, List<StoreRule> rules) {
-        return cells.get(index).accessible() && rules.stream().allMatch(rule -> !(rule instanceof StoreRule.Slots range)
-            || index >= range.from() && index < range.to());
+    private boolean accessible(int index, Optional<SlotWindow> window) {
+        return cells.get(index).accessible() && window.map(range -> range.contains(index)).orElse(true);
     }
 
     @Override
-    public PortReader reader(ServerLevel level, List<StoreRule> rules) {
+    public PortReader reader(ServerLevel level, Optional<SlotWindow> window) {
         return new PortReader() {
             private final List<Entry> entries = new ArrayList<>();
             private final List<SlotSnapshot> snapshots = new ArrayList<>();
@@ -143,7 +152,7 @@ public class CellPort implements StorePort {
                 if (finished) {
                     return true;
                 }
-                if (!usability().usable()) {
+                if (!valid(level)) {
                     reading = new PortReading(List.of(), Optional.empty(), Room.NONE, Set.of(), false);
                     finished = true;
                     return true;
@@ -151,7 +160,7 @@ public class CellPort implements StorePort {
                 while (cursor < cells.size() && budget-- > 0) {
                     int index = cursor++;
                     Cell cell = cells.get(index);
-                    if (!accessible(index, rules)) {
+                    if (!accessible(index, window)) {
                         continue;
                     }
                     available.add(cell);
@@ -215,12 +224,9 @@ public class CellPort implements StorePort {
     }
 
     @Override
-    public TransferResult take(ServerLevel level, List<Pull> requested, List<StoreRule> rules, boolean simulate) {
-        if (!usability().usable()) {
+    public TransferResult take(ServerLevel level, List<Pull> requested, Optional<SlotWindow> window, boolean simulate) {
+        if (!valid(level)) {
             return new TransferResult.Refused(TransferResult.Why.UNUSABLE);
-        }
-        if (!StoreRule.takes(rules)) {
-            return new TransferResult.Refused(TransferResult.Why.NOT_ALLOWED);
         }
         List<State> before = snapshot();
         List<State> after = new ArrayList<>(before);
@@ -230,7 +236,7 @@ public class CellPort implements StorePort {
                 : ((Pull.Matching) pull).count();
             for (int i = 0; i < cells.size() && remaining > 0; i++) {
                 State state = after.get(i);
-                if (!accessible(i, rules) || state.count == 0 || !cells.get(i).extracts(state.prototype)) {
+                if (!accessible(i, window) || state.count == 0 || !cells.get(i).extracts(state.prototype)) {
                     continue;
                 }
                 boolean matches = pull instanceof Pull.Exact exact
@@ -258,14 +264,9 @@ public class CellPort implements StorePort {
     }
 
     @Override
-    public TransferResult put(ServerLevel level, List<ItemStack> goods, List<StoreRule> rules,
-                              boolean directed, boolean simulate) {
-        if (!usability().usable()) {
+    public TransferResult put(ServerLevel level, List<ItemStack> goods, Optional<SlotWindow> window, boolean simulate) {
+        if (!valid(level)) {
             return new TransferResult.Refused(TransferResult.Why.UNUSABLE);
-        }
-        if (!directed && (!StoreRule.stores(rules)
-                || goods.stream().anyMatch(stack -> !StoreRule.admits(rules, stack)))) {
-            return new TransferResult.Refused(TransferResult.Why.NOT_ALLOWED);
         }
         List<State> before = snapshot();
         List<State> after = new ArrayList<>(before);
@@ -276,7 +277,7 @@ public class CellPort implements StorePort {
                 for (int i = 0; i < cells.size() && remaining > 0; i++) {
                     Cell cell = cells.get(i);
                     State state = after.get(i);
-                    if (!accessible(i, rules) || !cell.accepts(stack) || (pass == 0) == state.prototype.isEmpty()
+                    if (!accessible(i, window) || !cell.accepts(stack) || (pass == 0) == state.prototype.isEmpty()
                         || state.prototype.isEmpty() && cell.locked()
                         || !state.prototype.isEmpty() && !ItemStack.isSameItemSameComponents(state.prototype, stack)) {
                         continue;
@@ -311,10 +312,10 @@ public class CellPort implements StorePort {
                 State state = before.get(i);
                 cells.get(i).write(state.prototype, state.count);
             }
-            StorePorts.condemn(level, identity.home(), Component.translatable("folkways.storage.unusable.changed"));
+            Ports.observe(level, identity.home(), Component.translatable("folkways.storage.unusable.changed"));
             return new TransferResult.Refused(TransferResult.Why.UNUSABLE);
         }
-        StorePorts.changed(level, identity.home().block(level));
+        Ports.changed(level, identity.home().block(level));
         return new TransferResult.Done(moved);
     }
 

@@ -14,6 +14,12 @@ import net.minecraft.resources.ResourceLocation;
 public final class Keeps implements ColonyChangeSource {
 
     private final Map<ResourceLocation, CompoundTag> bags = new LinkedHashMap<>();
+    private final Map<ResourceLocation, Long> revisions = new LinkedHashMap<>();
+    private long revision;
+
+    public synchronized long revision(ResourceLocation owner) {
+        return revisions.getOrDefault(owner, 0L);
+    }
 
     private Runnable dirtyListener = () -> {
     };
@@ -29,7 +35,12 @@ public final class Keeps implements ColonyChangeSource {
     }
 
     public synchronized void keep(ResourceLocation owner, CompoundTag bag) {
+        CompoundTag previous = bags.get(owner);
+        if (bag.equals(previous) || previous == null && bag.isEmpty()) {
+            return;
+        }
         bags.put(owner, bag.copy());
+        revisions.put(owner, ++revision);
         dirtyListener.run();
     }
 
@@ -51,7 +62,10 @@ public final class Keeps implements ColonyChangeSource {
     }
 
     synchronized void relocate(Map<WorldPos, WorldPos> moved) {
-        bags.replaceAll((owner, bag) -> remap(bag, moved));
+        bags.replaceAll((owner, bag) -> {
+            revisions.put(owner, ++revision);
+            return remap(bag, moved);
+        });
         dirtyListener.run();
     }
 
@@ -84,6 +98,7 @@ public final class Keeps implements ColonyChangeSource {
     }
 
     synchronized void clear() {
+        bags.keySet().forEach(owner -> revisions.put(owner, ++revision));
         bags.clear();
         dirtyListener.run();
     }
@@ -95,10 +110,12 @@ public final class Keeps implements ColonyChangeSource {
     }
 
     synchronized void load(Reader reader) {
+        bags.keySet().forEach(owner -> revisions.put(owner, ++revision));
         bags.clear();
         for (String key : reader.keys()) {
             ResourceLocation owner = ResourceLocation.parse(key);
             bags.put(owner, reader.blob(key).orElseThrow());
+            revisions.put(owner, ++revision);
         }
     }
 }

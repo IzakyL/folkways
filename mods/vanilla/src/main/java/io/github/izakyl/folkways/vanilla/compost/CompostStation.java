@@ -10,14 +10,12 @@ import io.github.izakyl.folkways.core.work.api.Need;
 import io.github.izakyl.folkways.core.work.api.Node;
 import io.github.izakyl.folkways.core.work.api.NodeSpec;
 import io.github.izakyl.folkways.core.work.api.Outcome;
-import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.world.api.Stances;
 import io.github.izakyl.folkways.core.work.api.WorkGesture;
 import io.github.izakyl.folkways.core.work.api.WorkSite;
 import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.core.work.api.Workload;
 import io.github.izakyl.folkways.core.work.support.Leaves;
-import io.github.izakyl.folkways.core.work.support.WorkStances;
-import io.github.izakyl.folkways.core.world.api.Reach;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.core.world.api.WorldSpaces;
 import io.github.izakyl.folkways.vanilla.farming.FarmingContent;
@@ -147,6 +145,9 @@ public final class CompostStation {
     }
 
     public Component status(ServerLevel level, WorldPos at) {
+        if (!at.in(level) || !level.isLoaded(at.block(level))) {
+            return Component.empty();
+        }
         BlockState state = level.getBlockState(at.block(level));
         return Component.translatable(matches(state) && state.getValue(ComposterBlock.LEVEL) == 7
             ? "folkways.compost.status.maturing" : "folkways.compost.status.active");
@@ -205,11 +206,7 @@ public final class CompostStation {
         public Outcome commit(ServerLevel level, Worker who) {
             if (!at.in(level) || bookings.cancelled(at, id(), generation) || !bookings.first(at, id())
                     || io.github.izakyl.folkways.core.resident.api.Bodies.of(who.body())
-                        .filter(body -> body.licences().of(FarmingContent.trade()).isPresent()).isEmpty()
-                    || !WorkStances.stanceHolding(who.body(), spec.stances())
-                        .flatMap(feet -> WorldSpaces.storage(level, new WorldPos(at.realm(), feet)))
-                        .filter(feet -> Reach.withinReach(feet, at.block(level))
-                            && Reach.inSight(level, feet, at.block(level))).isPresent()) {
+                        .filter(body -> body.licences().of(FarmingContent.trade()).isPresent()).isEmpty()) {
                 return Outcome.failed(CompostRefusal.STATION_CHANGED);
             }
             BlockState before = level.getBlockState(at.block(level));

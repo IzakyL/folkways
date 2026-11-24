@@ -44,6 +44,8 @@ public final class Overhead {
     private static final double BLOCKS_A_NOTCH = 4.0D;
     private static final float DEGREES_A_PIXEL = 0.3F;
     private static final double STAND_OFF = 20.0D;
+    // How close to the window's edge, in screen pixels, the pointer pans the camera.
+    private static final double EDGE = 3.0D;
 
     /** The game's own HUD of a body that is not being played from here. */
     private static final Set<ResourceLocation> BODY_HUD = Set.of(VanillaGuiLayers.CROSSHAIR, VanillaGuiLayers.HOTBAR,
@@ -223,11 +225,27 @@ public final class Overhead {
         if (!on()) {
             return;
         }
-        // Told from the keys' own events as well as asked of the window: a screen has the keyboard here.
-        double ahead = (Pressed.held(minecraft.options.keyUp) ? 1.0D : 0.0D)
-            - (Pressed.held(minecraft.options.keyDown) ? 1.0D : 0.0D);
-        double aside = (Pressed.held(minecraft.options.keyRight) ? 1.0D : 0.0D)
-            - (Pressed.held(minecraft.options.keyLeft) ? 1.0D : 0.0D);
+        double ahead;
+        double aside;
+        if (edgeScroll()) {
+            // The pointer at the screen's edge or the arrow keys pan; W, A, S and D are left to the tools.
+            Window window = minecraft.getWindow();
+            long handle = window.getWindow();
+            double x = minecraft.mouseHandler.xpos();
+            double y = minecraft.mouseHandler.ypos();
+            boolean inside = minecraft.isWindowActive() && x >= 0 && y >= 0
+                && x < window.getScreenWidth() && y < window.getScreenHeight();
+            ahead = (arrow(handle, GLFW.GLFW_KEY_UP) || inside && y < EDGE ? 1.0D : 0.0D)
+                - (arrow(handle, GLFW.GLFW_KEY_DOWN) || inside && y >= window.getScreenHeight() - EDGE ? 1.0D : 0.0D);
+            aside = (arrow(handle, GLFW.GLFW_KEY_RIGHT) || inside && x >= window.getScreenWidth() - EDGE ? 1.0D : 0.0D)
+                - (arrow(handle, GLFW.GLFW_KEY_LEFT) || inside && x < EDGE ? 1.0D : 0.0D);
+        } else {
+            // Told from the keys' own events as well as asked of the window: a screen has the keyboard here.
+            ahead = (Pressed.held(minecraft.options.keyUp) ? 1.0D : 0.0D)
+                - (Pressed.held(minecraft.options.keyDown) ? 1.0D : 0.0D);
+            aside = (Pressed.held(minecraft.options.keyRight) ? 1.0D : 0.0D)
+                - (Pressed.held(minecraft.options.keyLeft) ? 1.0D : 0.0D);
+        }
         double climb =
             (Pressed.held(minecraft.options.keyJump) ? 1.0D : 0.0D)
             - (Pressed.held(minecraft.options.keyShift)
@@ -252,6 +270,15 @@ public final class Overhead {
         }
     }
 
+    /** Whether the camera pans at the screen's edge and with the arrow keys rather than with W, A, S and D. */
+    public static boolean edgeScroll() {
+        return io.github.izakyl.folkways.core.FolkwaysClientConfig.edgeScrollCamera();
+    }
+
+    private static boolean arrow(long window, int key) {
+        return com.mojang.blaze3d.platform.InputConstants.isKeyDown(window, key);
+    }
+
     /** Moves the camera along its own line of sight, nearer what it looks at or farther off. */
     static void dolly(double notches) {
         if (on()) {
@@ -268,7 +295,7 @@ public final class Overhead {
     }
 
     /** Brings the camera, turned as it is, to where the spot is in the middle of its view. */
-    static void lookAt(Vec3 spot) {
+    public static void lookAt(Vec3 spot) {
         if (on()) {
             place(spot.subtract(eye.getLookAngle().scale(STAND_OFF)), eye.getYRot(), eye.getXRot());
             if (tacticalControls()) {

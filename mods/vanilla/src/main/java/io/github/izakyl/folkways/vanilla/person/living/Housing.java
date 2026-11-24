@@ -3,6 +3,7 @@ package io.github.izakyl.folkways.vanilla.person.living;
 import java.util.Optional;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.BlockGetter;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.BedBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BedPart;
@@ -22,10 +23,16 @@ public final class Housing {
             return Optional.empty();
         }
         BlockPos head = pos.relative(BedBlock.getConnectedDirection(state));
+        if (level instanceof Level world && !world.isLoaded(head)) {
+            return Optional.empty();
+        }
         return isBed(level.getBlockState(head)) ? Optional.of(head) : Optional.empty();
     }
 
     static BlockPos sleepingCell(BlockGetter level, BlockPos pos) {
+        if (level instanceof Level world && !world.isLoaded(pos)) {
+            return pos;
+        }
         BlockState state = level.getBlockState(pos);
         if (isBed(state) && state.getValue(BedBlock.PART) == BedPart.HEAD) {
             return pos.relative(state.getValue(BedBlock.FACING).getOpposite());

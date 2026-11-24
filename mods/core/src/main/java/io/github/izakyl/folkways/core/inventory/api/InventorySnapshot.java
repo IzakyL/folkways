@@ -1,8 +1,9 @@
 package io.github.izakyl.folkways.core.inventory.api;
 
-import io.github.izakyl.folkways.core.inventory.api.port.PortReader.Entry;
-import io.github.izakyl.folkways.core.inventory.api.port.Room;
-import io.github.izakyl.folkways.core.inventory.api.port.StorePort.Operation;
+import io.github.izakyl.folkways.core.facility.api.control.SlotSnapshot;
+import io.github.izakyl.folkways.core.facility.api.control.PortReader.Entry;
+import io.github.izakyl.folkways.core.facility.api.control.Room;
+import io.github.izakyl.folkways.core.facility.api.control.Port.Operation;
 import io.github.izakyl.folkways.core.inventory.api.port.Usability;
 import io.github.izakyl.folkways.core.world.api.Stand;
 import io.github.izakyl.folkways.core.world.api.WorldPos;

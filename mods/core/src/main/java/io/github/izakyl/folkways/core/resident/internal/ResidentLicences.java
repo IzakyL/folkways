@@ -16,6 +16,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Supplier;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -33,10 +34,23 @@ public final class ResidentLicences implements Licences {
     private final Set<Vocation> withheld = new LinkedHashSet<>();
     private final Set<Vocation> enabled = new LinkedHashSet<>();
     private final Map<Vocation, Keenness> keenness = new LinkedHashMap<>();
-    private volatile long revision = REVISIONS.incrementAndGet();
+    private volatile long revision;
+    private Supplier<Licences> existing;
+    private Supplier<Licences> assign;
 
     public ResidentLicences(ResourceLocation body) {
         this.body = body;
+    }
+
+    public ResidentLicences(ResourceLocation body, Supplier<Licences> existing, Supplier<Licences> assign) {
+        this(body);
+        this.existing = existing;
+        this.assign = assign;
+    }
+
+    private ResidentLicences state() {
+        Licences licences = existing == null ? null : existing.get();
+        return licences == null ? this : (ResidentLicences) licences;
     }
 
     public Optional<Trade> trade(Vocation vocation) {
@@ -53,8 +67,8 @@ public final class ResidentLicences implements Licences {
 
     public boolean allows(Trade trade) {
         return stands(trade.vocation().id()) == Participation.ALWAYS
-            || !withheld.contains(trade.vocation())
-                && (trade.vocation().defaultAllowed() || enabled.contains(trade.vocation()));
+            || !state().withheld.contains(trade.vocation())
+                && (trade.vocation().defaultAllowed() || state().enabled.contains(trade.vocation()));
     }
 
     private Participation stands(ResourceLocation vocation) {
@@ -62,6 +76,10 @@ public final class ResidentLicences implements Licences {
     }
 
     public void allow(Trade trade, boolean allowed) {
+        if (assign != null) {
+            assign.get().allow(trade, allowed);
+            return;
+        }
         if (allowed) {
             withheld.remove(trade.vocation());
             if (!trade.vocation().defaultAllowed()) {
@@ -75,16 +93,20 @@ public final class ResidentLicences implements Licences {
     }
 
     public Keenness keennessOf(Trade trade) {
-        return keenness.getOrDefault(trade.vocation(), trade.vocation().defaultPriority());
+        return state().keenness.getOrDefault(trade.vocation(), trade.vocation().defaultPriority());
     }
 
     public void setKeenness(Trade trade, Keenness how) {
+        if (assign != null) {
+            assign.get().setKeenness(trade, how);
+            return;
+        }
         keenness.put(trade.vocation(), how);
         touched();
     }
 
     public long revision() {
-        return revision;
+        return state().revision;
     }
 
     private void touched() {
@@ -93,6 +115,9 @@ public final class ResidentLicences implements Licences {
 
     @Override
     public CompoundTag serializeNBT(HolderLookup.Provider provider) {
+        if (state() != this) {
+            return state().serializeNBT(provider);
+        }
         CompoundTag tag = new CompoundTag();
         ListTag off = new ListTag();
         withheld.forEach(vocation -> off.add(StringTag.valueOf(vocation.id().toString())));
@@ -108,6 +133,10 @@ public final class ResidentLicences implements Licences {
 
     @Override
     public void deserializeNBT(HolderLookup.Provider provider, CompoundTag tag) {
+        if (assign != null) {
+            assign.get().deserializeNBT(provider, tag);
+            return;
+        }
         withheld.clear();
         enabled.clear();
         keenness.clear();

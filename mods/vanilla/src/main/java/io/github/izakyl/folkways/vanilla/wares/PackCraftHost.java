@@ -10,7 +10,7 @@ import io.github.izakyl.folkways.core.plan.api.Produce;
 import io.github.izakyl.folkways.core.plan.api.Refinement;
 import io.github.izakyl.folkways.core.plan.api.Workshop;
 import io.github.izakyl.folkways.core.work.api.Need;
-import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.world.api.Stances;
 import io.github.izakyl.folkways.core.work.api.WorkSite;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
 import java.util.ArrayList;
@@ -40,14 +40,13 @@ final class PackCraftHost implements StationHost {
     private final Stances stances;
     private final StoreWorkstations.Capability capability;
     private final Predicate<ServerLevel> available;
-    private final boolean store;
 
     PackCraftHost(WorldPos at, Block block, Stances stances) {
-        this(at, block, StoreWorkstations.vanilla(block), stances, level -> true, false);
+        this(at, block, StoreWorkstations.vanilla(block), stances, level -> true);
     }
 
     PackCraftHost(WorldPos at, Block block, StoreWorkstations.Capability capability, Stances stances,
-                  Predicate<ServerLevel> available, boolean store) {
+                  Predicate<ServerLevel> available) {
         this.id = UUID.randomUUID();
         this.bearer = Optional.empty();
         this.at = at;
@@ -55,7 +54,6 @@ final class PackCraftHost implements StationHost {
         this.stances = stances;
         this.capability = capability;
         this.available = available;
-        this.store = store;
     }
 
     PackCraftHost(UUID bearer, WorldPos at, StoreWorkstations.Capability capability,
@@ -68,7 +66,6 @@ final class PackCraftHost implements StationHost {
         this.stances = Stances.WHEREVER;
         this.capability = capability;
         this.available = available;
-        this.store = true;
     }
 
     @Override
@@ -78,7 +75,7 @@ final class PackCraftHost implements StationHost {
 
     @Override
     public Workshop frozen(RecipeIndex recipes, ServerLevel level, Optional<ItemSpec> fuel) {
-        return new Bench(id, at, block, capability, stances, recipes, available, store, bearer);
+        return new Bench(id, at, block, capability, stances, recipes, available, bearer);
     }
 
     record Job(ItemSpec produces, long perRun, List<Ingredients.Demand> takes, Assembly assembly) {
@@ -105,16 +102,11 @@ final class PackCraftHost implements StationHost {
 
     private record Bench(UUID key, WorldPos at, Block block, StoreWorkstations.Capability capability,
                          Stances stances, RecipeIndex recipes, Predicate<ServerLevel> available,
-                         boolean store, Optional<UUID> bearer) implements Workshop {
+                         Optional<UUID> bearer) implements Workshop {
 
         @Override
         public ResourceLocation id() {
             return WaresContent.ID;
-        }
-
-        @Override
-        public boolean withholdsStore() {
-            return !store;
         }
 
         @Override

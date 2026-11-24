@@ -349,7 +349,7 @@ for (var queue : ((Map<?, ?>) field.get(engine)).values()) {
         }
     }
 }
-var visuals = Class.forName("io.github.izakyl.folkways.create.firefighting.ResidentSprayVisuals");
+var visuals = Class.forName("io.github.izakyl.folkways.core.shell.create.firefighting.ResidentSprayVisuals");
 var active = visuals.getDeclaredField("ACTIVE");
 active.setAccessible(true);
 counts.put("hoses", ((Map<?, ?>) active.get(null)).size());

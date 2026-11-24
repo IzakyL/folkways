@@ -89,7 +89,7 @@ minecraft.options.guiScale().set((int)Args.of(ctx).number("scale")); minecraft.r
 });
 
 export function ponderCatalog(locale: string): Record<string, string> {
-  return Object.assign({}, ...["core", "vanilla", "create", "cookery", "firearms", "carts", "golems"]
+  return Object.assign({}, ...["core", "vanilla", "airline", "assistant"]
     .map(mod => JSON.parse(readFileSync(`mods/${mod}/src/main/resources/assets/folkways_${mod}/lang/${locale}.json`, "utf8"))));
 }
 

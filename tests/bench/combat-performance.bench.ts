@@ -133,7 +133,7 @@ const IMPORTS = [
   "io.github.izakyl.folkways.vanilla.person.PersonBody",
   "io.github.izakyl.folkways.vanilla.person.PersonContent",
   "io.github.izakyl.folkways.vanilla.person.ResidentEntity",
-  "io.github.izakyl.folkways.core.rts.combat.command.ResidentCommands",
+  "io.github.izakyl.folkways.core.command.combat.command.ResidentCommands",
   "io.github.izakyl.folkways.core.world.api.WorldSpaces",
 ];
 

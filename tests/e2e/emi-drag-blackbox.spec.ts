@@ -1,22 +1,54 @@
 import { expect, test } from "@playwright/test";
-import { openOrderDraft } from "../shared/colony/membership-optin";
-import { input, media, screen, tick } from "@izakyl/blockwright-minecraft";
-import { clickElement, panelElements } from "../ldlib2";
-import { boardActs } from "../shared/ui/site-panel";
-import { createColonyViaBook, optInViaBook, waitForGroundedPlayer, type Vec } from "../shared/colony/colony-founding";
-import { drawTexts, sleepMs, type DrawCaptureResult } from "../shared/capture/draw-capture";
+import { filedOrdersAt, ORDER_COUNT, ORDER_ITEM, ORDER_LOW, ORDER_MAINTAIN, ORDERS_HERE } from "../shared/colony/membership-optin";
+import { defineTask, input, javaTask, media, tick } from "@izakyl/blockwright-minecraft";
+import { ancestorsOf, clickElement, panelElements, visibleBox } from "../ldlib2";
+import { cardRowsIn, facilityAt, openFacilityInBook, textUnder, waitForPresent } from "../shared/ui/book-cards";
+import { typeCell } from "../shared/ui/site-panel";
+import { createColonyViaBook, openColonyPanelViaBook, optInViaBook, waitForGroundedPlayer, type Vec } from "../shared/colony/colony-founding";
 import { launchPair, type E2EPair } from "../shared/harness/pair";
-import { ensureOut, tracePath } from "../shared/harness/out-paths";
+import { ensureOut, outAbs, tracePath } from "../shared/harness/out-paths";
 import { seededServer } from "../shared/harness/mod-settings";
 import { BUDGET } from "../shared/harness/budgets";
-import { frames, safeScreen, screenOpen, commandPos, tryCommand } from "../shared/harness/bw-helpers";
+import { frames, commandPos, tryCommand, waitForElement } from "../shared/harness/bw-helpers";
+import { mkdirSync } from "node:fs";
 import { newRunId } from "../shared/harness/run-id";
 
 const CONFIG_PATH = "blockwright.toml";
 
-const SYNC_ROUNDS = 12;
+type IndexCell = { x: number; y: number; id: string; name: string };
 
-test("dragging an EMI index cell onto the order draft's item button names that item", async ({}, testInfo) => {
+const EMI_INDEX_CELL = defineTask<Record<string, never>, { cell?: IndexCell }>({
+  name: "folkways.emi.index-cell",
+  side: "client",
+  source: javaTask({
+    imports: ["dev.emi.emi.screen.EmiScreenManager", "net.minecraft.client.Minecraft",
+      "net.minecraft.core.registries.BuiltInRegistries"],
+    body: `
+if (EmiScreenManager.isDisabled()) {
+    return Map.of();
+}
+var window = Minecraft.getInstance().getWindow();
+int width = window.getGuiScaledWidth();
+for (int y = 28; y < window.getGuiScaledHeight() - 20; y += 8) {
+    for (int x = width - 10; x > width * 2 / 3; x -= 8) {
+        var hovered = EmiScreenManager.getHoveredStack(x, y, false, true);
+        if (hovered.isEmpty() || hovered.getStack().getEmiStacks().size() != 1) {
+            continue;
+        }
+        var stack = hovered.getStack().getEmiStacks().getFirst().getItemStack();
+        if (!stack.isEmpty()) {
+            return Map.of("cell", Map.of("x", x, "y", y,
+                "id", BuiltInRegistries.ITEM.getKey(stack.getItem()).toString(),
+                "name", stack.getHoverName().getString()));
+        }
+    }
+}
+return Map.of();
+`,
+  }),
+});
+
+test("dragging an EMI index cell into the order item picker files that item", async ({}, testInfo) => {
   test.setTimeout(BUDGET.quick);
   ensureOut("e2e");
 
@@ -58,61 +90,61 @@ test("dragging an EMI index cell onto the order draft's item button names that i
     await tick.sprint(server, 3);
     evidence.opt_in = await optInViaBook(server, client, playerName, chest, "chest");
 
-    await tryCommand(server, `tp ${playerName} ${chest.x + 0.5} ${chest.y} ${chest.z + 1.5} 180 30`);
-    await tick.sprint(server, 5);
-    await screen.dismiss(client);
-    evidence.enter = await openOrderDraft(server, client, chest);
-    expect(screenOpen(await safeScreen(client)), "this site's panel should be open").toBe(true);
-    const elements = await panelElements(client);
-    const button = elements.find((element) => element.id === evidence.enter.edit_item);
-    expect(button, "the order draft should have an item button").toBeTruthy();
-    const draftRow = elements.find((element) => element.id === evidence.enter.row_id);
-    expect(draftRow, "the order draft's row should be on the panel").toBeTruthy();
-    const sitePanel = elements.find((element) => element.id === "folkways.site.panel");
-    expect(sitePanel, "this site's panel should be in its window").toBeTruthy();
-    const dropTarget = {
-      x: button!.x + button!.width / 2,
-      y: button!.y + button!.height / 2,
-    };
+    const facility = await facilityAt(server, playerName, chest);
+    expect(facility, "the chest should be a held storage facility").toBeTruthy();
+    await openColonyPanelViaBook(server, client, playerName, standBlock);
+    await openFacilityInBook(server, client, facility!);
+    await waitForPresent(server, client, ORDER_ITEM);
+    evidence.item_before = textUnder(await panelElements(client), ORDER_ITEM);
+    await clickElement(client, { id: ORDER_ITEM });
+    await waitForElement(client, { id: "folkways.selector.close" });
+    const tree = await panelElements(client);
+    const list = tree.find(element => element.id === "folkways.selector.tree")!;
+    const box = ancestorsOf(tree, list).find(element => element.className.endsWith(".ScrollerView"))!;
+    const visible = visibleBox(tree, box)!;
+    const dropTarget = { x: visible.x + visible.width / 2, y: visible.y + visible.height / 2 };
     evidence.drop_target = dropTarget;
 
-    evidence.row_text_before = await controlText(client, evidence.enter.edit_item);
+    let cell: IndexCell | undefined;
+    await expect.poll(async () => {
+      await frames(client, 3);
+      ({ cell } = await client.run(EMI_INDEX_CELL, {}));
+      return cell;
+    }, { message: "EMI should expose an item in its visible index" }).toBeDefined();
+    const { x, y, id: draggedId, name: draggedName } = cell!;
+    evidence.drag_source = { x, y, id: draggedId, name: draggedName };
+    expect(evidence.item_before, "the draft should not name the item yet").not.toContain(draggedName);
 
-    const found = await findHoveredIndexCell(client, sitePanel!.x + sitePanel!.width, dropTarget);
-    evidence.cell_search = found.search;
-    expect(found.cell, "EMI's index should have at least one cell that shows a tooltip on hover").toBeTruthy();
-    const dragSource = found.cell!;
-    evidence.drag_source = dragSource;
-    evidence.hovered_tooltip = found.tooltip;
-    const draggedId = `minecraft:${found.tooltip[0].toLowerCase().replace(/ /g, "_")}`;
-    const draggedName = found.tooltip[0];
-    evidence.dragged_id = draggedId;
-    expect(evidence.row_text_before, "the draft should not name the item yet").not.toContain(draggedName);
-
-    const dragReach = await input.drag(client, { from: dragSource, to: dropTarget, steps: 12 });
+    const dragReach = await input.drag(client, { from: { x, y }, to: dropTarget, steps: 12 });
     evidence.drag_reach = dragReach;
     expect(dragReach.pressArmed, "the press must set MouseHandler's drag state").toBe(true);
     expect(dragReach.dispatched, "every step must actually move the cursor").toBeGreaterThan(0);
 
-    // The readable order form paints the selection as text; its old icon is deliberately hidden.
-    const named = await waitForDraftText(server, client, evidence.enter.edit_item, draggedName);
-    evidence.row_text_after = named;
-    expect(named, "after the EMI drop the order draft should name the dragged item").toContain(draggedName);
+    await clickElement(client, { id: "folkways.selector.confirm" });
+    await waitForElement(client, { id: "folkways.selector.close" }, { state: "absent" });
+    await expect.poll(async () => {
+      await tick.sprint(server, 5);
+      return textUnder(await panelElements(client), ORDER_ITEM);
+    }).toContain(draggedName);
 
-    const submit = (await boardActs(client, "do", "folkways_vanilla.orders"))
-      .find((act) => act.row > evidence.enter.row && act.act === 0);
-    expect(submit, "the draft should offer a Maintain action").toBeTruthy();
-    await clickElement(client, { id: submit!.id }, { scrollIntoView: true });
+    for (const id of [ORDER_LOW, ORDER_COUNT]) {
+      await waitForPresent(server, client, id);
+      await typeCell(server, client, id, "1");
+    }
+    await waitForPresent(server, client, ORDER_MAINTAIN);
+    await clickElement(client, { id: ORDER_MAINTAIN });
     await expect.poll(async () => {
       await tick.sprint(server, 10);
-      await frames(client, 3);
-      const actions = (await boardActs(client, "do", "folkways_vanilla.orders")).filter(act => act.row > submit!.row);
-      const words = (await Promise.all(actions.map(act =>
-        controlText(client, `folkways.board.row.folkways_vanilla.orders.${act.row}`)))).flat();
-      evidence.order_text = words;
-      return words;
-    }, { message: "the dropped item must be filed as an order", timeout: 10_000 }).toContain(draggedName);
+      const tree = await panelElements(client);
+      return cardRowsIn(tree, ORDERS_HERE).map(row => textUnder(tree, row.id));
+    }, { message: "the container card must list the new order" }).toEqual([expect.stringContaining(draggedName)]);
+    expect(await filedOrdersAt(server, playerName, chest, draggedId)).toEqual([{ high: 1, standing: true }]);
   } catch (error) {
+    if (client) {
+      const shots = outAbs("e2e", "shots", "emi-drag-blackbox");
+      mkdirSync(shots, { recursive: true });
+      await media.screenshot(client, { path: `${shots}/failure.png` }).catch(() => undefined);
+    }
     pair?.failing(error);
     throw error;
   } finally {
@@ -120,67 +152,6 @@ test("dragging an EMI index cell onto the order draft's item button names that i
     await pair?.teardown(testInfo);
   }
 });
-
-async function captureHud(client: any): Promise<DrawCaptureResult> {
-  const recording = await media.startDraws(client, { channel: "hud", maxFrames: 4 });
-  await frames(client, 3);
-  return (await recording.stop()) as DrawCaptureResult;
-}
-
-async function findHoveredIndexCell(
-  client: any,
-  panelRight: number,
-  parkAt: { x: number; y: number },
-) {
-  const parked = await input.move(client, parkAt);
-  const width = parked.cursor.guiScaledWidth;
-  const baseline = textLines(await captureHud(client));
-  const search: any[] = [];
-  for (let y = 40; y <= 220; y += 18) {
-    for (let x = width - 14; x > panelRight + 18; x -= 18) {
-      await input.move(client, { x, y });
-      const capture = await captureHud(client);
-      const added = [...textLines(capture)].filter((line) => !baseline.has(line));
-      search.push({ x, y, added: added.slice(0, 3) });
-      if (added.length > 0) {
-        return { cell: { x, y }, tooltip: added, search };
-      }
-    }
-  }
-  return { cell: undefined, tooltip: [], search };
-}
-
-function textLines(capture: DrawCaptureResult): Set<string> {
-  return new Set(drawTexts(capture).map((entry) => entry.text));
-}
-
-async function controlText(client: any, id: string): Promise<string[]> {
-  const elements = await panelElements(client);
-  const root = elements.find(element => element.id === id);
-  if (!root) return [];
-  const words: string[] = [];
-  for (let at = root.index + 1; at < elements.length && elements[at].depth > root.depth; at++) {
-    const element = elements[at];
-    if (element.displayed && element.text?.trim()) words.push(element.text);
-  }
-  return words;
-}
-
-async function waitForDraftText(
-  server: any, client: any, id: string, name: string,
-) {
-  let words: string[] = [];
-  for (let round = 0; round < SYNC_ROUNDS; round++) {
-    await input.move(client, { x: 0, y: 0 });
-    words = await controlText(client, id);
-    if (words.includes(name)) {
-      return words;
-    }
-    await sleepMs(500);
-    await tick.sprint(server, 5);
-  }
-  return words;
-}
 
 async function flattenPlot(server: any, origin: Vec) {
   const minX = origin.x - 6;

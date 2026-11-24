@@ -55,6 +55,10 @@ public final class Reader {
         return tag.contains(key, Tag.TAG_INT_ARRAY) ? NbtUtils.readBlockPos(tag, key) : Optional.empty();
     }
 
+    public Optional<byte[]> byteArray(String key) {
+        return tag.contains(key, Tag.TAG_BYTE_ARRAY) ? Optional.of(tag.getByteArray(key)) : Optional.empty();
+    }
+
     public Optional<int[]> intArray(String key) {
         return tag.contains(key, Tag.TAG_INT_ARRAY) ? Optional.of(tag.getIntArray(key)) : Optional.empty();
     }

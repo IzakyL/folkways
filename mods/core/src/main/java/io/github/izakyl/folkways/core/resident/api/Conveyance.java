@@ -17,5 +17,10 @@ public interface Conveyance {
         return Optional.empty();
     }
 
+    /** Whether work must wait for this conveyance even when the body has reached its stance. */
+    default boolean awaitingArrival() {
+        return false;
+    }
+
     void release(ServerLevel level, Mob body);
 }

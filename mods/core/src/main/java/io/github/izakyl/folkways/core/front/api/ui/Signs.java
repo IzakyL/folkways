@@ -1,12 +1,14 @@
 package io.github.izakyl.folkways.core.front.api.ui;
 
 import com.lowdragmc.lowdraglib2.gui.LDLibFonts;
+import com.lowdragmc.lowdraglib2.gui.util.DrawerHelper;
 import io.github.izakyl.folkways.core.FolkwaysCoreMod;
-import io.github.izakyl.folkways.core.front.api.notice.Notice;
-import io.github.izakyl.folkways.core.front.api.notice.Sentence;
+import io.github.izakyl.folkways.core.card.api.notice.Notice;
+import io.github.izakyl.folkways.core.card.api.notice.Sentence;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import net.minecraft.client.Minecraft;
@@ -21,22 +23,23 @@ import net.minecraft.world.item.ItemStack;
 
 /**
  * A sentence as it is drawn: each token made a sign, a glyph whose sprite is missing made its words, and the signs
- * laid in a line {@link #HEIGHT} tall, each centred on the items' height, an item's count set low beside it as a
- * subscript with its first column tucked under the item's corner.
+ * laid in a line {@link #HEIGHT} tall, each centred on the items' height, an item's count set small in the item's
+ * bottom-right corner, as a slot prints a stack's count but at about half the size, so the item shows past it.
  */
 public final class Signs {
     public static final int ITEM_SIZE = 16;
     public static final int HEIGHT = ITEM_SIZE + 1;
     public static final int WORD_COLOR = 0xFFAAAAAA;
     public static final int COUNT_COLOR = 0xFFFFFFFF;
-    // How far back an item sits so it is drawn at a page's depth, as LDLib2's own item icons are.
+    // How far back an item sits before LDLib2's item drawer lifts it, as LDLib2's own item icons are.
     private static final float ITEM_DEPTH = -200.0F;
     private static final int TEXT_INK = 8;
     private static final int GAP = 2;
-    // Items side by side, with no plus between them, stand further apart so a count is not read as the next item's.
-    private static final int WARE_GAP = 5;
-    private static final int SUBSCRIPT_TUCK = 1;
-    private static final int SUBSCRIPT_DROP = 1;
+    // Items side by side, with no plus between them, stand a little apart so each reads as its own.
+    private static final int WARE_GAP = 3;
+    // A count's digits stand seven of the font's rows tall, its shadow one more, as dark as the font's own shadow.
+    private static final int COUNT_INK = 7;
+    private static final int SHADOW = 0xFF3F3F3F;
     private static final String MORE = "…";
     // Glyphs are drawn white with a dark rim for the world's dark cards. On the ledger's paper each is drawn from its
     // twin under ledger/, the white inked and the rim dropped; one with no twin is tinted to ink whole, and those whose
@@ -54,7 +57,7 @@ public final class Signs {
     private Signs() {
     }
 
-    /** One picture in a line of them: a glyph, an item with its count set low beside it, or a word. */
+    /** One picture in a line of them: a glyph, an item with its count over its corner, or a word. */
     public sealed interface Sign {
 
         record Mark(ResourceLocation sprite, int width, int height) implements Sign {
@@ -80,6 +83,10 @@ public final class Signs {
         }
 
         record Text(int x, int y, String text, int color) implements Placed {
+        }
+
+        /** An item's count, at the item's top-left x,y, drawn small over its bottom-right corner with a shadow. */
+        record Count(int x, int y, String text, int color) implements Placed {
         }
     }
 
@@ -159,8 +166,7 @@ public final class Signs {
                 case Sign.Ware ware -> {
                     placed.add(new Placed.Item(x, 0, ware.stack()));
                     if (!ware.count().isEmpty()) {
-                        placed.add(new Placed.Text(x + ITEM_SIZE - SUBSCRIPT_TUCK,
-                            ITEM_SIZE - TEXT_INK + SUBSCRIPT_DROP, ware.count(), COUNT_COLOR));
+                        placed.add(new Placed.Count(x, 0, ware.count(), COUNT_COLOR));
                     }
                 }
                 case Sign.Word word ->
@@ -194,7 +200,10 @@ public final class Signs {
                 case Placed.Item item -> drawItem(graphics, item.stack(), x + item.x(), y + item.y());
                 // Words are inked onto the page; only a count, white over its item, keeps the shadow it needs.
                 case Placed.Text text -> LDLibFonts.drawText(graphics, font, Component.literal(text.text()),
-                    x + text.x(), y + text.y(), text.color(), text.color() == COUNT_COLOR);
+                    x + text.x(), y + text.y(), text.color(), false);
+                // The item's drawer cleared the depth behind it, so the count needs no lift to show.
+                case Placed.Count count -> drawCount(graphics, font, count.text(), x + count.x(), y + count.y(),
+                    count.color(), 0.0F);
             }
         }
     }
@@ -218,14 +227,116 @@ public final class Signs {
         return sprite;
     }
 
-    // An item drawn as the panel's own item icons are: pushed back by the depth renderItem lifts it to, so it stays
-    // on its page. Lifted, it stood in front of every flat thing drawn after it, a dialog over the page included.
+    // An item drawn as LDLib2's own item icons are: pushed back, lifted by its drawer, and the depth it left cleared,
+    // so it is never culled behind what lies under the page nor stands in front of a dialog drawn over it.
     private static void drawItem(GuiGraphics graphics, ItemStack stack, int x, int y) {
         graphics.flush();
         graphics.pose().pushPose();
         graphics.pose().translate(0.0F, 0.0F, ITEM_DEPTH);
-        graphics.renderItem(stack, x, y);
+        DrawerHelper.drawItemStack(graphics, stack, x, y, -1, null);
         graphics.pose().popPose();
+    }
+
+    /**
+     * Draws {@code count} small in the bottom-right corner of the item whose top-left is at x,y, white digits over a
+     * shadow as a slot prints them, lifted {@code lift} toward the viewer to stand in front of the item. Where the
+     * screen is fine enough the font's own digits are drawn at about half size, each of their pixels a whole number of
+     * the screen's; where it is not (GUI scale 1), the font cannot shrink and stay legible, so the digits are drawn
+     * from a three-by-five figure set instead, a screen pixel to each of theirs.
+     */
+    public static void drawCount(GuiGraphics graphics, Font font, String count, float x, float y, int color,
+                                 float lift) {
+        double pixels = Minecraft.getInstance().getWindow().getGuiScale()
+            * Math.abs(graphics.pose().last().pose().m00());
+        graphics.pose().pushPose();
+        if (pixels >= 2.0D) {
+            float scale = (float) (Math.round(pixels / 2.0D) / pixels);
+            graphics.pose().translate(x + countLeft(font, count, scale), y + countTop(scale), lift);
+            graphics.pose().scale(scale, scale, 1.0F);
+            LDLibFonts.drawText(graphics, font, Component.literal(count), 0, 0, color, true);
+        } else {
+            float dot = pixels > 0.0D ? (float) (1.0D / pixels) : 1.0F;
+            int wide = Figures.width(count);
+            // Ink up to the item's right and bottom edges, the shadow a dot past them, set on whole screen pixels so
+            // every dot fills exactly one.
+            var matrix = graphics.pose().last().pose();
+            double gui = Minecraft.getInstance().getWindow().getGuiScale();
+            float left = Math.max(x, x + ITEM_SIZE - wide * dot);
+            float top = y + ITEM_SIZE - Figures.HEIGHT * dot;
+            if (matrix.m00() != 0.0F && matrix.m11() != 0.0F) {
+                left = (float) ((Math.round((matrix.m00() * left + matrix.m30()) * gui) / gui - matrix.m30())
+                    / matrix.m00());
+                top = (float) ((Math.round((matrix.m11() * top + matrix.m31()) * gui) / gui - matrix.m31())
+                    / matrix.m11());
+            }
+            graphics.pose().translate(left, top, lift);
+            graphics.pose().scale(dot, dot, 1.0F);
+            Figures.draw(graphics, count, 1, 1, SHADOW);
+            Figures.draw(graphics, count, 0, 0, color);
+        }
+        graphics.pose().popPose();
+    }
+
+    /** Small figures three dots wide and five tall, for counts on screens too coarse to shrink the font's. */
+    private static final class Figures {
+        static final int HEIGHT = 5;
+        private static final Map<Character, String[]> SHAPES = Map.ofEntries(
+            Map.entry('0', new String[] {"###", "#.#", "#.#", "#.#", "###"}),
+            Map.entry('1', new String[] {".#.", "##.", ".#.", ".#.", "###"}),
+            Map.entry('2', new String[] {"###", "..#", "###", "#..", "###"}),
+            Map.entry('3', new String[] {"###", "..#", "###", "..#", "###"}),
+            Map.entry('4', new String[] {"#.#", "#.#", "###", "..#", "..#"}),
+            Map.entry('5', new String[] {"###", "#..", "###", "..#", "###"}),
+            Map.entry('6', new String[] {"###", "#..", "###", "#.#", "###"}),
+            Map.entry('7', new String[] {"###", "..#", "..#", ".#.", ".#."}),
+            Map.entry('8', new String[] {"###", "#.#", "###", "#.#", "###"}),
+            Map.entry('9', new String[] {"###", "#.#", "###", "..#", "###"}),
+            Map.entry('.', new String[] {".", ".", ".", ".", "#"}),
+            Map.entry('k', new String[] {"#..", "#.#", "##.", "#.#", "#.#"}),
+            Map.entry('M', new String[] {"#...#", "##.##", "#.#.#", "#...#", "#...#"}));
+
+        private Figures() {
+        }
+
+        static int width(String text) {
+            int width = 0;
+            for (char each : text.toCharArray()) {
+                String[] shape = SHAPES.get(each);
+                width += shape == null ? 0 : shape[0].length() + 1;
+            }
+            return Math.max(0, width - 1);
+        }
+
+        static void draw(GuiGraphics graphics, String text, int x, int y, int color) {
+            int at = x;
+            for (char each : text.toCharArray()) {
+                String[] shape = SHAPES.get(each);
+                if (shape == null) {
+                    continue;
+                }
+                for (int row = 0; row < HEIGHT; row++) {
+                    for (int column = 0; column < shape[row].length(); column++) {
+                        if (shape[row].charAt(column) == '#') {
+                            graphics.fill(at + column, y + row, at + column + 1, y + row + 1, color);
+                        }
+                    }
+                }
+                at += shape[0].length() + 1;
+            }
+        }
+    }
+
+    /**
+     * Where a count drawn at {@code scale} starts, from its item's left: its digits' right edge on the item's, its
+     * shadow just past it, as in a slot; a count too wide for the item starts at the item's left edge instead.
+     */
+    public static float countLeft(Font font, String count, float scale) {
+        return Math.max(0.0F, ITEM_SIZE + scale - font.width(count) * scale);
+    }
+
+    /** Where a count drawn at {@code scale} starts, from its item's top: its digits' foot on the item's. */
+    public static float countTop(float scale) {
+        return ITEM_SIZE - COUNT_INK * scale;
     }
 
     private static int width(Font font, List<Sign> signs, int count) {
@@ -248,7 +359,7 @@ public final class Signs {
     private static int width(Font font, Sign sign) {
         return switch (sign) {
             case Sign.Mark mark -> mark.width();
-            case Sign.Ware ware -> ITEM_SIZE + (ware.count().isEmpty() ? 0 : font.width(ware.count()) - SUBSCRIPT_TUCK);
+            case Sign.Ware ware -> ITEM_SIZE;
             case Sign.Word word -> font.width(word.text());
         };
     }

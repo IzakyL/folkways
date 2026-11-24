@@ -1,6 +1,7 @@
 package io.github.izakyl.folkways.vanilla.build;
 
 import io.github.izakyl.folkways.core.base.persist.Writer;
+import io.github.izakyl.folkways.core.work.api.BlockData;
 import java.util.Optional;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderGetter;

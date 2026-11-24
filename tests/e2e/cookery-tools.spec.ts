@@ -3,7 +3,7 @@ import { writeFileSync } from "node:fs";
 import { defineTask, javaTask, screen, tick, world, type MinecraftServer, type MinecraftClient } from "@izakyl/blockwright-minecraft";
 import { foundColonyFast, foundingBox, optInViaBook, waitForGroundedPlayer, openColonyPanelViaBook, vocationPriority } from "../shared/colony/colony-founding";
 import { runColonyTask } from "../shared/colony/colony-tasks";
-import { deliverOrderViaSitePanel, setMaintainDemandViaUI } from "../shared/colony/membership-optin";
+import { deliverOrderViaCard, setMaintainDemandInView } from "../shared/colony/membership-optin";
 import { launchPair, type E2EPair } from "../shared/harness/pair";
 import { tracePath } from "../shared/harness/out-paths";
 import { seededServer } from "../shared/harness/mod-settings";
@@ -11,7 +11,7 @@ import { BUDGET } from "../shared/harness/budgets";
 import { commandPos } from "../shared/harness/bw-helpers";
 import { newRunId } from "../shared/harness/run-id";
 import { twins, type Stage, type Vec } from "../shared/harness/stage";
-import { markSouthRack } from "../shared/cookery/rack";
+import { aimSouthRack, markSouthRack } from "../shared/cookery/rack";
 import { clickElement } from "../ldlib2";
 import { scrollCellIntoView } from "../shared/ui/site-panel";
 import { showVocationColumn } from "../shared/ui/vocation-groups";
@@ -50,7 +50,7 @@ const OBSERVE = defineTask<{ mode: string; player: string; rack: Vec; boards: Ve
       "io.github.izakyl.folkways.core.runtime.Labor",
       "io.github.izakyl.folkways.core.work.api.NodeState",
       "io.github.izakyl.folkways.core.world.api.WorldPos",
-      "io.github.izakyl.folkways.cookery.CookeryContent",
+      "io.github.izakyl.folkways.vanilla.cookery.CookeryContent",
       "net.minecraft.core.BlockPos",
       "net.minecraft.core.registries.BuiltInRegistries",
       "net.minecraft.server.level.ServerLevel",
@@ -251,8 +251,8 @@ for (const stage of twins()) test(stage.title("shared cookery tools: one named r
     expect(original.where).toBe("rack"); expect(original.name).toBe("Shared Cookery Knife");
     expect(original.damage).toBe(INITIAL_DAMAGE);
     evidence.orders = [
-      await deliverOrderViaSitePanel(server, client, playerName, cells.noodles, NOODLES, SERVINGS, stage),
-      await deliverOrderViaSitePanel(server, client, playerName, cells.meat, MEAT, SERVINGS, stage),
+      await deliverOrderViaCard(server, client, playerName, cells.noodles, NOODLES, SERVINGS, stage),
+      await deliverOrderViaCard(server, client, playerName, cells.meat, MEAT, SERVINGS, stage),
     ];
     await put(server, stage, cells.supply, 2, DOUGH, BATCHES);
     await put(server, stage, cells.supply, 3, "minecraft:chicken", BATCHES);
@@ -273,7 +273,8 @@ for (const stage of twins()) test(stage.title("shared cookery tools: one named r
     expect(evidence.first.totals[DOUGH] ?? 0).toBe(0); expect(evidence.first.totals["minecraft:chicken"] ?? 0).toBe(0);
 
     await read("read", "maintain");
-    evidence.maintain = await setMaintainDemandViaUI(server, client, playerName, cells.rack, KNIFE, 2, stage, 2);
+    await aimSouthRack(server, client, playerName, cells.rack, stage);
+    evidence.maintain = await setMaintainDemandInView(server, client, cells.rack, KNIFE, 2, 0, stage, 2);
     evidence.twoIdle = await waitFor(server, read, "maintain", sample => sample.tools.length === 2
       && sample.tools.every(tool => tool.where === "rack"));
     expect(evidence.twoIdle.totals["minecraft:iron_ingot"] ?? 0, "the explicit two-tool target makes exactly one additional iron knife").toBe(0);
@@ -284,8 +285,8 @@ for (const stage of twins()) test(stage.title("shared cookery tools: one named r
     await read("read", "two");
     // A one-shot delivery raises the target stock to its count; the first 24 dishes are still real stock.
     evidence.parallelOrders = [
-      await deliverOrderViaSitePanel(server, client, playerName, cells.noodles, NOODLES, SERVINGS * 2, stage),
-      await deliverOrderViaSitePanel(server, client, playerName, cells.meat, MEAT, SERVINGS * 2, stage),
+      await deliverOrderViaCard(server, client, playerName, cells.noodles, NOODLES, SERVINGS * 2, stage),
+      await deliverOrderViaCard(server, client, playerName, cells.meat, MEAT, SERVINGS * 2, stage),
     ];
     await put(server, stage, cells.supply, 2, DOUGH, BATCHES);
     await put(server, stage, cells.supply, 3, "minecraft:chicken", BATCHES);

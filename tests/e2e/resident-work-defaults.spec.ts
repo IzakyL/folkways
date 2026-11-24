@@ -10,8 +10,8 @@ import { BUDGET } from "../shared/harness/budgets";
 import { commandPos } from "../shared/harness/bw-helpers";
 import { newRunId } from "../shared/harness/run-id";
 import { GROUND } from "../shared/harness/stage";
-import { clickTab } from "../shared/ui/colony-pages";
-import { boardActs, wheelCell } from "../shared/ui/site-panel";
+import { wheelCell } from "../shared/ui/site-panel";
+import { openEditor } from "../shared/ui/colony-pages";
 
 const CELL = "folkways.work_defaults.folkways_core.hauling";
 const GROUP = "folkways.work_defaults.group.folkways_core.transport";
@@ -19,7 +19,7 @@ const OPEN_GROUP = "folkways.work_defaults.open.folkways_core.transport";
 const READ = defineTask<{ player: string }, { allowed: boolean; priority: number; residents: Array<{ id: string; allowed: boolean; priority: number }> }>({
   name: "folkways.defaults.read", side: "server",
   source: javaTask({ imports: [
-    "io.github.izakyl.folkways.core.front.engine.charter.CurrentColony",
+    "io.github.izakyl.folkways.core.colony.charter.CurrentColony",
     "io.github.izakyl.folkways.core.front.engine.colony.Residents",
     "io.github.izakyl.folkways.core.colony.api.WorkDefaults",
     "io.github.izakyl.folkways.core.vocation.api.Vocations",
@@ -37,7 +37,7 @@ for(var body:Residents.of(colony,server)) {
 return Map.of("allowed",rule.allowed(),"priority",rule.priority().number(),"residents",rows);
 ` }),
 });
-test("future human work defaults on the person page affect only new arrivals", async ({}, testInfo) => {
+test("future human work defaults affect only new arrivals", async ({}, testInfo) => {
   test.setTimeout(BUDGET.heavy);
   ensureOut("e2e");
   const run = newRunId();
@@ -100,10 +100,7 @@ async function text(client: MinecraftClient, id: string): Promise<string | undef
 }
 
 async function openDefaults(client: MinecraftClient) {
-  await clickTab(client, "folkways.page.person");
-  const opens = await boardActs(client, "open", "folkways_vanilla.person");
-  expect(opens, "the person board opens names, looks, then work defaults").toHaveLength(3);
-  await clickElement(client, { id: opens[2].id });
+  await openEditor(client, "folkways_vanilla.work_defaults");
   // Each vocation group stands as one column until it is opened into its vocations.
   await waitForElement(client, { id: GROUP });
   await clickElement(client, { id: OPEN_GROUP });

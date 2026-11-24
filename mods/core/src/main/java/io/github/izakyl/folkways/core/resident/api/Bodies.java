@@ -5,6 +5,7 @@ import io.github.izakyl.folkways.core.effect.Effects;
 import io.github.izakyl.folkways.core.effect.Stats;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.UUID;
 import net.minecraft.core.Holder;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
@@ -22,6 +23,8 @@ public final class Bodies {
         BodyStateAccess state(Body body);
 
         Licences licences(Body body);
+
+        Optional<UUID> colonyOf(Entity entity);
     }
 
     private static StateSource states;
@@ -44,6 +47,10 @@ public final class Bodies {
 
     static Licences licences(Body body) {
         return states.licences(body);
+    }
+
+    public static Optional<UUID> colonyOf(Entity entity) {
+        return states.colonyOf(entity);
     }
 
     public static Optional<Body> of(Entity entity) {

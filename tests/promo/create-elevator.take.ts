@@ -12,7 +12,7 @@ const RISE = 6;
 const SECONDS = 50;
 const OUTLINES = defineTask<void, any>({
   name: "folkways.promo.elevator-outlines", side: "client", timeoutMs: 20_000,
-  source: javaTask({ imports: ["io.github.izakyl.folkways.create.elevator.ElevatorOutlines"], body: `
+  source: javaTask({ imports: ["io.github.izakyl.folkways.core.shell.create.elevator.ElevatorOutlines"], body: `
 return ElevatorOutlines.shown().stream().map(outline -> Map.of(
     "entity", outline.entityId(), "cabinHeight", outline.cabin().getYsize(),
     "sweepHeight", outline.sweep().map(box -> box.getYsize()).orElse(0.0),

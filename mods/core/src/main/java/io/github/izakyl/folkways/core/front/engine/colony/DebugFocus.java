@@ -1,31 +1,29 @@
 package io.github.izakyl.folkways.core.front.engine.colony;
 
-import io.github.izakyl.folkways.core.front.engine.Enrollments;
-import io.github.izakyl.folkways.core.resident.api.Body;
+import io.github.izakyl.folkways.core.card.api.notice.DebugText;
+import io.github.izakyl.folkways.core.card.api.notice.Line;
 import io.github.izakyl.folkways.core.colony.api.Colony;
-import io.github.izakyl.folkways.core.front.api.Facing;
-import io.github.izakyl.folkways.core.front.api.notice.DebugText;
-import io.github.izakyl.folkways.core.front.api.notice.Line;
-import io.github.izakyl.folkways.core.front.engine.net.DebugFocusPacket;
+import io.github.izakyl.folkways.core.front.engine.Enrollments;
 import io.github.izakyl.folkways.core.front.engine.net.DebugFocusPacket.Kind;
 import io.github.izakyl.folkways.core.front.engine.net.DebugFocusPacket.Link;
 import io.github.izakyl.folkways.core.front.engine.net.DebugFocusPacket.StoreMark;
+import io.github.izakyl.folkways.core.front.engine.net.DebugFocusPacket;
 import io.github.izakyl.folkways.core.front.engine.net.DebugTarget;
 import io.github.izakyl.folkways.core.resident.api.Bodies;
+import io.github.izakyl.folkways.core.resident.api.Body;
 import io.github.izakyl.folkways.core.runtime.ColonyLabor;
 import io.github.izakyl.folkways.core.runtime.DebugWork;
 import io.github.izakyl.folkways.core.runtime.Labor;
 import io.github.izakyl.folkways.core.runtime.StoreDebug;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.core.world.api.WorldSpaces;
-import java.util.Comparator;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 
@@ -76,10 +74,8 @@ public final class DebugFocus {
                         }
                     }
                 }
-                for (var owner : Enrollments.facingOwners()) {
-                    Facing.of(colony, owner).ifPresent(facing ->
-                        extension(card, owner, facing.debugResidentLines(entity.getUUID(), view)));
-                }
+                Enrollments.residentLines(colony).forEach((owner, lines) ->
+                    extension(card, owner, lines.debugResidentLines(entity.getUUID(), view)));
             }
         } else if (requested instanceof DebugTarget.Block block && level.isLoaded(block.pos())) {
             WorldPos at = WorldPos.of(level, block.pos());
@@ -102,10 +98,6 @@ public final class DebugFocus {
                 if (labor == null) {
                     colony.inventory().snapshot().store(at).ifPresent(one ->
                         card.addAll(StoreDebug.lines(level, one, colony.inventory())));
-                }
-                for (var owner : Enrollments.facingOwners()) {
-                    Facing.of(colony, owner).ifPresent(facing ->
-                        extension(card, owner, facing.debugBlockLines(block.pos(), view)));
                 }
             }
         }

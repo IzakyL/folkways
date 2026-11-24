@@ -139,8 +139,8 @@ return Sync.stamp(Map.of("motor",motor.getBlockState().toString(),"generatedSpee
 const STATUS = defineTask<Record<string, any>, Record<string, any>>({
   name: "folkways.promo.cookery-elevator-state", side: "server", timeoutMs: 20_000,
   source: javaTask({
-    imports: ["io.github.izakyl.folkways.create.elevator.CreateElevatorNetwork",
-      "io.github.izakyl.folkways.create.elevator.ElevatorRef", "io.github.izakyl.folkways.create.elevator.ElevatorDispatch",
+    imports: ["io.github.izakyl.folkways.core.shell.create.elevator.CreateElevatorNetwork",
+      "io.github.izakyl.folkways.core.shell.create.elevator.ElevatorRef", "io.github.izakyl.folkways.vanilla.create.elevator.ElevatorDispatch",
       "io.github.izakyl.folkways.core.colony.api.Colonies", "io.github.izakyl.folkways.core.resident.api.Bodies",
       "com.simibubi.create.content.contraptions.elevator.ElevatorPulleyBlockEntity", "net.minecraft.core.BlockPos"],
     body: `

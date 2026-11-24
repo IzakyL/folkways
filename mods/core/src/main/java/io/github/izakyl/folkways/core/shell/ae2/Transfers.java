@@ -1,13 +1,13 @@
 package io.github.izakyl.folkways.core.shell.ae2;
 
+import io.github.izakyl.folkways.core.facility.api.Ports;
 import appeng.api.config.Actionable;
 import appeng.api.networking.security.IActionSource;
 import appeng.api.stacks.AEItemKey;
 import appeng.api.storage.MEStorage;
-import io.github.izakyl.folkways.core.inventory.api.port.Pull;
-import io.github.izakyl.folkways.core.inventory.api.port.Room;
-import io.github.izakyl.folkways.core.inventory.api.port.StorePorts;
-import io.github.izakyl.folkways.core.inventory.api.port.TransferResult;
+import io.github.izakyl.folkways.core.facility.api.control.Pull;
+import io.github.izakyl.folkways.core.facility.api.control.Room;
+import io.github.izakyl.folkways.core.facility.api.control.TransferResult;
 import io.github.izakyl.folkways.core.item.api.Goods;
 import io.github.izakyl.folkways.core.shell.crafting.InsertionReceipts;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
@@ -103,9 +103,9 @@ final class Transfers {
                 }
                 if (count != entry.getValue()) {
                     boolean restored = compensate(storage, source, moved, insert);
-                    StorePorts.condemn(level, WorldPos.of(level, pos), Devices.reason(
+                    Ports.observe(level, WorldPos.of(level, pos), Ae2Devices.reason(
                         restored ? "changed_transfer" : "failed_compensation"));
-                    StorePorts.changed(level, pos);
+                    Ports.changed(level, pos);
                     return refused(TransferResult.Why.UNUSABLE);
                 }
             }
@@ -125,11 +125,11 @@ final class Transfers {
                     }
                 });
                 compensate(storage, source, observed, insert);
-                StorePorts.condemn(level, WorldPos.of(level, pos), Devices.reason("failed_compensation"));
-                StorePorts.changed(level, pos);
+                Ports.observe(level, WorldPos.of(level, pos), Ae2Devices.reason("failed_compensation"));
+                Ports.changed(level, pos);
                 return refused(TransferResult.Why.UNUSABLE);
             }
-            StorePorts.changed(level, pos);
+            Ports.changed(level, pos);
             return new TransferResult.Done(stacks(wanted));
         }
     }

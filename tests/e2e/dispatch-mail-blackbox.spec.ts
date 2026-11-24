@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { defineTask, javaTask, screen, tick, world } from "@izakyl/blockwright-minecraft";
 import { foundColonyFast, setBookGesture, waitForGroundedPlayer, type Vec } from "../shared/colony/colony-founding";
 import { runColonyTask } from "../shared/colony/colony-tasks";
-import { deliverOrderViaSitePanel, optInContainerViaUI } from "../shared/colony/membership-optin";
+import { deliverOrderViaCard, optInContainerViaUI } from "../shared/colony/membership-optin";
 import { buildRailLine } from "../shared/rail/rail-fixture";
 import { launchPair, type E2EPair } from "../shared/harness/pair";
 import { GROUND } from "../shared/harness/stage";
@@ -150,7 +150,7 @@ test("a parcel the colony sends by train waits in its postbox for the train book
       else if (seenAlpha) departure = ticks;
     }
     expect(departure, "the train should leave Alpha on its timetable").not.toBeUndefined();
-    await deliverOrderViaSitePanel(server, client, player.name, target, ITEM, ORDERED);
+    await deliverOrderViaCard(server, client, player.name, target, ITEM, ORDERED);
     await tryCommand(server, `tp ${player.name} ${a.x + 6.5} ${gy} ${a.z + 6.5}`);
 
     const samples: any[] = [];
@@ -252,8 +252,8 @@ const HANDED_OVER = defineTask<Record<string, any>, Record<string, any>>({
     imports: [
       "io.github.izakyl.folkways.core.colony.api.Claimed",
       "io.github.izakyl.folkways.core.front.engine.colony.ColonyGround",
-      "io.github.izakyl.folkways.create.dispatch.DispatchContent",
-      "io.github.izakyl.folkways.create.dispatch.DispatchPresence",
+      "io.github.izakyl.folkways.vanilla.create.dispatch.DispatchContent",
+      "io.github.izakyl.folkways.vanilla.create.dispatch.DispatchPresence",
       "net.minecraft.core.BlockPos",
       "net.minecraft.server.MinecraftServer",
     ],
@@ -286,8 +286,8 @@ const MAIL_STATE = defineTask<Record<string, any>, Record<string, any>>({
       "com.simibubi.create.content.logistics.box.PackageItem",
       "com.simibubi.create.content.logistics.packagePort.PackagePortBlockEntity",
       "io.github.izakyl.folkways.core.front.engine.colony.ColonyGround",
-      "io.github.izakyl.folkways.create.dispatch.DispatchContent",
-      "io.github.izakyl.folkways.create.dispatch.MailGate",
+      "io.github.izakyl.folkways.vanilla.create.dispatch.DispatchContent",
+      "io.github.izakyl.folkways.core.shell.create.dispatch.MailGate",
       "net.minecraft.core.BlockPos",
       "net.minecraft.core.registries.BuiltInRegistries",
       "net.minecraft.resources.ResourceLocation",

@@ -98,8 +98,8 @@ const IMPORTS = [
   "io.github.izakyl.folkways.core.resident.api.Body", "io.github.izakyl.folkways.core.world.api.WorldPos",
   "io.github.izakyl.folkways.core.world.api.Reach", "io.github.izakyl.folkways.vanilla.person.PersonBody",
   "io.github.izakyl.folkways.vanilla.person.PersonContent",
-  "io.github.izakyl.folkways.core.rts.combat.command.ResidentCommands",
-  "io.github.izakyl.folkways.core.rts.combat.group.UnitGroups", "io.github.izakyl.folkways.core.rts.combat.group.Deployment",
+  "io.github.izakyl.folkways.core.command.combat.command.ResidentCommands",
+  "io.github.izakyl.folkways.core.command.combat.group.UnitGroups", "io.github.izakyl.folkways.core.command.combat.group.Deployment",
 ];
 
 const SETUP = defineTask<{ x: string; y: string; z: string }, Scene>({

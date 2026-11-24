@@ -1,14 +1,14 @@
 package io.github.izakyl.folkways.core.shell.rs2;
 
+import io.github.izakyl.folkways.core.facility.api.Ports;
 import com.refinedmods.refinedstorage.api.core.Action;
 import com.refinedmods.refinedstorage.api.resource.ResourceKey;
 import com.refinedmods.refinedstorage.api.storage.Actor;
 import com.refinedmods.refinedstorage.api.storage.Storage;
 import com.refinedmods.refinedstorage.common.support.resource.ItemResource;
-import io.github.izakyl.folkways.core.inventory.api.port.Pull;
-import io.github.izakyl.folkways.core.inventory.api.port.Room;
-import io.github.izakyl.folkways.core.inventory.api.port.StorePorts;
-import io.github.izakyl.folkways.core.inventory.api.port.TransferResult;
+import io.github.izakyl.folkways.core.facility.api.control.Pull;
+import io.github.izakyl.folkways.core.facility.api.control.Room;
+import io.github.izakyl.folkways.core.facility.api.control.TransferResult;
 import io.github.izakyl.folkways.core.item.api.Goods;
 import io.github.izakyl.folkways.core.shell.crafting.InsertionReceipts;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
@@ -115,12 +115,12 @@ final class Transfers {
             }
             if (!acknowledged || !expected.equals(snapshot(storage))) {
                 boolean restored = compensate(storage, actor, before);
-                StorePorts.condemn(level, WorldPos.of(level, pos), Devices.reason(
+                Ports.observe(level, WorldPos.of(level, pos), Rs2Devices.reason(
                     restored ? "changed_transfer" : "failed_compensation"));
-                StorePorts.changed(level, pos);
+                Ports.changed(level, pos);
                 return refused(TransferResult.Why.UNUSABLE);
             }
-            StorePorts.changed(level, pos);
+            Ports.changed(level, pos);
             return new TransferResult.Done(stacks(wanted));
         }
     }

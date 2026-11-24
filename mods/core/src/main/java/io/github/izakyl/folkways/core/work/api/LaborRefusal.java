@@ -7,6 +7,7 @@ public enum LaborRefusal implements RefusalKind {
 
     NO_WAY_THERE,
     WORK_BROKE,
+    PROTECTED_FACILITY,
     NOWHERE_TO_PUT_IT,
     GOODS_GONE,
     WAITS_ON_ITSELF,
@@ -35,7 +36,7 @@ public enum LaborRefusal implements RefusalKind {
     @Override
     public boolean lasting() {
         return switch (this) {
-            case NO_WAY_THERE, NOWHERE_TO_PUT_IT, NO_ONE_FIT, NO_SOURCE, NO_ROOM_FOR, NO_WAY_FOR, NO_ONE_MAKES -> true;
+            case PROTECTED_FACILITY, NO_WAY_THERE, NOWHERE_TO_PUT_IT, NO_ONE_FIT, NO_SOURCE, NO_ROOM_FOR, NO_WAY_FOR, NO_ONE_MAKES -> true;
             default -> false;
         };
     }

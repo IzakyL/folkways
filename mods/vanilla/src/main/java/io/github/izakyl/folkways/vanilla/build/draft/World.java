@@ -4,7 +4,6 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.LevelReader;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.Heightmap;
@@ -17,6 +16,11 @@ public interface World {
 
     default int floor() {
         return Integer.MIN_VALUE;
+    }
+
+    /** Prepares this view on the caller's thread before handing it to a drafting worker. */
+    default World snapshot(Area area) {
+        return this;
     }
 
     World NONE = new World() {
@@ -36,8 +40,13 @@ public interface World {
         return Captured.of(level, area);
     }
 
-    static World of(LevelReader level) {
+    static World of(Level level) {
         return new World() {
+            @Override
+            public World snapshot(Area area) {
+                return capture(level, area);
+            }
+
             @Override
             public Optional<BlockState> block(BlockPos at) {
                 if (!level.hasChunkAt(at.getX(), at.getZ())) {

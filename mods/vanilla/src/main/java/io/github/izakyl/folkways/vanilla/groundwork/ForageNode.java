@@ -1,5 +1,7 @@
 package io.github.izakyl.folkways.vanilla.groundwork;
 
+import io.github.izakyl.folkways.core.work.api.LaborRefusal;
+import io.github.izakyl.folkways.core.facility.api.Facilities;
 import io.github.izakyl.folkways.core.item.api.ItemDrops;
 import io.github.izakyl.folkways.core.work.api.NodeSpec;
 import io.github.izakyl.folkways.core.work.api.Outcome;
@@ -61,6 +63,9 @@ final class ForageNode extends GroundNode {
         if ((!state.is(plant) && !(vine && Foraging.vine(plant.defaultBlockState())))
                 || !Foraging.root(state)) return Outcome.done();
         List<BlockPos> cells = Foraging.cells(level, cell, marked);
+        if (cells.stream().anyMatch(at -> Facilities.protectedAt(level, at))) {
+            return Outcome.failed(LaborRefusal.PROTECTED_FACILITY);
+        }
         if (cells.isEmpty() || !vine && !job.cells().equals(cells) || cells.stream().anyMatch(at -> !level.isLoaded(at)
                 || spared.test(at) || level.getBlockState(at).getDestroySpeed(level, at) < 0.0F)) {
             return refuse(GroundRefusal.NOTHING_TO_WORK);

@@ -1,20 +1,21 @@
 package io.github.izakyl.folkways.core.front.engine.colony;
 
+import io.github.izakyl.folkways.core.card.api.notice.Attempt;
+import io.github.izakyl.folkways.core.card.api.notice.Notice;
+import io.github.izakyl.folkways.core.card.api.notice.NoticeKind;
 import io.github.izakyl.folkways.core.colony.api.ClaimRelease;
-import io.github.izakyl.folkways.core.inventory.internal.ProxyStores;
-import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.core.colony.api.Claimed;
 import io.github.izakyl.folkways.core.colony.api.Colonies;
 import io.github.izakyl.folkways.core.colony.api.Colony;
 import io.github.izakyl.folkways.core.colony.api.ColonyView;
-import io.github.izakyl.folkways.core.resident.api.RefusalKind;
 import io.github.izakyl.folkways.core.front.api.Delegation;
-import io.github.izakyl.folkways.core.front.api.Facing;
+import io.github.izakyl.folkways.core.front.api.MemberPointing;
 import io.github.izakyl.folkways.core.front.api.Shape;
-import io.github.izakyl.folkways.core.front.api.notice.Attempt;
-import io.github.izakyl.folkways.core.front.api.notice.Notice;
-import io.github.izakyl.folkways.core.front.api.notice.NoticeKind;
 import io.github.izakyl.folkways.core.front.engine.Enrollments;
+import io.github.izakyl.folkways.core.inventory.api.port.StoreAccess;
+import io.github.izakyl.folkways.core.inventory.internal.ProxyStores;
+import io.github.izakyl.folkways.core.resident.api.RefusalKind;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
@@ -102,7 +103,7 @@ public final class MemberToggle {
         }
         BlockEntity blockEntity = level.getBlockEntity(pos);
         if (declaring.shape() instanceof Shape.Block && blockEntity == null
-            && !io.github.izakyl.folkways.core.inventory.api.port.StorePorts.ledger(level, pos)) {
+            && !io.github.izakyl.folkways.core.inventory.api.port.StoreAccess.ledger(level, pos)) {
             return told(player, Attempt.refused(Refusal.NO_BLOCK_ENTITY));
         }
         Optional<UUID> owner = ColonyGround.ofBlock(level, pos).map(Colony::id);
@@ -132,8 +133,8 @@ public final class MemberToggle {
     private static Optional<Attempt> pointed(ServerLevel level, Colony colony, BlockPos clicked,
                                              ServerPlayer player) {
         ColonyView view = ColonyViews.anyOf(colony, level);
-        for (Facing facing : Facing.all(colony)) {
-            Optional<Attempt> answered = facing.pointedAt(clicked, view, player);
+        for (MemberPointing handler : Enrollments.memberPointing(colony).values()) {
+            Optional<Attempt> answered = handler.pointedAt(clicked, view, player);
             if (answered.isPresent()) {
                 return answered;
             }

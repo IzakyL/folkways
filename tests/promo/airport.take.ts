@@ -895,7 +895,7 @@ async function setAltitude(client: MinecraftClient, band: "low" | "cruise" | "hi
 /** The airports the command card knows of: its roster carries the landing sites it may offer. */
 const CARD_AIRPORTS = defineTask<Record<string, never>, string[]>({
   name: "folkways.promo.airport.card-airports", side: "client",
-  source: javaTask({ imports: ["io.github.izakyl.folkways.core.rts.combat.net.ClientUnits"], body: `
+  source: javaTask({ imports: ["io.github.izakyl.folkways.core.command.combat.net.ClientUnits"], body: `
 return ClientUnits.snapshot().map(snapshot -> snapshot.landingSites().stream().map(site -> site.airport().id())
     .distinct().toList()).orElse(List.of());` }),
 });
@@ -1167,7 +1167,7 @@ const LANDING_ASSIGNMENT = defineTask<{ id: string }, any>({
     "io.github.izakyl.folkways.core.combat.api.LandingSites", "net.minecraft.world.phys.AABB"], body: `
 var level = ((MinecraftServer) ctx.server()).overworld();
 var vehicle = (VehicleEntity) level.getEntity(UUID.fromString(Args.of(ctx).string("id")));
-var type = Class.forName("io.github.izakyl.folkways.firearms.warfare.DirectVehicleMotion");
+var type = Class.forName("io.github.izakyl.folkways.core.shell.warfare.DirectVehicleMotion");
 var method = type.getDeclaredMethod("runway", VehicleEntity.class); method.setAccessible(true);
 var rows = new ArrayList<Object>();
 for (var site : LandingSites.in(level)) {

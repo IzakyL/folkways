@@ -12,6 +12,7 @@ public final class FolkwaysClientConfig {
     private static final ModConfigSpec.BooleanValue INVERT_WHEEL;
     private static final ModConfigSpec.BooleanValue REMEMBER_DRAWING_SETTINGS;
     private static final ModConfigSpec.BooleanValue OVERLAYS_WITHOUT_BOOK;
+    private static final ModConfigSpec.BooleanValue EDGE_SCROLL_CAMERA;
     private static final ModConfigSpec.ConfigValue<List<? extends String>> GLOBAL_TACTICAL_CONTROL_USERS;
 
     public static final ModConfigSpec SPEC;
@@ -30,9 +31,7 @@ public final class FolkwaysClientConfig {
             .define("invertWheel", false);
         REMEMBER_DRAWING_SETTINGS =
             BUILDER.translation("folkways.settings.remember_drawing_settings")
-            .comment(
-            "Remember the last options used for each kind of zone, path or"
-            + " building pattern configuration.")
+            .comment("Remember the last options used for each building pattern.")
             .define("rememberDrawingSettings", true);
         OVERLAYS_WITHOUT_BOOK =
             BUILDER.translation("folkways.settings.overlays_without_book")
@@ -43,6 +42,15 @@ public final class FolkwaysClientConfig {
             + " and their cards, residents' too.",
             "Only shown: pointing at or changing anything still takes the book.")
             .define("overlaysWithoutBook", false);
+        EDGE_SCROLL_CAMERA =
+            BUILDER.translation("folkways.settings.edge_scroll_camera")
+            .comment(
+            "Pan the view from above by moving the pointer to the screen's edge"
+            + " or with the arrow keys,",
+            "as strategy games do, instead of with W, A, S and D. The keys this"
+            + " frees become the RTS",
+            "facility card's grid (Q W E R / A S D F).")
+            .define("edgeScrollCamera", false);
         GLOBAL_TACTICAL_CONTROL_USERS =
             BUILDER.translation("folkways.settings.global_tactical_controls")
             .comment(
@@ -88,6 +96,16 @@ public final class FolkwaysClientConfig {
 
     public static void overlaysWithoutBook(boolean on) {
         OVERLAYS_WITHOUT_BOOK.set(on);
+        SPEC.save();
+    }
+
+    /** Whether the view from above pans at the screen's edge and with the arrow keys, leaving W, A, S, D free. */
+    public static boolean edgeScrollCamera() {
+        return SPEC.isLoaded() && EDGE_SCROLL_CAMERA.get();
+    }
+
+    public static void edgeScrollCamera(boolean on) {
+        EDGE_SCROLL_CAMERA.set(on);
         SPEC.save();
     }
 

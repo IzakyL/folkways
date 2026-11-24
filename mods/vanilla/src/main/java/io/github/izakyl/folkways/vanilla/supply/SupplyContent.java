@@ -7,7 +7,6 @@ import io.github.izakyl.folkways.core.front.api.Enrollment;
 import io.github.izakyl.folkways.core.front.api.Registering;
 import io.github.izakyl.folkways.core.front.api.Schema;
 import io.github.izakyl.folkways.core.front.api.Shape;
-import io.github.izakyl.folkways.core.front.api.panel.PageKind;
 import java.util.List;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
@@ -65,9 +64,8 @@ public final class SupplyContent {
     }
 
     private static void enroll(Registering event) {
-        event.facing(ID, colony -> colony.service(ID, SupplyPresence.class).map(state -> state));
+        event.holding(SOURCE, colony -> colony.service(ID, SupplyPresence.class).map(state -> state));
         event.enrollment(ID, new Enrollment(List.of(new Delegation(SOURCE,
-            new Shape.Block(state -> state.is(BLOCK.get())))), Schema.none(),
-            List.of(PageKind.boarded(ID, "folkways.page.supply", SOURCE))));
+            new Shape.Block(state -> state.is(BLOCK.get())), ITEM.getId())), Schema.none()));
     }
 }

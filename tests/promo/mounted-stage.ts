@@ -164,10 +164,10 @@ export async function flyTo(scene: MountedScene, from: Pose, eye: Vec, target: V
 }
 
 const IMPORTS = [
-  "io.github.izakyl.folkways.core.api.colony.Colonies",
-  "io.github.izakyl.folkways.core.api.terms.ItemSpec",
-  "io.github.izakyl.folkways.core.api.resident.body.Bodies",
-  "io.github.izakyl.folkways.core.api.vocation.Vocations",
+  "io.github.izakyl.folkways.core.colony.api.Colonies",
+  "io.github.izakyl.folkways.core.item.api.ItemSpec",
+  "io.github.izakyl.folkways.core.resident.api.Bodies",
+  "io.github.izakyl.folkways.core.vocation.api.Vocations",
   "io.github.izakyl.folkways.core.front.engine.colony.ColonyFront",
   "io.github.izakyl.folkways.core.front.engine.colony.ColonySettings",
   "io.github.izakyl.folkways.vanilla.person.ResidentEntity",
@@ -411,7 +411,7 @@ export const DRAW_FIELD = defineTask<Record<string, any>, any>({
   side: "server",
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.core.api.colony.Colonies",
+      "io.github.izakyl.folkways.core.colony.api.Colonies",
       "io.github.izakyl.folkways.core.front.engine.colony.ColonyFront",
       "io.github.izakyl.folkways.core.front.engine.colony.ColonySettings",
       "io.github.izakyl.folkways.vanilla.farming.FarmingContent",

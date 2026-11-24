@@ -12,7 +12,7 @@ public final class Cooldowns {
 
     private static final long LONGEST_WAIT = 640;
 
-    private record Bar(int failures, long retryAt) {
+    public record Bar(int failures, long retryAt) {
     }
 
     private final Map<Choice, Bar> bars = new LinkedHashMap<>();
@@ -51,6 +51,19 @@ public final class Cooldowns {
     public void round(long tick) {
         now = tick;
         bars.values().removeIf(bar -> now >= bar.retryAt() + LONGEST_WAIT);
+    }
+
+    public Map<UUID, Bar> snapshot() {
+        Map<UUID, Bar> result = new LinkedHashMap<>();
+        madeBy.forEach((node, choice) -> {
+            Bar bar = bars.get(choice);
+            if (bar != null) {
+                result.put(node, bar);
+            }
+        });
+        bars.forEach((choice, bar) -> result.merge(choice.open(), bar,
+            (had, next) -> had.retryAt() >= next.retryAt() ? had : next));
+        return Map.copyOf(result);
     }
 
     public OptionalLong nextOpening() {

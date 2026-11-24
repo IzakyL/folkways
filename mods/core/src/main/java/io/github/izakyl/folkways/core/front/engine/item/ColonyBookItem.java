@@ -1,8 +1,10 @@
 package io.github.izakyl.folkways.core.front.engine.item;
 
 import io.github.izakyl.folkways.core.front.api.Shape;
-import io.github.izakyl.folkways.core.front.engine.charter.CurrentColony;
-import io.github.izakyl.folkways.core.front.engine.colony.ColonyBoards;
+import io.github.izakyl.folkways.core.colony.charter.CurrentColony;
+import io.github.izakyl.folkways.core.card.net.CardOpen;
+import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.front.engine.colony.HeldFacilities;
 import io.github.izakyl.folkways.core.front.engine.registry.FolkwaysDataComponents;
 import io.github.izakyl.folkways.core.front.ui.screen.ColonyShell;
 import java.util.Optional;
@@ -32,11 +34,12 @@ public final class ColonyBookItem extends Item {
         if (!(level instanceof ServerLevel serverLevel) || !(player instanceof ServerPlayer serverPlayer)) {
             return InteractionResult.sidedSuccess(level.isClientSide);
         }
-        // A block the colony keeps a board for opens on that board; anything else opens the colony's own panel.
+        // A block the colony holds opens on its card; anything else opens the colony's own panel.
         BlockPos at = context.getClickedPos();
-        if (CurrentColony.of(serverPlayer)
-                .flatMap(colony -> ColonyBoards.firstAt(serverLevel, colony, at)).isPresent()) {
-            ColonyShell.openAt(serverPlayer, at);
+        Optional<Colony> colony = CurrentColony.of(serverPlayer);
+        Optional<HeldFacilities.Held> held = colony.flatMap(kept -> HeldFacilities.at(serverLevel, kept, at));
+        if (held.isPresent()) {
+            CardOpen.send(serverPlayer, colony.get().id(), held.get().id());
         } else {
             ColonyShell.open(serverPlayer);
         }
@@ -52,6 +55,7 @@ public final class ColonyBookItem extends Item {
         return InteractionResultHolder.sidedSuccess(stack, level.isClientSide);
     }
 
+    /** What the book does with a click; sneak and the wheel turn it to the next gesture. */
     public static Shape.Gesture gesture(ItemStack stack) {
         Shape.Gesture written = stack.get(FolkwaysDataComponents.BOOK_GESTURE.get());
         return written == null ? BookGestures.DEFAULT : written;

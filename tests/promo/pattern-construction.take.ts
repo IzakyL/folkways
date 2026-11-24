@@ -131,7 +131,7 @@ const imports = ["io.github.izakyl.folkways.core.front.engine.colony.ColonyGroun
   "io.github.izakyl.folkways.vanilla.build.*", "net.minecraft.core.BlockPos",
   "net.minecraft.core.registries.BuiltInRegistries", "net.minecraft.resources.ResourceLocation",
   "net.minecraft.world.item.ItemStack", "net.minecraft.world.level.block.Blocks", "net.minecraft.world.Container",
-  "io.github.izakyl.folkways.core.resident.api.Bodies", "io.github.izakyl.folkways.core.front.api.notice.Doings",
+  "io.github.izakyl.folkways.core.resident.api.Bodies", "io.github.izakyl.folkways.core.card.api.notice.Doings",
   "io.github.izakyl.folkways.core.work.api.Node"];
 const members = `
 static BlockPos pos(Map<?,?> raw){return new BlockPos(((Number)raw.get("x")).intValue(),((Number)raw.get("y")).intValue(),((Number)raw.get("z")).intValue());}

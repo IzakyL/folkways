@@ -1,8 +1,10 @@
 package io.github.izakyl.folkways.core.plan.internal;
 
 import io.github.izakyl.folkways.core.FolkwaysConfig;
+import io.github.izakyl.folkways.core.inventory.api.Stash;
 import io.github.izakyl.folkways.core.item.api.Goods;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
+import io.github.izakyl.folkways.core.plan.api.Delivery;
 import io.github.izakyl.folkways.core.plan.api.Intent;
 import io.github.izakyl.folkways.core.plan.api.Refinement;
 import io.github.izakyl.folkways.core.plan.api.TransportIntent;
@@ -148,13 +150,27 @@ final class Routing implements Refinement {
         }
         session = new Session();
         try {
-            return OptionalLong.of(plan.attempt(() -> expand(transfer, plan)));
+            long moved = plan.attempt(() -> expand(transfer, plan));
+            if (moved > 0 || !canFallBack(transfer, plan.situation().stock())) {
+                return OptionalLong.of(moved);
+            }
         } catch (Limited exhausted) {
             plan.because(Why.NO_SOURCE);
             return OptionalLong.of(0);
         } finally {
             session = null;
         }
+        // Keep local hauling available while the trunk is still being priced.
+        return OptionalLong.of(plan.attempt(() -> direct.lay(transfer, plan)));
+    }
+
+    private static boolean canFallBack(Transfer transfer, Stock stock) {
+        if (!(transfer.from() instanceof From.Carried)) {
+            return true;
+        }
+        // A non-slot store still needs a delivery node to put the goods in its port.
+        Stash destination = Stash.at(transfer.intent().to().at());
+        return stock.holds(destination) && !stock.direct(destination);
     }
 
     // What carrying the goods between two places would cost by the cheapest route known: straight there, or by one
@@ -517,6 +533,15 @@ final class Routing implements Refinement {
             }
             plan.add(node);
             owned.add(node.id());
+        }
+
+        @Override
+        public Node delivery(Node intent) {
+            session.use();
+            if (!(intent instanceof Delivery delivery) || delivery.destination().isEmpty()) {
+                throw new IllegalArgumentException("transport requires a part delivery");
+            }
+            return TransferNode.delivering(delivery, delivery.goods());
         }
 
         public boolean feed(UUID consumer) {

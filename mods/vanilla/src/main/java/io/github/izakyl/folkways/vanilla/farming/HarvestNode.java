@@ -1,5 +1,7 @@
 package io.github.izakyl.folkways.vanilla.farming;
 
+import io.github.izakyl.folkways.core.work.api.LaborRefusal;
+import io.github.izakyl.folkways.core.facility.api.Facilities;
 import io.github.izakyl.folkways.core.work.api.Amount;
 import io.github.izakyl.folkways.core.work.api.Outcome;
 import io.github.izakyl.folkways.core.work.api.WorkNoise;
@@ -69,7 +71,11 @@ final class HarvestNode extends FarmNode {
         boolean cut = false;
         int broken = 0;
         List<BlockPos> cells = tending.neighbors(job, (int) who.effects().value(FarmingContent.CHAIN));
-        for (BlockPos cell : currentColumn(level, cells)) {
+        List<BlockPos> column = currentColumn(level, cells);
+        if (column.stream().anyMatch(cell -> Facilities.protectedAt(level, cell))) {
+            return Outcome.failed(LaborRefusal.PROTECTED_FACILITY);
+        }
+        for (BlockPos cell : column) {
             if (!level.isLoaded(cell)) {
                 continue;
             }
@@ -87,7 +93,7 @@ final class HarvestNode extends FarmNode {
                     stack.grow((int) extra + (level.random.nextDouble() < extra % 1 ? 1 : 0));
                 }
             }
-            CropCare.of(level).forget(cell);
+            CropCare.refresh(level).forget(cell);
             taken.addAll(drops);
             heard.add(WorkNoise.broke(cell, state));
             broken++;
@@ -140,7 +146,8 @@ final class HarvestNode extends FarmNode {
                     if (level.random.nextDouble() < who.effects().value(FarmingContent.SEED_SAVING)) {
                         stack.grow(Math.max(0, before - stack.getCount()));
                     }
-                    CropCare.of(level).tend(cell, level.getBlockState(cell), who.effects().value(FarmingContent.GROWTH));
+                    CropCare.refresh(level).tend(cell, level.getBlockState(cell),
+                        who.effects().value(FarmingContent.GROWTH));
                     return Optional.of(WorkNoise.placed(cell, level.getBlockState(cell)));
                 }
             }

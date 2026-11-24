@@ -13,7 +13,7 @@ import io.github.izakyl.folkways.core.work.api.Need;
 import io.github.izakyl.folkways.core.work.api.Node;
 import io.github.izakyl.folkways.core.work.api.NodeSpec;
 import io.github.izakyl.folkways.core.work.api.Outcome;
-import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.world.api.Stances;
 import io.github.izakyl.folkways.core.work.api.Urge;
 import io.github.izakyl.folkways.core.work.api.WorkEffort;
 import io.github.izakyl.folkways.core.work.api.WorkGesture;
@@ -26,7 +26,7 @@ import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.core.world.api.WorldSpaces;
 import io.github.izakyl.folkways.core.front.api.Fronts;
 import io.github.izakyl.folkways.core.front.api.ZoneView;
-import io.github.izakyl.folkways.core.front.api.notice.Line;
+import io.github.izakyl.folkways.core.card.api.notice.Line;
 import io.github.izakyl.folkways.vanilla.FolkwaysVanillaConfig;
 import io.github.izakyl.folkways.vanilla.person.ResidentEntity;
 import java.nio.charset.StandardCharsets;
@@ -77,7 +77,7 @@ final class Dining {
 
     record Seat(BlockPos chair, BlockPos approach) { }
     private static final int MAX_TABLE_CELLS = 128;
-    private static final int MAX_DINING_ZONE_CELLS = 4096;
+    static final int MAX_DINING_ZONE_CELLS = 4096;
     record Table(ServerLevel level, UUID zone, BlockPos at, ItemSpec food, int target,
                  Set<BlockPos> tops, List<Seat> seats, List<BlockPos> approaches, boolean display, boolean provider) { }
     private record Portion(WorldPos at, int slot) { }
@@ -109,7 +109,10 @@ final class Dining {
             }
         }
         List<ZoneKey> next = geometry(server);
-        if (!geometryDirty && geometry.equals(next)) { return; }
+        if (!geometryDirty && geometry.equals(next)) {
+            supplies.observe();
+            return;
+        }
         geometryDirty = false;
         geometry = next;
         watches.forEach(BlockChanges.Heard::close);
@@ -123,6 +126,7 @@ final class Dining {
             }
         }
         supplies.refresh(server);
+        supplies.observe();
         List<Table> found = new ArrayList<>();
         Set<WorldPos> seen = new HashSet<>();
         for (ColonyView view : colony.views(server)) {
@@ -451,17 +455,12 @@ final class Dining {
             || !body.level().getEntitiesOfClass(Mob.class, body.getBoundingBox().inflate(6), mob -> mob instanceof Enemy).isEmpty();
     }
 
-    private static boolean near(Table table, Mob body) {
-        return table.tops.stream().anyMatch(top -> WorldSpaces.world(table.level, WorldPos.of(table.level, top))
-            .map(at -> body.position().distanceToSqr(at) <= 4 * 4).orElse(false));
-    }
-
     void tick(MinecraftServer server) {
         for (BarDrink drink : List.copyOf(drinks.values())) {
             if (drink.refusal(drink.cabinet.level()).isPresent() || drink.cabinet.level().getGameTime() > drink.expires) { drink.finish(); }
         }
         for (Meal meal : List.copyOf(meals.values())) {
-            if (!meal.present(false) || meal.engaged && !meal.present(true)
+            if (!meal.present()
                     || meal.choice.table.level.getGameTime() > meal.expires
                     || server.getTickCount() % 10 == 0 && (!valid(meal.choice.table)
                         || !valid(meal.choice.table, meal.choice.seat) || unsafe(meal.who.body())
@@ -506,18 +505,14 @@ final class Dining {
         for (var cabinet : supplies.cabinets().stream().sorted(Comparator.comparingDouble(one -> one.at().distSqr(who.body().blockPosition()))).toList()) {
             if (cabinet.level() != view.level() || cabinet.at().distSqr(who.body().blockPosition()) > 16 * 16
                     || !supplies.current(cabinet)) { continue; }
-            var stock = colony.inventory().snapshot().store(WorldPos.of(view.level(), cabinet.at())).orElse(null);
-            if (stock == null || stock.state() != InventorySnapshot.State.OBSERVED) {
-                colony.inventory().ensureObserved(Stash.at(WorldPos.of(view.level(), cabinet.at())));
-                continue;
-            }
+            var stock = supplies.stock(cabinet);
             for (Seat seat : cabinet.seats()) {
                 BlockPos chair = seat.chair;
                 BlockPos approach = seat.approach;
                 if (!barChair(cabinet, chair, who)) { continue; }
-                for (var observed : stock.slots()) {
-                    int slot = observed.physicalSlot();
-                    ItemStack serving = observed.stackCopy();
+                for (int i = 0; i < stock.size(); i++) {
+                    int slot = i;
+                    ItemStack serving = stock.get(slot);
                     Portion portion = new Portion(WorldPos.of(view.level(), cabinet.at()), slot);
                     if (serving.isEmpty() || !Goods.matches(serving, cabinet.menu()) || !DiningDrinks.accepts(serving)
                             || portions.containsKey(portion)) { continue; }
@@ -530,7 +525,7 @@ final class Dining {
                             seats.remove(chairPos, token);
                             return unavailableBar(cabinet, approach);
                         }
-                        BarDrink drink = new BarDrink(token, who, cabinet, seat, slot, bottle, stock.version());
+                        BarDrink drink = new BarDrink(token, who, cabinet, seat, slot, bottle);
                         drinks.put(token, drink);
                         return drink;
                     }));
@@ -566,15 +561,12 @@ final class Dining {
         final Seat seat;
         final int slot;
         final ItemStack bottle;
-        final InventorySnapshot.Version observed;
         final NodeSpec spec;
         final long expires;
         boolean finished;
-        boolean engaged;
-        BarDrink(UUID token, Worker who, DiningSupplies.Cabinet cabinet, Seat seat, int slot, ItemStack bottle,
-                 InventorySnapshot.Version observed) {
+        BarDrink(UUID token, Worker who, DiningSupplies.Cabinet cabinet, Seat seat, int slot, ItemStack bottle) {
             this.token = token; this.who = who; this.cabinet = cabinet; this.seat = seat;
-            this.slot = slot; this.bottle = bottle; this.observed = observed;
+            this.slot = slot; this.bottle = bottle;
             int duration = FolkwaysVanillaConfig.diningMealTicks();
             expires = cabinet.level().getGameTime() + 500 + duration;
             spec = NodeSpec.of(token, LivingContent.ID, WorkSite.at(cabinet.level(), cabinet.at()),
@@ -583,7 +575,6 @@ final class Dining {
                 .gesture(new WorkGesture() {
                     public void perform(net.minecraft.world.entity.LivingEntity body, int tick, BlockPos focus) {
                         if (refusal(cabinet.level()).isPresent()) { finish(); return; }
-                        engaged = true;
                         if (!body.isPassenger()) { DiningTables.sit(cabinet.level(), seat.chair, who.body()); }
                         if (body instanceof ResidentEntity person) { person.leisureMotion("drinking"); }
                         body.getPersistentData().putBoolean("folkways_vanilla:dining_drinking", true);
@@ -595,22 +586,10 @@ final class Dining {
         }
         public NodeSpec spec() { return spec; }
 
-        public boolean ready(ServerLevel level) {
-            WorldPos at = WorldPos.of(cabinet.level(), cabinet.at());
-            var stock = colony.inventory().snapshot().store(at);
-            if (stock.isPresent() && stock.get().state() == InventorySnapshot.State.OBSERVED) {
-                return true;
-            }
-            colony.inventory().ensureObserved(Stash.at(at));
-            return false;
-        }
-
         public Optional<io.github.izakyl.folkways.core.resident.api.RefusalKind> refusal(ServerLevel level) {
-            var stock = colony.inventory().snapshot().store(WorldPos.of(cabinet.level(), cabinet.at())).orElse(null);
-            boolean serving = stock == null || stock.state() != InventorySnapshot.State.OBSERVED
-                || stock.version().epoch().equals(observed.epoch())
-                    && stock.slots().stream().anyMatch(item -> item.physicalSlot() == slot
-                        && ItemStack.isSameItemSameComponents(item.stackCopy(), bottle));
+            var stock = supplies.stock(cabinet);
+            boolean serving = slot < stock.size() && !stock.get(slot).isEmpty()
+                && ItemStack.isSameItemSameComponents(stock.get(slot), bottle);
             return finished || level != cabinet.level() || who.body().level() != level || !who.body().isAlive()
                 || who.body().isRemoved() || level.getEntity(who.body().getUUID()) != who.body() || unsafe(who.body())
                 || !supplies.current(cabinet) || level.isLoaded(cabinet.at()) && !DiningDrinks.hasSupply(level, cabinet.at())
@@ -619,30 +598,25 @@ final class Dining {
                 || !level.isLoaded(seat.approach) || !Footing.withFeetAt(level, seat.approach)
                 || Fronts.of(colony).zonesIn(level).stream()
                     .noneMatch(zone -> zone.id().equals(cabinet.zone()) && includes(zone, seat.chair))
-                || engaged && who.body().blockPosition().distSqr(seat.chair) > 16 || !serving
+                || !serving
                 ? Optional.of(LivingRefusal.NOTHING_TO_EAT) : Optional.empty();
         }
 
         public Outcome commit(ServerLevel level, Worker worker) {
             try {
-                if (worker.body() != who.body() || refusal(level).isPresent() || who.body().blockPosition().distSqr(seat.chair) > 16) {
-                    return Outcome.failed(LivingRefusal.NOTHING_TO_EAT);
-                }
-                var publication = colony.inventory().snapshot().store(WorldPos.of(level, cabinet.at())).orElse(null);
-                if (publication == null || publication.state() != InventorySnapshot.State.OBSERVED) {
+                if (worker.body() != who.body() || refusal(level).isPresent()) {
                     return Outcome.failed(LivingRefusal.NOTHING_TO_EAT);
                 }
                 Container stock = DiningDrinks.supply(level, cabinet.at()).orElse(null);
-                if (stock == null || slot >= stock.getContainerSize()
+                if (stock == null || slot >= stock.getContainerSize() || stock.getItem(slot).isEmpty()
                         || !ItemStack.isSameItemSameComponents(stock.getItem(slot), bottle)) {
-                    colony.inventoryFeedback().stale(Stash.at(WorldPos.of(level, cabinet.at())),
-                        publication.version());
+                    supplies.observe(cabinet, stock);
                     return Outcome.failed(LivingRefusal.NOTHING_TO_EAT);
                 }
                 int before = who.body().getPersistentData().getInt("folkways_vanilla:table_drinks");
                 List<ItemStack> left = DiningDrinks.consume(level, who.body(), stock, slot);
+                supplies.observe(cabinet, stock);
                 if (who.body().getPersistentData().getInt("folkways_vanilla:table_drinks") == before) { return Outcome.failed(LivingRefusal.NOTHING_TO_EAT); }
-                colony.inventoryFeedback().changed(Stash.at(WorldPos.of(level, cabinet.at())));
                 living.drank(who.resident().id(), level.getGameTime());
                 return new Outcome.Done(List.of(), left, Optional.empty());
             } finally { finish(); }
@@ -682,7 +656,7 @@ final class Dining {
         @Override public NodeSpec spec() { return spec; }
         @Override public Outcome commit(ServerLevel level, Worker who) {
             List<ItemStack> back = new ArrayList<>(who.supplied().stream().map(ItemStack::copy).toList());
-            if (level != table.level || who.body().level() != level || !near(table, who.body())
+            if (level != table.level || who.body().level() != level
                     || !valid(table) || table.seats.stream().noneMatch(seat -> valid(table, seat))
                     || table.approaches.stream().noneMatch(at -> level.isLoaded(at) && Footing.withFeetAt(level, at)
                         && level.getFluidState(at).isEmpty())) {
@@ -723,7 +697,6 @@ final class Dining {
         final long expires;
         final NodeSpec spec;
         volatile boolean finished;
-        boolean engaged;
         Meal(UUID token, Worker who, Choice choice) {
             this.token = token; this.who = who; this.choice = choice;
             int duration = FolkwaysVanillaConfig.diningMealTicks();
@@ -733,8 +706,7 @@ final class Dining {
                 .effort(WorkEffort.NONE).doing(LivingContent.DINING_EATING).focus(choice.table.at)
                 .gesture(new WorkGesture() {
                     @Override public void perform(net.minecraft.world.entity.LivingEntity body, int tick, BlockPos focus) {
-                        if (finished || !Meal.this.present(true) || unsafe(who.body())) { finish(); return; }
-                        engaged = true;
+                        if (finished || !Meal.this.present() || unsafe(who.body())) { finish(); return; }
                         if (!body.isPassenger()) { DiningTables.sit(choice.table.level, choice.seat.chair, who.body()); }
                         if (body instanceof ResidentEntity person) { person.leisureMotion("dining"); }
                         who.body().getLookControl().setLookAt(choice.table.at.getX() + 0.5, choice.table.at.getY() + 1, choice.table.at.getZ() + 0.5);
@@ -743,21 +715,20 @@ final class Dining {
                 }).done();
         }
         @Override public NodeSpec spec() { return spec; }
-        boolean present(boolean nearby) {
+        boolean present() {
             Mob body = who.body();
             ServerLevel level = choice.table.level;
             return body.level() == level && body.isAlive() && !body.isRemoved()
-                && level.getEntity(body.getUUID()) == body && (!nearby || WorldSpaces.world(level,
-                    WorldPos.of(level, choice.seat.chair)).map(at -> body.position().distanceToSqr(at) <= 4 * 4).orElse(false));
+                && level.getEntity(body.getUUID()) == body;
         }
         @Override public Optional<io.github.izakyl.folkways.core.resident.api.RefusalKind> refusal(ServerLevel level) {
-            return level != choice.table.level || finished || !present(engaged)
+            return level != choice.table.level || finished || !present()
                     || !valid(choice.table) || !valid(choice.table, choice.seat) || unsafe(who.body())
                     || !DiningTables.available(level, choice.seat.chair, who.body())
                 ? Optional.of(LivingRefusal.NOTHING_TO_EAT) : Optional.empty();
         }
         @Override public Outcome commit(ServerLevel level, Worker eater) {
-            if (refusal(level).isPresent() || eater.body() != who.body() || !present(true)) {
+            if (refusal(level).isPresent() || eater.body() != who.body()) {
                 finish(); return Outcome.failed(LivingRefusal.NOTHING_TO_EAT);
             }
             if (choice.version != null) {

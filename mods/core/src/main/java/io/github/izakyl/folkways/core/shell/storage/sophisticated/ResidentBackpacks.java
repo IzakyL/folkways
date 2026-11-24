@@ -4,10 +4,13 @@ import io.github.izakyl.folkways.core.resident.api.Bodies;
 import io.github.izakyl.folkways.core.resident.api.Body;
 import io.github.izakyl.folkways.core.shell.mixin.BackpackInventoryProviderAccessor;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.effect.MobEffectInstance;
@@ -68,8 +71,10 @@ final class ResidentBackpacks {
                 default -> { }
             }
         }
+        // A compatibility layer can present the same Accessories slot through both handlers.
+        Set<ItemStack> seen = Collections.newSetFromMap(new IdentityHashMap<>());
         return stacks.stream().filter(stack -> !stack.isEmpty() && stack.getItem() instanceof BackpackItem)
-            .toList();
+            .filter(seen::add).toList();
     }
 
     private static final class Curios {

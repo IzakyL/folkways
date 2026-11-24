@@ -1,26 +1,25 @@
 package io.github.izakyl.folkways.core.front.engine.net;
 
-import io.github.izakyl.folkways.core.front.engine.colony.LaborDebug;
-import io.github.izakyl.folkways.core.front.engine.colony.DebugFocus;
-import io.github.izakyl.folkways.core.travel.internal.ColonyWays;
-import io.github.izakyl.folkways.core.travel.internal.graph.WayGraphDebug;
-import io.github.izakyl.folkways.core.front.client.ColonyDebugState;
 import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.base.persist.Reader;
+import io.github.izakyl.folkways.core.card.api.notice.Attempt;
+import io.github.izakyl.folkways.core.card.api.notice.Line;
+import io.github.izakyl.folkways.core.card.net.CardOpen;
 import io.github.izakyl.folkways.core.colony.api.Colony;
 import io.github.izakyl.folkways.core.colony.api.ColonyView;
-import io.github.izakyl.folkways.core.resident.api.Bodies;
-import io.github.izakyl.folkways.core.resident.api.Body;
-import io.github.izakyl.folkways.core.front.api.Facing;
+import io.github.izakyl.folkways.core.facility.api.Facilities;
 import io.github.izakyl.folkways.core.front.api.Ghost;
+import io.github.izakyl.folkways.core.front.api.GhostSource;
 import io.github.izakyl.folkways.core.front.api.Placard;
-import io.github.izakyl.folkways.core.front.api.notice.Attempt;
-import io.github.izakyl.folkways.core.front.api.notice.Line;
+import io.github.izakyl.folkways.core.front.api.ZoneRing;
+import io.github.izakyl.folkways.core.front.client.ColonyDebugState;
 import io.github.izakyl.folkways.core.front.client.ColonyHighlightState;
 import io.github.izakyl.folkways.core.front.client.ColonyLookState;
+import io.github.izakyl.folkways.core.front.client.ZoneSelection;
+import io.github.izakyl.folkways.core.front.engine.Enrollments;
 import io.github.izakyl.folkways.core.front.engine.authority.AtBody;
 import io.github.izakyl.folkways.core.front.engine.authority.ColonyAuthority;
-import io.github.izakyl.folkways.core.front.engine.charter.CurrentColony;
+import io.github.izakyl.folkways.core.colony.charter.CurrentColony;
 import io.github.izakyl.folkways.core.front.engine.colony.BlockSweep;
 import io.github.izakyl.folkways.core.front.engine.colony.ColonyFront;
 import io.github.izakyl.folkways.core.front.engine.colony.ColonyGround;
@@ -28,20 +27,26 @@ import io.github.izakyl.folkways.core.front.engine.colony.ColonyPath;
 import io.github.izakyl.folkways.core.front.engine.colony.ColonySettings;
 import io.github.izakyl.folkways.core.front.engine.colony.ColonyStalls;
 import io.github.izakyl.folkways.core.front.engine.colony.ColonyZone;
+import io.github.izakyl.folkways.core.front.engine.colony.DebugFocus;
 import io.github.izakyl.folkways.core.front.engine.colony.Endorsements;
+import io.github.izakyl.folkways.core.front.engine.colony.HeldFacilities;
+import io.github.izakyl.folkways.core.front.engine.colony.LaborDebug;
 import io.github.izakyl.folkways.core.front.engine.colony.MemberToggle;
 import io.github.izakyl.folkways.core.front.engine.colony.ZoneDrafts;
 import io.github.izakyl.folkways.core.front.engine.item.ColonyBookItem;
 import io.github.izakyl.folkways.core.front.ui.screen.ColonyShell;
+import io.github.izakyl.folkways.core.resident.api.Bodies;
+import io.github.izakyl.folkways.core.resident.api.Body;
+import io.github.izakyl.folkways.core.travel.internal.ColonyWays;
+import io.github.izakyl.folkways.core.travel.internal.graph.WayGraphDebug;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.WeakHashMap;
 import java.util.function.BiConsumer;
-import java.util.function.Function;
 import net.minecraft.core.BlockPos;
-import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -77,6 +82,8 @@ public final class FolkwaysUiNetworkEvents {
         registrar.playToServer(ToggleColonyResidentPacket.TYPE, ToggleColonyResidentPacket.STREAM_CODEC,
             asPlayer((packet, player) -> ColonyAuthority.forColony(player, packet.colonyId())
                 .ifPresent(authority -> toggleColonyEntity(player, authority, packet.entityId()))));
+        registrar.playToServer(UseBookPacket.TYPE, UseBookPacket.STREAM_CODEC,
+            asPlayer(FolkwaysUiNetworkEvents::useBook));
         registrar.playToServer(SetBookGesturePacket.TYPE, SetBookGesturePacket.STREAM_CODEC,
             asPlayer(FolkwaysUiNetworkEvents::setBookGesture));
         registrar.playToServer(
@@ -88,6 +95,8 @@ public final class FolkwaysUiNetworkEvents {
                     .ifPresent(authority -> ColonyShell.open(player, packet.page()))));
         registrar.playToServer(CreateZonePacket.TYPE, CreateZonePacket.STREAM_CODEC,
             asPlayer(FolkwaysUiNetworkEvents::createZone));
+        registrar.playToClient(ZoneImpactPacket.TYPE, ZoneImpactPacket.STREAM_CODEC,
+            (packet, context) -> onClient(context, () -> ZoneSelection.confirmImpact(packet)));
         registrar.playToServer(CreatePathPacket.TYPE, CreatePathPacket.STREAM_CODEC,
             asPlayer(FolkwaysUiNetworkEvents::createPath));
         registrar.playToServer(SweepBlocksPacket.TYPE, SweepBlocksPacket.STREAM_CODEC,
@@ -148,12 +157,32 @@ public final class FolkwaysUiNetworkEvents {
         }
     }
 
+    // The book in that hand turns to the gesture; the client has already said so.
     private static void setBookGesture(SetBookGesturePacket packet, ServerPlayer player) {
         ItemStack stack = player.getItemInHand(packet.hand());
         if (stack.getItem() instanceof ColonyBookItem) {
             ColonyBookItem.setGesture(stack, packet.gesture());
-            player.displayClientMessage(Component.translatable(
-                "folkways.book.gesture." + packet.gesture().getSerializedName()), true);
+        }
+    }
+
+    // What the colony holds where the book was used opens on its card, a block before the ground it stands in;
+    // anywhere else, the colony's panel.
+    private static void useBook(UseBookPacket packet, ServerPlayer player) {
+        Optional<ColonyAuthority> authority = ColonyAuthority.forColony(player, packet.colonyId());
+        if (authority.isEmpty()) {
+            ColonyShell.open(player);
+            return;
+        }
+        Colony colony = authority.get().colony();
+        ServerLevel level = player.serverLevel();
+        Optional<UUID> held = packet.block().filter(level::isLoaded)
+            .flatMap(at -> HeldFacilities.at(level, colony, at))
+            .or(() -> packet.holding().flatMap(id -> HeldFacilities.find(colony, id)))
+            .map(HeldFacilities.Held::id);
+        if (held.isPresent()) {
+            CardOpen.send(player, colony.id(), held.get());
+        } else {
+            ColonyShell.open(player);
         }
     }
 
@@ -192,11 +221,33 @@ public final class FolkwaysUiNetworkEvents {
         PacketDistributor.sendToPlayer(player, ColonyOverviews.fresh(player, colony));
     }
 
+    private record PendingZone(ServerLevel level, CreateZonePacket request, List<Facilities.Source> affected,
+                               long expires) {
+    }
+
+    private static final WeakHashMap<ServerPlayer, PendingZone> PENDING_ZONES = new WeakHashMap<>();
+
     private static void createZone(CreateZonePacket packet, ServerPlayer player) {
-        ColonyAuthority.forColony(player, packet.colonyId()).ifPresent(authority -> ZoneDrafts
-            .zone(player.serverLevel(), authority.colony(), packet.delegation(), packet.min(), packet.max(),
-                ColonySettings.load(Reader.of(packet.settings())))
-            .ifPresent(zone -> opened(player, authority.colony(), zone.id())));
+        ColonyAuthority.forColony(player, packet.colonyId()).ifPresent(authority -> {
+            ServerLevel level = player.serverLevel();
+            PendingZone pending = PENDING_ZONES.remove(player);
+            if (packet.confirmation().isPresent() && (pending == null || pending.level() != level
+                    || pending.expires() < level.getGameTime() || !pending.request().equals(packet))) {
+                return;
+            }
+            ColonySettings settings = ColonySettings.load(Reader.of(packet.settings()));
+            var affected = ZoneDrafts.affected(level, packet.delegation(), packet.min(), packet.max(), settings);
+            if (!affected.isEmpty() && (packet.confirmation().isEmpty() || !affected.equals(pending.affected()))) {
+                var confirm = new CreateZonePacket(packet.colonyId(), packet.min(), packet.max(), packet.delegation(),
+                    packet.settings(), Optional.of(UUID.randomUUID()));
+                PENDING_ZONES.put(player, new PendingZone(level, confirm, affected, level.getGameTime() + 1800));
+                PacketDistributor.sendToPlayer(player,
+                    new ZoneImpactPacket(confirm, ZoneDrafts.describeAffected(level, affected)));
+                return;
+            }
+            ZoneDrafts.zone(level, authority.colony(), packet.delegation(), packet.min(), packet.max(), settings)
+                .ifPresent(zone -> opened(player, authority.colony(), zone.id()));
+        });
     }
 
     private static void createPath(CreatePathPacket packet, ServerPlayer player) {
@@ -217,42 +268,44 @@ public final class FolkwaysUiNetworkEvents {
     }
 
     private static void opened(ServerPlayer player, Colony colony, UUID id) {
-        ColonyShell.editSelection(player, id);
+        CardOpen.send(player, colony.id(), id);
         PacketDistributor.sendToPlayer(player, ColonyOverviews.fresh(player, colony));
     }
 
     static ColonyOverviewPacket buildOverview(ServerLevel level, Colony colony) {
         List<ZoneSnapshot> zones = new ArrayList<>();
         for (ColonyZone zone : ColonyFront.of(colony).zonesIn(level)) {
-            zones.add(ZoneSnapshot.of(zone, Facing.all(colony).stream()
-                .flatMap(facing -> facing.zoneRings(zone, colony.view(level)).stream()).limit(64).toList()));
+            List<ZoneRing> rings = new ArrayList<>();
+            HeldFacilities.find(colony, zone.id()).ifPresent(held -> rings.addAll(held.rings(colony.view(level))));
+            zones.add(ZoneSnapshot.of(zone, rings.stream().limit(64).toList()));
         }
         List<ColonyPath> paths = ColonyFront.of(colony).paths().stream()
             .filter(path -> path.dimension().equals(level.dimension())).toList();
         ColonyView view = colony.view(level);
-        List<Facing> facings = Facing.all(colony);
+        var sources = Enrollments.ghostSource(colony).values();
         List<Ghost> ghosts = new ArrayList<>();
-        for (Facing facing : facings) {
-            ghosts.addAll(facing.ghosts(view));
+        for (GhostSource source : sources) {
+            ghosts.addAll(source.ghosts(view));
         }
         List<Placards.Note> notes = new ArrayList<>();
         List<Placard> placards = new ArrayList<>();
+        // A zone's or a path's card over it says what its card says it is doing.
         for (ColonyZone zone : ColonyFront.of(colony).zonesIn(level)) {
-            Set<BlockPos> cells = zone.cells();
-            noted(notes, zone.id(), facings, facing -> facing.zoneLines(zone, view),
-                ColonyStalls.lines(colony, level, cells::contains));
+            noted(notes, zone.id(), HeldFacilities.find(colony, zone.id())
+                .map(held -> held.lines(level, java.util.Map.of())).orElse(List.of()));
         }
         for (ColonyPath path : paths) {
-            noted(notes, path.id(), facings, facing -> facing.pathLines(path, view), List.of());
+            noted(notes, path.id(), HeldFacilities.find(colony, path.id())
+                .map(held -> held.lines(level, java.util.Map.of())).orElse(List.of()));
         }
-        for (Facing facing : facings) {
-            for (Placard placard : facing.placards(view)) {
+        for (GhostSource source : sources) {
+            for (Placard placard : source.placards(view)) {
                 placards.add(stalled(colony, level, placard));
             }
         }
         return new ColonyOverviewPacket(ColonyGround.cells(level, colony), zones, List.copyOf(ghosts),
             paths.stream().map(ColonyPath::save).toList(), notes, placards,
-            facings.stream().flatMap(facing -> facing.previewRecipes(view).stream()).limit(512).toList());
+            sources.stream().flatMap(source -> source.previewRecipes(view).stream()).limit(512).toList());
     }
 
     // A card over a block or a site also tells the work standing still inside it, unless it tells that itself.
@@ -277,13 +330,7 @@ public final class FolkwaysUiNetworkEvents {
         };
     }
 
-    private static void noted(List<Placards.Note> notes, UUID id, List<Facing> facings,
-            Function<Facing, List<Line>> lines, List<Line> stalled) {
-        List<Line> said = new ArrayList<>();
-        for (Facing facing : facings) {
-            said.addAll(lines.apply(facing));
-        }
-        said.addAll(stalled);
+    private static void noted(List<Placards.Note> notes, UUID id, List<Line> said) {
         if (!said.isEmpty()) {
             notes.add(new Placards.Note(id, said));
         }

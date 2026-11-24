@@ -2,8 +2,8 @@ package io.github.izakyl.folkways.core.front.engine.authority;
 
 import com.lowdragmc.lowdraglib2.gui.holder.ModularUIContainerMenu;
 import io.github.izakyl.folkways.core.colony.api.Colony;
-import io.github.izakyl.folkways.core.front.engine.charter.Charters;
-import io.github.izakyl.folkways.core.front.engine.charter.CurrentColony;
+import io.github.izakyl.folkways.core.colony.charter.Charters;
+import io.github.izakyl.folkways.core.colony.charter.CurrentColony;
 import io.github.izakyl.folkways.core.front.engine.colony.ColonyGround;
 import io.github.izakyl.folkways.core.front.engine.colony.Residents;
 import java.util.Optional;

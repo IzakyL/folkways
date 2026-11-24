@@ -6,8 +6,8 @@ import io.github.izakyl.folkways.core.colony.api.ClaimRelease;
 import io.github.izakyl.folkways.core.colony.api.Claimed;
 import io.github.izakyl.folkways.core.colony.api.Colony;
 import io.github.izakyl.folkways.core.colony.api.Colonies;
-import io.github.izakyl.folkways.core.inventory.api.port.StorePort;
-import io.github.izakyl.folkways.core.inventory.api.port.StorePorts;
+import io.github.izakyl.folkways.core.facility.api.control.ItemPort;
+import io.github.izakyl.folkways.core.inventory.api.port.StoreAccess;
 import io.github.izakyl.folkways.core.inventory.api.port.Usability;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.core.world.api.WorldSpaces;
@@ -37,22 +37,22 @@ public final class ProxyStores {
         this.colony = colony;
     }
 
-    private static Optional<StorePort> port(MinecraftServer server, WorldPos at) {
-        return WorldSpaces.resolve(server, at).flatMap(block -> StorePorts.at(block.level(), block.cell()));
+    private static Optional<ItemPort> port(MinecraftServer server, WorldPos at) {
+        return WorldSpaces.resolve(server, at).flatMap(block -> StoreAccess.at(block.level(), block.cell()));
     }
 
     /** Preflight uses the same live declarations as the claim transaction, before any member is marked. */
     public static Optional<Component> refusal(MinecraftServer server, Colony colony, ResourceLocation owner,
                                                WorldPos at) {
-        StorePort proxy = port(server, at).orElse(null);
+        ItemPort proxy = port(server, at).orElse(null);
         if (proxy == null || proxy.proxyMembers().isEmpty()) {
             return Optional.empty();
         }
-        if (!proxy.usability().usable()) {
-            return Optional.of(((Usability.Unusable) proxy.usability()).reason());
+        if (!StoreAccess.usability(at.level(server).orElseThrow(), proxy).usable()) {
+            return Optional.of(((Usability.Unusable) StoreAccess.usability(at.level(server).orElseThrow(), proxy)).reason());
         }
         for (WorldPos member : proxy.proxyMembers().orElseThrow()) {
-            StorePort store = port(server, member).orElse(null);
+            ItemPort store = port(server, member).orElse(null);
             boolean occupied = Colonies.all(server).stream().anyMatch(other -> other.claimAt(member)
                 .filter(claim -> !other.id().equals(colony.id()) || !claim.owner().equals(owner)).isPresent());
             if (!member.sameRealm(at) || member.equals(at) || store == null || store.proxyMembers().isPresent()
@@ -60,9 +60,9 @@ public final class ProxyStores {
                     .filter(block -> block.level().getBlockEntity(block.cell()) != null).isEmpty()) {
                 return Optional.of(Component.translatable("folkways.store.proxy.unavailable"));
             }
-            if (!store.usability().usable()) {
+            if (!StoreAccess.usability(member.level(server).orElseThrow(), store).usable()) {
                 return Optional.of(Component.translatable("folkways.store.proxy.member_refused",
-                    ((Usability.Unusable) store.usability()).reason()));
+                    ((Usability.Unusable) StoreAccess.usability(member.level(server).orElseThrow(), store)).reason()));
             }
         }
         return Optional.empty();
@@ -71,7 +71,7 @@ public final class ProxyStores {
     public Optional<Claim> hold(MinecraftServer server, ResourceLocation owner, Claimed what,
                                 Supplier<Optional<Claim>> single) {
         WorldPos at = what instanceof Claimed.Block block ? block.cell() : null;
-        StorePort proxy = at == null ? null : port(server, at).orElse(null);
+        ItemPort proxy = at == null ? null : port(server, at).orElse(null);
         if (proxy == null || proxy.proxyMembers().isEmpty()) {
             return single.get();
         }
@@ -181,16 +181,16 @@ public final class ProxyStores {
             if (!(claim.what() instanceof Claimed.Block block)) {
                 continue;
             }
-            StorePort proxy = port(server, block.cell()).orElse(null);
-            if (proxy == null || proxy.proxyMembers().isEmpty() || !proxy.usability().usable()) {
+            ItemPort proxy = port(server, block.cell()).orElse(null);
+            if (proxy == null || proxy.proxyMembers().isEmpty() || !StoreAccess.usability(block.cell().level(server).orElseThrow(), proxy).usable()) {
                 continue;
             }
             Set<WorldPos> represented = new LinkedHashSet<>();
             records().stream().filter(record -> address(record).filter(block.cell()::equals).isPresent())
                 .forEach(record -> represented.addAll(members(record)));
             for (WorldPos member : proxy.proxyMembers().orElseThrow()) {
-                StorePort store = port(server, member).orElse(null);
-                if (!member.sameRealm(block.cell()) || store == null || !store.usability().usable()
+                ItemPort store = port(server, member).orElse(null);
+                if (!member.sameRealm(block.cell()) || store == null || !StoreAccess.usability(member.level(server).orElseThrow(), store).usable()
                     || store.proxyMembers().isPresent()) {
                     continue;
                 }

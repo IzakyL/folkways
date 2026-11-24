@@ -21,7 +21,7 @@ import { newRunId } from "../shared/harness/run-id";
 const CONFIG_PATH = "blockwright.toml";
 
 const SKIN = path.join(MODEL_ASSETS, "steve", "textures", "tartaric_acid.png");
-const BLUEPRINT = path.join(REPO_ROOT, "mods/vanilla/src/gametest/resources/data/folkways_vanilla/folkways/blueprint/test_hut.nbt");
+const BLUEPRINT = path.join(REPO_ROOT, "tests/gametest/vanilla/gametest/resources/data/folkways_vanilla/folkways/blueprint/test_hut.nbt");
 const PATTERN = `accepts = ["zone"]
 
 def draw(site):
@@ -71,7 +71,7 @@ test("server data loads from the folkways folder and data packs: files, resident
     expect(after?.pattern, "a pattern in the folder loads under local:").toBe(true);
     expect(after?.blueprint, "a blueprint in the folder is on the shelf, and no pattern").toEqual([true, false]);
     expect(after?.skin, "a skin in the folder joins the pool of looks").toBe("slim");
-    expect(after?.misnamed, "a file a resource location cannot name is reported, not lost").toEqual(["Bad Name.star"]);
+    expect(after?.encodedPattern, "a filename with spaces and capitals loads under its encoded ID").toBe(true);
     expect(after?.patternPacks, "the folder's pattern is listed as the folder pack's").toContain("folkways/library");
 
     evidence.arrival = await waitForModelsOnClient(client, SKIN_PACK_PATH);
@@ -152,14 +152,14 @@ function copy(from: string, to: string) {
 /** The folder, its shelves, and whether what was dropped in it is loaded. */
 const READ_LIBRARY = defineTask<void, {
   root?: unknown; shelves?: unknown; pattern?: unknown; blueprint?: unknown; skin?: unknown;
-  misnamed?: unknown; patternPacks?: unknown;
+  encodedPattern?: unknown; patternPacks?: unknown;
 }>({
   name: "folkways.library.read",
   side: "server",
   timeoutMs: 20_000,
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.core.library.LooseFolder",
+      "io.github.izakyl.folkways.core.library.FileNames",
       "io.github.izakyl.folkways.core.library.Shelves",
       "io.github.izakyl.folkways.vanilla.build.draft.Patterns",
       "io.github.izakyl.folkways.vanilla.build.draft.Templates",
@@ -170,13 +170,11 @@ const READ_LIBRARY = defineTask<void, {
     ],
     body: `
 var shelves = new java.util.ArrayList<String>();
-var misnamed = new java.util.ArrayList<String>();
 var patternPacks = new java.util.ArrayList<String>();
 for (Shelves.Shelf shelf : Shelves.all()) {
     if (Files.isDirectory(shelf.path())) {
         shelves.add(shelf.name());
     }
-    misnamed.addAll(LooseFolder.misnamed(shelf));
     if (shelf.name().equals("pattern")) {
         patternPacks.addAll(Shelves.stock(shelf).entries().values());
     }
@@ -192,7 +190,7 @@ return Map.of(
         Templates.blueprint(ResourceLocation.fromNamespaceAndPath("local", "blueprint/hut")).isPresent(),
         Patterns.find(ResourceLocation.fromNamespaceAndPath("local", "blueprint/hut")).isPresent()),
     "skin", look == null ? "missing" : ((ResidentLook.Skin) look.appearance()).arms().getSerializedName(),
-    "misnamed", misnamed,
+    "encodedPattern", Patterns.find(ResourceLocation.fromNamespaceAndPath("local", FileNames.encodePath("Bad Name"))).isPresent(),
     "patternPacks", patternPacks);
 `,
   }),
@@ -215,7 +213,7 @@ const TRANSLATE = defineTask<{ first: string; second: string }, {
   source: javaTask({
     imports: [
       "com.mojang.serialization.JsonOps",
-      "io.github.izakyl.folkways.core.front.api.notice.Notice",
+      "io.github.izakyl.folkways.core.card.api.notice.Notice",
       "io.github.izakyl.folkways.vanilla.build.draft.Pattern",
       "io.github.izakyl.folkways.vanilla.build.draft.PatternText",
       "net.minecraft.client.Minecraft",

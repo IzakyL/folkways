@@ -1,34 +1,31 @@
 package io.github.izakyl.folkways.vanilla.supply;
 
+import io.github.izakyl.folkways.core.card.api.notice.Line;
 import io.github.izakyl.folkways.core.colony.api.Claim;
 import io.github.izakyl.folkways.core.colony.api.ClaimRelease;
 import io.github.izakyl.folkways.core.colony.api.Closing;
 import io.github.izakyl.folkways.core.colony.api.Colony;
 import io.github.izakyl.folkways.core.colony.api.ColonyView;
+import io.github.izakyl.folkways.core.front.api.HoldingKind;
+import io.github.izakyl.folkways.core.item.api.Containers;
 import io.github.izakyl.folkways.core.plan.api.Workshop;
-import io.github.izakyl.folkways.core.work.api.Stances;
 import io.github.izakyl.folkways.core.world.api.Reach;
+import io.github.izakyl.folkways.core.world.api.Stances;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
-import io.github.izakyl.folkways.core.front.api.Facing;
-import io.github.izakyl.folkways.core.front.api.notice.Line;
-import io.github.izakyl.folkways.core.front.api.panel.Board;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 
-final class SupplyPresence implements Facing, Claim.Watch {
+final class SupplyPresence implements HoldingKind, Claim.Watch {
     private final Colony colony;
     private final Map<WorldPos, SupplyWorkshop> workshops = new LinkedHashMap<>();
     private final Set<ResourceKey<Level>> published = new LinkedHashSet<>();
@@ -79,24 +76,11 @@ final class SupplyPresence implements Facing, Claim.Watch {
         published.clear();
     }
 
-    public boolean shows(ResourceLocation page) {
-        return !page.equals(SupplyContent.ID) || !colony.claims(SupplyContent.SOURCE).isEmpty();
-    }
-
-    public Optional<Board> board(ResourceLocation page, ColonyView view) {
-        if (!page.equals(SupplyContent.ID)) return Optional.empty();
-        List<Board.Row> rows = new ArrayList<>();
-        for (BlockPos cell : view.blocks(SupplyContent.SOURCE)) {
-            if (view.level().isLoaded(cell) && view.level().getBlockEntity(cell) instanceof SupplyBox source) {
-                rows.add(new Board.Row(new ItemStack(SupplyContent.ITEM.get()),
-                    Component.translatable("block.folkways_vanilla.creative_supply_box"), state(source), List.of(new Board.Act.Ping(cell))));
-            }
-        }
-        return Optional.of(new Board(List.of(), rows, Optional.of(Component.translatable("folkways.supply.empty"))));
-    }
-
-    public List<Line> blockLines(BlockPos at, ColonyView view) {
-        return view.level().getBlockEntity(at) instanceof SupplyBox box ? List.of(Line.text(state(box))) : List.of();
+    @Override
+    public List<Line> lines(Held held, ColonyView view) {
+        BlockPos at = held.site().block(view.level());
+        return Containers.blockEntity(view.level(), at).orElse(null) instanceof SupplyBox box
+            ? List.of(Line.text(state(box))) : List.of();
     }
 
     private static Component state(SupplyBox source) {

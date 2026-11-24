@@ -111,6 +111,22 @@ return Map.of("moving", true, "keys", next.keys.size(), "carry", next.carry,
     members: `
 private static Rig rig;
 private static java.lang.reflect.Field scrollField;
+private static java.lang.reflect.Method capturing;
+private static boolean noCapture;
+
+static boolean assistantCapturing() {
+    if (noCapture) return false;
+    try {
+        if (capturing == null) {
+            capturing = Class.forName("io.github.izakyl.folkways.assistant.client.ScreenshotCapture").getDeclaredMethod("capturing");
+            capturing.setAccessible(true);
+        }
+        return Boolean.TRUE.equals(capturing.invoke(null));
+    } catch (ReflectiveOperationException | RuntimeException e) {
+        noCapture = true;
+        return false;
+    }
+}
 
 static List<double[]> points(Object raw) {
     var out = new ArrayList<double[]>();
@@ -167,6 +183,8 @@ private static final class Rig {
     int frames, lost;
 
     CameraPose frame(float partial) {
+        // The assistant's own screenshots aim the camera themselves; the rig holds off for those frames.
+        if (assistantCapturing()) return null;
         var mc = Minecraft.getInstance();
         long now = System.nanoTime();
         double elapsed = (now - t0) / 1.0e9;
@@ -263,7 +281,7 @@ const READ_OVERLAY = defineTask<Record<string, any>, any>({
   source: javaTask({
     imports: [
       "net.minecraft.client.Minecraft", "net.minecraft.Util",
-      "io.github.izakyl.folkways.core.front.api.notice.Line",
+      "io.github.izakyl.folkways.core.card.api.notice.Line",
       "io.github.izakyl.folkways.core.front.engine.net.DebugFocusPacket",
       "io.github.izakyl.folkways.core.front.engine.net.DebugTarget",
       "io.github.izakyl.folkways.core.travel.internal.graph.WayGraphDebug",

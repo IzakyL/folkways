@@ -1,5 +1,6 @@
 package io.github.izakyl.folkways.vanilla.person.fear;
 
+import io.github.izakyl.folkways.core.colony.api.Colony;
 import io.github.izakyl.folkways.core.colony.api.ColonyView;
 import io.github.izakyl.folkways.core.resident.api.Bodies;
 import io.github.izakyl.folkways.core.work.api.Urge;
@@ -22,6 +23,8 @@ final class FearPresence {
 
     static final ResourceLocation FLEE = ResourceLocation.fromNamespaceAndPath("folkways_vanilla", "flee");
 
+    private static final int SIGHT_INTERVAL = 10;
+
     private record Escape(BlockPos to, long started) {
     }
 
@@ -29,18 +32,20 @@ final class FearPresence {
     // until reached, failed or timed out; weak keys retain no unloaded bodies.
     private final Map<Mob, Escape> escapes = new WeakHashMap<>();
 
-    public List<Urge> urges(Worker who, ColonyView colony) {
-        Optional<BlockPos> away = away(who);
+    private final Map<Mob, Long> sightChecked = new WeakHashMap<>();
+
+    public List<Urge> urges(Colony colony, Worker who, ColonyView view) {
+        Optional<BlockPos> away = away(colony, who, view);
         if (away.isEmpty()) {
             return List.of();
         }
-        ServerLevel level = colony.level();
+        ServerLevel level = view.level();
         BlockPos to = away.get();
         return List.of(new Urge(FLEE, Urge.DIRE, true,
             () -> new FleeAction(level, who.resident().id(), to)));
     }
 
-    private Optional<BlockPos> away(Worker who) {
+    private Optional<BlockPos> away(Colony colony, Worker who, ColonyView view) {
         Mob body = who.body();
         DamageSource hurt = body.getLastDamageSource();
         Mob pursuer =
@@ -69,6 +74,7 @@ final class FearPresence {
             .isPresent();
         if (!body.isAlive() || body.isRemoved() || body.isPassenger()) {
             escapes.remove(body);
+            sightChecked.remove(body);
             return Optional.empty();
         }
         if (escape != null
@@ -79,10 +85,22 @@ final class FearPresence {
         }
         escapes.remove(body);
         if (!danger) {
+            sightChecked.remove(body);
             return Optional.empty();
         }
         Entity from = pursuer != null ? pursuer : hurt == null ? null : hurt.getEntity();
-        Optional<BlockPos> to = Fleeing.awayFrom(body, Optional.ofNullable(from).map(Entity::position));
+        if (from != null) {
+            // Urges are polled every tick. Only recheck the relevant attacker when an escape needs planning.
+            Long checked = sightChecked.get(body);
+            if (checked != null && now - checked < SIGHT_INTERVAL) {
+                return Optional.empty();
+            }
+            sightChecked.put(body, now);
+            if (!body.hasLineOfSight(from)) {
+                return Optional.empty();
+            }
+        }
+        Optional<BlockPos> to = Fleeing.awayFrom(body, Optional.ofNullable(from).map(Entity::position), colony, view);
         to.ifPresent(point -> escapes.put(body, new Escape(point, now)));
         return to;
     }

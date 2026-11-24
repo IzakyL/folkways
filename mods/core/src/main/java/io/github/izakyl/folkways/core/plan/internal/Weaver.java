@@ -2,11 +2,14 @@ package io.github.izakyl.folkways.core.plan.internal;
 
 import io.github.izakyl.folkways.core.FolkwaysConfig;
 import io.github.izakyl.folkways.core.inventory.api.Stash;
-import io.github.izakyl.folkways.core.inventory.api.port.StorePort.Operation;
+import io.github.izakyl.folkways.core.facility.api.control.Port.Operation;
 import io.github.izakyl.folkways.core.item.api.Goods;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import io.github.izakyl.folkways.core.plan.api.Before;
 import io.github.izakyl.folkways.core.plan.api.Grown;
+import io.github.izakyl.folkways.core.work.api.ReservationPool;
+import io.github.izakyl.folkways.core.plan.api.RunBoundary;
+import io.github.izakyl.folkways.core.plan.api.ScopedWork;
 import io.github.izakyl.folkways.core.plan.api.Produce;
 import io.github.izakyl.folkways.core.plan.api.Refinement;
 import io.github.izakyl.folkways.core.plan.api.Sizing;
@@ -33,7 +36,7 @@ import io.github.izakyl.folkways.core.work.api.Node;
 import io.github.izakyl.folkways.core.work.api.NodeSpec;
 import io.github.izakyl.folkways.core.work.api.Placement;
 import io.github.izakyl.folkways.core.work.api.Stall;
-import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.world.api.Stances;
 import io.github.izakyl.folkways.core.work.api.ToolPolicy;
 import io.github.izakyl.folkways.core.work.api.Unmet;
 import io.github.izakyl.folkways.core.work.api.WorkSite;
@@ -147,6 +150,9 @@ public final class Weaver {
     private TransportPublication publication;
     private Crew crew;
     private Costs costs;
+    private Map<UUID, PlanTask> attempted = Map.of();
+    private boolean wanted;
+    private long taskSummaries;
     private List<Workshop> costedFor = List.of();
     private PackSizing sizing = new PackSizing(new Crew(List.of()));
     // What the crew could do when the plan was last checked against it, and whether it can do something else now.
@@ -160,6 +166,10 @@ public final class Weaver {
     }
 
     private final Map<WalkIn, Long> walkIns = new HashMap<>();
+
+    private final Map<ReservationPool, PoolClaims> pools = new LinkedHashMap<>();
+    private final Map<UUID, List<PoolClaims.Loan>> loans = new HashMap<>();
+    private final Map<Edge, List<ReservationPool.Stored>> completedRuns = new LinkedHashMap<>();
 
     private Choice choosing;
     private Why lastWhy = Why.NO_SOURCE;
@@ -286,7 +296,30 @@ public final class Weaver {
         };
     }
 
+    List<PlanTask> attempted() {
+        return List.copyOf(attempted.values());
+    }
+
+    private void remember(Grown work) {
+        if (!wanted) {
+            return;
+        }
+        for (Node node : work.nodes()) {
+            attempted.put(node.id(), PlanTask.of(node.spec(), node.worker().orElse(null)));
+            taskSummaries++;
+        }
+    }
+
+    List<PlanInputs.Process> processes() {
+        return costs == null ? List.of() : costs.processes();
+    }
+
     public void know(Situation now, Crew crew) {
+        know(now, crew, false);
+    }
+
+    void know(Situation now, Crew crew, boolean wanted) {
+        this.wanted = wanted;
         this.now = now;
         this.crew = crew;
         this.sizing = new PackSizing(crew);
@@ -306,6 +339,7 @@ public final class Weaver {
         } else {
             costs.restock();
         }
+        costs.wanted(wanted);
         occupied.clear();
         for (Crew.Hand hand : crew.hands()) {
             hand.holding().ifPresent(held -> occupied.add(hand.id()));
@@ -322,6 +356,7 @@ public final class Weaver {
             rollBack();
         }
         weaving = true;
+        attempted = wanted ? new LinkedHashMap<>() : Map.of();
         endedGaps.clear();
         noted.clear();
         refused.clear();
@@ -341,6 +376,18 @@ public final class Weaver {
         if (retry) {
             rechoose();
         }
+        pools.values().forEach(pool -> pool.receive(claims));
+        for (var finished : completedRuns.entrySet()) {
+            Edge edge = finished.getKey();
+            if (nodes.containsKey(edge.consumer())) {
+                long left = deliverBooked(edge, finished.getValue());
+                if (left > 0) {
+                    reopened.addFirst(edge.covering(left));
+                }
+            }
+        }
+        completedRuns.clear();
+        stowRunOutputs();
         repair();
         Set<UUID> retried = new LinkedHashSet<>();
         if (retry) {
@@ -583,6 +630,23 @@ public final class Weaver {
     }
 
     public void finished(UUID node) {
+        var drawn = loans.remove(node);
+        if (drawn != null) {
+            drawn.forEach(PoolClaims.Loan::run);
+        }
+        if (nodes.get(node) instanceof RunBoundary boundary) {
+            Expansion run = grownBy.get(node);
+            if (!run.isRequest()) {
+                for (Edge edge : run.fed()) {
+                    completedRuns.put(edge, boundary.reservations().storedSince(0));
+                }
+            }
+            closePool(boundary);
+            // A standalone run has no consumer edge. Its request settles with the node below.
+            if (!run.isRequest()) {
+                remove(run);
+            }
+        }
         unask(node);
         handOff(node);
         for (Expansion fed : List.copyOf(feeding.getOrDefault(node, List.of()))) {
@@ -772,6 +836,9 @@ public final class Weaver {
         shownAfter.clear();
         shownBefore.clear();
         shownHeld = Set.of();
+        completedRuns.clear();
+        loans.clear();
+        pools.clear();
         weaving = false;
         sizing = new PackSizing(new Crew(List.of()));
         fitFor = List.of();
@@ -831,6 +898,13 @@ public final class Weaver {
             return;
         }
         if (grown.isRequest()) {
+            // A child reports its own failure, but the submitter is listening at the request's boundary.
+            if (how instanceof Ending.Failed && !node.equals(grown.asked)) {
+                Request request = asked.get(grown.asked);
+                if (request != null) {
+                    going.add(new Gone(request.work.nodes().getFirst(), how));
+                }
+            }
             drop(grown.asked, how);
             return;
         }
@@ -866,7 +940,7 @@ public final class Weaver {
     private void refit() {
         Set<UUID> seen = new HashSet<>();
         for (UUID id : List.copyOf(nodes.keySet())) {
-            if (!nodes.containsKey(id) || seen.contains(id)) {
+            if (!nodes.containsKey(id) || seen.contains(id) || nodes.get(id) instanceof RunBoundary) {
                 continue;
             }
             Set<UUID> group = together(id);
@@ -926,13 +1000,15 @@ public final class Weaver {
             gapsOf.remove(edge.id());
             if (fill(edge) > 0) {
                 List<Gap> gaps = List.copyOf(noted.subList(mark, noted.size()));
-                if (noted.getLast().why() instanceof Why.Cooling) {
+                PoolClaims pool = grownBy.get(edge.consumer()).pool;
+                if (pool == null && noted.getLast().why() instanceof Why.Cooling) {
                     gapsOf.put(edge.id(), gaps);
                     resting.add(edge);
                     continue;
                 }
                 endedGaps.addAll(gaps);
-                lose(edge.consumer(), Ending.DROPPED);
+                RefusalKind why = told(noted.getLast().why()).orElse(LaborRefusal.NO_SOURCE);
+                lose(edge.consumer(), pool == null ? Ending.DROPPED : new Ending.Failed(edge.consumer(), why));
             }
         }
         reopened.addAll(resting);
@@ -973,11 +1049,26 @@ public final class Weaver {
         choosing = choice;
         Expansion grown = begin(new Expansion(id));
         grown.holds.addAll(result.holds());
+        var scope = goal.nodes().getFirst() instanceof ScopedWork scoped ? scoped.reservations() : null;
+        grown.pool = pools.get(scope);
         try {
+            if (scope != null && grown.pool == null) {
+                var failure = new Ending.Failed(id, LaborRefusal.NO_SOURCE);
+                going.add(new Gone(goal.nodes().getFirst(), failure));
+                drop(id, failure);
+                return;
+            }
             place(grown, work);
             grown.waitOn(work, Expansion.after(result.holds(), nodes.keySet()));
             askedWith(grown, request, work);
+            if (work.nodes().size() == 1 && work.nodes().getFirst() instanceof RunBoundary boundary) {
+                if (!bookPool(boundary)) {
+                    undo(grown, Ending.DROPPED);
+                }
+                return;
+            }
             if (!fitsAll(work)) {
+                remember(work);
                 refused.add(new Refused(Optional.empty(), LaborRefusal.NO_ONE_FIT));
                 unfit.add(id);
                 cooldowns.failed(choice);
@@ -985,8 +1076,18 @@ public final class Weaver {
                 return;
             }
             if (!(landed(grown) && open(grown, Set.of()))) {
-                gapsOf.put(id, List.copyOf(noted.subList(mark, noted.size())));
-                undo(grown, Ending.DROPPED);
+                remember(work);
+                var gaps = List.copyOf(noted.subList(mark, noted.size()));
+                if (grown.pool != null) {
+                    Gap gap = gaps.isEmpty() ? null : gaps.getLast();
+                    RefusalKind why = told(gap == null ? lastWhy : gap.why()).orElse(LaborRefusal.NO_SOURCE);
+                    var failure = new Ending.Failed(gap == null ? id : gap.consumer(), why);
+                    going.add(new Gone(goal.nodes().getFirst(), failure));
+                    drop(id, failure);
+                } else {
+                    gapsOf.put(id, gaps);
+                    undo(grown, Ending.DROPPED);
+                }
             }
         } catch (RuntimeException | LinkageError broken) {
             undo(grown, Ending.DROPPED);
@@ -1092,7 +1193,9 @@ public final class Weaver {
             return edge.count();
         }
         long whole = edge.count();
-        long left = whole - fromPack(edge, whole);
+        PoolClaims pool = grownBy.get(edge.consumer()).pool;
+        long left = pool == null ? whole : whole - borrow(pool, edge, whole);
+        left -= fromPack(edge, left);
         while (left > 0 && !publication.entries().isEmpty()) {
             long carried = fromPack(edge, left);
             if (carried <= 0) {
@@ -1229,8 +1332,8 @@ public final class Weaver {
                     any = true;
                     WorldPos at = node.spec().site().where();
                     // Goods leave with the worker beside the station, not from inside its solid block.
-                    Set<Stand> loading = node.spec().stances() instanceof Stances.Wherever
-                        ? Set.of(new Stand(at)) : WorkStances.cellsOf(node.spec().stances());
+                    Set<Stand> loading = node.spec().stances() instanceof Stances.Cells
+                        ? WorkStances.cellsOf(node.spec().stances()) : Set.of(new Stand(at));
                     best = Math.min(best, carriedTo(edge, at, loading, TransportEndpoint.Form.PACK,
                         gives.spec(), Math.min(edge.count(), gives.count())));
                 }
@@ -1319,6 +1422,9 @@ public final class Weaver {
     // Without published transport, pack goods stay with the consumer's worker. Routed goods keep their carrier
     // as a source constraint and the consumer's binding as a separate destination constraint.
     private long fromPack(Edge edge, long count) {
+        if (count <= 0) {
+            return 0;
+        }
         Node consumer = nodes.get(edge.consumer());
         boolean routed = !publication.entries().isEmpty();
         if (!routed && consumer instanceof Receipt) {
@@ -1374,6 +1480,163 @@ public final class Weaver {
         return 0;
     }
 
+    private boolean bookPool(RunBoundary boundary) {
+        var budget = boundary.reservations();
+        PoolClaims pool = new PoolClaims(budget);
+        pools.put(budget, pool);
+        pool.receive(claims);
+        var needs = budget.remaining();
+        for (int index = 0; index < needs.size(); index++) {
+            Need need = needs.get(index);
+            long left = need.count();
+            for (Stock.Lot lot : now.stock().lotsOf(need.spec())) {
+                long count = Math.min(left, drawable(lot.where(), lot.concrete()));
+                pool.adjust(claims, new PoolClaims.Input(index, new Resource.Lot(lot.where(), lot.concrete())), count);
+                left -= count;
+                if (left == 0) {
+                    break;
+                }
+            }
+            if (left > 0) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private void closePool(RunBoundary boundary) {
+        PoolClaims pool = pools.remove(boundary.reservations());
+        if (pool != null) {
+            pool.close(claims);
+            for (Expansion hauling : List.copyOf(pool.hauling.values())) {
+                undo(hauling, Ending.REVOKED);
+            }
+        }
+    }
+
+    private long borrow(PoolClaims pool, Edge edge, long count) {
+        long left = count;
+        for (var key : List.copyOf(pool.inputs.keySet())) {
+            Resource.Lot lot = key.lot();
+            if (!Goods.matches(Goods.display(lot.spec()), edge.spec())
+                    || !feeds(lot.where(), edge.consumer(), lot.spec())) {
+                continue;
+            }
+            while (left > 0) {
+                Claim held = pool.inputs.get(key);
+                if (held == null) {
+                    break;
+                }
+                long asked = Math.min(left, held.amount());
+                Expansion grown = begin(new Expansion(edge));
+                pool.adjust(claims, key, -asked);
+                long assigned = 0;
+                long moved;
+                try {
+                    moved = transfer(grown, new From.Stocked(lot.where()), new To.Feeding(edge), lot.spec(), asked);
+                    if (moved > 0) {
+                        for (Claim claim : grown.claims) {
+                            if (claim.on().equals(lot)) {
+                                var loan = new PoolClaims.Loan(pool, key, claim);
+                                grown.loans.add(loan);
+                                loans.computeIfAbsent(claim.owner(), id -> new ArrayList<>()).add(loan);
+                                assigned += claim.amount();
+                            }
+                        }
+                    }
+                } catch (RuntimeException | LinkageError broken) {
+                    undo(grown, Ending.DROPPED);
+                    throw broken;
+                } finally {
+                    pool.adjust(claims, key, asked - assigned);
+                }
+                if (moved <= 0) {
+                    undo(grown, Ending.DROPPED);
+                    break;
+                }
+                grown.covers = moved;
+                left -= moved;
+            }
+        }
+        return count - left;
+    }
+
+    private long deliverBooked(Edge edge, List<ReservationPool.Stored> stored) {
+        long left = edge.count();
+        for (var put : stored) {
+            if (left == 0) {
+                break;
+            }
+            if (!admits(edge.spec(), put.spec()) || !feeds(put.where(), edge.consumer(), put.spec())) {
+                continue;
+            }
+            Expansion grown = begin(new Expansion(edge));
+            long moved = transfer(grown, new From.LeftBy(List.of(), put.where()),
+                new To.Feeding(edge), put.spec(), Math.min(left, put.count()));
+            if (moved > 0) {
+                grown.covers = moved;
+                left -= moved;
+            } else {
+                undo(grown, Ending.DROPPED);
+            }
+        }
+        return left;
+    }
+
+    private void stowRunOutputs() {
+        for (PoolClaims pool : pools.values()) {
+            var carried = pool.budget.carried();
+            // Protect all goods waiting to be stowed before choosing routes for any of them.
+            for (var cargo : carried) {
+                if (!pool.hauling.containsKey(cargo.id()) && !pool.packed.containsKey(cargo.id())) {
+                    Claim hold = new Claim(new Resource.Cargo(cargo.resident(), cargo.spec()), cargo.id(), cargo.count());
+                    pool.packed.put(cargo.id(), hold);
+                    claims.take(hold);
+                }
+            }
+            for (var cargo : carried) {
+                if (!pool.hauling.containsKey(cargo.id())) {
+                    stowRunOutput(pool, cargo);
+                }
+            }
+        }
+    }
+
+    private void stowRunOutput(PoolClaims pool, ReservationPool.Carried cargo) {
+        var hand = crew.hands().stream().filter(one -> one.id().equals(cargo.resident())).findFirst().orElse(null);
+        if (hand == null) {
+            return;
+        }
+        List<RecoveryStore> stores = new ArrayList<>();
+        for (Stash store : now.stock().stashes()) {
+            Set<Stand> at = now.stands().around(store, Operation.PUT);
+            if (now.stock().stores(store) && now.stock().direct(store) && !at.isEmpty()
+                    && roomFor(store, cargo.spec()) >= cargo.count() && !cutOff(store, at)) {
+                stores.add(new RecoveryStore(store, at, walkAtLeast(hand.at(), store.pos())));
+            }
+        }
+        List<RecoveryStore> ordered = puttingAway(stores, cargo.spec());
+        ordered.sort(Comparator.comparing(store -> pool.consumers.stream().noneMatch(
+            consumer -> nodes.containsKey(consumer) && feeds(store.stash(), consumer, cargo.spec()))));
+        for (RecoveryStore into : ordered) {
+            Claim hold = pool.packed.remove(cargo.id());
+            claims.drop(hold);
+            Expansion grown = begin(new Expansion(cargo.id()));
+            grown.pool = pool;
+            grown.stowing = cargo.id();
+            pool.hauling.put(cargo.id(), grown);
+            ItemStack stack = Goods.display(cargo.spec()).copyWithCount(cargo.count());
+            var from = new From.Carried(cargo.resident(), List.of(stack));
+            var to = new To.Stored(into.stash());
+            if (transfer(grown, from, to, cargo.spec(), cargo.count()) == cargo.count()) {
+                return;
+            }
+            undo(grown, Ending.DROPPED);
+            pool.packed.put(cargo.id(), hold);
+            claims.take(hold);
+        }
+    }
+
     // A lot in a store: each carry of it is its own growth, so a failed fetch takes back only what it was bringing.
     private long fromStore(Edge edge, Stock.Lot lot, long left) {
         long can = Math.min(left, drawable(lot.where(), lot.concrete()));
@@ -1408,7 +1671,7 @@ public final class Weaver {
     }
 
     // A workshop's offer taken for one edge first and then for every further edge in `also`, each fed whole from the
-    // one making: what the primary edge gets is returned, or nothing, when any part could not be laid.
+    // one making. Return how much of the primary edge this growth takes responsibility for.
     private long make(Edge edge, long left, List<Edge> also, Costs.Offer offer) {
         Refinement.Change change = offer.change();
         ItemSpec made = concreteOf(change.replacement(), edge.spec());
@@ -1454,7 +1717,35 @@ public final class Weaver {
         try {
             place(grown, work);
             grown.waitOn(work, after);
+            if (work.nodes().size() == 1 && work.nodes().getFirst() instanceof RunBoundary boundary) {
+                if (!bookPool(boundary)) {
+                    undo(grown, Ending.DROPPED);
+                    lastWhy = Why.NO_SOURCE;
+                    return 0;
+                }
+                // Keep the outstanding demand with this run. Its hold is exclusive, so the next run can
+                // only be booked after completion reopens whatever the stored output did not supply.
+                pools.get(boundary.reservations()).consumers.add(edge.consumer());
+                grown.covers = left;
+                grown.link(new Before(boundary.id(), edge.consumer()));
+                return left;
+            }
+            for (Node node : work.nodes()) {
+                var draw = node.stockDraw().orElse(null);
+                if (draw == null) {
+                    continue;
+                }
+                var goods = draw.goods();
+                long stocked = now.stock().stockForWorkshop(draw.source(), goods.spec());
+                if (unclaimed(draw.source(), goods.spec(), stocked) < goods.count()) {
+                    undo(grown, Ending.DROPPED);
+                    madeShort = "source stock already spoken for";
+                    return 0;
+                }
+                book(grown, new Resource.Lot(draw.source(), goods.spec()), node.id(), goods.count());
+            }
             if (!fitsAll(work)) {
+                remember(work);
                 undo(grown, Ending.DROPPED);
                 lastWhy = Why.NO_HAND;
                 madeShort = "no hand";
@@ -2166,10 +2457,22 @@ public final class Weaver {
             }
         }
         for (UUID id : List.copyOf(grown.nodes)) {
+            if (nodes.get(id) instanceof RunBoundary boundary) {
+                closePool(boundary);
+            }
             forget(id);
         }
         grown.nodes.clear();
         grown.claims.forEach(claims::drop);
+        for (var loan : grown.loans) {
+            loans.computeIfPresent(loan.draw.owner(), (id, draws) -> {
+                draws.remove(loan);
+                return draws.isEmpty() ? null : draws;
+            });
+            if (loan.returnable() && loan.pool.open) {
+                loan.pool.adjust(claims, loan.input, loan.draw.amount());
+            }
+        }
         grown.settle(how);
         remove(grown);
     }
@@ -2184,6 +2487,9 @@ public final class Weaver {
             }
         }
         live.remove(grown);
+        if (grown.stowing != null) {
+            grown.pool.hauling.remove(grown.stowing, grown);
+        }
         if (grown.isRequest()) {
             answering.remove(grown.asked, grown);
         } else {
@@ -2300,7 +2606,7 @@ public final class Weaver {
     // it may stand anywhere and nothing has narrowed it yet.
     private Set<Stand> standsOf(UUID node) {
         Stances stances = nodes.get(node).spec().stances();
-        Set<Stand> stands = stances instanceof Stances.Wherever ? null : WorkStances.cellsOf(stances);
+        Set<Stand> stands = stances instanceof Stances.Cells ? WorkStances.cellsOf(stances) : null;
         for (Touch touch : touched.getOrDefault(node, List.of())) {
             if (touch.stands().isEmpty()) {
                 continue;
@@ -2387,8 +2693,11 @@ public final class Weaver {
             }
             carrying.addAll(worked.planningLeaves(promised));
         }
+        Expansion grown = grownBy.get(node);
+        List<PoolClaims.Loan> booked = loans.get(node);
+        var settlement = booked == null ? null : new Placement.DrawSettlement(node, new ArrayList<>(booked));
         return new Placement(stands == null ? Set.of() : stands, carrying, List.copyOf(from), List.copyOf(into),
-            drawsOf(node));
+            drawsOf(node), grown.pool == null ? null : grown.pool.budget, grown.stowing, settlement);
     }
 
     // What the node's own claims set aside for it to take: lots in stores, and goods in the pack, whether already
@@ -2558,7 +2867,11 @@ public final class Weaver {
         if (!now.stock().takes(where)) {
             return 0;
         }
-        return Math.max(0, now.stock().heldAt(where, concrete) - claims.taken(new Resource.Lot(where, concrete))
+        return unclaimed(where, concrete, now.stock().heldAt(where, concrete));
+    }
+
+    private long unclaimed(Stash where, ItemSpec concrete, long stocked) {
+        return Math.max(0, stocked - claims.taken(new Resource.Lot(where, concrete))
             - claims.taken(new Resource.Transit(where, concrete)));
     }
 

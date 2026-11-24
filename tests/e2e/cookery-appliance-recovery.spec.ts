@@ -116,8 +116,8 @@ const IGNITION_READ = defineTask<Record<string, any>, Record<string, any>>({
   name: "folkways.e2e.read-real-stove-ignition", side: "server", timeoutMs: 20000,
   source: javaTask({ imports: [
     "com.github.ysbbbbbb.kaleidoscopecookery.block.kitchen.StoveBlock",
-    "io.github.izakyl.folkways.cookery.stove.StoveIgnition",
-    "io.github.izakyl.folkways.cookery.CookeryContent",
+    "io.github.izakyl.folkways.core.shell.cookery.api.StoveIgnition",
+    "io.github.izakyl.folkways.vanilla.cookery.CookeryContent",
     "io.github.izakyl.folkways.core.colony.api.Colonies", "io.github.izakyl.folkways.core.colony.api.Claimed",
     "io.github.izakyl.folkways.core.resident.api.Bodies",
     "io.github.izakyl.folkways.core.world.api.WorldPos", "io.github.izakyl.folkways.core.world.api.WorldSpaces",

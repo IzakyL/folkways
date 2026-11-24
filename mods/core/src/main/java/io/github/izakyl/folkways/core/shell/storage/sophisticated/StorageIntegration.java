@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.core.shell.storage.sophisticated;
 
-import io.github.izakyl.folkways.core.inventory.api.port.StorePorts;
+import io.github.izakyl.folkways.core.facility.api.Ports;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.core.shell.storage.ProxyPort;
 import java.util.List;
@@ -19,8 +19,8 @@ public final class StorageIntegration {
         SophisticatedWorkstations.install("sophisticated_storage", (level, pos) ->
             level.getBlockEntity(pos) instanceof StorageBlockEntity storage
                 ? Optional.of(storage.getStorageWrapper()) : Optional.empty());
-        StorePorts.register(ResourceLocation.fromNamespaceAndPath("folkways_core", "sophisticated_storage"),
-            StorePorts.SPECIFIC, (level, pos) -> {
+        Ports.registerItem(ResourceLocation.fromNamespaceAndPath("folkways_core", "sophisticated_storage"),
+            Ports.SPECIFIC, (level, pos) -> {
                 var entity = level.getBlockEntity(pos);
                 if (entity instanceof StorageBlockEntity storage) {
                     return Optional.of(SophisticatedPort.create(level, pos, storage.getStorageWrapper(),

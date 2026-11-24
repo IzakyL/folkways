@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.core.colony.internal;
 
-import io.github.izakyl.folkways.core.shell.neoforge.FolkwaysAttachments;
+import io.github.izakyl.folkways.core.resident.internal.FolkwaysAttachments;
 import java.util.Optional;
 import java.util.UUID;
 import net.minecraft.world.level.block.entity.BlockEntity;

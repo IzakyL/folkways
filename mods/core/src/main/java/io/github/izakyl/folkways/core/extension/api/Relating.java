@@ -2,6 +2,7 @@ package io.github.izakyl.folkways.core.extension.api;
 
 import io.github.izakyl.folkways.core.resident.api.Participation;
 import io.github.izakyl.folkways.core.resident.api.Participations;
+import io.github.izakyl.folkways.core.resident.api.ResidentKinds;
 import io.github.izakyl.folkways.core.resident.api.Stake;
 import net.minecraft.resources.ResourceLocation;
 import net.neoforged.bus.api.Event;
@@ -27,6 +28,11 @@ public final class Relating extends Event implements IModBusEvent {
     public void participation(ResourceLocation resident, Stake content, Participation how) {
         writing();
         Participations.register(resident, content, how);
+    }
+
+    public void barehanded(ResourceLocation resident, ResourceLocation vocation) {
+        writing();
+        ResidentKinds.registerBarehanded(resident, vocation);
     }
 
     public void defaultParticipation(ResourceLocation resident, Stake content, Participation how) {

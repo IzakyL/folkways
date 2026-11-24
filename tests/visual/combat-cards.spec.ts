@@ -16,7 +16,7 @@ const FAIL_ROUTE = defineTask<{ colony: string; resident: string }, boolean>({
   name: "folkways.visual.combat-cards.failed-route", side: "server",
   source: javaTask({
     imports: ["net.minecraft.server.MinecraftServer", "io.github.izakyl.folkways.core.colony.api.Colonies",
-      "io.github.izakyl.folkways.core.rts.combat.group.UnitGroups", "io.github.izakyl.folkways.core.rts.combat.group.UnitGroup"],
+      "io.github.izakyl.folkways.core.command.combat.group.UnitGroups", "io.github.izakyl.folkways.core.command.combat.group.UnitGroup"],
     body: `
 var a = Args.of(ctx);
 var colony = Colonies.of((MinecraftServer) ctx.server(), UUID.fromString(a.string("colony"))).orElseThrow();
@@ -28,7 +28,7 @@ return true;`,
   }),
 });
 
-test("combat cards: status, failures, pagination and hover help at both window sizes", async ({}, testInfo) => {
+test("combat cards: status, failures, group slots and hover help at both window sizes", async ({}, testInfo) => {
   test.setTimeout(BUDGET.heavy);
   let pair: E2EPair | undefined;
   try {
@@ -58,7 +58,7 @@ test("combat cards: status, failures, pagination and hover help at both window s
     await frames(client, 10);
     await input.key(client, { keyCode: 86 });
     await screen.waitFor(client, "OverheadScreen", { timeoutMs: 8_000 });
-    await screen.clickWidget(client, { label: "RTS" });
+    await screen.clickWidget(client, { label: "Control" });
     const settle = async () => {
       await tick.sprint(server, 2);
       await frames(client, 5);
@@ -110,31 +110,13 @@ test("combat cards: status, failures, pagination and hover help at both window s
       await expect.poll(async () => (await settle()).state.result).toBe("stopped");
       await input.move(client, { x: 0, y: 0 });
       await frames(client, 5);
-      const firstPage = (await client.run(READ_CLIENT)).buttons.filter(hit => hit.kind === "UNIT").map(hit => hit.resident);
-      expect(firstPage.length).toBeGreaterThan(0);
-      expect(firstPage.length).toBeLessThan(14);
-      await shot("03-page-one", "Fourteen selected residents: first page, group slots and centered portraits");
-      for (const [kind, name, subject] of [
-        ["GROUP", "05-group-tooltip", "Group slot hover: slot number and available member count"],
-        ["UNIT", "06-portrait-tooltip", "Portrait hover: resident name and health"],
-        ["NEXT", "07-next-tooltip", "Next-page arrow hover help"],
-        ["PREVIOUS", "08-previous-tooltip", "Previous-page arrow hover help"],
-      ]) {
-        const hit = (await client.run(READ_CLIENT)).buttons.find(button => button.kind === kind);
-        expect(hit, `${kind} must be drawn at ${size.width}x${size.height}`).toBeTruthy();
-        await input.move(client, center(hit!));
-        await frames(client, 15);
-        await shot(name, subject);
-      }
-      const next = (await client.run(READ_CLIENT)).buttons.find(hit => hit.kind === "NEXT")!;
-      await input.click(client, center(next), { button: "left" });
-      await input.move(client, { x: 0, y: 0 });
-      await frames(client, 5);
-      const secondPage = (await client.run(READ_CLIENT)).buttons.filter(hit => hit.kind === "UNIT").map(hit => hit.resident);
-      expect(secondPage.length).toBeGreaterThan(0);
-      expect(secondPage.some(id => firstPage.includes(id))).toBe(false);
-      expect((await client.run(READ_CLIENT)).selected).toHaveLength(14);
-      await shot("04-page-two", "The next page has different portraits while the selection remains fourteen");
+      const slots = (await client.run(READ_CLIENT)).buttons.filter(hit => hit.kind === "GROUP");
+      expect(slots.map(hit => hit.slot)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+      expect(slots[0].texture).toBe("pressed");
+      await shot("03-group-dock", "Fourteen selected residents in a saved group, with a representative portrait");
+      await input.move(client, center(slots[0]));
+      await frames(client, 15);
+      await shot("05-group-tooltip", "Group slot hover: slot number and available member count");
 
       const target = await client.run(PROJECT, { ...origin, x: origin.x + 7, z: origin.z + 6, entity: "" });
       expect(target.y).toBeLessThan(target.height - (await client.run(READ_CLIENT)).barHeight);

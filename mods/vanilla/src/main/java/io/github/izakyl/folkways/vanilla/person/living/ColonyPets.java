@@ -60,7 +60,7 @@ final class ColonyPets {
             List<BlockPos> beds = view.blocks(LivingContent.BED).stream()
                 .filter(level::isLoaded)
                 .filter(at -> Housing.isBed(level.getBlockState(at)))
-                .filter(at -> rooms.get(level, at).grade().ordinal() >= HousingRooms.Grade.DORMITORY.ordinal())
+                .filter(at -> rooms.request(level, at).grade().ordinal() >= HousingRooms.Grade.DORMITORY.ordinal())
                 .toList();
             int local = Math.min(residents, beds.size());
             housed += local;

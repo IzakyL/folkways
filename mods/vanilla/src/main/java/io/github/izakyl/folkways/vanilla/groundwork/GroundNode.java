@@ -1,5 +1,7 @@
 package io.github.izakyl.folkways.vanilla.groundwork;
 
+import io.github.izakyl.folkways.core.work.api.LaborRefusal;
+import io.github.izakyl.folkways.core.facility.api.Facilities;
 import io.github.izakyl.folkways.core.resident.api.RefusalKind;
 import io.github.izakyl.folkways.core.vocation.api.Vocation;
 import io.github.izakyl.folkways.core.work.api.Ending;
@@ -59,7 +61,11 @@ abstract class GroundNode implements Node {
 
     @Override
     public final Outcome commit(ServerLevel level, Worker who) {
-        Outcome done = work(level, who, chore.job());
+        Job job = chore.job();
+        Outcome done = !(this instanceof HaulNode)
+                && java.util.stream.Stream.concat(job.cells().stream(), job.canopy().stream())
+                    .anyMatch(cell -> Facilities.protectedAt(level, cell))
+            ? Outcome.failed(LaborRefusal.PROTECTED_FACILITY) : work(level, who, job);
         chore.tending().made().record(spec, done, level.getGameTime());
         return done;
     }

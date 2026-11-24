@@ -1,7 +1,7 @@
 package io.github.izakyl.folkways.core.shell.storage;
 
-import io.github.izakyl.folkways.core.inventory.api.port.PortIdentity;
-import io.github.izakyl.folkways.core.inventory.api.port.StorePort;
+import io.github.izakyl.folkways.core.facility.api.control.PortIdentity;
+import io.github.izakyl.folkways.core.facility.api.control.ItemPort;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
 import java.util.List;
 import java.util.stream.IntStream;
@@ -15,8 +15,8 @@ public final class NativeCells {
     private NativeCells() {
     }
 
-    public static StorePort refused(WorldPos home, String reason) {
-        return new CellPort(PortIdentity.block(home), List.of(), () -> Verdicts.because(reason), false);
+    public static ItemPort refused(WorldPos home, String reason) {
+        return new CellPort(PortIdentity.block(home), List.of(), () -> StorageTraits.unavailable(reason), false);
     }
 
     public static List<CellPort.Cell> container(Container inventory) {

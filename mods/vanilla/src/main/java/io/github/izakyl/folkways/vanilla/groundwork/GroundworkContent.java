@@ -1,13 +1,15 @@
 package io.github.izakyl.folkways.vanilla.groundwork;
 
+import io.github.izakyl.folkways.core.front.engine.colony.ZoneDrafts;
 import io.github.izakyl.folkways.core.extension.api.Declaring;
 import io.github.izakyl.folkways.core.vocation.api.Vocation;
 import io.github.izakyl.folkways.core.vocation.api.Vocations;
 import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.core.work.api.Workload;
+import io.github.izakyl.folkways.core.front.api.Category;
 import io.github.izakyl.folkways.core.front.api.Delegation;
 import io.github.izakyl.folkways.core.front.api.Enrollment;
-import io.github.izakyl.folkways.core.front.api.Facing;
+import io.github.izakyl.folkways.core.front.api.HoldingKind;
 import io.github.izakyl.folkways.core.front.api.Registering;
 import io.github.izakyl.folkways.core.front.api.Schema;
 import io.github.izakyl.folkways.core.front.api.Shape;
@@ -59,7 +61,9 @@ public final class GroundworkContent {
     }
 
     public static void enroll(Registering registering) {
-        registering.facing(ID, colony -> colony.service(ID, GroundPresence.class).map(Facing.class::cast));
+        ZoneDrafts.demolition(ZONE, settings -> settings.flag(CLEAR) && !settings.flag(FILL));
+        registering.holding(ZONE,
+            colony -> colony.service(ID, GroundPresence.class).map(HoldingKind.class::cast));
         registering.enrollment(ID, new Enrollment(List.of(new Delegation(ZONE,
             new Shape.Volume(FolkwaysVanillaConfig.maxGroundworkCells()),
             new Schema(List.of(
@@ -71,7 +75,7 @@ public final class GroundworkContent {
                 work(HAUL, "chest", false),
                 work(FORAGE, "sweet_berries", false),
                 Schema.Setting.Items.oneBlock(BLOCK, "folkways.settings.fill_block", icon("dirt"), icon("dirt")))),
-            icon("iron_shovel")))));
+            icon("iron_shovel")).in(Category.CONSTRUCTION))));
     }
 
     private static final Workload.Haste HAULING_HASTE = Workload.Haste.of(Vocations.HAULING);

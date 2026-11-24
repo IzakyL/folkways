@@ -1,0 +1,20 @@
+package io.github.izakyl.folkways.vanilla.carts;
+
+import io.github.izakyl.folkways.core.resident.api.RefusalKind;
+
+public enum CartRefusal implements RefusalKind.Named {
+
+    NO_CART,
+
+    NO_HORSE,
+
+    NOT_HITCHED,
+
+    NOT_AT_STATION,
+
+    NO_ROOM,
+
+    NOT_ABOARD,
+
+    NOWHERE_TO_PLACE
+}

@@ -1,9 +1,9 @@
 package io.github.izakyl.folkways.core.shell.rs2;
 
+import io.github.izakyl.folkways.core.facility.api.Ports;
 import com.refinedmods.refinedstorage.api.storage.root.RootStorage;
 import com.refinedmods.refinedstorage.api.storage.root.RootStorageListener;
 import com.refinedmods.refinedstorage.api.resource.list.MutableResourceList;
-import io.github.izakyl.folkways.core.inventory.api.port.StorePorts;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
@@ -69,7 +69,7 @@ final class NetworkEvents {
             for (var at : devices.keySet()) {
                 var level = at.level(server).orElse(null);
                 if (level != null && level.isLoaded(at.block(level))) {
-                    StorePorts.changed(level, at.block(level));
+                    Ports.changed(level, at.block(level));
                 }
             }
         }

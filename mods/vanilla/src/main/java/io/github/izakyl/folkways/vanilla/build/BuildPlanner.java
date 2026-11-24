@@ -1,6 +1,7 @@
 package io.github.izakyl.folkways.vanilla.build;
 
-import io.github.izakyl.folkways.vanilla.build.draft.Joint;
+import io.github.izakyl.folkways.core.work.api.Joint;
+import io.github.izakyl.folkways.core.work.api.Joints;
 import java.util.Map;
 import java.util.function.Function;
 import net.minecraft.core.BlockPos;

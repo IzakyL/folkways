@@ -16,7 +16,7 @@ export type Cell = [number, number];
 
 // The game is in Chinese (blockwright.toml#promo-land): its buttons are found by what they say there.
 export const SAYS: Record<string, string> = Object.assign({},
-  ...["core", "vanilla", "create", "cookery", "firearms", "carts", "golems"].map(mod => JSON.parse(
+  ...["core", "vanilla", "create", "cookery", "carts", "golems"].map(mod => JSON.parse(
     readFileSync(path.join(REPO_ROOT, `mods/${mod}/src/main/resources/assets/folkways_${mod}/lang/zh_cn.json`), "utf8"))));
 
 // The view's own numbers (Overhead.java): how fast the walking keys fly it, how far a wheel notch moves it along its
@@ -122,11 +122,11 @@ export class View {
   }
 
   /** Presses one of the buttons along the top, named by its lang key. */
-  async press(key: string) {
+  async press(key: string, occurrence = 0) {
     const label = SAYS[key];
     let widget: any;
     for (let wait = 0; wait < 30 && !widget; wait++) {
-      widget = ((await softly(() => screen.widgets(this.client))) as any[] ?? []).find?.((one: any) => one.label === label);
+      widget = ((await softly(() => screen.widgets(this.client))) as any[] ?? []).filter?.((one: any) => one.label === label)[occurrence];
       if (!widget) await sleepMs(150);
     }
     if (!widget) throw new Error(`no ${label} button on the view from above`);
@@ -224,7 +224,8 @@ export class View {
 
   private async gestured(draft: Drawing, pace: number) {
     if (this.gesture === draft.gesture) return;
-    await this.press(`folkways.overhead.gesture.${draft.gesture}`);
+    await this.press(draft.gesture === "line"
+      ? "folkways.delegation.folkways_vanilla.patrol" : "folkways.delegation.folkways_vanilla.farm");
     this.gesture = draft.gesture;
     await sleepMs(400 * pace);
   }
@@ -263,14 +264,13 @@ export class View {
    */
   private async commission(spot: Vec, pattern: string, knobs: Knob[], pace: number, raiseNow = false) {
     const wait = (ms: number) => sleepMs(ms * pace);
+    await this.press("folkways.draft", this.gesture === "line" ? 1 : 0);
     await this.click(spot, "right");
-    const offer = await this.element(id => id.startsWith("folkways.zoneconfig.") && id.includes("draft"));
-    await this.pick(offer);
     await this.pick(await this.element(id => id === "folkways.draft.choose"));
     if (raiseNow) {
       const shown = await this.shown();
       if (!shown.some(one => one.id.endsWith(`.${pattern}`))) {
-        await this.pick(await this.element(id => id === "folkways.draft.folder.shared.folkways_carving"));
+        await this.pick(await this.element(id => id === "folkways.draft.folder.shared.folkways_core"));
       }
     }
     const picked = await this.element(id => id.startsWith("folkways.draft.pattern.") && id.endsWith(`.${pattern}`));
@@ -280,6 +280,14 @@ export class View {
     for (const knob of knobs) {
       const id = `folkways.draft.knob.${knob.key}`;
       if ("option" in knob) {
+        // A choice of a few options stands inline, one press each; a longer one opens the picker.
+        const inline = (await this.shown()).map(one => String(one.id))
+          .find(one => one.startsWith(`${id}.`) && one.endsWith(`.${knob.option}`));
+        if (inline) {
+          await this.pick(inline, true);
+          await wait(250);
+          continue;
+        }
         await this.pick(id, true);
         const option = await this.element(one => one.startsWith("folkways.choice.option.") && one.endsWith(`.${knob.option}`));
         await wait(350);
@@ -319,7 +327,7 @@ export class View {
     await this.point(action);
     await clickUnverified(this.client, { id: action });
     await this.back(pattern);
-    return { offer, picked };
+    return { picked };
   }
 
   /** Waits for the view's own screen to come back once the pattern's page has closed; a page left open has refused. */

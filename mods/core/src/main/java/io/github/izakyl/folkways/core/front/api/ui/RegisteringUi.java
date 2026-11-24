@@ -1,12 +1,8 @@
 package io.github.izakyl.folkways.core.front.api.ui;
 
-import com.lowdragmc.lowdraglib2.gui.ui.UIElement;
-import java.util.List;
-import java.util.UUID;
-import java.util.function.BiFunction;
+import io.github.izakyl.folkways.core.front.api.ColonyPanel;
 import java.util.function.Supplier;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.entity.player.Player;
 import net.neoforged.bus.api.Event;
 import net.neoforged.fml.event.IModBusEvent;
 
@@ -16,6 +12,8 @@ public final class RegisteringUi extends Event implements IModBusEvent {
         void page(ResourceLocation page, Supplier<? extends Draw> factory);
         void inlay(Bay bay, ResourceLocation owner, Supplier<? extends Inlay> factory);
         void outline(Outline outline);
+
+        void editor(ColonyPanel.Page page, Editor editor);
     }
 
     private final Registry registry;
@@ -45,10 +43,10 @@ public final class RegisteringUi extends Event implements IModBusEvent {
         registry.inlay(bay, owner, factory);
     }
 
-    public void zoneSettings(List<ResourceLocation> delegations,
-            BiFunction<Player, Supplier<UUID>, UIElement> factory) {
+    /** An editor opened from a button on one of the book's own pages, in registration order. */
+    public void editor(ColonyPanel.Page page, Editor editor) {
         writing();
-        ZonePanels.register(delegations, factory);
+        registry.editor(page, editor);
     }
 
     public void outline(Outline outline) {

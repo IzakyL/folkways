@@ -162,7 +162,7 @@ public final class BodyRunner {
         return execution == null ? Optional.empty() : execution.debugStage();
     }
 
-    public int drainSkipped() {
+    public int consumeSkipped() {
         int said = skipped;
         skipped = 0;
         return said;

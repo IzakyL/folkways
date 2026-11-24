@@ -1,11 +1,15 @@
 package io.github.izakyl.folkways.vanilla.build;
 
+import io.github.izakyl.folkways.core.work.api.BlockData;
+import io.github.izakyl.folkways.core.work.api.Costs;
+import io.github.izakyl.folkways.core.work.api.Joint;
 import io.github.izakyl.folkways.core.work.api.Need;
+import io.github.izakyl.folkways.core.work.api.SchematicPrinter;
 import io.github.izakyl.folkways.core.work.api.StructureCompat;
+import io.github.izakyl.folkways.core.work.api.UnloadedBlock;
 import io.github.izakyl.folkways.core.world.api.Realm;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.core.world.api.WorldSpaces;
-import io.github.izakyl.folkways.vanilla.build.draft.Joint;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -105,20 +109,20 @@ record BuildTarget(Realm realm, Map<BlockPos, BlockState> cells, Set<BlockPos> u
      * The shot aimed at a cell. A fluid source is poured on its own, a step outside the cannon's rules; air is
      * cleared, not shot; a part another shot makes has none of its own.
      */
-    Optional<SchematicPlacement.Launch> launch(BlockPos pos) {
+    Optional<SchematicPrinter.Launch> launch(BlockPos pos) {
         BlockState state = cells.get(pos);
         if (state == null || state.isAir()) {
             return Optional.empty();
         }
         if (state.getBlock() instanceof LiquidBlock) {
-            return Optional.of(SchematicPlacement.Launch.of(pos, Set.of(pos)));
+            return Optional.of(SchematicPrinter.Launch.of(pos, Set.of(pos)));
         }
-        return SchematicPlacement.adapter().launch(this::wanted, pos);
+        return SchematicPrinter.adapter().launch(this::wanted, pos);
     }
 
     /** Every shot of the target, by each cell it leaves placed. A cell no shot makes is missing. */
-    Map<BlockPos, SchematicPlacement.Launch> shots() {
-        Map<BlockPos, SchematicPlacement.Launch> shots = new LinkedHashMap<>();
+    Map<BlockPos, SchematicPrinter.Launch> shots() {
+        Map<BlockPos, SchematicPrinter.Launch> shots = new LinkedHashMap<>();
         for (BlockPos cell : cells.keySet()) {
             launch(cell).ifPresent(launch -> launch.produces().stream().filter(cells::containsKey)
                 .forEach(made -> shots.putIfAbsent(made, launch)));
@@ -127,7 +131,7 @@ record BuildTarget(Realm realm, Map<BlockPos, BlockState> cells, Set<BlockPos> u
     }
 
     /** The target cells a shot leaves placed, its own cell first. */
-    Footprint footprint(SchematicPlacement.Launch launch) {
+    Footprint footprint(SchematicPrinter.Launch launch) {
         Map<BlockPos, BlockState> placed = new LinkedHashMap<>();
         placed.put(launch.anchor(), wanted(launch.anchor()));
         launch.produces().stream().filter(cells::containsKey).forEach(cell -> placed.putIfAbsent(cell, wanted(cell)));
@@ -135,13 +139,15 @@ record BuildTarget(Realm realm, Map<BlockPos, BlockState> cells, Set<BlockPos> u
     }
 
     /** What a shot costs, leaving out what was paid already; nothing when the colony cannot supply it. */
-    Optional<List<Need>> costs(ServerLevel level, SchematicPlacement.Launch launch, Set<BlockPos> met) {
+    Optional<List<Need>> costs(ServerLevel level, SchematicPrinter.Launch launch, Set<BlockPos> met) {
+        if (!level.isLoaded(launch.anchor()) || launch.produces().stream().anyMatch(cell -> !level.isLoaded(cell))
+                || launch.charged().stream().anyMatch(cell -> !level.isLoaded(cell))) return Optional.empty();
         BlockState anchor = wanted(launch.anchor());
         if (anchor.getBlock() instanceof LiquidBlock) {
             return met.contains(launch.anchor()) ? Optional.of(List.of()) : Costs.poured(anchor);
         }
         List<BlockPos> charged = launch.charged().stream().filter(cell -> !met.contains(cell)).toList();
-        return SchematicPlacement.costs(level, new SchematicPlacement.Launch(launch.anchor(), launch.produces(), charged),
+        return SchematicPlacement.costs(level, new SchematicPrinter.Launch(launch.anchor(), launch.produces(), charged),
             this::wanted, this::dataAt);
     }
 

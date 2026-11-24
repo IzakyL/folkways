@@ -1,0 +1,24 @@
+{
+  "required": true,
+  "minVersion": "0.8.5",
+  "package": "io.github.izakyl.folkways.core.shell.crafting.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "plugin": "io.github.izakyl.folkways.core.shell.mixin.CoreMixinPlugin",
+  "mixins": [
+    "Ae2CommissionMixin",
+    "Rs2CommissionMixin",
+    "Rs2TaskSnapshotMixin",
+    "Ae2TerminalMenuMixin",
+    "Rs2TerminalMenuMixin",
+    "Rs2MenuOpenerMixin",
+    "Rs2GridDataMixin",
+    "Rs2RepositoryAccessor"
+  ],
+  "client": [
+    "Ae2TerminalScreenMixin",
+    "Rs2TerminalScreenMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

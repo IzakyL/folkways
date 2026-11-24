@@ -1,13 +1,18 @@
+import { createHash } from "node:crypto";
 import { expect, test } from "@playwright/test";
 import { writeFileSync } from "node:fs";
 import { defineTask, javaTask, screen, tick, world, type MinecraftClient, type MinecraftServer } from "@izakyl/blockwright-minecraft";
-import { clickElement, scrollElementIntoView } from "../ldlib2";
+import { clickElement, panelElements } from "../ldlib2";
 import { chooseInSelector, foundColonyFast, foundingBox, openColonyPanelViaBook, optInViaBook,
   waitForGroundedPlayer } from "../shared/colony/colony-founding";
 import { setMaintainDemandViaUI } from "../shared/colony/membership-optin";
-import { boardActs, settlePanel } from "../shared/ui/site-panel";
-import { colonyRegistry, configureZone, createMarkedZone, openBookPage, setBookGesture,
-  zoneCellsAt, zoneCount, zoneFlagSettingAt, zoneKindAt } from "../shared/ui/zone-tools";
+import { BOOK_TABS, closeCard, waitForPresent } from "../shared/ui/book-cards";
+import { clickTab } from "../shared/ui/colony-pages";
+import { settlePanel } from "../shared/ui/site-panel";
+import {
+  applyZoneSetting, chooseBookTool, colonyRegistry, createMarkedZone, handShapeTo, holdZoneAndOpen,
+  zoneCellsAt, zoneCount, zoneFlagSettingAt, zoneKindAt, zoneKindKey,
+} from "../shared/ui/zone-tools";
 import { aimAndWorldLeftClick } from "../shared/ui/world-ui";
 import { launchPair, type E2EPair } from "../shared/harness/pair";
 import { ensureOut, tracePath } from "../shared/harness/out-paths";
@@ -85,21 +90,24 @@ for (const stage of twins()) test(stage.title("cookery farming: native rice, own
     await world.command(server, `setblock ${block(layout.composter)} minecraft:composter`);
     evidence.composterMark = await optInViaBook(server, client, player, layout.composter, "worksite", stage);
 
-    evidence.hatOff = await editClothing(server, client, player, founded.standBlock, stage, 0);
+    evidence.hatOff = await editClothing(server, client, player, founded.standBlock, stage, "wear_hat");
     expect((await state(server, stage, layout)).wearHat, "the real book action disables task hat borrowing").toBe(false);
     expect((await state(server, stage, layout)).wearArmor, "a full farmer outfit is opt-in").toBe(false);
-    evidence.clothingPicker = await editClothing(server, client, player, founded.standBlock, stage, 2, HAT);
+    evidence.clothingPicker = await editClothing(server, client, player, founded.standBlock, stage, "clothing", HAT);
     expect((await inventory(server, stage, containers)).totals[HAT] ?? 0, "the clothing selector is a sample, not a physical free hat").toBe(0);
 
     // Start from ordinary dirt, not pre-tilled farmland. The resident must prepare the flooded soil.
     // Mark before flooding, so the book can address its visible surface.
     await world.command(server, `setblock ${block(layout.riceGround)} minecraft:dirt`);
-    await setBookGesture(server, client, player, "box");
+    await chooseBookTool(server, client, zoneKindKey("farm"));
     await aimAndWorldLeftClick(server, client, player, layout.riceGround, stage);
     await aimAndWorldLeftClick(server, client, player, layout.riceGround, stage);
     evidence.riceMark = await createMarkedZone(server, client, player, founded.standBlock, "farm", stage);
-    evidence.riceSetting = await configureZone(server, client, player, founded.standBlock,
-      { min: layout.riceGround, max: layout.riceGround }, [{ key: "crop", option: RICE_CROP }], stage);
+    const ricePlot = { min: layout.riceGround, max: layout.riceGround };
+    await holdZoneAndOpen(server, client, player, ricePlot, stage);
+    await waitForPresent(server, client, "folkways.card.choice.crop");
+    evidence.riceSetting = await applyZoneSetting(server, client, { key: "crop", option: RICE_CROP });
+    await closeCard(server, client);
     // Native rice needs source water and two clear blocks above. Its one-block rim contains the water.
     for (const [dx, dz] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
       await world.command(server, `setblock ${block({ ...layout.riceRoot, x: layout.riceRoot.x + dx!, z: layout.riceRoot.z + dz! })} minecraft:smooth_stone`);
@@ -149,7 +157,7 @@ for (const stage of twins()) test(stage.title("cookery farming: native rice, own
 
     await world.command(server, `fill ${block({ ...layout.grass.min, y: layout.grass.min.y - 1 })} ${block({ ...layout.grass.max, y: layout.grass.max.y - 1 })} minecraft:dirt`);
     await world.command(server, `fill ${block(layout.grass.min)} ${block(layout.grass.max)} minecraft:grass_block`);
-    evidence.grassMark = await markSeedGrass(server, client, player, founded.standBlock, layout, stage);
+    evidence.grassMark = await markSeedGrass(server, client, player, layout, stage);
     expect((await state(server, stage, layout)).grass, "no short grass is pre-generated to bypass the bone-meal loop").toBe(0);
     evidence.seedOrder = await setMaintainDemandViaUI(server, client, player, layout.seedTarget, WHEAT_SEED, PROTECTED_WHEAT, stage);
     for (let stack = 0; stack < 4; stack++) await putStock(server, stage, layout.supply, WHEAT_SEED, 64);
@@ -159,7 +167,7 @@ for (const stage of twins()) test(stage.title("cookery farming: native rice, own
     expect(initial.totals[BONE_MEAL] ?? 0, "all bone meal must come from the real composter").toBe(0);
     for (const seed of GRASS_SEEDS) expect(initial.totals[seed] ?? 0, "there are no unstated rare seeds").toBe(0);
 
-    evidence.hatOn = await editClothing(server, client, player, founded.standBlock, stage, 0);
+    evidence.hatOn = await editClothing(server, client, player, founded.standBlock, stage, "wear_hat");
     expect((await state(server, stage, layout)).wearHat).toBe(true);
     let hatSeen = false, hatReturnedToStore = false;
     let level7Seen = false, level8Seen = false, collectedSeen = false, grewGrass = false, harvestedGrass = false, newSeedSeen = false;
@@ -225,16 +233,22 @@ function farming(origin: Vec) {
 }
 
 async function editClothing(server: MinecraftServer, client: MinecraftClient, player: string, stand: Vec, stage: Stage,
-  setting: 0 | 2, item?: string) {
+  setting: "wear_hat" | "clothing", item?: string) {
   await openColonyPanelViaBook(server, client, player, stand, stage);
-  await scrollElementIntoView(client, { id: "folkways.page.cookery" });
-  await clickElement(client, { id: "folkways.page.cookery" });
-  await settlePanel(server, client);
-  const edits = await boardActs(client, "edit", "folkways_cookery.cookery");
-  expect(edits.length, "the actual kitchen page exposes hat, outfit and clothing settings").toBe(3);
-  const edit = edits[setting]!;
-  await scrollElementIntoView(client, { id: edit.id });
-  const opened = await clickElement(client, { id: edit.id });
+  await clickTab(client, BOOK_TABS.settings);
+  const hash = createHash("md5").update("folkways_core:colony_settings/folkways_vanilla:cookery").digest();
+  hash[6] = (hash[6] & 0x0f) | 0x30;
+  hash[8] = (hash[8] & 0x3f) | 0x80;
+  const id = hash.toString("hex").replace(/^(........)(....)(....)(....)/, "$1-$2-$3-$4-");
+  const head = `folkways.book.scope.${id}`;
+  const edit = setting === "wear_hat" ? "folkways.card.flag.wear_hat" : "folkways.card.items.clothing";
+  await waitForPresent(server, client, head);
+  const scope = `folkways.book.scope.card.${id}`;
+  if (!(await panelElements(client)).some(element => element.id === scope && element.displayed)) {
+    await clickElement(client, { id: head });
+  }
+  await waitForPresent(server, client, edit);
+  const opened = await clickElement(client, { id: edit });
   let picked: unknown;
   if (item) {
     picked = await chooseInSelector(client, item, "*" + item, opened);
@@ -246,19 +260,16 @@ async function editClothing(server: MinecraftServer, client: MinecraftClient, pl
   return { setting, edit, opened, picked };
 }
 
-async function markSeedGrass(server: MinecraftServer, client: MinecraftClient, player: string, stand: Vec, layout: Layout, stage: Stage) {
+async function markSeedGrass(server: MinecraftServer, client: MinecraftClient, player: string, layout: Layout, stage: Stage) {
   const registry = await colonyRegistry(server);
   const before = await zoneCount(server, registry);
-  await setBookGesture(server, client, player, "box");
+  await chooseBookTool(server, client, "kind:folkways_vanilla:seed_grass");
   await aimAndWorldLeftClick(server, client, player, layout.grass.min, stage);
   await aimAndWorldLeftClick(server, client, player, layout.grass.max, stage);
-  await openBookPage(server, client, player, stand, stage);
-  await clickElement(client, { id: "folkways.zoneconfig.kind.folkways_cookery.seed_grass" });
-  await settlePanel(server, client);
-  await clickElement(client, { id: "folkways.zoneconfig.confirm" });
+  await handShapeTo(server, client, "kind:folkways_vanilla:seed_grass");
   await expect.poll(async () => { await tick.sprint(server, 3); return zoneCount(server, registry); }, { timeout: 8_000 }).toBe(before + 1);
   await screen.dismiss(client);
-  expect(await zoneKindAt(server, registry, before)).toBe("folkways_cookery:seed_grass");
+  expect(await zoneKindAt(server, registry, before)).toBe("folkways_vanilla:seed_grass");
   expect(await zoneCellsAt(server, registry, before)).toBe(225);
   expect(await zoneFlagSettingAt(server, registry, "restore_grass", before)).toBe(true);
   return { index: before, cells: 225, restoreGrass: true };
@@ -292,7 +303,7 @@ const READ_FARM = defineTask<{ rice: Vec; composter: Vec; min: Vec; max: Vec }, 
     imports: ["net.minecraft.core.BlockPos", "net.minecraft.world.level.block.Blocks", "net.minecraft.world.level.block.ComposterBlock",
       "net.minecraft.world.entity.EquipmentSlot", "net.minecraft.world.item.Items", "io.github.izakyl.folkways.core.colony.api.Colonies",
       "io.github.izakyl.folkways.core.resident.api.Bodies", "io.github.izakyl.folkways.core.front.api.Fronts",
-      "io.github.izakyl.folkways.cookery.CookeryContent", "io.github.izakyl.folkways.cookery.seeds.SeedPresence",
+      "io.github.izakyl.folkways.vanilla.cookery.CookeryContent", "io.github.izakyl.folkways.vanilla.cookery.seeds.SeedPresence",
       "com.github.ysbbbbbb.kaleidoscopecookery.init.ModItems", "com.github.ysbbbbbb.kaleidoscopecookery.init.tag.TagMod"],
     members: `private static BlockPos pos(Object raw) {
       var at = (Map<?, ?>) raw;

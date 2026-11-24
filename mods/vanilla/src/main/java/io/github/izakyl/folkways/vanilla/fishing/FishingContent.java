@@ -1,6 +1,18 @@
 package io.github.izakyl.folkways.vanilla.fishing;
 
+import io.github.izakyl.folkways.core.effect.Modifier;
+import io.github.izakyl.folkways.core.effect.Scope;
+import io.github.izakyl.folkways.core.effect.Stat;
+import io.github.izakyl.folkways.core.effect.Stats;
+import io.github.izakyl.folkways.core.effect.perk.Perk;
 import io.github.izakyl.folkways.core.extension.api.Declaring;
+import io.github.izakyl.folkways.core.front.api.Category;
+import io.github.izakyl.folkways.core.front.api.Delegation;
+import io.github.izakyl.folkways.core.front.api.Enrollment;
+import io.github.izakyl.folkways.core.front.api.HoldingKind;
+import io.github.izakyl.folkways.core.front.api.Registering;
+import io.github.izakyl.folkways.core.front.api.Schema;
+import io.github.izakyl.folkways.core.front.api.Shape;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import io.github.izakyl.folkways.core.vocation.api.Vocation;
 import io.github.izakyl.folkways.core.vocation.api.VocationGroup;
@@ -8,18 +20,6 @@ import io.github.izakyl.folkways.core.vocation.api.VocationSpec;
 import io.github.izakyl.folkways.core.vocation.api.Vocations;
 import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.core.work.api.Workload;
-import io.github.izakyl.folkways.core.effect.Modifier;
-import io.github.izakyl.folkways.core.effect.Scope;
-import io.github.izakyl.folkways.core.effect.Stat;
-import io.github.izakyl.folkways.core.effect.Stats;
-import io.github.izakyl.folkways.core.effect.perk.Perk;
-import io.github.izakyl.folkways.core.front.api.Delegation;
-import io.github.izakyl.folkways.core.front.api.Enrollment;
-import io.github.izakyl.folkways.core.front.api.Facing;
-import io.github.izakyl.folkways.core.front.api.Registering;
-import io.github.izakyl.folkways.core.front.api.Schema;
-import io.github.izakyl.folkways.core.front.api.Shape;
-import io.github.izakyl.folkways.core.front.api.panel.PageKind;
 import io.github.izakyl.folkways.vanilla.FolkwaysVanillaConfig;
 import java.util.List;
 import net.minecraft.resources.ResourceLocation;
@@ -36,9 +36,6 @@ public final class FishingContent {
 
     public static final ResourceLocation FISHERY =
         ResourceLocation.fromNamespaceAndPath("folkways_vanilla", "fish");
-
-    private static final PageKind PAGE = PageKind.boarded(ID, "folkways.page.fish",
-        ResourceLocation.withDefaultNamespace("fishing_rod")).tools(VOCATION);
 
     public static final String QUICK_HANDS = "fishing_quick_hands";
 
@@ -86,10 +83,11 @@ public final class FishingContent {
     }
 
     public static void enroll(Registering registering) {
-        registering.facing(ID, colony -> colony.service(ID, FishingPresence.class).map(Facing.class::cast));
+        registering.holding(FISHERY,
+            colony -> colony.service(ID, FishingPresence.class).map(HoldingKind.class::cast));
         registering.enrollment(ID,
             new Enrollment(List.of(new Delegation(FISHERY, new Shape.Volume(cap()),
-                ResourceLocation.withDefaultNamespace("fishing_rod"))), Schema.none(), List.of(PAGE)));
+                ResourceLocation.withDefaultNamespace("fishing_rod")).in(Category.FOOD)), Schema.none()));
     }
 
     static Vocation trade() {

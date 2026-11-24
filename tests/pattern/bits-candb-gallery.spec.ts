@@ -15,7 +15,7 @@ const CAMERA_SETUP = defineTask<void, unknown>({
   source: readFileSync("tests/pattern/galleries/arch-bridge/CameraSetup.java", "utf8"),
 });
 const SETTLE_MS = 5_000;
-const PATTERN = "mods/carving/src/main/resources/data/folkways_carving/folkways/pattern/curved_gallery.star";
+const PATTERN = "mods/vanilla/src/main/resources/chiselsandbits/data/folkways_vanilla/folkways/pattern/curved_gallery.star";
 const gallery = {
   pattern: "bits-candb-gallery",
   task: defineTask<Record<string, any>, any>({

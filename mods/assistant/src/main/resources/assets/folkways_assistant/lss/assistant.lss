@@ -1,0 +1,184 @@
+// The assistant keeps a conversation apart from the ledger yet on the same paper: a flat sheet edged in oak, words
+// in the desk's ink with its faded brown for whatever only reports, hairline ledger rules in place of frames and
+// the desk's red ink for what commits. Every rule starts from the window's class so it outranks the desk's oak
+// tags and nine-slice frames.
+
+.folkways_desk .panel_bg.folkways_assistant_window {
+  padding-all: 0;
+  gap-all: 0;
+}
+.folkways_desk .folkways_assistant_window .__dialog_title__ {
+  background: empty;
+  padding-left: 8;
+  padding-right: 4;
+  height: 22;
+  gap-all: 2;
+}
+.folkways_desk .folkways_assistant_window .__dialog_title__ label {
+  text-color: #2b1c12;
+}
+.folkways_desk .folkways_assistant_window text, .folkways_desk .folkways_assistant_window label {
+  text-color: #3b2a1a;
+  text-shadow: false;
+}
+.folkways_desk .folkways_assistant_window .folkways_assistant_quiet {
+  text-color: #7d6748;
+}
+.folkways_desk .folkways_assistant_window .folkways_assistant_faint {
+  text-color: #8f7f62;
+}
+.folkways_desk .folkways_assistant_window .folkways_assistant_failed {
+  text-color: #8a2416;
+}
+.folkways_desk .folkways_assistant_window .folkways_assistant_live {
+  text-color: #9a3324;
+}
+.folkways_desk .folkways_assistant_window .folkways_assistant_section {
+  text-color: #9a3324;
+}
+
+// Rules and surfaces
+.folkways_desk .folkways_assistant_window .folkways_assistant_rule {
+  background: color(#c4ad7e);
+}
+.folkways_desk .folkways_assistant_window .folkways_assistant_bubble {
+  background: sdf(#d6c497, 4);
+  padding-all: 4;
+  padding-left: 6;
+  padding-right: 6;
+}
+.folkways_desk .folkways_assistant_window .folkways_assistant_code {
+  background: sdf(#f4ead0, 3, 1, #d6c497);
+  padding-all: 5;
+}
+.folkways_desk .folkways_assistant_window .folkways_assistant_card {
+  background: sdf(#f4ead0, 4, 1, #c4ad7e);
+  padding-all: 6;
+  gap-all: 5;
+}
+.folkways_desk .folkways_assistant_window .folkways_assistant_composer {
+  background: sdf(#f4ead0, 4, 1, #c4ad7e);
+  padding-all: 2;
+  padding-left: 4;
+}
+
+// Buttons are bare words or icons that only show a wash under the pointer
+.folkways_desk .folkways_assistant_window button:host {
+  base-background: empty;
+  hover-background: sdf(#d6c497, 3);
+  pressed-background: sdf(#c4ad7e, 3);
+  height: 16;
+  padding-all: 2;
+}
+.folkways_desk .folkways_assistant_window button .__button_text__ {
+  text-color: #3b2a1a;
+}
+.folkways_desk .folkways_assistant_window button.__disabled__ {
+  base-background: empty;
+}
+.folkways_desk .folkways_assistant_window button.__disabled__ .__button_text__ {
+  text-color: #8f7f62;
+}
+.folkways_desk .folkways_assistant_window button.folkways_chosen {
+  base-background: sdf(#d6c497, 3, 1, #9a3324);
+}
+.folkways_desk .folkways_assistant_window button.folkways_chosen .__button_text__ {
+  text-color: #3b2a1a;
+}
+.folkways_desk .folkways_assistant_window button.folkways_assistant_outline {
+  base-background: sdf(#00000000, 3, 1, #b49d70);
+  hover-background: sdf(#d6c497, 3, 1, #8f7f62);
+  padding-left: 6;
+  padding-right: 6;
+}
+.folkways_desk .folkways_assistant_window button.folkways_assistant_primary {
+  base-background: sdf(#9a3324, 3);
+  hover-background: sdf(#8a2416, 3);
+  pressed-background: sdf(#8a2416, 3);
+  padding-left: 6;
+  padding-right: 6;
+}
+.folkways_desk .folkways_assistant_window button.folkways_assistant_primary .__button_text__ {
+  text-color: #eadcb6;
+}
+.folkways_desk .folkways_assistant_window button.folkways_assistant_row {
+  height: auto;
+  padding-all: 2;
+  padding-left: 4;
+  padding-right: 4;
+}
+
+// The composer's field sits flat inside its rounded well
+.folkways_desk .folkways_assistant_window text-field:host {
+  background: sdf(#f4ead0, 3, 1, #c4ad7e);
+  focus-overlay: sdf(#00000000, 3, 1, #9a3324);
+  text-color: #3b2a1a;
+  text-shadow: false;
+  cursor-color: #9a3324;
+  error-color: #8a2416;
+  padding-all: 3;
+  padding-top: 2;
+  padding-bottom: 2;
+}
+.folkways_desk .folkways_assistant_window .folkways_assistant_composer text-field:host {
+  background: empty;
+  focus-overlay: empty;
+}
+// The chat's own input is a field of its own kind, which the stylesheet reaches by class rather than as a text-field.
+.folkways_desk .folkways_assistant_window .folkways_assistant_input:host {
+  background: empty;
+  focus-overlay: empty;
+  text-color: #3b2a1a;
+  text-shadow: false;
+  cursor-color: #9a3324;
+  error-color: #8a2416;
+  padding-all: 3;
+  padding-top: 2;
+  padding-bottom: 2;
+}
+
+// Lists lose their ledger rules
+.folkways_desk .folkways_assistant_window .folkways_list {
+  background: empty;
+}
+.folkways_desk .folkways_assistant_window .folkways_row {
+  background: empty;
+}
+
+.folkways_desk .folkways_assistant_window .__toggle_button__ {
+  base-background: sdf(#f4ead0, 3, 1, #b49d70);
+  pressed-background: sdf(#f4ead0, 3, 1, #b49d70);
+  hover-background: sdf(#d6c497, 3, 1, #9a3324);
+}
+.folkways_desk .folkways_assistant_window .__toggle_mark-icon__ {
+  background: sdf(#9a3324, 2);
+}
+
+// A thin rail in place of the wooden rod
+.folkways_desk .folkways_assistant_window scroller-vertical:host {
+  width: 4;
+}
+.folkways_desk .folkways_assistant_window .__scroller_view_vertical-scroller__ {
+  width: 4;
+  margin-left: 3;
+}
+.folkways_desk .folkways_assistant_window .__scroller_view_view-port__ {
+  background: empty;
+  padding-all: 0;
+}
+.folkways_desk .folkways_assistant_window .__scroller_scroll_container__ {
+  background: empty;
+  padding-all: 0;
+}
+.folkways_desk .folkways_assistant_window scroller-vertical .__scroller_scroll_bar__ {
+  base-background: sdf(#c4ad7e, 2);
+  hover-background: sdf(#b49d70, 2);
+  pressed-background: sdf(#8f7f62, 2);
+}
+
+.folkways_desk .folkways_assistant_window .folkways_assistant_accent {
+  background: color(#9a3324);
+}
+.folkways_desk .folkways_assistant_window button.folkways_assistant_outline.folkways_chosen {
+  base-background: sdf(#d6c497, 3, 1, #9a3324);
+}

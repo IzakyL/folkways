@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { defineTask, input, javaTask, tick } from "@izakyl/blockwright-minecraft";
-import { ancestorsOf, clickElement, panelElements, scrollElementIntoView, visibleBox, waitForElement } from "../ldlib2";
+import { ancestorsOf, panelElements, scrollElementIntoView, visibleBox, waitForElement } from "../ldlib2";
 import { foundColonyFast, openColonyPanelViaBook, waitForGroundedPlayer } from "../shared/colony/colony-founding";
 import { VisualRun } from "../shared/capture/visual-kit";
 import { launchPair, type E2EPair } from "../shared/harness/pair";
@@ -9,7 +9,8 @@ import { tracePath } from "../shared/harness/out-paths";
 import { BUDGET } from "../shared/harness/budgets";
 import { frames } from "../shared/harness/bw-helpers";
 import { setVisualLanguage } from "../shared/capture/ponder";
-import { clickTab } from "../shared/ui/colony-pages";
+import { waitForPresent } from "../shared/ui/book-cards";
+import { clickTab, openResidentDetail } from "../shared/ui/colony-pages";
 
 const GROW = defineTask<{ uuid: string }, { ok: boolean }>({
   name: "folkways.resident-detail.grow",
@@ -17,7 +18,7 @@ const GROW = defineTask<{ uuid: string }, { ok: boolean }>({
   source: javaTask({
     imports: ["net.minecraft.server.MinecraftServer", "net.minecraft.resources.ResourceLocation", "net.minecraft.util.RandomSource",
       "io.github.izakyl.folkways.core.resident.api.Body", "io.github.izakyl.folkways.core.colony.api.Colonies",
-      "io.github.izakyl.folkways.vanilla.person.living.LivingContent", "io.github.izakyl.folkways.core.front.api.Facing"],
+      "io.github.izakyl.folkways.vanilla.person.living.LivingContent"],
     body: `
 var level = ((MinecraftServer)ctx.server()).overworld();
 var body = (Body)level.getEntity(UUID.fromString(Args.of(ctx).string("uuid")));
@@ -27,7 +28,7 @@ add.setAccessible(true);
 add.invoke(perks, ResourceLocation.parse("folkways_vanilla:building"), 1120, RandomSource.create(17));
 add.invoke(perks, ResourceLocation.parse("folkways_vanilla:farming"), 200, RandomSource.create(19));
 var colony = Colonies.of(level.getServer(), body.colonyId().orElseThrow()).orElseThrow();
-var living = colony.service(LivingContent.ID, Facing.class).orElseThrow();
+var living = colony.service(LivingContent.ID, Object.class).orElseThrow();
 var find = living.getClass().getDeclaredMethod("mood", UUID.class);
 find.setAccessible(true);
 var mood = find.invoke(living, body.id());
@@ -94,8 +95,8 @@ throw new IllegalStateException("resident missing");
       }),
     }), { prefix: row.slice("folkways.resident.name.".length) })).uuid;
     expect((await server.run(GROW, { uuid })).ok).toBe(true);
-    await clickElement(client, { id: row });
-    await waitForElement(client, { id: "folkways.resident.mood" });
+    await openResidentDetail(server, client, row);
+    await waitForPresent(server, client, "folkways.resident.mood");
     await frames(client, 10);
     await run.shot(client, "01-mood-and-recent", {
       subject: "Resident detail: mood and alertness meters, colored reasons, recent events and vocation groups in one scrolling body",

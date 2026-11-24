@@ -1,5 +1,7 @@
 package io.github.izakyl.folkways.vanilla.groundwork;
 
+import io.github.izakyl.folkways.core.work.api.LaborRefusal;
+import io.github.izakyl.folkways.core.facility.api.Facilities;
 import io.github.izakyl.folkways.core.vocation.api.Vocation;
 import io.github.izakyl.folkways.core.work.api.NodeSpec;
 import io.github.izakyl.folkways.core.work.api.Outcome;
@@ -95,6 +97,9 @@ final class BreakNode extends GroundNode {
         List<BlockPos> decorations = way == Way.FALLEN
             ? new FallenLogs(level, at -> false).decorations(cell) : job.canopy();
         for (BlockPos decoration : decorations) {
+            if (Facilities.protectedAt(level, decoration)) {
+                return Outcome.failed(LaborRefusal.PROTECTED_FACILITY);
+            }
             if (!level.isLoaded(decoration) || spared.test(decoration, level.getBlockState(decoration))) {
                 return refuse(GroundRefusal.NOTHING_TO_WORK);
             }

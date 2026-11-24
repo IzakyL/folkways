@@ -1,14 +1,14 @@
 import { expect, test } from "@playwright/test";
 import { defineTask, input, javaTask, screen, tick, world, type MinecraftClient } from "@izakyl/blockwright-minecraft";
 import { cameraLookingAt } from "@izakyl/blockwright-minecraft/internal";
-import { clickElement } from "../ldlib2";
 import { waitForGroundedPlayer, type Vec } from "../shared/colony/colony-founding";
 import { setMaintainDemandInView } from "../shared/colony/membership-optin";
-import { buttonText, openContainerScreen, pickChoice } from "../shared/ui/site-panel";
-import { colonyRegistry, setBookGesture, zoneCount, zoneKindToken } from "../shared/ui/zone-tools";
+import { cellText, openContainerScreen, pickChoice } from "../shared/ui/site-panel";
+import { colonyRegistry, chooseBookTool, setBookGesture, zoneCount, zoneKindKey } from "../shared/ui/zone-tools";
+
 import { drainActionBar, FIRST_CORNER, readActionBar, ZONE_MARKED } from "../shared/ui/zone-receipt";
 import { BUDGET } from "../shared/harness/budgets";
-import { frames, safeAction, softly, tryCommand, waitForElement } from "../shared/harness/bw-helpers";
+import { frames, safeAction, tryCommand, waitForElement } from "../shared/harness/bw-helpers";
 import { runColonyTask } from "../shared/colony/colony-tasks";
 import { admitPromoSettlersFast, foundPromoColonyFast, licenseCrewFast } from "./fast-setup";
 import {
@@ -49,7 +49,7 @@ const FIELD_GROW_SPEED = 2_500;
 // there are down and a few that came up again have been felled in turn.
 const WOOD_GROW_SPEED = 40;
 const REGROWN_TREES = 2;
-const CROP_TOKEN = "folkways.draft.value.crop";
+const CROP_TOKEN = "folkways.card.choice.crop.open";
 const CHAT_FADE_MS = 12_000;
 const REVEAL_MS = 3_500;
 // The player's gestures go at a pace a viewer can follow: each turn of the head, and a hold after each step.
@@ -344,6 +344,7 @@ async function frameZone(server: any, client: MinecraftClient, spot: Spot, from:
   let look = from;
   const registry = await colonyRegistry(server);
   evidence.zones_before = await zoneCount(server, registry);
+  evidence.kind = await chooseBookTool(server, client, zoneKindKey("farm"));
   await drainActionBar(client);
   for (const [corner, receipt, key] of [[plot.min, FIRST_CORNER, "corner_1"], [plot.max, ZONE_MARKED, "corner_2"]] as const) {
     look = await glide(client, look, lookAt(spot, { ...corner, y: corner.y + 0.4 }), GLIDE_MS);
@@ -364,19 +365,14 @@ async function frameZone(server: any, client: MinecraftClient, spot: Spot, from:
   look = await glide(client, look, lookAt(spot, middle), GLIDE_MS);
   await sleepMs(BEAT_MS);
   evidence.open = await rightClick(client);
-  await waitForElement(client, { id: zoneKindToken("farm") }, { timeoutMs: 8_000 });
-  await sleepMs(BEAT_MS);
-  evidence.kind = await softly(() => clickElement(client, { id: zoneKindToken("farm") }));
+  await waitForElement(client, { id: CROP_TOKEN }, { timeoutMs: 8_000 });
   await sleepMs(BEAT_MS);
   if (crop) {
     // The picker holds open on the chosen sapling before it is confirmed.
-    evidence.crop = await pickChoice(server, client, CROP_TOKEN, crop, () => buttonText(client, CROP_TOKEN),
+    evidence.crop = await pickChoice(server, client, CROP_TOKEN, crop, () => cellText(client, CROP_TOKEN),
       () => sleepMs(BEAT_MS));
     await sleepMs(BEAT_MS);
   }
-  await waitForElement(client, { id: "folkways.zoneconfig.confirm" }, { timeoutMs: 8_000 });
-  evidence.confirm = await softly(() => clickElement(client, { id: "folkways.zoneconfig.confirm" }));
-  await sleepMs(BEAT_MS / 2);
   evidence.close = await safeAction(() => screen.dismiss(client));
   evidence.zones_after = await zoneCount(server, registry);
   if (evidence.zones_after !== evidence.zones_before + 1) {
@@ -551,15 +547,17 @@ const PLACARDS = defineTask<Record<string, any>, Record<string, any>>({
   timeoutMs: 20_000,
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.core.front.api.Facing",
-      "io.github.izakyl.folkways.core.front.api.notice.Line",
+      "io.github.izakyl.folkways.core.front.engine.Enrollments",
+      "io.github.izakyl.folkways.core.card.api.notice.Line",
       "io.github.izakyl.folkways.core.front.engine.colony.ColonyGround",
     ],
     body: `
 var server=ctx.server();var level=server.overworld();var args=Args.of(ctx);
 var colony=ColonyGround.of(server,UUID.fromString(args.string("colony_id"))).orElseThrow();
 var view=colony.view(level);var out=new ArrayList<Object>();
-for(var facing:Facing.all(colony))for(var placard:facing.placards(view)){
+var placards = Enrollments.ghostSource(colony).values().stream()
+    .flatMap(source -> source.placards(view).stream()).toList();
+for (var placard : placards) {
   var lines=new ArrayList<Object>();
   for(var line:placard.lines())lines.add(switch(line){
     case Line.Said said->said.notice().component().getString();

@@ -8,15 +8,15 @@ import com.lowdragmc.lowdraglib2.gui.ui.elements.TextField;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Toggle;
 import com.lowdragmc.lowdraglib2.gui.ui.event.UIEvents;
 import dev.vfyjxf.taffy.style.FlexDirection;
-import io.github.izakyl.folkways.core.item.api.ItemFilter;
 import io.github.izakyl.folkways.core.front.api.Ghost;
 import io.github.izakyl.folkways.core.front.api.Schema;
 import io.github.izakyl.folkways.core.front.api.ui.FilterStacks;
 import io.github.izakyl.folkways.core.front.api.ui.Picker;
 import io.github.izakyl.folkways.core.front.api.ui.Rows;
+import io.github.izakyl.folkways.core.front.api.ui.Segments;
 import io.github.izakyl.folkways.core.front.api.ui.Taking;
 import io.github.izakyl.folkways.core.front.api.ui.Tokens;
-import io.github.izakyl.folkways.core.front.ui.screen.RememberedSettings;
+import io.github.izakyl.folkways.core.item.api.ItemFilter;
 import io.github.izakyl.folkways.core.library.FileNames;
 import io.github.izakyl.folkways.core.library.Shelves;
 import io.github.izakyl.folkways.vanilla.build.SiteNameField;
@@ -60,6 +60,7 @@ public final class DraftPanel {
     private static final float PICKER_WIDTH = 180f;
     private static final float PICKER_HEIGHT = 220f;
     private static final int CONTROL_MIN = 28;
+    private static final float SEGMENTS_ROOM = 170;
     private static final int NUMBER_WIDTH = 34;
     private static final int MOST_ICONS = 6;
 
@@ -223,7 +224,7 @@ public final class DraftPanel {
     private void choose(Pattern pattern) {
         KnobValues restored = KnobValues.of(pattern.knobs());
         try {
-            restored = RememberedSettings.load("pattern/" + pattern.id())
+            restored = RememberedPatternSettings.load("pattern/" + pattern.id())
                 .map(saved -> KnobValues.restore(pattern.knobs(), saved)).orElse(restored);
         } catch (RuntimeException ignored) { }
         choose(pattern, restored);
@@ -289,7 +290,7 @@ public final class DraftPanel {
             } else {
                 DraftOffer.commission(chosen, hint, settings, front, typed, now);
             }
-            RememberedSettings.save("pattern/" + chosen.id(), values.save(chosen.knobs()));
+            RememberedPatternSettings.save("pattern/" + chosen.id(), values.save(chosen.knobs()));
             kept = null;
             taking.done();
         });
@@ -441,6 +442,11 @@ public final class DraftPanel {
                 Component label = option == null ? Picker.labelOf(id)
                     : worded(Face.wordOf(choice.key(), option), Picker.labelOf(id));
                 rows.add(new Picker.Row(id.toString(), label, icon.isEmpty() ? Picker.iconOf(id) : icon));
+            }
+            // A few short options stand side by side; a longer choice is picked from a list.
+            if (Segments.fits(rows, SEGMENTS_ROOM)) {
+                return new Segments(TOKEN + ".knob." + choice.key(), rows, values.choice(choice.key()).toString(),
+                    picked -> values.choose(choice, ResourceLocation.parse(picked)));
             }
             Button press = Rows.wearing();
             press.layout(layout -> layout.widthAuto().minWidth(CONTROL_MIN).flexShrink(1));

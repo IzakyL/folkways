@@ -3,7 +3,7 @@ package io.github.izakyl.folkways.core.plan.api;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import io.github.izakyl.folkways.core.transport.api.TransportEndpoint;
 import io.github.izakyl.folkways.core.work.api.NodeSpec;
-import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.world.api.Stances;
 import io.github.izakyl.folkways.core.work.api.WorkSite;
 import io.github.izakyl.folkways.core.work.api.Workload;
 import java.util.UUID;

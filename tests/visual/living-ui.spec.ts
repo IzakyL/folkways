@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
-import { defineTask, input, javaTask, player, screen, tick, world } from "@izakyl/blockwright-minecraft";
+import { defineTask, input, javaTask, screen, tick, world } from "@izakyl/blockwright-minecraft";
 import { cameraLookingAt } from "@izakyl/blockwright-minecraft/internal";
-import { ancestorsOf, clickElement, panelElements, visibleBox, waitForElement } from "../ldlib2";
+import { ancestorsOf, panelElements, visibleBox } from "../ldlib2";
 import { foundColonyFast, isColonyMember, openColonyPanelViaBook, waitForGroundedPlayer, type Vec } from "../shared/colony/colony-founding";
 import { MARK_MEMBERS, runColonyTask } from "../shared/colony/colony-tasks";
 import { VisualRun } from "../shared/capture/visual-kit";
@@ -11,14 +11,15 @@ import { seededOffThreadServer } from "../shared/harness/mod-settings";
 import { tracePath } from "../shared/harness/out-paths";
 import { BUDGET } from "../shared/harness/budgets";
 import { frames } from "../shared/harness/bw-helpers";
-import { clickTab } from "../shared/ui/colony-pages";
+import { clickTab, openSettingsScope } from "./ui-catalog";
+import { waitForPresent } from "../shared/ui/book-cards";
 import { createMarkedZone, holdZoneAndOpen, setBookGesture } from "../shared/ui/zone-tools";
 import { aimAndWorldLeftClick } from "../shared/ui/world-ui";
 
 const PLACARDS = defineTask<void, string[][]>({
   name: "folkways.visual.bed-placards", side: "client",
   source: javaTask({ imports: ["io.github.izakyl.folkways.core.front.client.ColonyHighlightState",
-    "io.github.izakyl.folkways.core.front.api.Placard", "io.github.izakyl.folkways.core.front.api.notice.Line"], body: `
+    "io.github.izakyl.folkways.core.front.api.Placard", "io.github.izakyl.folkways.core.card.api.notice.Line"], body: `
 var field = ColonyHighlightState.class.getDeclaredField("PLACARDS"); field.setAccessible(true);
 var cards = (List<Placard>)field.get(null);
 return cards.stream().filter(card -> card.lines().getFirst() instanceof Line.Said said
@@ -34,7 +35,7 @@ return cards.stream().filter(card -> card.lines().getFirst() instanceof Line.Sai
 const RESIDENT_CARD = defineTask<void, boolean>({
   name: "folkways.visual.resident-card", side: "client",
   source: javaTask({ imports: ["net.minecraft.client.Minecraft", "io.github.izakyl.folkways.core.front.client.ColonyLookState",
-    "io.github.izakyl.folkways.core.front.api.notice.Line"], body: `
+    "io.github.izakyl.folkways.core.card.api.notice.Line"], body: `
 var minecraft = Minecraft.getInstance();
 for (var card : ColonyLookState.residents()) {
  var entity = minecraft.level.getEntity(card.entityId());
@@ -78,7 +79,7 @@ return false;
 const DINING_CARD = defineTask<void, boolean>({
   name: "folkways.visual.dining-card", side: "client",
   source: javaTask({ imports: ["io.github.izakyl.folkways.core.front.client.ColonyHighlightState",
-    "io.github.izakyl.folkways.core.front.api.notice.Line", "net.minecraft.network.chat.Component"], body: `
+    "io.github.izakyl.folkways.core.card.api.notice.Line", "net.minecraft.network.chat.Component"], body: `
 var field = ColonyHighlightState.class.getDeclaredField("NOTES"); field.setAccessible(true);
 var notes = (Map<UUID, List<Line>>)field.get(null);
 var expected = Component.translatable("folkways.dining.summary", 1, 2).getString();
@@ -142,7 +143,7 @@ player.getAbilities().flying = true; player.onUpdateAbilities(); return true;
     await runColonyTask(server, MARK_MEMBERS, { player: who, colony_id: String(founding.evidence.colonyId),
       cells: [spare, pulley].flatMap(at => [at.x, at.y, at.z]) });
     expect(await isColonyMember(server, pulley), "the elevator delegation must accept the real Create pulley").toBe(true);
-    run.note("elevator", { at: pulley, delegation: "folkways_create:elevator", member: true });
+    run.note("elevator", { at: pulley, delegation: "folkways_vanilla:elevator", member: true });
     const catalog = ponderCatalog(locale);
     await expect.poll(async () => {
       await tick.sprint(server, 40);
@@ -226,35 +227,33 @@ return selected.filter(zone -> zone.delegation().toString().equals("folkways_van
     && AABB.encapsulatingFullBlocks(zone.min(), zone.max()).contains(player.getEyePosition())).isPresent();
 ` }),
         })), "right-click must select dining while the player's eyes are inside its box").toBe(true);
-        for (const key of ["food", "drink", "servings"]) await waitForElement(client, { id: `folkways.zoneconfig.value.${key}` });
-      } else {
-        await player.aim(server, box.min, { player: who, face: "up", from: { x: box.min.x + 0.5, y, z: box.min.z + 0.5 } });
-        await player.click(client, { button: "right" });
-        await waitForElement(client, { id: "folkways.selection.back" });
+        for (const id of ["items.food", "items.drink", "number.servings.field"]) {
+          await waitForPresent(server, client, `folkways.card.${id}`);
+        }
       }
       await frames(client, 8);
-      await shot(`0${5 + index * 2}-${box.kind}-panel`, `${box.kind} zone panel${box.kind === "dining" ? ": food, drink and servings settings" : ": purpose and remove action"}`);
+      await shot(`0${5 + index * 2}-${box.kind}-panel`, `${box.kind} zone settings card${box.kind === "dining" ? ": food, drink and servings settings" : ": purpose and remove action"}`);
       await panelFits(client, run, box.kind);
       await screen.dismiss(client);
     }
     await view({ x: pulley.x + 0.5, y: y + 1.62, z: pulley.z + 4 }, { x: pulley.x + 0.5, y: y + 0.5, z: pulley.z + 0.5 });
     await shot("06-elevator-delegation", "Create elevator pulley delegated to the colony with the book");
     await openColonyPanelViaBook(server, client, who, founding.standBlock);
-    await clickTab(client, "folkways.page.person");
+    await clickTab(client, "folkways.tab.settings");
+    await openSettingsScope(server, client, "folkways_vanilla:living", "folkways.card.flag.food_safety");
     await frames(client, 8);
-    await shot("07-household-board", "Household Board: needs, food policy, safety setting, food list and free beds");
+    await shot("07-household-settings", "Household settings card: food policy, safety setting and food list");
     await panelFits(client, run, "household");
-    const board = await panelElements(client);
-    const caption = (key: string) => board.find(element => element.text === catalog[key]
-      && visibleBox(board, element)
-      && [element, ...ancestorsOf(board, element)].every(parent => parent.displayed && parent.visible));
-    const policy = caption("folkways.settings.food_mode");
-    const safety = caption("folkways.settings.food_safety");
-    expect(policy, "food policy caption must remain visible").toBeDefined();
-    expect(safety, "food safety caption must remain visible").toBeDefined();
+    const settings = await panelElements(client);
+    const visibleRow = (id: string) => settings.find(element => element.id === id && visibleBox(settings, element)
+      && [element, ...ancestorsOf(settings, element)].every(parent => parent.displayed && parent.visible));
+    const policy = visibleRow("folkways.card.choice.food_mode");
+    const safety = visibleRow("folkways.card.flag.food_safety.line");
+    expect(policy, "the food policy row must remain visible").toBeDefined();
+    expect(safety, "the food safety row must remain visible").toBeDefined();
     expect(safety!.y, "food policy and safety controls need separate rows").toBeGreaterThanOrEqual(policy!.y + policy!.height + 1);
     run.expectTaken(["01-claimed-private-bed", "02-unclaimed-exposed-bed", "03-resident-mood-card", "04-dining-card",
-      "05-dining-panel", "06-elevator-delegation", "07-household-board"]);
+      "05-dining-panel", "06-elevator-delegation", "07-household-settings"]);
   } catch (error) {
     pair?.failing(error); throw error;
   } finally {

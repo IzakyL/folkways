@@ -10,6 +10,7 @@ public enum BuildRefusal implements RefusalKind.Named {
     ACCESS_DEPENDENCY,
     CONTESTED,
     OCCUPIED,
+    PROTECTED_FACILITY,
     CELL_NOT_LOADED,
     NO_SUCH_ORDER,
     EMPTYING_CONTAINER,

@@ -1,7 +1,6 @@
 package io.github.izakyl.folkways.core.front.ui.screen;
 
 import com.lowdragmc.lowdraglib2.gui.factory.PlayerUIMenuType;
-import com.lowdragmc.lowdraglib2.gui.holder.ModularUIContainerMenu;
 import com.lowdragmc.lowdraglib2.gui.sync.bindings.impl.DataBindingBuilder;
 import com.lowdragmc.lowdraglib2.gui.texture.ColorRectTexture;
 import com.lowdragmc.lowdraglib2.gui.ui.ModularUI;
@@ -13,36 +12,27 @@ import com.lowdragmc.lowdraglib2.gui.ui.style.StylesheetManager;
 import dev.vfyjxf.taffy.style.AlignItems;
 import dev.vfyjxf.taffy.style.FlexDirection;
 import io.github.izakyl.folkways.core.FolkwaysCoreMod;
-import io.github.izakyl.folkways.core.colony.api.Colony;
-import io.github.izakyl.folkways.core.front.api.panel.Board;
-import io.github.izakyl.folkways.core.front.api.panel.PageKind;
+import io.github.izakyl.folkways.core.card.client.CardView;
 import io.github.izakyl.folkways.core.front.api.ui.Draw;
 import io.github.izakyl.folkways.core.front.api.ui.Pages;
-import io.github.izakyl.folkways.core.front.api.ui.Pane;
 import io.github.izakyl.folkways.core.front.api.ui.Rows;
 import io.github.izakyl.folkways.core.front.api.ui.Tokens;
 import io.github.izakyl.folkways.core.front.api.ui.Windows;
 import io.github.izakyl.folkways.core.front.engine.authority.ColonyAuthority;
-import io.github.izakyl.folkways.core.front.engine.charter.Charters;
-import io.github.izakyl.folkways.core.front.engine.charter.CurrentColony;
-import io.github.izakyl.folkways.core.front.engine.colony.ColonyBoards;
-import io.github.izakyl.folkways.core.front.engine.colony.ColonyGround;
-import io.github.izakyl.folkways.core.front.engine.colony.ColonySites;
-import io.github.izakyl.folkways.core.front.engine.colony.SiteBoard;
-import io.github.izakyl.folkways.core.front.engine.net.FolkwaysUiNetworkEvents;
+import io.github.izakyl.folkways.core.colony.charter.Charters;
+import io.github.izakyl.folkways.core.colony.charter.CurrentColony;
 import io.github.izakyl.folkways.core.front.ui.UiRegistrations;
+import io.github.izakyl.folkways.core.front.ui.screen.PageKinds.BookPage;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.WeakHashMap;
-import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.TickTask;
-import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
 import org.appliedenergistics.yoga.YogaJustify;
@@ -52,11 +42,6 @@ public final class ColonyShell
 
     public static final ResourceLocation ID =
         ResourceLocation.fromNamespaceAndPath(FolkwaysCoreMod.MOD_ID, "colony");
-    public static final ResourceLocation SITE_ID =
-        ResourceLocation.fromNamespaceAndPath(FolkwaysCoreMod.MOD_ID, "site");
-
-    // The block a book was used on, kept from the click until the window built for it takes it.
-    private static final Map<Player, BlockPos> AIMED = new WeakHashMap<>();
     private static final Map<Player, ResourceLocation> REQUESTED_PAGE = new WeakHashMap<>();
 
     private static final int PANEL_WIDTH = 500;
@@ -75,158 +60,23 @@ public final class ColonyShell
     private static final int MARK_WIDTH = 2;
     private static final int MARK_ON = 0xFF9A3324;
 
-    // Compact site lists and grouped forms each get enough room; smaller screens keep scrolling.
-    private static final int SITE_WIDTH = 400;
-    private static final int SITE_HEIGHT = 320;
-    private static final int FORM_WIDTH = 380;
-    private static final int FORM_HEIGHT = 340;
+    private static final int CARD_WIDTH = 340;
+    private static final int CARD_HEIGHT = 320;
 
     private final Optional<UUID> colonyId;
     private final Optional<ResourceLocation> initialPage;
-    private final Optional<BlockPos> site;
-    private final boolean atSite;
-    private Map<ResourceLocation, Pane> opened = Map.of();
-    private final ZoneSettings selectionSettings = ZoneSettings.create();
-    private boolean editingSelection;
-
-    public static void editSelection(Player player, UUID id) {
-        of(player).ifPresent(shell -> shell.selectionSettings.hold(id));
-    }
-
     private ColonyShell(Player player) {
-        this(player, Optional.empty(), false);
-    }
-
-    private ColonyShell(Player player, Optional<BlockPos> at, boolean atSite) {
-        site = at;
-        this.atSite = atSite;
-        colonyId = CurrentColony.id(player).or(() -> siteColonyId(player, at));
+        colonyId = CurrentColony.id(player);
         initialPage = Optional.ofNullable(REQUESTED_PAGE.remove(player));
-    }
-
-    private static Optional<SiteBoard> answeringSite(Player player, Optional<BlockPos> at) {
-        if (!(player instanceof ServerPlayer serverPlayer) || at.isEmpty()) {
-            return Optional.empty();
-        }
-        BlockPos pos = at.get();
-        ServerLevel level = serverPlayer.serverLevel();
-        return ColonyAuthority.of(serverPlayer, Optional.of(pos))
-            .flatMap(authority -> ColonyBoards.firstAt(level, authority.colony(), pos));
-    }
-
-    private static Optional<ResourceLocation> answeringPage(Player player, Optional<BlockPos> at) {
-        return answeringSite(player, at).map(SiteBoard::page);
-    }
-
-    private static Optional<UUID> siteColonyId(Player player, Optional<BlockPos> at) {
-        if (!(player instanceof ServerPlayer serverPlayer)) {
-            return Optional.empty();
-        }
-        return at.flatMap(pos -> ColonyGround.ofBlock(serverPlayer.serverLevel(), pos))
-            .filter(colony -> Charters.member(serverPlayer.getServer(), colony, serverPlayer.getUUID()))
-            .map(Colony::id);
-    }
-
-    private ModularUI createSiteUI(Player player) {
-        Desk desk = new Desk();
-        Window window = desk.panel(Window.of("site",
-            Component.translatable("folkways.panel.title"),
-            0f, 0f, SITE_WIDTH, SITE_HEIGHT, 220, 140));
-        window.open();
-        window.onDismiss(() -> {
-            if (player instanceof ServerPlayer serverPlayer) {
-                serverPlayer.closeContainer();
-            }
-        });
-        UIElement panel = Rows.page();
-        panel.layout(layout -> layout.flexGrow(1).flexShrink(1).minHeight(0));
-        Tokens.name(panel, "folkways.site.panel");
-        panel.setDisplay(false);
-        panel.setOverflowVisible(false);
-        Button toggle = new Button()
-            .setText(Component.translatable("folkways.member.toggle"))
-            .setOnServerClick(event -> toggleMember(player));
-        Tokens.name(toggle, "folkways.member.toggle");
-        window.body().addChildren(panel, Rows.actions(toggle));
-        Windows windows = (id, title, body, width, height) -> {
-            Window opened = desk.add(Window.of(id, title,
-                0, 0, width, height, Math.min(220, width), Math.min(140, height)));
-            opened.body().addChildren(body);
-            return opened;
-        };
-        Map<ResourceLocation, UIElement> pages = new LinkedHashMap<>();
-        Map<ResourceLocation, Pane> panes = new LinkedHashMap<>();
-        List<PageKind> listed = PageKinds.all();
-        for (PageKind kind : PageKinds.every()) {
-            if (PageKinds.CORE.contains(kind)) {
-                continue;
-            }
-            if (listed.contains(kind)) {
-                UIElement content = titled(kind, player, windows);
-                content.setDisplay(false);
-                pages.put(kind.id(), content);
-                panel.addChildren(content);
-            } else {
-                panes.put(kind.id(), windows.add(Tokens.of(kind.id()),
-                    Component.translatable(kind.nameKey()), windowed(kind, player, windows)));
-            }
-        }
-        opened = Map.copyOf(panes);
-        desk.root().addSyncValue(DataBindingBuilder.stringS2C(() -> answeringPage(player, site)
-            .map(ResourceLocation::toString).orElse(""))
-            .onSyncReceived(id -> {
-                ResourceLocation target = ResourceLocation.tryParse(id);
-                panel.setDisplay(target != null && pages.containsKey(target));
-                pages.forEach((key, value) -> value.setDisplay(key.equals(target)));
-            }).build().getSyncValue());
-        desk.root().addSyncValue(DataBindingBuilder.boolS2C(() -> answeringSite(player, site)
-            .map(answer -> answer.board().layout() == Board.Layout.FORM).orElse(false))
-            .onSyncReceived(form -> window.preferSize(form ? FORM_WIDTH : SITE_WIDTH,
-                form ? FORM_HEIGHT : SITE_HEIGHT)).build().getSyncValue());
-        desk.root().addSyncValue(DataBindingBuilder.boolS2C(() -> member(player, site))
-            .onSyncReceived(held -> toggle.setText(Component.translatable(
-                held ? "folkways.member.leave" : "folkways.member.join")))
-            .build().getSyncValue());
-        return new ModularUI(UI.of(desk.root(),
-            List.of(StylesheetManager.INSTANCE.getStylesheetSafe(StylesheetManager.MC),
-                StylesheetManager.INSTANCE.getStylesheetSafe(
-                    ResourceLocation.fromNamespaceAndPath("folkways_core", "lss/desk.lss"))),
-            screen -> screen), player);
-    }
-
-    private static boolean member(Player player, Optional<BlockPos> at) {
-        if (!(player instanceof ServerPlayer serverPlayer) || at.isEmpty()) {
-            return false;
-        }
-        ServerLevel level = serverPlayer.serverLevel();
-        return ColonyAuthority.of(serverPlayer, at)
-            .filter(authority -> ColonyGround.holds(level, authority.colony(), ColonySites.anchor(level, at.get())))
-            .isPresent();
-    }
-
-    private void toggleMember(Player player) {
-        if (player instanceof ServerPlayer serverPlayer) {
-            ColonyAuthority.of(serverPlayer, site)
-                .filter(authority -> authority.at().isPresent())
-                .ifPresent(authority -> FolkwaysUiNetworkEvents.toggleColonyMember(serverPlayer, authority));
-        }
     }
 
     public static void register() {
         PlayerUIMenuType.register(ID, ColonyShell::new);
-        PlayerUIMenuType.register(SITE_ID,
-            player -> new ColonyShell(player, Optional.ofNullable(AIMED.remove(player)), true));
     }
 
     @Override
     public Optional<UUID> colonyId() {
         return colonyId;
-    }
-
-    static Optional<ColonyShell> of(Player player) {
-        return player.containerMenu instanceof ModularUIContainerMenu menu
-            && menu.uiHolder instanceof ColonyShell shell
-            ? Optional.of(shell) : Optional.empty();
     }
 
     public static void open(ServerPlayer player) {
@@ -235,7 +85,7 @@ public final class ColonyShell
 
     /** A requested main page still has to be declared, visible, and owned by the book's current holder. */
     public static void open(ServerPlayer player, ResourceLocation page) {
-        if (CurrentColony.of(player).filter(colony -> PageKinds.shows(colony, page)).isEmpty()
+        if (CurrentColony.of(player).isEmpty()
             || PageKinds.all().stream().noneMatch(kind -> kind.id().equals(page))) {
             return;
         }
@@ -257,27 +107,8 @@ public final class ColonyShell
         }));
     }
 
-    /** The window of one block the colony holds: its board alone, without the colony's other pages. */
-    public static void openAt(ServerPlayer player, BlockPos at) {
-        AIMED.put(player, at.immutable());
-        PlayerUIMenuType.openUI(player, SITE_ID);
-        AIMED.remove(player);
-    }
-
-    public static Optional<BlockPos> siteOf(Player player) {
-        return of(player).flatMap(shell -> shell.site);
-    }
-
-    static void openPage(Player player, ResourceLocation page) {
-        of(player).map(shell -> shell.opened.get(page)).ifPresent(Pane::open);
-    }
-
     @Override
     public ModularUI createUI(Player player) {
-        PageKinds.verify();
-        if (atSite) {
-            return createSiteUI(player);
-        }
         Desk desk = new Desk();
         Window panel = desk.panel(Window.of("colony",
             Component.translatable("folkways.panel.title"),
@@ -305,11 +136,10 @@ public final class ColonyShell
         Map<ResourceLocation, UIElement> marks = new LinkedHashMap<>();
         // Every group scrolls in one list, so every entry is as wide as the next and none is cut short mid-panel.
         UIElement coreNav = navGroup("folkways.ui.nav.colony");
-        UIElement navList = navGroup("folkways.ui.nav.production");
         UIElement preferences = navGroup("folkways.ui.nav.preferences");
         UIElement groups = new UIElement()
             .layout(layout -> layout.flexDirection(FlexDirection.COLUMN).widthPercent(100).gapAll(6))
-            .addChildren(coreNav, navList, preferences);
+            .addChildren(coreNav, preferences);
         ScrollerView nav = Rows.box();
         nav.layout(layout -> layout.width(NAV_WIDTH).flexShrink(0).minHeight(0));
         nav.style(style -> style.background(DeskTextures.paper(true)));
@@ -330,27 +160,19 @@ public final class ColonyShell
             return window;
         };
 
-        Map<ResourceLocation, UIElement> entriesByPage = new LinkedHashMap<>();
-        List<PageKind> listed = new java.util.ArrayList<>(PageKinds.all());
-        listed.removeAll(PageKinds.TRAILING);
-        listed.addAll(PageKinds.TRAILING);
-        for (PageKind kind : listed) {
+        List<BookPage> listed = PageKinds.all();
+        for (BookPage kind : listed) {
             UIElement page = titled(kind, player, windows);
             page.setDisplay(kind.equals(listed.get(0)));
             pages.put(kind.id(), page);
             pane.addChildren(page);
-            UIElement entries = PageKinds.TRAILING.contains(kind) ? preferences
-                : PageKinds.CORE.contains(kind) ? coreNav : navList;
-            UIElement navigation = entry(kind, marks, () -> {
+            UIElement entries = PageKinds.TRAILING.contains(kind) ? preferences : coreNav;
+            entries.addChildren(entry(kind, marks, () -> {
                 show(pages, marks, kind.id());
                 fold.close();
-            });
-            navigation.setDisplay(PageKinds.CORE.contains(kind));
-            entriesByPage.put(kind.id(), navigation);
-            entries.addChildren(navigation);
+            }));
         }
         mark(marks, listed.get(0).id());
-        navList.setDisplay(navList.getChildren().size() > 1);
 
         UIElement workspace = new UIElement()
             .layout(layout -> layout.flexDirection(FlexDirection.ROW)
@@ -362,71 +184,24 @@ public final class ColonyShell
 
         UIElement chooser = new Chooser().build(player, () -> choosing[0] = false);
         chooser.setDisplay(false);
-        UIElement configuration = Rows.page();
-        configuration.layout(layout -> layout.flexGrow(1).flexShrink(1).minHeight(0));
-        Tokens.name(configuration, "folkways.selection.page");
-        UIElement draft = Drawing.create().build();
-        draft.layout(layout -> layout.flexGrow(1).flexShrink(1).minHeight(0));
-        UIElement settings = selectionSettings.build(player);
-        settings.setDisplay(false);
-        configuration.addChildren(draft, settings);
-        configuration.setDisplay(false);
-        panel.body().addChildren(chooser, workspace, configuration);
-        desk.root().addSyncValue(DataBindingBuilder.tagS2C(() -> selectionSettings.reading(player))
-            .onSyncReceived(tag -> {
-                editingSelection = selectionSettings.show(player, tag);
-                settings.setDisplay(editingSelection);
-            }).build().getSyncValue());
-        String[] requestedSelection = {""};
-        boolean[] selectionRequested = {false};
-        var selectedBinding = DataBindingBuilder.stringC2S(id -> {
-            if (!id.isEmpty()) {
-                try { selectionSettings.hold(UUID.fromString(id)); }
-                catch (IllegalArgumentException ignored) { }
-            }
-        }).build();
-        selectedBinding.setRemoteDataSource(com.lowdragmc.lowdraglib2.gui.sync.bindings.IDataSource.of(
-            ignored -> { }, () -> requestedSelection[0]));
-        desk.root().addSyncValue(selectedBinding.getSyncValue());
+        panel.body().addChildren(chooser, workspace);
         desk.root().addEventListener(com.lowdragmc.lowdraglib2.gui.ui.event.UIEvents.TICK, event -> {
-            if (!com.lowdragmc.lowdraglib2.LDLib2.isRemote()) return;
-            if (!selectionRequested[0]) {
-                requestedSelection[0] = Drawing.selected();
-                selectionRequested[0] = true;
+            if (!com.lowdragmc.lowdraglib2.LDLib2.isRemote()) {
+                return;
             }
-            boolean drawing = Drawing.active();
-            boolean configuring = drawing || editingSelection;
-            configuration.setDisplay(configuring);
-            draft.setDisplay(drawing && !editingSelection);
-            chooser.setDisplay(!configuring && (!settled[0] || choosing[0]));
-            workspace.setDisplay(!configuring && !chooser.isDisplayed());
+            chooser.setDisplay(!settled[0] || choosing[0]);
+            workspace.setDisplay(!chooser.isDisplayed());
             menu.setDisplay(fold.folded && workspace.isDisplayed());
         });
 
-        Map<ResourceLocation, Pane> panes = new LinkedHashMap<>();
-        for (PageKind kind : PageKinds.every()) {
-            if (listed.contains(kind)) {
-                continue;
-            }
-            panes.put(kind.id(), windows.add(Tokens.of(kind.id()),
-                Component.translatable(kind.nameKey()), windowed(kind, player, windows)));
+        // A facility's card, pressed on any page, opens beside the panel; it follows the facility pressed last.
+        Window card = desk.add(Window.of("book_card", Component.translatable(CardView.ID + "window"),
+            0f, 0f, CARD_WIDTH, CARD_HEIGHT, 180f, 100f));
+        if (com.lowdragmc.lowdraglib2.LDLib2.isRemote()) {
+            BookCards.attach(desk.root(), card);
         }
-        opened = Map.copyOf(panes);
 
         UIElement root = desk.root();
-        root.addSyncValue(DataBindingBuilder.stringS2C(() -> Pages.colonyOf(player)
-            .map(colony -> listed.stream().filter(kind -> PageKinds.shows(colony, kind.id()))
-                .map(kind -> kind.id().toString()).collect(java.util.stream.Collectors.joining("|")))
-            .orElse(""))
-            .onSyncReceived(value -> {
-                var visible = java.util.Arrays.asList(value.split("\\|"));
-                entriesByPage.forEach((id, navigation) -> navigation.setDisplay(visible.contains(id.toString())));
-                boolean hidden = pages.entrySet().stream()
-                    .anyMatch(entry -> entry.getValue().isDisplayed() && !visible.contains(entry.getKey().toString()));
-                if (hidden) show(pages, marks, PageKinds.CITIZENS.id());
-                navList.setDisplay(listed.stream().filter(kind -> !PageKinds.CORE.contains(kind)
-                    && !PageKinds.TRAILING.contains(kind) && visible.contains(kind.id().toString())).count() > 0);
-            }).build().getSyncValue());
         root.addSyncValue(DataBindingBuilder.boolS2C(() -> Pages.colonyOf(player).isPresent())
             .onSyncReceived(kept -> {
                 settled[0] = kept;
@@ -435,30 +210,20 @@ public final class ColonyShell
             })
             .build()
             .getSyncValue());
-        root.addSyncValue(
-            DataBindingBuilder.stringS2C(
-            () ->
-                initialPage
-                    .filter(
-                    page ->
-                        Pages.colonyOf(player)
-                            .filter(colony -> PageKinds.shows(colony, page))
-                            .isPresent())
-                    .map(ResourceLocation::toString)
-                    .orElse(""))
-            .onSyncReceived(
-            value -> {
+        root.addSyncValue(DataBindingBuilder.stringS2C(() -> initialPage
+            .filter(page -> Pages.colonyOf(player).isPresent())
+            .map(ResourceLocation::toString).orElse(""))
+            .onSyncReceived(value -> {
                 ResourceLocation target = ResourceLocation.tryParse(value);
                 if (target != null && pages.containsKey(target)) {
                     show(pages, marks, target);
                 }
-            })
-            .build()
-            .getSyncValue());
+            }).build().getSyncValue());
         root.addSyncValue(DataBindingBuilder.componentS2C(() -> heading(player))
             .onSyncReceived(title -> heading.setText(title))
             .build()
             .getSyncValue());
+        desk.launchers();
         return new ModularUI(UI.of(root,
             List.of(StylesheetManager.INSTANCE.getStylesheetSafe(StylesheetManager.MC),
                 StylesheetManager.INSTANCE.getStylesheetSafe(
@@ -543,7 +308,7 @@ public final class ColonyShell
         return group.addChildren(Rows.group(Component.translatable(nameKey)));
     }
 
-    private static Button entry(PageKind kind, Map<ResourceLocation, UIElement> marks,
+    private static Button entry(BookPage kind, Map<ResourceLocation, UIElement> marks,
             Runnable chosen) {
         UIElement mark = new UIElement()
             .layout(layout -> layout.width(MARK_WIDTH).heightPercent(100).flexShrink(0))
@@ -595,12 +360,12 @@ public final class ColonyShell
         return Component.translatable("folkways.charter.heading", title);
     }
 
-    private static Draw drawOf(PageKind kind) {
-        return UiRegistrations.draw(kind.id()).orElseGet(() -> DomainPage.of(kind));
+    private static Draw drawOf(BookPage kind) {
+        return UiRegistrations.draw(kind.id()).orElseThrow();
     }
 
     // A page in the panel: its name on the left of the title line, its figures and buttons on the right.
-    private static UIElement titled(PageKind kind, Player player, Windows windows) {
+    private static UIElement titled(BookPage kind, Player player, Windows windows) {
         Draw drawn = drawOf(kind);
         UIElement body = drawn.build(player);
         drawn.windows(player, windows);
@@ -614,20 +379,6 @@ public final class ColonyShell
             page.addChildren(Rows.actions(actions.toArray(UIElement[]::new)));
         }
         page.addChildren(body);
-        page.layout(layout -> layout.flexGrow(1).flexShrink(1).minHeight(0));
-        return page;
-    }
-
-    // A page in its own window, whose title bar already names it.
-    private static UIElement windowed(PageKind kind, Player player, Windows windows) {
-        Draw drawn = drawOf(kind);
-        UIElement body = drawn.build(player);
-        drawn.windows(player, windows);
-        List<UIElement> actions = drawn.actions();
-        if (actions.isEmpty()) {
-            return body;
-        }
-        UIElement page = Rows.page().addChildren(Rows.actions(actions.toArray(UIElement[]::new)), body);
         page.layout(layout -> layout.flexGrow(1).flexShrink(1).minHeight(0));
         return page;
     }

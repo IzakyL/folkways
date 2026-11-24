@@ -160,7 +160,7 @@ const IMPORTS = ["java.util.Set", "java.util.Optional", "io.github.izakyl.folkwa
   "io.github.izakyl.folkways.core.world.api.WorldPos",
   "io.github.izakyl.folkways.vanilla.person.PersonBody", "io.github.izakyl.folkways.vanilla.person.PersonContent",
   "io.github.izakyl.folkways.vanilla.person.ResidentEntity",
-  "io.github.izakyl.folkways.epicfight.ResidentEpicFightPatch", "io.github.izakyl.folkways.epicfight.EpicFightWeaponAttack",
+  "io.github.izakyl.folkways.vanilla.epicfight.ResidentEpicFightPatch", "io.github.izakyl.folkways.core.shell.epicfight.EpicFightWeaponAttack",
   "yesman.epicfight.api.animation.types.AttackAnimation"];
 const SETUP = defineTask<Vec & { token: string }, Scene>({ name: "folkways.epicfight.lifecycle.real-fixture", side: "server", source: javaTask({ imports: IMPORTS, body: `
 var a=Args.of(ctx);var level=((MinecraftServer)ctx.server()).overworld();var colony=Colonies.mint(level.getServer());

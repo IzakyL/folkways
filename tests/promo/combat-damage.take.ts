@@ -86,8 +86,8 @@ test("combat: extinguisher, hose and blast-crater recovery in damage-control mod
     }).toEqual({ creative: true, bookColony: scene.colony, aimedZone: fixture.zone });
     run.note("baselinePanelInput", await scene.client.run(DAMAGE_PANEL_INPUT));
     await input.click(scene.client, baselinePointer, { button: "right" });
-    await waitForElement(scene.client, { id: "folkways.zoneconfig.action.record" });
-    await clickElement(scene.client, { id: "folkways.zoneconfig.action.record" });
+    await waitForElement(scene.client, { id: "folkways.card.button.record" });
+    await clickElement(scene.client, { id: "folkways.card.button.record" });
     await expect.poll(async () => {
       await tick.sprint(scene.server, 3);
       return (await scene.server.run(DAMAGE_PLANS, args)).baselines;

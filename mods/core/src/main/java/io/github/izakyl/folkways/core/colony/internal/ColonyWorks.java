@@ -11,6 +11,7 @@ import io.github.izakyl.folkways.core.colony.api.ColonyContext;
 import io.github.izakyl.folkways.core.colony.api.ColonyLifecycle;
 import io.github.izakyl.folkways.core.colony.api.ColonyView;
 import io.github.izakyl.folkways.core.colony.api.WorkListener;
+import io.github.izakyl.folkways.core.facility.api.Facilities;
 import io.github.izakyl.folkways.core.inventory.api.ColonyInventory;
 import io.github.izakyl.folkways.core.inventory.api.InventoryFeedback;
 import io.github.izakyl.folkways.core.inventory.api.Stash;
@@ -33,6 +34,7 @@ import io.github.izakyl.folkways.core.work.api.Urge;
 import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.core.world.api.WorldSpaces;
+import io.github.izakyl.folkways.core.base.task.ColonyLog;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -77,7 +79,6 @@ public final class ColonyWorks extends Stretch implements Colony, InventorySourc
     private final Rules rules = new Rules();
 
     private final StorePlaces stores = new StorePlaces();
-    private final StorePlaces withheld = new StorePlaces();
     private long inventoryMembershipRevision;
 
     // What the labor in each dimension last said stands still there.
@@ -271,12 +272,14 @@ public final class ColonyWorks extends Stretch implements Colony, InventorySourc
         deliver(gone.from, gone.node, how);
     }
 
-    private static void deliver(Submission from, UUID node, Ending how) {
-        try {
-            from.ended.accept(node, how);
-        } catch (RuntimeException | LinkageError broken) {
-            org.slf4j.LoggerFactory.getLogger("folkways-work").error(
-                "{} failed hearing that {} ended as {}", from.owner, node, how, broken);
+    private void deliver(Submission from, UUID node, Ending how) {
+        try (var ignored = ColonyLog.open(id())) {
+            try {
+                from.ended.accept(node, how);
+            } catch (RuntimeException | LinkageError broken) {
+                org.slf4j.LoggerFactory.getLogger("folkways-work").error(
+                    "{} failed hearing that {} ended as {}", from.owner, node, how, broken);
+            }
         }
     }
 
@@ -296,8 +299,8 @@ public final class ColonyWorks extends Stretch implements Colony, InventorySourc
         inventoryMembershipRevision++;
         workshops.clear();
         transports.clear();
+        stores.dimensions().forEach(this::storeOwnershipChanged);
         stores.clear();
-        withheld.clear();
         rules.clear();
         Stores.ruled(id(), Map.of());
         waiting.clear();
@@ -324,32 +327,36 @@ public final class ColonyWorks extends Stretch implements Colony, InventorySourc
     }
 
     void settleIn(ColonyRuntime.Run run) {
-        settled = true;
-        server = run.server();
-        residents().forEach(resident -> colony.inventory().joined(resident.id()));
-        for (Contributions.Entry entry : Contributions.all()) {
-            Scope scope = opened(new Scope(entry.owner()));
-            scopes.add(scope);
-            try {
-                entry.setup().accept(scope);
-            } finally {
-                scope.configuring = false;
-            }
-            for (Claim claim : colony.claims().all()) {
-                scope.heard(claim.owner(), watch -> watch.held(claim));
+        try (var ignored = ColonyLog.open(id())) {
+            settled = true;
+            server = run.server();
+            residents().forEach(resident -> colony.inventory().joined(resident.id()));
+            for (Contributions.Entry entry : Contributions.all()) {
+                Scope scope = opened(new Scope(entry.owner()));
+                scopes.add(scope);
+                try {
+                    entry.setup().accept(scope);
+                } finally {
+                    scope.configuring = false;
+                }
+                for (Claim claim : colony.claims().all()) {
+                    scope.heard(claim.owner(), watch -> watch.held(claim));
+                }
             }
         }
     }
 
     void refresh(MinecraftServer server, Runnable remap) {
-        List.copyOf(listening.values()).forEach(WorkListener::relocating);
-        for (Scope scope : List.copyOf(scopes)) {
-            scope.closed(Closing.SHUTDOWN);
+        try (var ignored = ColonyLog.open(id())) {
+            List.copyOf(listening.values()).forEach(WorkListener::relocating);
+            for (Scope scope : List.copyOf(scopes)) {
+                scope.closed(Closing.SHUTDOWN);
+            }
+            clearWork();
+            settled = false;
+            remap.run();
+            ColonyRuntime.refresh(server, this);
         }
-        clearWork();
-        settled = false;
-        remap.run();
-        ColonyRuntime.refresh(server, this);
     }
 
     @Override
@@ -403,12 +410,20 @@ public final class ColonyWorks extends Stretch implements Colony, InventorySourc
     @Override
     public void stores(ResourceLocation owner, ResourceKey<Level> dimension, Collection<WorldPos> offering) {
         if (stores.publish(owner, dimension, List.copyOf(offering))) {
+            storeOwnershipChanged(dimension);
             inventoryMembershipRevision++;
             colony.inventory().offered(dimension, this, inventoryMembershipRevision);
             if (server != null) {
                 colony.inventory().published(server, dimension);
             }
             listener(dimension).ifPresent(WorkListener::offered);
+        }
+    }
+
+    private void storeOwnershipChanged(ResourceKey<Level> dimension) {
+        ServerLevel level = server == null ? null : server.getLevel(dimension);
+        if (level != null) {
+            Facilities.ownershipChanged(level);
         }
     }
 
@@ -436,6 +451,9 @@ public final class ColonyWorks extends Stretch implements Colony, InventorySourc
     public List<StoreRule> storeRules(WorldPos at) {
         for (var store : inventory().snapshot().stores().values()) {
             if (store.aliases().contains(at)) {
+                if (server != null && at.level(server).filter(level -> Stores.hasLocalRules(level, at)).isPresent()) {
+                    break;
+                }
                 return Stores.rulesAt(store.aliases());
             }
         }
@@ -470,19 +488,6 @@ public final class ColonyWorks extends Stretch implements Colony, InventorySourc
     }
 
     @Override
-    public void withhold(ResourceLocation owner, ResourceKey<Level> dimension, Collection<WorldPos> answered) {
-        if (withheld.publish(owner, dimension, List.copyOf(answered))) {
-            inventoryMembershipRevision++;
-            colony.inventory().offered(dimension, this, inventoryMembershipRevision);
-            listener(dimension).ifPresent(WorkListener::offered);
-        }
-    }
-
-    public Set<WorldPos> withheldIn(ResourceKey<Level> dimension) {
-        return withheld.setIn(dimension);
-    }
-
-    @Override
     public void rule(ResourceLocation owner, ResourceKey<Level> dimension, Collection<StoreRule> ruling) {
         if (rules.publish(owner, dimension, List.copyOf(ruling))) {
             Stores.ruled(id(), rules.all());
@@ -501,6 +506,11 @@ public final class ColonyWorks extends Stretch implements Colony, InventorySourc
             return;
         }
         colony.keeps().keep(owner, bag);
+    }
+
+    @Override
+    public long keptRevision(ResourceLocation owner) {
+        return colony.keeps().revision(owner);
     }
 
     @Override
@@ -675,57 +685,49 @@ public final class ColonyWorks extends Stretch implements Colony, InventorySourc
         return workshops.in(dimension);
     }
 
-    public Set<BlockPos> sitesIn(ResourceKey<Level> dimension) {
-        if (server == null) {
-            Set<BlockPos> cells = new LinkedHashSet<>();
-            workshops.in(dimension).stream()
-                .map(workshop -> workshop.site().where()).filter(cell -> cell.in(dimension))
-                .forEach(cell -> cells.add(cell.cell()));
-            return Set.copyOf(cells);
-        }
-        ServerLevel level = server.getLevel(dimension);
-        return level == null ? Set.of() : workshops.sitesIn(level);
-    }
-
     public record Felt(ResourceLocation owner, Urge urge) { }
 
     public List<Felt> urges(Worker who, ColonyView view) {
-        List<Felt> felt = new ArrayList<>();
-        for (Scope scope : List.copyOf(scopes)) {
-            for (BiFunction<Worker, ColonyView, List<Urge>> source : scope.urges) {
-                try {
-                    source.apply(who, view).forEach(urge -> felt.add(new Felt(scope.owner, urge)));
-                } catch (RuntimeException | LinkageError broken) {
-                    org.slf4j.LoggerFactory.getLogger("folkways-work").error(
-                        "{} failed collecting urges", scope.owner, broken);
+        try (var ignored = ColonyLog.open(id())) {
+            List<Felt> felt = new ArrayList<>();
+            for (Scope scope : List.copyOf(scopes)) {
+                for (BiFunction<Worker, ColonyView, List<Urge>> source : scope.urges) {
+                    try {
+                        source.apply(who, view).forEach(urge -> felt.add(new Felt(scope.owner, urge)));
+                    } catch (RuntimeException | LinkageError broken) {
+                        org.slf4j.LoggerFactory.getLogger("folkways-work").error(
+                            "{} failed collecting urges", scope.owner, broken);
+                    }
                 }
             }
+            return List.copyOf(felt);
         }
-        return List.copyOf(felt);
     }
 
     public void pulse(MinecraftServer server) {
-        if (over()) {
-            return;
-        }
-        proxies.refresh(server);
-        for (ServerLevel level : server.getAllLevels()) {
-            Map<UUID, Body> present = new LinkedHashMap<>();
-            for (Body body : colony.claims().bodiesIn(level)) {
-                if (!colony.claims().isCarriedOff(body.id())) {
-                    present.put(body.id(), body);
-                }
+        try (var ignored = ColonyLog.open(id())) {
+            if (over()) {
+                return;
             }
-            colony.inventory().advance(level, this, present);
-        }
-        for (Scope scope : List.copyOf(scopes)) {
-            long began = System.nanoTime();
-            scope.ticks.forEach(callback -> callback.accept(server));
-            long took = System.nanoTime() - began;
-            // A plugin's tick is the colony's tick too: one that takes a good share of the budget says so.
-            if (took >= SLOW_PULSE_NANOS && FolkwaysConfig.logPlanHeartbeat()) {
-                org.slf4j.LoggerFactory.getLogger("folkways-work").info("slow pulse owner={} us={} tick={}",
-                    scope.owner, took / 1000, server.getTickCount());
+            proxies.refresh(server);
+            for (ServerLevel level : server.getAllLevels()) {
+                Map<UUID, Body> present = new LinkedHashMap<>();
+                for (Body body : colony.claims().bodiesIn(level)) {
+                    if (!colony.claims().isCarriedOff(body.id())) {
+                        present.put(body.id(), body);
+                    }
+                }
+                colony.inventory().advance(level, this, present);
+            }
+            for (Scope scope : List.copyOf(scopes)) {
+                long began = System.nanoTime();
+                scope.ticks.forEach(callback -> callback.accept(server));
+                long took = System.nanoTime() - began;
+                // A plugin's tick is the colony's tick too: one that takes a good share of the budget says so.
+                if (took >= SLOW_PULSE_NANOS && FolkwaysConfig.logPlanHeartbeat()) {
+                    org.slf4j.LoggerFactory.getLogger("folkways-work").info("slow pulse owner={} us={} tick={}",
+                        scope.owner, took / 1000, server.getTickCount());
+                }
             }
         }
     }
@@ -734,16 +736,18 @@ public final class ColonyWorks extends Stretch implements Colony, InventorySourc
 
     @Override
     protected void ended(Closing why) {
-        try (Cleanup cleanup = new Cleanup("Closing colony " + id() + " as " + why)) {
-            try {
-                cleanup.run("listeners", () -> ColonyLifecycle.closed(this, why));
-                cleanup.run("work", this::clearWork);
-            } finally {
-                scopes.clear();
-                services.clear();
-                settled = false;
-                if (why == Closing.RAZED) {
-                    cleanup.run("keeps", () -> colony.keeps().clear());
+        try (var ignored = ColonyLog.open(id())) {
+            try (Cleanup cleanup = new Cleanup("Closing colony " + id() + " as " + why)) {
+                try {
+                    cleanup.run("listeners", () -> ColonyLifecycle.closed(this, why));
+                    cleanup.run("work", this::clearWork);
+                } finally {
+                    scopes.clear();
+                    services.clear();
+                    settled = false;
+                    if (why == Closing.RAZED) {
+                        cleanup.run("keeps", () -> colony.keeps().clear());
+                    }
                 }
             }
         }
@@ -796,15 +800,17 @@ public final class ColonyWorks extends Stretch implements Colony, InventorySourc
         }
 
         private void heard(ResourceLocation held, Consumer<Claim.Watch> telling) {
-            if (over()) {
-                return;
-            }
-            for (Claim.Watch watch : watches.getOrDefault(held, List.of())) {
-                try {
-                    telling.accept(watch);
-                } catch (RuntimeException | LinkageError broken) {
-                    org.slf4j.LoggerFactory.getLogger("folkways-work").error(
-                        "{} failed hearing about what the colony holds", owner, broken);
+            try (var ignored = ColonyLog.open(id())) {
+                if (over()) {
+                    return;
+                }
+                for (Claim.Watch watch : watches.getOrDefault(held, List.of())) {
+                    try {
+                        telling.accept(watch);
+                    } catch (RuntimeException | LinkageError broken) {
+                        org.slf4j.LoggerFactory.getLogger("folkways-work").error(
+                            "{} failed hearing about what the colony holds", owner, broken);
+                    }
                 }
             }
         }
@@ -820,30 +826,31 @@ public final class ColonyWorks extends Stretch implements Colony, InventorySourc
 
         @Override
         protected void ended(Closing why) {
-            scopes.remove(this);
-            if (shared != null) {
-                services.remove(owner, shared);
-            }
-            try (Cleanup cleanup = new Cleanup("Closing colony " + id() + " owner " + owner + " as " + why)) {
-                try {
-                    int index = 0;
-                    for (Consumer<Closing> callback : endings) {
-                        cleanup.run("callback " + index++, () -> callback.accept(why));
-                    }
-                } finally {
-                    if (scopes.stream().noneMatch(scope -> scope.owner.equals(owner))) {
-                        cleanup.run("workshops", () -> workshops.forget(owner));
-                        cleanup.run("transports", () -> transports.forget(owner));
-                        cleanup.run("stores", () -> stores.forget(owner));
-                        cleanup.run("withheld stores", () -> withheld.forget(owner));
-                        cleanup.run("rules", () -> rules.forget(owner));
-                        cleanup.run("published rules", () -> Stores.ruled(id(), rules.all()));
-                        inventoryMembershipRevision++;
-                        for (var dimension : stores.dimensions()) {
-                            colony.inventory().offered(dimension, ColonyWorks.this, inventoryMembershipRevision);
+            try (var ignored = ColonyLog.open(id())) {
+                scopes.remove(this);
+                if (shared != null) {
+                    services.remove(owner, shared);
+                }
+                try (Cleanup cleanup = new Cleanup("Closing colony " + id() + " owner " + owner + " as " + why)) {
+                    try {
+                        int index = 0;
+                        for (Consumer<Closing> callback : endings) {
+                            cleanup.run("callback " + index++, () -> callback.accept(why));
                         }
-                        colony.inventory().rulesChanged();
-                        cleanup.run("asked work", () -> forgetAsked(owner));
+                    } finally {
+                        if (scopes.stream().noneMatch(scope -> scope.owner.equals(owner))) {
+                            cleanup.run("workshops", () -> workshops.forget(owner));
+                            cleanup.run("transports", () -> transports.forget(owner));
+                            cleanup.run("stores", () -> stores.forget(owner).forEach(ColonyWorks.this::storeOwnershipChanged));
+                            cleanup.run("rules", () -> rules.forget(owner));
+                            cleanup.run("published rules", () -> Stores.ruled(id(), rules.all()));
+                            inventoryMembershipRevision++;
+                            for (var dimension : stores.dimensions()) {
+                                colony.inventory().offered(dimension, ColonyWorks.this, inventoryMembershipRevision);
+                            }
+                            colony.inventory().rulesChanged();
+                            cleanup.run("asked work", () -> forgetAsked(owner));
+                        }
                     }
                 }
             }

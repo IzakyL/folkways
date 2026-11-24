@@ -1,23 +1,31 @@
 package io.github.izakyl.folkways.core.shell.crafting;
 
-import io.github.izakyl.folkways.core.inventory.api.StoreRule;
-import io.github.izakyl.folkways.core.inventory.api.port.PortIdentity;
-import io.github.izakyl.folkways.core.inventory.api.port.PortReader;
-import io.github.izakyl.folkways.core.inventory.api.port.Pull;
-import io.github.izakyl.folkways.core.inventory.api.port.StorePort;
-import io.github.izakyl.folkways.core.inventory.api.port.TransferResult;
-import io.github.izakyl.folkways.core.inventory.api.port.Usability;
+import net.minecraft.network.chat.Component;
+import io.github.izakyl.folkways.core.facility.api.control.TransformHint;
+import io.github.izakyl.folkways.core.facility.api.control.SlotWindow;
+import io.github.izakyl.folkways.core.facility.api.control.PortIdentity;
+import io.github.izakyl.folkways.core.facility.api.control.PortReader;
+import io.github.izakyl.folkways.core.facility.api.control.Pull;
+import io.github.izakyl.folkways.core.facility.api.control.ItemPort;
+import io.github.izakyl.folkways.core.facility.api.control.TransferResult;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
 
 /** A crafting delivery may be consumed by a waiting native task instead of increasing ordinary stock. */
-public record CraftedPort(StorePort delegate, Insert insert) implements StorePort {
+public record CraftedPort(ItemPort delegate, Insert insert) implements ItemPort {
 
     @FunctionalInterface
     public interface Insert {
         long accept(ItemStack item, long count, boolean simulate);
+    }
+
+    @Override
+    public WorldPos anchor() {
+        return identity().home();
     }
 
     @Override
@@ -26,8 +34,13 @@ public record CraftedPort(StorePort delegate, Insert insert) implements StorePor
     }
 
     @Override
-    public Usability usability() {
-        return delegate.usability();
+    public Optional<Component> unavailable(ServerLevel level) {
+        return delegate.unavailable(level);
+    }
+
+    @Override
+    public List<TransformHint> transforms() {
+        return delegate.transforms();
     }
 
     @Override
@@ -36,21 +49,19 @@ public record CraftedPort(StorePort delegate, Insert insert) implements StorePor
     }
 
     @Override
-    public PortReader reader(ServerLevel level, List<StoreRule> rules) {
-        return delegate.reader(level, rules);
+    public PortReader reader(ServerLevel level, Optional<SlotWindow> window) {
+        return delegate.reader(level, window);
     }
 
     @Override
-    public TransferResult take(ServerLevel level, List<Pull> requested, List<StoreRule> rules, boolean simulate) {
-        return delegate.take(level, requested, rules, simulate);
+    public TransferResult take(ServerLevel level, List<Pull> requested, Optional<SlotWindow> window, boolean simulate) {
+        return delegate.take(level, requested, window, simulate);
     }
 
     @Override
-    public TransferResult put(ServerLevel level, List<ItemStack> goods, List<StoreRule> rules,
-            boolean directed, boolean simulate) {
-        if (!usability().usable() || !operations().contains(Operation.PUT)
-                || !StoreRule.stores(rules) || rules.stream().anyMatch(StoreRule.Slots.class::isInstance)
-                || goods.isEmpty() || goods.stream().anyMatch(stack -> !StoreRule.admits(rules, stack))) {
+    public TransferResult put(ServerLevel level, List<ItemStack> goods, Optional<SlotWindow> window, boolean simulate) {
+        if (!valid(level) || !operations().contains(Operation.PUT)
+                || window.isPresent() || goods.isEmpty()) {
             return new TransferResult.Refused(TransferResult.Why.NOT_ALLOWED);
         }
         ItemStack item = goods.getFirst();

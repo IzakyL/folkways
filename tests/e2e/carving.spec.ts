@@ -12,7 +12,7 @@ type Args = { player: string; x: number; y: number; z: number; mode: string };
 const STATE = defineTask<Args, Record<string, any>>({
   name: "folkways.carving.build-state", side: "server", timeoutMs: 20_000,
   source: javaTask({ imports: [
-    "io.github.izakyl.folkways.carving.CandBStructureCodec",
+    "io.github.izakyl.folkways.core.shell.chiselsandbits.CandBStructureCodec",
     "io.github.izakyl.folkways.core.front.api.Books",
     "io.github.izakyl.folkways.core.resident.api.Body",
     "io.github.izakyl.folkways.core.item.api.Goods",

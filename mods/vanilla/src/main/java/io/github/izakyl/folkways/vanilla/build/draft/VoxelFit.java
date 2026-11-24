@@ -18,6 +18,8 @@ final class VoxelFit {
 
     record Cell(BlockState state, StructurePayload payload) {}
 
+    private int paintedLayers;
+
     private final Voxelizer encoder;
     private final int size;
     private final int grid;
@@ -79,11 +81,11 @@ final class VoxelFit {
                         // Full masks are shared read-only across cells. Only boundary cells need voxel sampling.
                         BitSet mask = coverage == 1 ? full : sample(solid, x, y, z);
                         if (!mask.isEmpty()) {
-                            cells.computeIfAbsent(BlockPos.asLong(x, y, z), ignored -> new ArrayList<>())
-                                .add(new Layer(part, mask));
-                            if (cells.size() > Lattice.maxCells()) {
+                            if (++paintedLayers > Lattice.maxCells()) {
                                 return false;
                             }
+                            cells.computeIfAbsent(BlockPos.asLong(x, y, z), ignored -> new ArrayList<>())
+                                .add(new Layer(part, mask));
                         }
                     }
                 }

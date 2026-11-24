@@ -1,17 +1,31 @@
 package io.github.izakyl.folkways.core.front.ui.screen;
 
 import com.lowdragmc.lowdraglib2.LDLib2;
+import com.lowdragmc.lowdraglib2.gui.texture.SpriteTexture;
+import com.lowdragmc.lowdraglib2.gui.ui.ModularUI;
 import com.lowdragmc.lowdraglib2.gui.ui.UIElement;
+import com.lowdragmc.lowdraglib2.gui.ui.elements.Button;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Dialog;
 import com.lowdragmc.lowdraglib2.gui.ui.event.UIEvents;
+import dev.vfyjxf.taffy.style.TaffyPosition;
+import io.github.izakyl.folkways.core.front.api.ui.DeskLaunchers;
+import io.github.izakyl.folkways.core.front.api.ui.Pane;
 import io.github.izakyl.folkways.core.front.api.ui.Rows;
+import io.github.izakyl.folkways.core.front.api.ui.Tokens;
+import java.lang.ref.WeakReference;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.WeakHashMap;
+import java.util.function.Function;
+import net.minecraft.client.Minecraft;
+import net.minecraft.network.chat.Component;
 
 public final class Desk {
 
-    private static Desk shown;
+    private static final Map<UIElement, WeakReference<Desk>> DESKS = new WeakHashMap<>();
 
     private final List<Window> windows = new ArrayList<>();
 
@@ -27,17 +41,110 @@ public final class Desk {
 
     private Window panel;
 
+    private UIElement launcherStrip;
+
+    private Runnable onEmpty = () -> { };
+
+    private final Map<String, Pane> extensions = new HashMap<>();
+
+    private final DeskLaunchers.Context context = this::extension;
+
+    private Pane extension(String id, Component title, float width, float height, Function<Pane, UIElement> body) {
+        return extensions.computeIfAbsent(id, key -> {
+            Window window = add(Window.of(id, title, 0, 0, width, height, 160, 80));
+            if (panel != null) {
+                window.beside(panel);
+            }
+            window.body().addChildren(body.apply(window));
+            return window;
+        });
+    }
+
+    static boolean available(UIElement root, Window self, WindowGeometry.Box box) {
+        WeakReference<Desk> reference = DESKS.get(root);
+        Desk desk = reference == null ? null : reference.get();
+        if (desk == null) {
+            return true;
+        }
+        for (Window window : desk.windows) {
+            if (window == self || !window.isOpen()) {
+                continue;
+            }
+            if (overlaps(box, window.frame())) {
+                return false;
+            }
+        }
+        // A window set beside another keeps clear of the launchers too, which stand above every window.
+        UIElement strip = desk.launcherStrip;
+        return strip == null || !strip.isDisplayed() || strip.getChildren().isEmpty() || !overlaps(box, strip);
+    }
+
+    private static boolean overlaps(WindowGeometry.Box box, UIElement element) {
+        return box.x() < element.getLayoutX() + element.getSizeWidth()
+            && box.x() + box.width() > element.getLayoutX()
+            && box.y() < element.getLayoutY() + element.getSizeHeight()
+            && box.y() + box.height() > element.getLayoutY();
+    }
+
+    public void launchers() {
+        if (!LDLib2.isRemote()) {
+            return;
+        }
+        UIElement strip = Rows.strip();
+        launcherStrip = strip;
+        strip.layout(layout -> layout.positionType(TaffyPosition.ABSOLUTE).left(4).top(30).widthAuto());
+        strip.style(style -> style.zIndex(Window.aboveWindows()));
+        for (DeskLaunchers.Launcher launcher : DeskLaunchers.all()) {
+            Button button = Rows.act().setOnClick(event -> launcher.action().accept(context));
+            button.layout(layout -> layout.width(24).height(24));
+            button.addChildren(new UIElement().layout(layout -> layout.widthPercent(100).heightPercent(100))
+                .style(style -> style.background(SpriteTexture.of(launcher.icon().toString()))));
+            button.style(style -> style.tooltips(Component.translatable(launcher.tooltip())));
+            Tokens.name(button, launcher.id());
+            strip.addChildren(button);
+        }
+        root.addChildren(strip);
+    }
+
+    static void raiseLaunchers(UIElement root) {
+        WeakReference<Desk> reference = DESKS.get(root);
+        Desk desk = reference == null ? null : reference.get();
+        if (desk != null && desk.launcherStrip != null) {
+            desk.launcherStrip.style(style -> style.zIndex(Window.aboveWindows()));
+        }
+    }
+
+    public void onEmpty(Runnable action) {
+        onEmpty = action;
+    }
+
+    static void windowClosed(UIElement root) {
+        WeakReference<Desk> reference = DESKS.get(root);
+        Desk desk = reference == null ? null : reference.get();
+        if (desk != null && desk.windows.stream().noneMatch(Window::isOpen)) {
+            desk.onEmpty.run();
+        }
+    }
+
+    public boolean launch(String id) {
+        return DeskLaunchers.all().stream().filter(launcher -> launcher.id().equals(id)).findFirst().map(launcher -> {
+            launcher.action().accept(context);
+            return true;
+        }).orElse(false);
+    }
+
+    public static boolean launchCurrent(String id) {
+        var screen = Minecraft.getInstance().screen;
+        return screen != null && of(ModularUI.of(screen)).map(desk -> desk.launch(id)).orElse(false);
+    }
+
     public Desk() {
         root.addClass("folkways_desk");
         DeskTextures.installPopups(root);
         root.addEventListener(UIEvents.LAYOUT_CHANGED, event -> clamp());
         if (LDLib2.isRemote()) {
-            shown = this;
+            DESKS.put(root, new WeakReference<>(this));
         }
-    }
-
-    public static void forget() {
-        shown = null;
     }
 
     public UIElement root() {
@@ -49,7 +156,7 @@ public final class Desk {
         return add(window);
     }
 
-    Window add(Window window) {
+    public Window add(Window window) {
         windows.add(window);
         root.addChildren(window.frame());
         window.nextTo(panel);
@@ -66,20 +173,17 @@ public final class Desk {
 
     static void resetLayout() {
         WindowGeometry.reset();
-        if (shown != null) {
-            shown.windows.forEach(Window::resetLayout);
+        var screen = Minecraft.getInstance().screen;
+        if (screen != null) {
+            of(ModularUI.of(screen)).ifPresent(desk -> desk.windows.forEach(Window::resetLayout));
         }
     }
 
     public record Box(int x, int y, int width, int height) {
     }
 
-    public static List<Box> occupied(com.lowdragmc.lowdraglib2.gui.ui.ModularUI ui) {
-        Desk desk = shown;
-        if (desk == null || ui == null || desk.root.getModularUI() != ui) {
-            return List.of();
-        }
-        return desk.occupiedBoxes();
+    public static List<Box> occupied(ModularUI ui) {
+        return of(ui).map(Desk::occupiedBoxes).orElseGet(List::of);
     }
 
     private List<Box> occupiedBoxes() {
@@ -99,6 +203,9 @@ public final class Desk {
                 boxes.add(box);
             }
         }
+        if (launcherStrip != null && launcherStrip.isDisplayed() && !launcherStrip.getChildren().isEmpty()) {
+            boxOf(launcherStrip).ifPresent(boxes::add);
+        }
         // Pickers open as dialogs on the desk too: the dialog itself spans the screen, its overlay is the box drawn.
         for (UIElement child : root.getChildren()) {
             if (child instanceof Dialog dialog && dialog.isDisplayed()) {
@@ -114,20 +221,26 @@ public final class Desk {
         return box.width() > 0 && box.height() > 0 ? Optional.of(box) : Optional.empty();
     }
 
-    public static boolean on(com.lowdragmc.lowdraglib2.gui.ui.ModularUI ui) {
-        return shown != null && ui != null && shown.root.getModularUI() == ui;
+    private static Optional<Desk> of(ModularUI ui) {
+        if (ui == null) {
+            return Optional.empty();
+        }
+        WeakReference<Desk> found = DESKS.get(ui.ui.getRootElement());
+        Desk desk = found == null ? null : found.get();
+        return desk != null && desk.root.getModularUI() == ui ? Optional.of(desk) : Optional.empty();
+    }
+
+    public static boolean on(ModularUI ui) {
+        return of(ui).isPresent();
     }
 
     /** Whether a window stands open over the desk's own panel, for Escape to close before the desk itself. */
-    public static boolean floating(com.lowdragmc.lowdraglib2.gui.ui.ModularUI ui) {
-        return on(ui) && shown.topmost().isPresent();
+    public static boolean floating(ModularUI ui) {
+        return of(ui).flatMap(Desk::topmost).isPresent();
     }
 
-    public static boolean closeTopmost(com.lowdragmc.lowdraglib2.gui.ui.ModularUI ui) {
-        if (!on(ui)) {
-            return false;
-        }
-        Optional<Window> top = shown.topmost();
+    public static boolean closeTopmost(ModularUI ui) {
+        Optional<Window> top = of(ui).flatMap(Desk::topmost);
         top.ifPresent(Window::close);
         return top.isPresent();
     }

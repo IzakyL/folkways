@@ -5,8 +5,8 @@ import appeng.api.networking.crafting.ICraftingPlan;
 import appeng.api.stacks.AEItemKey;
 import appeng.api.stacks.AEKey;
 import io.github.izakyl.folkways.core.item.api.Goods;
-import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import io.github.izakyl.folkways.core.shell.crafting.CraftQuotes;
+import io.github.izakyl.folkways.core.shell.crafting.NetworkExtensions;
 import io.github.izakyl.folkways.core.shell.crafting.PatternTimes;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -18,8 +18,8 @@ import java.util.concurrent.Future;
 /** All native API calls and Future reads belong to the server thread. */
 final class Calculations {
 
-    final CraftQuotes<Devices.NetworkKey> quotes = new CraftQuotes<>();
-    private final Map<Devices.NetworkKey, State> states = new HashMap<>();
+    final CraftQuotes<Ae2Devices.NetworkKey> quotes = new CraftQuotes<>();
+    private final Map<Ae2Devices.NetworkKey, State> states = new HashMap<>();
     private final PatternTimes times;
     private final Map<String, Set<String>> definitions = new HashMap<>();
 
@@ -30,14 +30,14 @@ final class Calculations {
     private static final class State {
         private Map<AEKey, Long> stock = Map.of();
         private Set<String> patterns = Set.of();
-        private final Map<CraftQuotes.Request<Devices.NetworkKey>, Future<ICraftingPlan>> pending = new HashMap<>();
+        private final Map<CraftQuotes.Request<Ae2Devices.NetworkKey>, Future<ICraftingPlan>> pending = new HashMap<>();
     }
 
     static String definition(appeng.api.crafting.IPatternDetails pattern, NetworkPort port) {
         return PatternTimes.identity(pattern.getDefinition().toTag(port.node().getLevel().registryAccess()).toString());
     }
 
-    void update(Devices.NetworkKey network, String savedNetwork, NetworkPort port, Set<AEItemKey> craftables) {
+    void update(Ae2Devices.NetworkKey network, String savedNetwork, NetworkPort port, Set<AEItemKey> craftables) {
         State state = states.computeIfAbsent(network, ignored -> new State());
         Map<AEKey, Long> stock = new HashMap<>();
         for (var entry : port.storage().getAvailableStacks()) {
@@ -70,7 +70,7 @@ final class Calculations {
             try {
                 var plan = entry.getValue().get();
                 if (!plan.simulation() && plan.missingItems().isEmpty()
-                        && plan.patternTimes().keySet().stream().noneMatch(ColonyPattern::isColonyPattern)) {
+                        && plan.patternTimes().keySet().stream().noneMatch(NetworkExtensions::isExternalPattern)) {
                     Map<String, Long> runs = new HashMap<>();
                     plan.patternTimes().forEach((pattern, count) ->
                         runs.merge(definition(pattern, port), count, Long::sum));
@@ -103,13 +103,13 @@ final class Calculations {
                 quotes.put(request, CraftQuotes.Quote.impossible());
                 continue;
             }
-            var source = Devices.source(port.node());
+            var source = Ae2Devices.source(port.node());
             state.pending.put(request, crafting.beginCraftingCalculation(port.node().getLevel(), () -> source,
                 item, request.count(), CalculationStrategy.REPORT_MISSING_ITEMS));
         }
     }
 
-    void retain(Set<Devices.NetworkKey> networks, Set<String> savedNetworks) {
+    void retain(Set<Ae2Devices.NetworkKey> networks, Set<String> savedNetworks) {
         states.entrySet().removeIf(entry -> {
             if (networks.contains(entry.getKey())) {
                 return false;

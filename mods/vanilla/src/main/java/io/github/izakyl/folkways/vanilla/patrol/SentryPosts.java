@@ -4,29 +4,35 @@ import io.github.izakyl.folkways.core.colony.api.ClaimRelease;
 import io.github.izakyl.folkways.core.colony.api.Claimed;
 import io.github.izakyl.folkways.core.colony.api.Colony;
 import io.github.izakyl.folkways.core.colony.api.ColonyView;
+import io.github.izakyl.folkways.core.facility.api.Lease;
+import io.github.izakyl.folkways.core.facility.api.Post;
+import io.github.izakyl.folkways.core.facility.api.Posts;
+import io.github.izakyl.folkways.core.work.api.WorkSite;
 import io.github.izakyl.folkways.core.vocation.api.Vocations;
-import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.world.api.Stances;
 import io.github.izakyl.folkways.core.work.api.Disposition;
 import io.github.izakyl.folkways.core.work.api.Urge;
 import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.core.world.api.Footing;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.core.world.api.WorldSpaces;
-import io.github.izakyl.folkways.core.front.api.Facing;
+import io.github.izakyl.folkways.core.front.api.HoldingKind;
 import io.github.izakyl.folkways.core.front.api.Fronts;
 import io.github.izakyl.folkways.core.front.api.ZoneRing;
 import io.github.izakyl.folkways.core.front.api.ZoneView;
-import io.github.izakyl.folkways.core.front.api.notice.Attempt;
-import io.github.izakyl.folkways.core.front.api.notice.Line;
-import io.github.izakyl.folkways.core.front.api.notice.Notice;
-import io.github.izakyl.folkways.core.front.api.panel.Board;
+import io.github.izakyl.folkways.core.card.api.Card;
+import io.github.izakyl.folkways.core.card.api.notice.Line;
+import io.github.izakyl.folkways.core.facility.api.DefinedFacilities;
+import io.github.izakyl.folkways.core.facility.api.control.PostKey;
+import io.github.izakyl.folkways.core.facility.api.control.Value;
+import io.github.izakyl.folkways.core.front.api.ColonyPanel;
 import io.github.izakyl.folkways.vanilla.FolkwaysVanillaConfig;
 import io.github.izakyl.folkways.core.combat.api.DefenseControl;
 import io.github.izakyl.folkways.vanilla.combat.SpottedTargets;
 import io.github.izakyl.folkways.vanilla.combat.WeaponStations;
 import io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutProfile;
 import io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutProfiles;
-import io.github.izakyl.folkways.vanilla.combat.weapon.Weapons;
+import io.github.izakyl.folkways.vanilla.combat.weapon.ResidentWeapons;
 import io.github.izakyl.folkways.vanilla.person.PersonBody;
 import io.github.izakyl.folkways.vanilla.person.ResidentEntity;
 import java.util.ArrayList;
@@ -41,6 +47,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -48,14 +55,17 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
 /** Executes aggregate staffing; active duties and station leases belong to the loaded world. */
-public final class SentryPosts implements Facing {
+public final class SentryPosts implements HoldingKind, ColonyPanel {
     public static final ResourceLocation ID = ResourceLocation.fromNamespaceAndPath("folkways_vanilla", "sentry_posts");
     public static final ResourceLocation ZONE = ResourceLocation.fromNamespaceAndPath("folkways_vanilla", "sentry");
 
     public static final ResourceLocation STATION = ResourceLocation.fromNamespaceAndPath("folkways_vanilla", "weapon_station");
 
+    private static final String WITHDRAW = "withdraw_station";
+    private static final String STATION_ID = "station";
+
     private final Colony colony;
-    private final Map<UUID, SentryNode> active = new LinkedHashMap<>();
+    private final Map<UUID, SentryWatch> active = new LinkedHashMap<>();
 
     public SentryPosts(Colony colony) {
         this.colony = colony;
@@ -83,8 +93,10 @@ public final class SentryPosts implements Facing {
         if (!(zone instanceof StationPost post)) {
             return List.of();
         }
-        return WeaponStations.find(level, zone).stream()
-            .filter(station -> station.entity().filter(post.entity()::equals).isPresent()).toList();
+        return WeaponStations.at(level, post.anchor()).stream()
+            .filter(station -> station.leaseKey().equals(post.entity())
+                && zone.cells().stream().anyMatch(cell -> zone.at(cell).equals(station.anchor())))
+            .toList();
     }
 
     public Optional<ZoneView> zone(ServerLevel level, UUID id) {
@@ -99,6 +111,12 @@ public final class SentryPosts implements Facing {
         return Fronts.of(colony).zonesIn(level).stream()
             .filter(zone -> zone.id().equals(id) && zone.delegation().equals(ZONE)).map(ZoneView.class::cast)
             .findFirst();
+    }
+
+    // The seat a station post's weapon is manned from, when it is one: the sentry walks to it and sits down.
+    private Optional<Stances.Seat> seat(ServerLevel level, ZoneView zone) {
+        return stations(level, zone).stream().findFirst().flatMap(station -> station.stance(level))
+            .filter(Stances.Seat.class::isInstance).map(Stances.Seat.class::cast);
     }
 
     public List<BlockPos> stances(ServerLevel level, ZoneView zone) {
@@ -199,7 +217,7 @@ public final class SentryPosts implements Facing {
         if (zone.delegation().equals(STATION) && stations(level, zone).isEmpty()) {
             return "station_unavailable";
         }
-        SentryNode node = active.get(resident);
+        SentryWatch node = active.get(resident);
         return node == null ? "returning" : node.status();
     }
 
@@ -221,71 +239,84 @@ public final class SentryPosts implements Facing {
         UUID resident = worker.resident().id();
         UUID assigned = assignment(resident).orElse(null);
         // A sentry sets out for its own supplies when the colony's plan sends it, and takes up its post again after.
-        if (assigned == null || !valid(view.level(), resident, assigned) || Weapons.awaitingSupply(worker)
+        if (assigned == null || !valid(view.level(), resident, assigned) || ResidentWeapons.awaitingSupply(worker)
             || PatrolContent.suppliesOf(colony).filter(supplies -> supplies.underway(resident)).isPresent()) {
             return List.of();
         }
-        ZoneView zone = zone(view.level(), assigned).orElseThrow();
-        List<BlockPos> cells = stances(view.level(), zone, worker.body());
-        int index = stanceIndex(assigned, resident);
+        var service = Posts.of(colony).orElseThrow();
+        return place(view.level(), assigned, worker.body()).map(post -> {
+            boolean fighting = SpottedTargets.of(colony).observe(worker.body()).stream()
+                .anyMatch(target -> worker.body().distanceTo(target) <= ResidentWeapons.rangedRange(worker, target));
+            SentryWatch running = active.get(resident);
+            fighting |= running != null && running.status().equals("fighting");
+            double weight = fighting && worker.body().getHealth() > worker.body().getMaxHealth() * .35 ? 2.5 : 1.5;
+            var intent = ResourceLocation.fromNamespaceAndPath("folkways_vanilla", "sentry/" + post.key().name());
+            var watch = (SentryWatch) post.station();
+            return List.of(service.urge(post, () -> watch.ready(view.level()), intent, weight, true, Disposition.END));
+        }).orElseGet(List::of);
+    }
+
+    List<Post> posts(ServerLevel level) {
+        return colony.residents().stream().flatMap(resident -> assignment(resident.id()).stream()
+            .filter(assigned -> valid(level, resident.id(), assigned))
+            .flatMap(assigned -> place(level, assigned, (Mob) level.getEntity(resident.id())).stream())).toList();
+    }
+
+    private Optional<Post> place(ServerLevel level, UUID assigned, Mob body) {
+        ZoneView zone = zone(level, assigned).orElse(null);
+        if (zone == null) {
+            return Optional.empty();
+        }
+        List<BlockPos> cells = stances(level, zone, body);
+        int index = stanceIndex(assigned, body.getUUID());
         if (index < 0 || index >= cells.size()) {
-            return List.of();
+            return Optional.empty();
         }
         BlockPos cell = cells.get(index);
         WorldPos at = zone.cells().contains(cell) ? zone.at(cell) : zone.at(cell.below()).above();
-        Stances standing = zone instanceof StationPost
-            ? Stances.of(view.level(), cells).orElseThrow() : Stances.at(at);
-        ResourceLocation intent = ResourceLocation.fromNamespaceAndPath("folkways_vanilla",
-            "sentry/" + assigned + "/" + (zone instanceof StationPost post ? post.anchor().cell() : cell).asLong()
-                + "/" + slot(assigned, resident)
-                .map(UUID::toString).orElseThrow());
-        boolean fighting = SpottedTargets.of(colony).observe(worker.body()).stream()
-            .anyMatch(target -> worker.body().distanceTo(target) <= Weapons.rangedRange(worker, target));
-        SentryNode running = active.get(resident);
-        fighting |= running != null && running.status().equals("fighting");
-        double weight = fighting && worker.body().getHealth() > worker.body().getMaxHealth() * .35 ? 2.5 : 1.5;
-        return List.of(new Urge(intent, weight, true, () -> {
-            SentryNode node = new SentryNode(this, colony, resident, assigned, at, view.dimension(),
-                zone instanceof StationPost post ? Optional.of(post.anchor()) : Optional.empty(), standing);
-            active.put(resident, node);
-            return node;
-        }).withPreemption(Disposition.END));
+        var anchor = zone instanceof StationPost station ? Optional.of(station.anchor()) : Optional.<WorldPos>empty();
+        Stances standing = anchor.isPresent()
+            ? seat(level, zone).<Stances>map(Stances.class::cast).orElseGet(() -> Stances.of(level, cells).orElseThrow())
+            : Stances.at(at);
+        String name = assigned + "/" + anchor.map(WorldPos::cell).orElse(cell).asLong()
+            + "/" + slot(assigned, body.getUUID()).orElseThrow();
+        var watch = new SentryWatch(this, colony, body.getUUID(), assigned, level.dimension(), anchor, standing);
+        var place = new Post(new PostKey(ID, assigned, name), new WorkSite.AtBlock(at), standing,
+            ref -> stations(level, zone).stream().anyMatch(station -> station.ref().equals(ref)
+                || station.trigger(level).filter(control -> control.ref().equals(ref)).isPresent()
+                || station.magazine(level).filter(control -> control.ref().equals(ref)).isPresent()
+                || station.breech(level).filter(control -> control.ref().equals(ref)).isPresent()),
+            new Post.Demand(Post.Staffing.ON_DEMAND, Urge.Priority.ORDINARY, false), watch);
+        watch.post(place);
+        return Optional.of(place);
     }
 
     public void tick(MinecraftServer server) {
-        for (Map.Entry<UUID, SentryNode> entry : List.copyOf(active.entrySet())) {
-            SentryNode node = entry.getValue();
-            ServerLevel level = server.getLevel(node.dimension());
-            if (level != null) {
-                node.maintain(level);
-            }
-            if (level == null || !node.ready(level)) {
-                release(entry.getKey());
+        for (SentryWatch watch : List.copyOf(active.values())) {
+            ServerLevel level = server.getLevel(watch.dimension());
+            if (level == null || !watch.stillStaffed(level)) {
+                Posts.of(colony).ifPresent(posts -> posts.release(watch.post()));
             }
         }
-
     }
 
-    void ended(UUID resident, SentryNode node) {
-        active.remove(resident, node);
+    void staffed(UUID resident, SentryWatch watch) {
+        active.put(resident, watch);
     }
 
-    private void release(UUID resident) {
-        SentryNode node = active.remove(resident);
-        if (node != null) {
-            node.close();
-        }
+    void ended(UUID resident, SentryWatch watch) {
+        active.remove(resident, watch);
     }
 
     public void close() {
-        for (UUID resident : List.copyOf(active.keySet())) {
-            release(resident);
-        }
+        Posts.of(colony).ifPresent(posts ->
+            List.copyOf(active.values()).forEach(watch -> posts.release(watch.post())));
     }
 
     @Override
-    public List<Line> zoneLines(ZoneView zone, ColonyView view) {
-        if (!zone.delegation().equals(ZONE)) {
+    public List<Line> lines(Held held, ColonyView view) {
+        ZoneView zone = held.zone().orElse(null);
+        if (zone == null || !zone.delegation().equals(ZONE)) {
             return List.of();
         }
         List<Line> lines = new ArrayList<>();
@@ -295,7 +326,7 @@ public final class SentryPosts implements Facing {
         for (UUID resident : residents(zone.id())) {
             lines.add(Line.text(Component.translatable("folkways.sentry.resident", name(view.level(), resident),
                 Component.translatable("folkways.sentry." + status(view.level(), resident, zone)))));
-            SentryNode node = active.get(resident);
+            SentryWatch node = active.get(resident);
             if (node != null && node.targetName().isPresent()) {
                 lines.add(Line.text(Component.translatable("folkways.sentry.target", node.targetName().get())));
             }
@@ -305,9 +336,41 @@ public final class SentryPosts implements Facing {
         return List.copyOf(lines);
     }
 
+    // A sentry zone's card staffs it: its headcount and the profiles allowed to stand there.
     @Override
-    public List<ZoneRing> zoneRings(ZoneView zone, ColonyView view) {
-        if (!zone.delegation().equals(ZONE)) {
+    public List<Card.Element> elements() {
+        return StaffingCard.elements(false);
+    }
+
+    @Override
+    public List<Card.Row> rows(Held held, String source, ColonyView view) {
+        return post(held) ? StaffingCard.rows(colony, held, source) : List.of();
+    }
+
+    @Override
+    public Optional<Value> parameter(Held held, String parameter) {
+        return post(held) ? StaffingCard.parameter(colony, held, parameter) : Optional.empty();
+    }
+
+    @Override
+    public Optional<List<DefinedFacilities.Problem>> setParameter(Held held, String parameter, Value value) {
+        return post(held) ? StaffingCard.setParameter(colony, held, parameter, value) : Optional.empty();
+    }
+
+    @Override
+    public Optional<List<DefinedFacilities.Problem>> act(Held held, ServerPlayer by, String routine,
+            Map<String, Value> arguments) {
+        return post(held) ? StaffingCard.act(colony, held, routine, arguments) : Optional.empty();
+    }
+
+    private static boolean post(Held held) {
+        return held.delegation().equals(ZONE) && held.zone().isPresent();
+    }
+
+    @Override
+    public List<ZoneRing> rings(Held held, ColonyView view) {
+        ZoneView zone = held.zone().orElse(null);
+        if (zone == null || !zone.delegation().equals(ZONE) || zone.cells().isEmpty()) {
             return List.of();
         }
         List<BlockPos> cells = stances(view.level(), zone);
@@ -323,7 +386,7 @@ public final class SentryPosts implements Facing {
             BlockPos center = cells.get(stance);
             if (view.level().getEntity(posted.get(index)) instanceof ResidentEntity body) {
                 radius = SpottedTargets.maximumSight(body);
-                if (WeaponStations.ownsSeat(body)) {
+                if (Lease.ownsSeat(body)) {
                     center = WorldSpaces.storage(view.level(), WorldSpaces.at(body)).orElse(body.blockPosition());
                 }
             }
@@ -342,62 +405,66 @@ public final class SentryPosts implements Facing {
     }
 
     @Override
-    public Optional<Board> board(ResourceLocation page, ColonyView view) {
-        if (!page.equals(ID)) {
-            return Optional.empty();
+    public List<Card.Row> rows(Page page, ColonyView view) {
+        if (page != Page.RESIDENTS) {
+            return List.of();
         }
-        List<Board.Row> rows = new ArrayList<>();
-        for (ZoneView zone : Fronts.of(colony).zonesIn(view.level())) {
-            if (!zone.delegation().equals(ZONE)) {
-                continue;
-            }
-            BlockPos at = zone.cells().iterator().next();
-            rows.add(new Board.Row(new ItemStack(Items.BOW),
-                Component.translatable("folkways.delegation.folkways_vanilla.sentry"),
-                Component.translatable("folkways.sentry.capacity", residents(zone.id()).size(),
-                    capacity(view.level(), zone)),
-                List.of(new Board.Act.Ping(at))));
-            rows.add(Board.Row.of(ItemStack.EMPTY, Component.translatable("folkways.staffing.headcount_label"),
-                PatrolStaffing.of(colony).summary(zone.id())));
-        }
+        List<Card.Row> rows = new ArrayList<>();
+        PatrolStaffing staffing = PatrolStaffing.of(colony);
         for (UUID id : stationPosts().stream().sorted().toList()) {
             var holding = colony.claim(id).orElseThrow();
             Component title = Component.translatable("folkways.delegation.folkways_vanilla.weapon_station");
-            if (holding.what() instanceof Claimed.Entity held && view.level().getEntity(held.entity()) != null) {
-                var entity = view.level().getEntity(held.entity());
-                title = entity.getDisplayName().copy().append(" · " + entity.blockPosition().toShortString());
-            }
-            Component detail = PatrolStaffing.of(colony).summary(id);
-            Optional<ZoneView> zone = zone(view.level(), id);
-            if (zone.isEmpty()) {
-                detail = detail.copy().append(" · ").append(Component.translatable("folkways.sentry.unloaded"));
-            } else {
-                for (UUID resident : residents(id)) {
-                    detail = detail.copy().append(" · ").append(name(view.level(), resident)).append(": ")
-                        .append(Component.translatable(
-                            "folkways.sentry." + status(view.level(), resident, zone.get())));
+            Component detail = staffing.summary(id);
+            boolean loaded = false;
+            if (holding.what() instanceof Claimed.Entity held) {
+                for (ServerLevel level : view.level().getServer().getAllLevels()) {
+                    var entity = level.getEntity(held.entity());
+                    if (entity == null) {
+                        continue;
+                    }
+                    title = entity.getDisplayName().copy().append(" · " + entity.blockPosition().toShortString());
+                    Optional<ZoneView> zone = zone(level, id);
+                    if (zone.isPresent()) {
+                        loaded = true;
+                        for (UUID resident : residents(id)) {
+                            detail = detail.copy().append(" · ").append(name(level, resident)).append(": ")
+                                .append(Component.translatable("folkways.sentry." + status(level, resident, zone.get())));
+                        }
+                        break;
+                    }
                 }
             }
-            rows.add(new Board.Row(new ItemStack(Items.DISPENSER), title, detail,
-                List.of(new Board.Act.Do("withdraw/" + id, "folkways.sentry.withdraw_station"))));
+            if (!loaded) {
+                detail = detail.copy().append(" · ").append(Component.translatable("folkways.sentry.unloaded"));
+            }
+            rows.add(Card.Row.of(new ItemStack(Items.DISPENSER), Line.text(title), List.of(Line.text(detail)))
+                .with(new Card.Act.Run(WITHDRAW, Map.of(STATION_ID, new Value.Text(id.toString())),
+                    new Card.Label("folkways.sentry.withdraw_station", true), Optional.empty())));
         }
-        return Optional.of(new Board(List.of(), rows, Optional.of(Component.translatable("folkways.sentry.empty"))));
+        return List.copyOf(rows);
     }
 
     @Override
-    public Attempt act(ResourceLocation page, String action, Optional<BlockPos> at, ColonyView view) {
-        if (page.equals(ID) && action.startsWith("withdraw/")) {
-            try {
-                UUID target = UUID.fromString(action.substring("withdraw/".length()));
-                if (colony.claim(target).filter(holding -> holding.owner().equals(STATION)).isPresent()) {
-                    colony.release(target, ClaimRelease.LET_GO);
-                    PatrolStaffing.of(colony).tick(view.level().getServer());
-                    tick(view.level().getServer());
-                    return Attempt.went();
-                }
-            } catch (IllegalArgumentException ignored) {
-            }
+    public Optional<List<DefinedFacilities.Problem>> act(ServerPlayer by, String routine, Map<String, Value> arguments) {
+        if (!routine.equals(WITHDRAW)) {
+            return Optional.empty();
         }
-        return new Attempt.Refused(new Notice("folkways.staffing.rejected", List.of()));
+        UUID target;
+        try {
+            target = arguments.get(STATION_ID) instanceof Value.Text text ? UUID.fromString(text.value()) : null;
+        } catch (IllegalArgumentException ignored) {
+            target = null;
+        }
+        if (target == null) {
+            return Optional.of(List.of(new DefinedFacilities.Problem(STATION_ID, "invalid", "")));
+        }
+        if (colony.claim(target).filter(holding -> holding.owner().equals(STATION)).isEmpty()) {
+            return Optional.of(List.of(new DefinedFacilities.Problem(STATION_ID, "missing", target.toString())));
+        }
+        colony.release(target, ClaimRelease.LET_GO);
+        var server = by.serverLevel().getServer();
+        PatrolStaffing.of(colony).tick(server);
+        tick(server);
+        return Optional.of(List.of());
     }
 }

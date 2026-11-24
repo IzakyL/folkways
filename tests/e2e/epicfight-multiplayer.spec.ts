@@ -220,14 +220,14 @@ const TARGET_HEALTH = defineTask<Scene, boolean>({ name: "folkways.epicfight.mul
 var a=Args.of(ctx);var level=((MinecraftServer)ctx.server()).overworld();var target=(Mob)level.getEntity(UUID.fromString(a.string("monster")));
 target.getAttribute(Attributes.MAX_HEALTH).setBaseValue(2000);target.setHealth(2000);return true;` }) });
 const DRAW = defineTask<Scene, Draw>({ name: "folkways.epicfight.multiplayer.actual-client-draw", side: "client", source: javaTask({ imports: [
-  "java.util.LinkedHashMap", "net.minecraft.client.Minecraft", "net.neoforged.fml.ModList",
+  "java.util.LinkedHashMap", "net.minecraft.client.Minecraft", "net.neoforged.fml.ModList", "io.github.izakyl.folkways.core.shell.api.OptionalIntegrations",
   "io.github.izakyl.folkways.vanilla.person.ResidentEntity", "io.github.izakyl.folkways.vanilla.person.look.ResidentLooks",
-  "io.github.izakyl.folkways.epicfight.ResidentEpicFightPatch", "io.github.izakyl.folkways.epicfight.client.ResidentRenderEvidence",
+  "io.github.izakyl.folkways.vanilla.epicfight.ResidentEpicFightPatch", "io.github.izakyl.folkways.vanilla.epicfight.client.ResidentRenderEvidence",
   "yesman.epicfight.api.animation.types.AttackAnimation"], body: `
 var a=Args.of(ctx);var mc=Minecraft.getInstance();var out=new LinkedHashMap<String,Object>();
 out.put("present",false);out.put("patch",false);out.put("epicfight",ModList.get().isLoaded("epicfight"));
 out.put("overlay",mc.getOverlay()!=null);out.put("screen",mc.screen==null?"":mc.screen.getClass().getSimpleName());
-out.put("bridge",ModList.get().isLoaded("folkways_epicfight"));
+out.put("bridge",OptionalIntegrations.EPIC_FIGHT.enabled());
 out.put("nativeVersion",ModList.get().getModContainerById("epicfight").orElseThrow().getModInfo().getVersion().toString());
 out.put("look","");out.put("animation","");out.put("attackAnimation",false);out.put("draws",0L);out.put("tick",-1L);
 out.put("mesh","");out.put("texture","");out.put("sourceRenderer","");out.put("entryScale",0);

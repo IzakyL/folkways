@@ -3,7 +3,7 @@ package io.github.izakyl.folkways.vanilla.patrol;
 import io.github.izakyl.folkways.core.work.api.Node;
 import io.github.izakyl.folkways.core.work.api.NodeSpec;
 import io.github.izakyl.folkways.core.work.api.Outcome;
-import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.world.api.Stances;
 import io.github.izakyl.folkways.core.work.api.ToolUse;
 import io.github.izakyl.folkways.core.work.api.WorkGesture;
 import io.github.izakyl.folkways.core.work.api.WorkSite;
@@ -23,8 +23,7 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 
-// Legacy Core ToolUse combat for non-person bodies, including independently implemented golems. A
-// foe that
+// Legacy Core ToolUse combat for non-person bodies, including independently implemented golems. A foe that
 // has moved off or gone is no failure; the patroller is urged at it again from where it now stands.
 final class ToolStrikeNode implements Node {
 
@@ -35,13 +34,11 @@ final class ToolStrikeNode implements Node {
     private final NodeSpec spec;
     private final UUID foe;
     private final BooleanSupplier authorized;
+    private final boolean directTravel;
 
-    ToolStrikeNode(ServerLevel level, Mob foe, Stances stances) {
-        this(level, foe, stances, () -> true);
-    }
-
-    ToolStrikeNode(ServerLevel level, Mob foe, Stances stances, BooleanSupplier authorized) {
+    ToolStrikeNode(ServerLevel level, Mob foe, Stances stances, BooleanSupplier authorized, boolean directTravel) {
         this.authorized = authorized;
+        this.directTravel = directTravel;
         this.foe = foe.getUUID();
         // The foe, and the cell it is struck at, as the site holds them: aboard the ship it stands
         // on, if it does.
@@ -59,6 +56,11 @@ final class ToolStrikeNode implements Node {
     @Override
     public boolean mountedWork() {
         return true;
+    }
+
+    @Override
+    public boolean directTravel() {
+        return directTravel;
     }
 
     @Override

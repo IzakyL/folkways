@@ -102,6 +102,9 @@ public final class WayGraph implements Ways {
             return TransportTravel.LATER;
         }
         Web web = webs.computeIfAbsent(sort, this::weave);
+        if (impassableAt(to)) {
+            return TransportTravel.NO;
+        }
         if (from.equals(to)) {
             return new TransportTravel.Yes(0, 0);
         }
@@ -233,6 +236,12 @@ public final class WayGraph implements Ways {
     // Closed work areas have no public waypoints. A walk involving one stays with the body's native navigation,
     // without asking the public graph to learn paths through changing construction geometry.
     private Faring fare(Asker asker, Sort sort, WorldPos from, Set<WorldPos> goals) {
+        if (goals.stream().anyMatch(this::impassableAt)) {
+            goals = goals.stream().filter(goal -> !impassableAt(goal)).collect(java.util.stream.Collectors.toSet());
+            if (goals.isEmpty()) {
+                return Faring.NO;
+            }
+        }
         boolean leaving = closedAt(from);
         Set<WorldPos> walking = new LinkedHashSet<>();
         for (WorldPos goal : goals) {
@@ -254,6 +263,10 @@ public final class WayGraph implements Ways {
             return usingPublicWays(asker, sort, from, goals, leaving);
         }
         return direct(asker, sort, from, goals);
+    }
+
+    private boolean impassableAt(WorldPos cell) {
+        return closed.stream().anyMatch(one -> one.impassable() && one.holds(cell));
     }
 
     private boolean closedAt(WorldPos cell) {

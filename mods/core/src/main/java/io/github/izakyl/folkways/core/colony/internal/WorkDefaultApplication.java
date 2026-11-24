@@ -4,7 +4,7 @@ import io.github.izakyl.folkways.core.colony.api.WorkDefaults;
 import io.github.izakyl.folkways.core.resident.api.Body;
 import io.github.izakyl.folkways.core.resident.api.Licences;
 import io.github.izakyl.folkways.core.resident.api.WorkPriorities;
-import io.github.izakyl.folkways.core.shell.neoforge.FolkwaysAttachments;
+import io.github.izakyl.folkways.core.resident.internal.FolkwaysAttachments;
 import io.github.izakyl.folkways.core.vocation.api.Vocations;
 import net.minecraft.nbt.CompoundTag;
 

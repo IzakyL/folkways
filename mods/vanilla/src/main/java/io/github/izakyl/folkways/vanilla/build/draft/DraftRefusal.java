@@ -12,10 +12,12 @@ public enum DraftRefusal implements RefusalKind {
     UNLOADED,
     READ_TOO_FAR,
     TIMED_OUT,
+    MEMORY_LIMIT,
     WRONG_MARK,
     UNKNOWN_BLOCK,
     UNSUPPORTED_PAYLOAD,
-    MISSING_VOXELIZER;
+    MISSING_VOXELIZER,
+    JOINER_UNAVAILABLE;
 
     @Override
     public String translationKey() {

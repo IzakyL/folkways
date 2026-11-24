@@ -6,6 +6,7 @@ import java.util.Locale;
 public enum HaulRefusal implements RefusalKind {
 
     NOT_A_CONTAINER,
+    FACILITY_PART,
     NOTHING_TO_TAKE,
     NOTHING_CARRIED,
     NO_ROOM,
@@ -30,6 +31,6 @@ public enum HaulRefusal implements RefusalKind {
 
     @Override
     public boolean lasting() {
-        return this == NOT_A_CONTAINER || this == NO_ROOM || this == UNUSABLE;
+        return this == NOT_A_CONTAINER || this == FACILITY_PART || this == NO_ROOM || this == UNUSABLE;
     }
 }

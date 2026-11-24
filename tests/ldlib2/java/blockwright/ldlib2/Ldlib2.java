@@ -104,8 +104,8 @@ public final class Ldlib2 {
             "target", node == null ? "absent" : Rules.observed(tree, node)));
     }
 
-    /** Whether the pinned element still belongs to the open panel after an asynchronous rebuild. */
-    public static Object attached(Context ctx, Args args) throws Exception {
+    /** Whether the pinned element is still under the same pointer after an asynchronous layout pass. */
+    public static Object stillAimed(Context ctx, Args args) throws Exception {
         Routes routes = Routes.of(args);
         Located located = Panel.locate(ClientGame.mc(ctx), routes);
         if (!located.found() || located.modularUI() != Handles.resolve(args.string("ui"))) {
@@ -113,7 +113,14 @@ public final class Ldlib2 {
         }
         Object target = Handles.resolve(args.string("element"));
         Tree current = tree(located, routes, args, 0);
-        return current.truncated() || current.nodes().stream().anyMatch(node -> node.target == target);
+        for (Node node : current.nodes()) {
+            if (node.target == target) {
+                double[] aim = Rules.aim(node);
+                return Math.round(aim[0]) == Math.round(args.number("x"))
+                    && Math.round(aim[1]) == Math.round(args.number("y"));
+            }
+        }
+        return current.truncated();
     }
 
     /** What acting on {@code node} needs, pinned by handle so a press is judged by this very UI. */

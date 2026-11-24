@@ -2,7 +2,7 @@ package io.github.izakyl.folkways.core.plan.internal;
 
 import io.github.izakyl.folkways.core.inventory.api.Stash;
 import io.github.izakyl.folkways.core.inventory.api.StoreRule;
-import io.github.izakyl.folkways.core.inventory.api.port.Room;
+import io.github.izakyl.folkways.core.facility.api.control.Room;
 import io.github.izakyl.folkways.core.item.api.Goods;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import io.github.izakyl.folkways.core.work.api.Manifest;
@@ -43,9 +43,9 @@ public final class Stock {
     private final Map<Stash, Room> rooms;
     private final Set<Stash> stashes;
     private final Set<Stash> direct;
-    private final Set<Stash> supplied;
 
     private final Map<Stash, List<Holding>> byStash;
+    private final Map<Stash, List<Holding>> workshopStock;
     private final Map<Stash, List<StoreRule>> rules;
     private final Map<Stash, Set<Item>> refused;
 
@@ -63,7 +63,7 @@ public final class Stock {
     // `refused` holds, per store, the items the container itself will not take in any slot.
     public Stock(List<Holding> holdings, Map<Stash, Integer> emptyCells, Map<Stash, List<StoreRule>> rules,
                  Map<Stash, Set<Item>> refused) {
-        this(holdings, slotRooms(holdings, emptyCells), rules, refused, null, null);
+        this(holdings, slotRooms(holdings, emptyCells), rules, refused, null, Map.of());
     }
 
     private static Map<Stash, Room> slotRooms(List<Holding> holdings, Map<Stash, Integer> empty) {
@@ -85,22 +85,28 @@ public final class Stock {
 
     public static Stock observed(List<Holding> holdings, Map<Stash, Room> rooms,
                                  Map<Stash, List<StoreRule>> rules, Map<Stash, Set<Item>> refused) {
-        return new Stock(holdings, rooms, rules, refused, null, null);
+        return observed(holdings, rooms, rules, refused, Map.of(), null);
+    }
+
+    public static Stock observed(List<Holding> holdings, Map<Stash, Room> rooms,
+                                 Map<Stash, List<StoreRule>> rules, Map<Stash, Set<Item>> refused,
+                                 Map<Stash, List<Holding>> workshopStock, Set<Stash> direct) {
+        return new Stock(holdings, rooms, rules, refused, direct, workshopStock);
     }
 
     private Stock(List<Holding> holdings, Map<Stash, Room> rooms, Map<Stash, List<StoreRule>> rules,
-                  Map<Stash, Set<Item>> refused, Set<Stash> direct, Set<Stash> supplied) {
+                  Map<Stash, Set<Item>> refused, Set<Stash> direct, Map<Stash, List<Holding>> workshopStock) {
         this.rules = Map.copyOf(rules);
         this.refused = Map.copyOf(refused);
         this.holdings = List.copyOf(holdings);
         this.rooms = Map.copyOf(rooms);
+        this.workshopStock = Map.copyOf(workshopStock);
         Set<Stash> known = new LinkedHashSet<>(rooms.keySet());
         for (Holding holding : this.holdings) {
             known.add(holding.where());
         }
         this.stashes = Set.copyOf(known);
         this.direct = direct == null ? this.stashes : Set.copyOf(direct);
-        this.supplied = supplied == null ? this.stashes : Set.copyOf(supplied);
         Map<Stash, List<Holding>> grouped = new LinkedHashMap<>();
         for (Holding holding : this.holdings) {
             grouped.computeIfAbsent(holding.where(), key -> new ArrayList<>()).add(holding);
@@ -109,13 +115,8 @@ public final class Stock {
         this.byStash = Map.copyOf(grouped);
     }
 
-    public Stock direct(Set<Stash> stores) {
-        return new Stock(holdings, rooms, rules, refused, stores, supplied);
-    }
-
-    // Keep physical contents for capacity calculations, while Workshops alone promise withheld goods.
-    public Stock supplied(Set<Stash> stores) {
-        return new Stock(holdings, rooms, rules, refused, direct, stores);
+    List<Holding> holdings() {
+        return holdings;
     }
 
     public boolean direct(Stash where) {
@@ -176,13 +177,7 @@ public final class Stock {
     }
 
     private long count(ItemSpec spec) {
-        long total = 0;
-        for (Holding holding : holdings) {
-            if (supplied.contains(holding.where()) && Goods.matches(holding.stack(), spec)) {
-                total += holding.count();
-            }
-        }
-        return total;
+        return count(holdings, spec);
     }
 
     public List<Lot> lotsOf(ItemSpec spec) {
@@ -192,7 +187,7 @@ public final class Stock {
     private List<Lot> findLots(ItemSpec spec) {
         Map<Stash, Map<ItemSpec, Long>> byStash = new LinkedHashMap<>();
         for (Holding holding : holdings) {
-            if (!supplied.contains(holding.where()) || !Goods.matches(holding.stack(), spec)) {
+            if (!Goods.matches(holding.stack(), spec)) {
                 continue;
             }
             byStash.computeIfAbsent(holding.where(), key -> new LinkedHashMap<>())
@@ -205,12 +200,16 @@ public final class Stock {
     }
 
     public long heldAt(Stash where, ItemSpec spec) {
-        return supplied.contains(where) ? storedAt(where, spec) : 0;
+        return count(byStash.getOrDefault(where, List.of()), spec);
     }
 
-    private long storedAt(Stash where, ItemSpec spec) {
+    long stockForWorkshop(Stash where, ItemSpec spec) {
+        return takes(where) ? heldAt(where, spec) + count(workshopStock.getOrDefault(where, List.of()), spec) : 0;
+    }
+
+    private static long count(List<Holding> holdings, ItemSpec spec) {
         long held = 0;
-        for (Holding holding : byStash.getOrDefault(where, List.of())) {
+        for (Holding holding : holdings) {
             if (Goods.matches(holding.stack(), spec)) {
                 held += holding.count();
             }
@@ -241,8 +240,8 @@ public final class Stock {
             long ceiling = pool.perKey().map(limits -> Math.max(0,
                 limits.getOrDefault(Goods.specOf(Goods.display(spec)), 0L) - used)).orElse(Long.MAX_VALUE);
             long freed = takes.values().stream().mapToLong(Long::longValue).sum();
-            long kinds = puts.keySet().stream().filter(key -> storedAt(where, key) == 0 && puts.get(key) > 0).count();
-            boolean known = storedAt(where, spec) > 0 || puts.getOrDefault(spec, 0L) > 0;
+            long kinds = puts.keySet().stream().filter(key -> heldAt(where, key) == 0 && puts.get(key) > 0).count();
+            boolean known = heldAt(where, spec) > 0 || puts.getOrDefault(spec, 0L) > 0;
             return !known && kinds >= pool.newKinds() ? 0
                 : Math.min(ceiling, remaining(pool.items(), freed, used));
         }

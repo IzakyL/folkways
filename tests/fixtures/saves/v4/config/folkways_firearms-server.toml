@@ -1,0 +1,10 @@
+#Gun IDs residents may use. Empty allows compatible built-in guns; special ammunition and unknown scripts stay unsupported.
+allowedGuns = []
+#Maximum firing distance. This does not change guard engagement radius.
+# Default: 24.0
+# Range: 1.0 ~ 128.0
+rangeCap = 31.0
+#Optional per-gun range caps, formatted as gun_id=blocks; bounded by rangeCap.
+gunRangeCaps = ["tacz:m1911=16", "tacz:m870=12"]
+#Protect same-colony residents and colony pets from resident gunfire, including bullets already in flight.
+protectColonyAllies = true

@@ -29,10 +29,10 @@ type Reading = { ok: true; player: string; current: string | null; colonies: Kep
 const IMPORTS = [
   "io.github.izakyl.folkways.core.colony.api.Colonies",
   "io.github.izakyl.folkways.core.colony.api.Colony",
-  "io.github.izakyl.folkways.core.front.engine.charter.Charter",
-  "io.github.izakyl.folkways.core.front.engine.charter.Charters",
-  "io.github.izakyl.folkways.core.front.engine.charter.CurrentColony",
-  "io.github.izakyl.folkways.core.front.engine.charter.Invitations",
+  "io.github.izakyl.folkways.core.colony.charter.Charter",
+  "io.github.izakyl.folkways.core.colony.charter.Charters",
+  "io.github.izakyl.folkways.core.colony.charter.CurrentColony",
+  "io.github.izakyl.folkways.core.colony.charter.Invitations",
   "net.minecraft.server.MinecraftServer",
   "net.minecraft.server.level.ServerPlayer",
 ];
@@ -223,10 +223,9 @@ test("a player founds, names and switches colonies from the panel's title, only 
     // Handed to someone else, the colony is no longer this player's to end: the raze button asks nothing.
     await runColonyTask(server, HAND_TO_STRANGER, { colony: alpha.id, stranger: STRANGER });
     await tick.sprint(server, 5);
-    // Settings is the last entry of the page list, below the plugins' pages.
     await scrollElementIntoView(client, { id: "folkways.tab.settings" });
     await clickElement(client, { id: "folkways.tab.settings" });
-    await clickElement(client, { id: "folkways.metrics.raze" });
+    await clickElement(client, { id: "folkways.metrics.raze" }, { scrollIntoView: true });
     await tick.sprint(server, 5);
     const confirm = (await panelElements(client)).find((element) => element.id === "folkways.metrics.raze.confirm");
     evidence.confirm_after_handover = confirm ?? null;
@@ -251,7 +250,7 @@ test("a player founds, names and switches colonies from the panel's title, only 
     await waitForText(client, /Beta ▾/);
     await scrollElementIntoView(client, { id: "folkways.tab.settings" });
     await clickElement(client, { id: "folkways.tab.settings" });
-    await clickElement(client, { id: "folkways.metrics.raze" });
+    await clickElement(client, { id: "folkways.metrics.raze" }, { scrollIntoView: true });
     await typeIntoElement(client, { id: "folkways.metrics.raze.field" }, "DELETE THIS COLONY");
     await tick.sprint(server, 2);
     await clickElement(client, { id: "folkways.metrics.raze.confirm" });

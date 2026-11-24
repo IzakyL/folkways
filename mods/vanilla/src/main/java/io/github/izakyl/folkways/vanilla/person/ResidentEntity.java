@@ -2,12 +2,12 @@ package io.github.izakyl.folkways.vanilla.person;
 
 import io.github.izakyl.folkways.core.colony.api.Colonies;
 import io.github.izakyl.folkways.core.colony.api.Colony;
-import io.github.izakyl.folkways.core.resident.api.Body;
 import io.github.izakyl.folkways.core.resident.api.ResidentKind;
 import io.github.izakyl.folkways.core.world.api.Reach;
 import io.github.izakyl.folkways.core.effect.Effects;
 import io.github.izakyl.folkways.vanilla.FolkwaysVanillaConfig;
 import io.github.izakyl.folkways.core.combat.api.WeaponAttack;
+import io.github.izakyl.folkways.core.combat.api.WeaponHands;
 import io.github.izakyl.folkways.vanilla.person.living.LivingContent;
 import io.github.izakyl.folkways.vanilla.person.look.LookPool;
 import io.github.izakyl.folkways.vanilla.person.look.ResidentLook;
@@ -47,7 +47,7 @@ import net.minecraft.world.level.Level;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class ResidentEntity extends PathfinderMob implements Body {
+public class ResidentEntity extends PathfinderMob implements WeaponHands {
 
     private static final Logger LOGGER = LoggerFactory.getLogger("folkways-labor");
 
@@ -88,7 +88,7 @@ public class ResidentEntity extends PathfinderMob implements Body {
 
     @Override
     public Effects effects() {
-        return Body.super.effects().with(LivingContent.effects(this));
+        return WeaponHands.super.effects().with(LivingContent.effects(this));
     }
 
     private boolean handIsPresentation;
@@ -356,7 +356,7 @@ public class ResidentEntity extends PathfinderMob implements Body {
     @Override
     public void leaveColony() {
         endCombat();
-        Body.super.leaveColony();
+        WeaponHands.super.leaveColony();
     }
 
     @Override

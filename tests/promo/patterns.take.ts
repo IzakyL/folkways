@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { clickElement, panelElements, typeIntoElement } from "../ldlib2";
 import { camera, defineTask, input, javaTask, screen, tick, world, type MinecraftClient } from "@izakyl/blockwright-minecraft";
 import { cameraLookingAt } from "@izakyl/blockwright-minecraft/internal";
-import { setBookGesture, waitForGroundedPlayer } from "../shared/colony/colony-founding";
+import { chooseBookTool, setBookGesture, waitForGroundedPlayer } from "../shared/colony/colony-founding";
 import { runColonyTask } from "../shared/colony/colony-tasks";
 import {
   deployedSchematic, equipHandoffTool, HANDOFF_CONFIRM, HANDOFF_WINDOW, rightClickWorld,
@@ -119,7 +119,7 @@ test("a blueprint and a road are laid by hand, then the colony's other works com
     // Keep the built scenery, but withdraw its work while the foreground hand-offs are filmed.
     // Empty stores and a relocation do not stop the mine or the remaining background orders.
     const calledOff = await runColonyTask(server, CALL_OFF,
-      { colony_id, ids: (before.placards as any[]).map(one => one.id) });
+      { colony_id, player, ids: (before.placards as any[]).map(one => one.id) });
     run.note("background_called_off", calledOff);
 
     run.note("gathered", await runColonyTask(server, GATHER, { colony_id, origin }));
@@ -175,6 +175,7 @@ test("a blueprint and a road are laid by hand, then the colony's other works com
           await sleepMs(1_000);
         }
 
+        await chooseBookTool(server, client, "offer:folkways_vanilla:draft_path");
         await turnTo(at(1, 8, -1), 900);
         await sleepMs(400);
         await leftClick(client);
@@ -271,10 +272,7 @@ async function waitForToken(client: any, match: (id: string) => boolean, timeout
 
 async function commissionRoad(client: any) {
   const opened = await rightClickWorld(client);
-  const offer = await waitForToken(client, id => id.startsWith("folkways.zoneconfig.") && id.includes("draft"));
   await sleepMs(700);
-  await clickElement(client, { id: offer });
-  await sleepMs(500);
   await clickElement(client, { id: await waitForToken(client, id => id === "folkways.draft.choose") });
   await sleepMs(500);
   const road = await waitForToken(client, id => id.startsWith("folkways.draft.pattern.") && id.endsWith("road"));
@@ -293,7 +291,7 @@ async function commissionRoad(client: any) {
   // The road is drawn again off the client's thread before it is sent; the page closes itself once it has been.
   for (let waited = 0; waited < 40 && screenOpen(await safeScreen(client)); waited++) await sleepMs(100);
   await safeAction(() => screen.dismiss(client));
-  return { opened, offer, road, named, preview, reopened, confirm };
+  return { opened, road, named, preview, reopened, confirm };
 }
 
 // Works the real ground rather than a flattened one: only the meadow's tall grass is cleared and the wheat field
@@ -511,7 +509,7 @@ const DOING = defineTask<Record<string, any>, Record<string, any>>({
   source: javaTask({
     imports: [
       "io.github.izakyl.folkways.core.front.engine.colony.ColonyGround",
-      "io.github.izakyl.folkways.core.front.api.notice.Doings",
+      "io.github.izakyl.folkways.core.card.api.notice.Doings",
       "io.github.izakyl.folkways.core.resident.api.Bodies",
       "net.minecraft.server.MinecraftServer",
     ],
@@ -686,10 +684,11 @@ const PLACARDS = defineTask<Record<string, any>, Record<string, any>>({
   timeoutMs: 20_000,
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.core.front.api.Facing",
+      "io.github.izakyl.folkways.core.front.engine.Enrollments",
+      "io.github.izakyl.folkways.vanilla.build.BuildContent",
       "io.github.izakyl.folkways.core.front.api.Placard",
-      "io.github.izakyl.folkways.core.front.api.notice.Line",
-      "io.github.izakyl.folkways.core.front.api.notice.Sentence",
+      "io.github.izakyl.folkways.core.card.api.notice.Line",
+      "io.github.izakyl.folkways.core.card.api.notice.Sentence",
       "io.github.izakyl.folkways.core.front.engine.colony.ColonyGround",
       "net.minecraft.server.MinecraftServer",
     ],
@@ -698,8 +697,8 @@ var server=ctx.server();var level=server.overworld();var args=Args.of(ctx);
 var colony=ColonyGround.of(server,UUID.fromString(args.string("colony_id"))).orElseThrow();
 var view=colony.view(level);var out=new ArrayList<Object>();
 // The building sites' cards only: stores and cookers carry cards of their own.
-for(var facing:Facing.all(colony))if(facing.getClass().getSimpleName().equals("BuildPresence"))
-for(var placard:facing.placards(view)){
+var build = Enrollments.ghostSource(colony).get(BuildContent.ID);
+for (var placard : build.placards(view)) {
   var lines=new ArrayList<Object>();
   for(var line:placard.lines())lines.add(switch(line){
     case Line.Said said->said.notice().component().getString();
@@ -724,10 +723,10 @@ const STOCK = defineTask<Record<string, any>, Record<string, any>>({
   timeoutMs: 20_000,
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.core.front.api.Facing",
+      "io.github.izakyl.folkways.core.front.engine.Enrollments",
       "io.github.izakyl.folkways.core.front.api.Placard",
-      "io.github.izakyl.folkways.core.front.api.notice.Line",
-      "io.github.izakyl.folkways.core.front.api.notice.Sentence",
+      "io.github.izakyl.folkways.core.card.api.notice.Line",
+      "io.github.izakyl.folkways.core.card.api.notice.Sentence",
       "io.github.izakyl.folkways.core.front.engine.colony.ColonyGround",
       "net.minecraft.core.BlockPos",
       "net.minecraft.core.registries.BuiltInRegistries",
@@ -742,7 +741,10 @@ double share=args.number("share");
 var yards=new ArrayList<List<BlockPos>>();
 for(var yard:args.list("yards"))yards.add(((List<?>)yard).stream().map(Task::pos).toList());
 var stocked=new ArrayList<Object>();
-for(var facing:Facing.all(colony))for(var placard:facing.placards(colony.view(level))){
+var view = colony.view(level);
+var placards = Enrollments.ghostSource(colony).values().stream()
+    .flatMap(source -> source.placards(view).stream()).toList();
+for (var placard : placards) {
   BlockPos first=switch(placard.outline()){
     case Placard.Outline.Box box->box.min();
     case Placard.Outline.Path path->path.points().getFirst();
@@ -824,16 +826,21 @@ const CALL_OFF = defineTask<Record<string, any>, Record<string, any>>({
   side: "server",
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.core.front.api.Facing",
+      "io.github.izakyl.folkways.core.facility.api.Operations",
       "io.github.izakyl.folkways.core.front.engine.colony.ColonyGround",
       "io.github.izakyl.folkways.vanilla.build.BlueprintBuildOrder",
       "net.minecraft.resources.ResourceLocation",
     ],
     body: `
-var level=ctx.server().overworld();var args=Args.of(ctx);
-var colony=ColonyGround.of(ctx.server(),UUID.fromString(args.string("colony_id"))).orElseThrow();
+var server = ctx.server();
+var args = Args.of(ctx);
+var colony = ColonyGround.of(server, UUID.fromString(args.string("colony_id"))).orElseThrow();
+var player = server.getPlayerList().getPlayerByName(args.string("player"));
+if (player == null) {
+    throw new IllegalStateException("No online promo player");
+}
 var page=ResourceLocation.parse("folkways_vanilla:build");
-var facing=Facing.of(colony,page).orElseThrow();int stopped=0;
+int stopped = 0;
 var presence=colony.service(page,Object.class).orElseThrow();
 var field=presence.getClass().getDeclaredField("book");field.setAccessible(true);var book=field.get(presence);
 var all=book.getClass().getDeclaredMethod("allBuildOrders");all.setAccessible(true);
@@ -844,9 +851,11 @@ for(var raw:(List<?>)all.invoke(book)){
 }
 if(orders.size()!=args.strings("ids").size())throw new IllegalStateException("Background drawings are not ready to retain");
 for(var id:args.strings("ids")){
-  var result=facing.act(page,"stop:"+id,Optional.empty(),colony.view(level));
-  if(result.refused())result=facing.act(page,"cancel:"+id,Optional.empty(),colony.view(level));
-  if(result.refused())throw new IllegalStateException("Could not call off background site "+id);
+  var site = Operations.find(colony, UUID.fromString(id)).orElseThrow();
+  var problems = site.run(player, "cancel", Map.of());
+  if (!problems.isEmpty()) {
+    throw new IllegalStateException("Could not call off background site " + id + ": " + problems);
+  }
   stopped++;
 }
 return Sync.stamp(Map.of("ok",true,"stopped",stopped,"orders",orders));

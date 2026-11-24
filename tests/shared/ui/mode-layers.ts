@@ -22,20 +22,22 @@ type Modes = {
 
 /** Real server holdings, baseline and an unbuilt blueprint; UI input alone changes the mode. */
 export async function checkModeLayers(client: MinecraftClient, server: MinecraftServer, scene: Scene) {
-  await server.run(PREPARE, scene);
+  await server.run(PREPARE_MODE_LAYERS, scene);
   await tick.sprint(server, 40);
   await expect.poll(async () => {
     await tick.sprint(server, 2);
     await frames(client, 8);
     const state = await client.run(MODE_PROBE);
-    return state.zones > 0 && state.ghosts > 0 && state.marks > 1;
+    return state.zones > 0 && state.ghosts > 0 && state.marks > 0;
   }, { timeout: 10_000, message: "server overlays must reach the client before mode assertions" }).toBe(true);
   const directory = path.resolve("tests/out/mode-layers");
   mkdirSync(directory, { recursive: true });
   const evidence: Record<string, Modes> = {};
+  // The mode switch picks the mode; picking any group of the book's tools is the build mode too, and damage control
+  // is a kind in the defense group, not a mode.
   const sequence = [
-    ["Build", "build"], ["RTS", "rts"], ["Damage Control", "damage_control"],
-    ["Build", "build"], ["RTS", "rts"],
+    ["Build", "build"], ["Control", "rts"], ["Build", "build"],
+    ["Defense", "build"], ["Take in", "build"], ["Control", "rts"],
   ];
   for (const [label, mode] of sequence) {
     await screen.clickWidget(client, { label });
@@ -45,27 +47,29 @@ export async function checkModeLayers(client: MinecraftClient, server: Minecraft
       return (await client.run(MODE_PROBE)).alpha[mode];
     }).toBeCloseTo(1, 4);
     const state = await client.run(MODE_PROBE);
-    expect(state.mode).toBe(`${mode === "damage_control" ? "folkways_vanilla" : "folkways_core"}:${mode}`);
+    expect(state.mode).toBe(`folkways_core:${mode}`);
     expect(state.zones).toBeGreaterThan(0);
     expect(state.ghosts).toBeGreaterThan(0);
-    expect(state.marks).toBeGreaterThan(1);
+    expect(state.marks).toBeGreaterThan(0);
     for (const [index, value] of [0.22, 0.61, 1].entries()) {
       expect(state.transition[index]).toBeCloseTo(value, 5);
     }
-    for (const other of ["build", "rts", "damage_control"].filter(value => value !== mode)) {
+    for (const other of ["build", "rts"].filter(value => value !== mode)) {
       expect(state.alpha[other]).toBeCloseTo(0.22, 4);
     }
     if (mode !== "rts") {
       expect(state.handler).toBe(false);
       expect(state.bottom).toBe(0);
     }
-    if (mode !== "damage_control") {
-      expect(state.aimed, "passive damage-control marks cannot own hover or input").toBe(false);
-    }
     const widgets = await screen.widgets(client);
-    expect(widgets.some(widget => widget.label === "Take in")).toBe(mode === "build");
-    await screen.clickWidget(client, { label });
-    expect((await client.run(MODE_PROBE)).revision, "the current mode is a no-op").toBe(state.revision);
+    expect(widgets.some(widget => widget.label === "Take in"), "the book's tools show in the build mode only")
+      .toBe(mode === "build");
+    expect(widgets.some(widget => widget.label === "Build") && widgets.some(widget => widget.label === "Control"),
+      "the mode switch stays in every mode").toBe(true);
+    if (mode === "rts") {
+      await screen.clickWidget(client, { label });
+      expect((await client.run(MODE_PROBE)).revision, "the current tool is a no-op").toBe(state.revision);
+    }
     if (!evidence[mode]) {
       evidence[mode] = state;
       await media.screenshot(client, { path: path.join(directory, `${mode}.png`) });
@@ -86,8 +90,8 @@ export const MODE_PROBE = defineTask<void, Modes>({
     ],
     body: `
 var alpha = new LinkedHashMap<String, Float>();
-for (String name : List.of("build", "rts", "damage_control")) {
-    alpha.put(name, ModeOverlays.alpha(ResourceLocation.fromNamespaceAndPath(name.equals("damage_control") ? "folkways_vanilla" : "folkways_core", name)));
+for (String name : List.of("build", "rts")) {
+    alpha.put(name, ModeOverlays.alpha(ResourceLocation.fromNamespaceAndPath("folkways_core", name)));
 }
 var aimed = Class.forName("io.github.izakyl.folkways.core.front.client.ToolOverlay").getDeclaredMethod("aimed");
 aimed.setAccessible(true);
@@ -100,7 +104,7 @@ clock.setAccessible(true);
 long started = clock.getLong(null);
 return Map.of("mode", OverheadTools.mode().toString(), "alpha", alpha,
     "revision", OverheadTools.selectionRevision(),
-    "marks", OverheadTools.all().stream().mapToInt(tool -> tool.marks().size()).sum(),
+    "marks", OverheadTools.marks().stream().mapToInt(source -> source.marks().size()).sum(),
     "zones", ColonyHighlightState.zones().size(), "ghosts", ((List<?>) ghosts.get(owed.get(null))).size(),
     "aimed", ((Optional<?>) aimed.invoke(null)).isPresent(),
     "handler", OverheadTools.selectedHandler().isPresent(),
@@ -111,18 +115,21 @@ return Map.of("mode", OverheadTools.mode().toString(), "alpha", alpha,
   }),
 });
 
-const PREPARE = defineTask<Scene, boolean>({
+export const PREPARE_MODE_LAYERS = defineTask<Scene, boolean>({
   name: "folkways.mode-layers.prepare-overlapping-server-overlays",
   side: "server",
   source: javaTask({
     imports: [
       "io.github.izakyl.folkways.core.colony.api.Colonies",
-      "io.github.izakyl.folkways.core.front.api.Facing",
+      "io.github.izakyl.folkways.core.card.api.notice.Attempt",
+      "io.github.izakyl.folkways.core.colony.api.ColonyView",
       "io.github.izakyl.folkways.core.front.engine.colony.ColonySettings",
       "io.github.izakyl.folkways.core.front.engine.colony.ZoneDrafts",
       "io.github.izakyl.folkways.vanilla.build.Blueprint",
       "io.github.izakyl.folkways.vanilla.build.BlueprintBlock",
       "io.github.izakyl.folkways.vanilla.build.BlueprintVolume",
+      "io.github.izakyl.folkways.vanilla.build.BuildContent",
+      "io.github.izakyl.folkways.vanilla.damagecontrol.DamageControlContent",
       "net.minecraft.core.BlockPos",
       "net.minecraft.resources.ResourceLocation",
       "net.minecraft.server.MinecraftServer",
@@ -134,7 +141,7 @@ var args = Args.of(ctx);
 var level = ((MinecraftServer) ctx.server()).overworld();
 var colony = Colonies.of(level.getServer(), UUID.fromString(args.string("colony"))).orElseThrow();
 var origin = new BlockPos((int) args.integer("x"), (int) args.integer("y"), (int) args.integer("z"));
-var dc = ResourceLocation.parse("folkways_vanilla:damage_control");
+var dc = DamageControlContent.ID;
 ZoneDrafts.zone(level, colony, ResourceLocation.parse("folkways_vanilla:farm"),
     origin.offset(-8, 0, 2), origin.offset(-3, 1, 7), ColonySettings.empty()).orElseThrow();
 var protectedArea = ZoneDrafts.zone(level, colony, dc, origin.offset(3, 0, 2), origin.offset(7, 2, 6),
@@ -143,8 +150,10 @@ var protectedArea = ZoneDrafts.zone(level, colony, dc, origin.offset(3, 0, 2), o
 for (int x = 3; x <= 7; x++) {
     level.setBlockAndUpdate(origin.offset(x, 0, 3), Blocks.BRICKS.defaultBlockState());
 }
-var recorded = Facing.of(colony, dc).orElseThrow().act(dc, "record:" + protectedArea.id(),
-    Optional.empty(), colony.view(level));
+var damageControl = colony.service(dc, Object.class).orElseThrow();
+var record = damageControl.getClass().getDeclaredMethod("record", UUID.class, ColonyView.class);
+record.setAccessible(true);
+var recorded = (Attempt) record.invoke(damageControl, protectedArea.id(), colony.view(level));
 if (recorded.refusal().isPresent()) {
     throw new IllegalStateException("baseline refused: " + recorded.refusal());
 }
@@ -158,7 +167,7 @@ for (int x = 0; x < 4; x++) {
 }
 var blueprint = new Blueprint(UUID.randomUUID(), "Mode layer preview", blocks,
     BlueprintVolume.of(4, 3, 1).orElseThrow(), level.getGameTime());
-var build = Facing.of(colony, ResourceLocation.parse("folkways_vanilla:build")).orElseThrow();
+var build = colony.service(BuildContent.ID, Object.class).orElseThrow();
 var file = build.getClass().getDeclaredMethod("file", ServerLevel.class, Blueprint.class,
     BlockPos.class, String.class, Optional.class, String.class);
 file.setAccessible(true);

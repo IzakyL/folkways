@@ -47,7 +47,9 @@ final class Fitness {
                 return Optional.of(Unfit.NO_TOOL);
             }
         }
-        if (hand.space() == null && work.cells() > hand.packCapacity()) {
+        // Whole stacks give a lower bound for native packs too. Personal supplies can reduce the
+        // usable capacity below the combined load of several pickups in the same work group.
+        if (work.cells() > hand.packCapacity()) {
             return Optional.of(Unfit.NO_ROOM);
         }
         return Optional.empty();

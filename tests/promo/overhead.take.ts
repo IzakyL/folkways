@@ -342,16 +342,17 @@ const SITES = defineTask<Record<string, any>, Record<string, any>>({
   timeoutMs: 20_000,
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.core.front.api.Facing",
-      "io.github.izakyl.folkways.core.front.api.notice.Line",
+      "io.github.izakyl.folkways.core.front.engine.Enrollments",
+      "io.github.izakyl.folkways.vanilla.build.BuildContent",
+      "io.github.izakyl.folkways.core.card.api.notice.Line",
       "io.github.izakyl.folkways.core.front.engine.colony.ColonyGround",
     ],
     body: `
 var server=ctx.server();var level=server.overworld();var args=Args.of(ctx);
 var colony=ColonyGround.of(server,UUID.fromString(args.string("colony_id"))).orElseThrow();
 var view=colony.view(level);var out=new ArrayList<Object>();
-for(var facing:Facing.all(colony))if(facing.getClass().getSimpleName().equals("BuildPresence"))
-for(var placard:facing.placards(view)){
+var build = Enrollments.ghostSource(colony).get(BuildContent.ID);
+for (var placard : build.placards(view)) {
   String name="";int placed=0,of=0;
   for(var line:placard.lines()){
     if(line instanceof Line.Said said&&name.isEmpty())name=said.notice().component().getString();

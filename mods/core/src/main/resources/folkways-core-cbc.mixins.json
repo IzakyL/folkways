@@ -1,0 +1,14 @@
+{
+  "required": true,
+  "minVersion": "0.8.5",
+  "package": "io.github.izakyl.folkways.core.shell.cbc.mixin",
+  "plugin": "io.github.izakyl.folkways.core.shell.cbc.CbcMixinPlugin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "CannonMountAccess", "CannonShotMixin", "DropMortarAccess", "DropMortarShotMixin",
+    "ProjectilePropertiesAccess"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

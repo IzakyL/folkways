@@ -1,16 +1,15 @@
 package io.github.izakyl.folkways.core.shell.mekanism;
 
-import io.github.izakyl.folkways.core.inventory.api.StoreRule;
-import io.github.izakyl.folkways.core.inventory.api.port.PortIdentity;
-import io.github.izakyl.folkways.core.inventory.api.port.PortReader;
-import io.github.izakyl.folkways.core.inventory.api.port.Pull;
-import io.github.izakyl.folkways.core.inventory.api.port.Room;
-import io.github.izakyl.folkways.core.inventory.api.port.StorePort;
-import io.github.izakyl.folkways.core.inventory.api.port.StorePorts;
-import io.github.izakyl.folkways.core.inventory.api.port.TransferResult;
-import io.github.izakyl.folkways.core.inventory.api.port.Usability;
+import net.minecraft.network.chat.Component;
+import io.github.izakyl.folkways.core.facility.api.control.SlotWindow;
+import io.github.izakyl.folkways.core.facility.api.Ports;
+import io.github.izakyl.folkways.core.facility.api.control.PortIdentity;
+import io.github.izakyl.folkways.core.facility.api.control.PortReader;
+import io.github.izakyl.folkways.core.facility.api.control.Pull;
+import io.github.izakyl.folkways.core.facility.api.control.Room;
+import io.github.izakyl.folkways.core.facility.api.control.ItemPort;
+import io.github.izakyl.folkways.core.facility.api.control.TransferResult;
 import io.github.izakyl.folkways.core.item.api.Goods;
-import io.github.izakyl.folkways.core.shell.storage.Verdicts;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -32,25 +31,30 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
 
-final class QioPort implements StorePort {
+final class QioPort implements ItemPort {
 
     private record NetworkKey(QIOFrequency frequency, Set<QIODriveKey> drives) {
     }
 
     private final ServerLevel level;
     private final BlockPos pos;
-    private final TileEntityQIOComponent device;
+    private final TileEntityQIOComponent component;
     private final Set<Operation> operations;
 
-    QioPort(ServerLevel level, BlockPos pos, TileEntityQIOComponent device, Set<Operation> operations) {
+    QioPort(ServerLevel level, BlockPos pos, TileEntityQIOComponent component, Set<Operation> operations) {
         this.level = level;
         this.pos = pos.immutable();
-        this.device = device;
+        this.component = component;
         this.operations = Set.copyOf(operations);
     }
 
     private QIOFrequency frequency() {
-        return device.getQIOFrequency();
+        return component.getQIOFrequency();
+    }
+
+    @Override
+    public WorldPos anchor() {
+        return identity().home();
     }
 
     @Override
@@ -62,25 +66,21 @@ final class QioPort implements StorePort {
     }
 
     @Override
-    public Usability usability() {
-        var condemned = StorePorts.condemned(WorldPos.of(level, pos));
-        if (condemned.isPresent()) {
-            return new Usability.Unusable(condemned.get(), true);
-        }
+    public Optional<Component> unavailable(ServerLevel level) {
         QIOFrequency frequency = frequency();
         if (frequency == null || !frequency.isValid() || frequency.getAllDrives().isEmpty()) {
-            return Verdicts.because("disconnected");
+            return Optional.of(Component.translatable("folkways.storage.unusable.disconnected"));
         }
         // The colony indexes and reserves physical inventories per dimension. Reject cross-dimension
         // access rather than publishing the same goods independently to two reservation ledgers.
         if (frequency.getAllDrives().stream().anyMatch(drive -> drive.getKey().holder().getLevel() != level)) {
-            return Verdicts.because("remote");
+            return Optional.of(Component.translatable("folkways.storage.unusable.remote"));
         }
         if (frequency.getSecurity() != SecurityMode.PUBLIC
-            || device.hasSecurity() && device.getSecurity().getMode() != SecurityMode.PUBLIC) {
-            return Verdicts.because("protected");
+            || component.hasSecurity() && component.getSecurity().getMode() != SecurityMode.PUBLIC) {
+            return Optional.of(Component.translatable("folkways.storage.unusable.protected"));
         }
-        return operations.isEmpty() ? Verdicts.because("hand_access") : Usability.USABLE;
+        return operations.isEmpty() ? Optional.of(Component.translatable("folkways.storage.unusable.hand_access")) : Optional.empty();
     }
 
     @Override
@@ -95,8 +95,11 @@ final class QioPort implements StorePort {
     }
 
     @Override
-    public PortReader reader(ServerLevel world, List<StoreRule> rules) {
-        var cursor = (usability().usable() ? frequency().getItemDataMap().entrySet().stream()
+    public PortReader reader(ServerLevel world, Optional<SlotWindow> window) {
+        if (window.isPresent()) {
+            return PortReader.EMPTY;
+        }
+        var cursor = (valid(world) ? frequency().getItemDataMap().entrySet().stream()
             .map(item -> new PortReader.Entry(item.getKey().createStack(1), item.getValue().getCount())).toList()
             : List.<PortReader.Entry>of()).iterator();
         return new PortReader() {
@@ -117,7 +120,7 @@ final class QioPort implements StorePort {
                 if (!finished) {
                     throw new IllegalStateException("QIO reading is unfinished");
                 }
-                return new PortReading(entries, Optional.empty(), usability().usable() ? room() : Room.NONE,
+                return new PortReading(entries, Optional.empty(), valid(world) ? room() : Room.NONE,
                     Set.of(), false);
             }
         };
@@ -140,14 +143,14 @@ final class QioPort implements StorePort {
         return new Room.Pool(items, items == 0 ? 0 : kinds);
     }
 
-    private boolean permits(Operation operation, List<StoreRule> rules) {
-        return usability().usable() && operations.contains(operation)
-            && rules.stream().noneMatch(StoreRule.Slots.class::isInstance);
+    private boolean permits(ServerLevel world, Operation operation, Optional<SlotWindow> window) {
+        return valid(world) && operations.contains(operation)
+            && window.isEmpty();
     }
 
     @Override
-    public TransferResult take(ServerLevel world, List<Pull> requested, List<StoreRule> rules, boolean simulate) {
-        if (!permits(Operation.TAKE, rules) || !StoreRule.takes(rules)) {
+    public TransferResult take(ServerLevel world, List<Pull> requested, Optional<SlotWindow> window, boolean simulate) {
+        if (!permits(world, Operation.TAKE, window)) {
             return refused(TransferResult.Why.NOT_ALLOWED);
         }
         var available = snapshot();
@@ -178,10 +181,8 @@ final class QioPort implements StorePort {
     }
 
     @Override
-    public TransferResult put(ServerLevel world, List<ItemStack> goods, List<StoreRule> rules,
-                              boolean directed, boolean simulate) {
-        if (!permits(Operation.PUT, rules) || !directed && (!StoreRule.stores(rules)
-            || goods.stream().anyMatch(stack -> !StoreRule.admits(rules, stack)))) {
+    public TransferResult put(ServerLevel world, List<ItemStack> goods, Optional<SlotWindow> window, boolean simulate) {
+        if (!permits(world, Operation.PUT, window)) {
             return refused(TransferResult.Why.NOT_ALLOWED);
         }
         Map<HashedItem, Long> wanted = new LinkedHashMap<>();
@@ -242,12 +243,12 @@ final class QioPort implements StorePort {
         }
         if (!acknowledged || !expected.equals(snapshot())) {
             compensate(before);
-            StorePorts.condemn(level, WorldPos.of(level, pos),
+            Ports.observe(level, WorldPos.of(level, pos),
                 net.minecraft.network.chat.Component.translatable("folkways.storage.unusable.changed"));
-            StorePorts.changed(level, pos);
+            Ports.changed(level, pos);
             return refused(TransferResult.Why.UNUSABLE);
         }
-        StorePorts.changed(level, pos);
+        Ports.changed(level, pos);
         return new TransferResult.Done(moved);
     }
 

@@ -1,0 +1,18 @@
+{
+  "required": true,
+  "minVersion": "0.8.5",
+  "package": "io.github.izakyl.folkways.core.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "ColonyDisplayMixin",
+    "EntityUpgradeMixin",
+    "BlockEntityUpgradeMixin",
+    "AttachmentHostsMixin",
+    "PathfindingContextMixin",
+    "ServerConfigFolderMixin",
+    "ResidentTickMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

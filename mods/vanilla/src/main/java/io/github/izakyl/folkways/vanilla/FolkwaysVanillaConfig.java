@@ -181,20 +181,16 @@ public final class FolkwaysVanillaConfig {
                 "Materials, tools and work time are unchanged. Read while the work runs; not stored in orders.")
             .define("simpleConstruction", false);
         MAX_BUILD_CELLS = BUILDER
-            .comment("Most cells one blueprint or drawn pattern may set, counting the cells it digs out",
-                "as well as the blocks it lays, but not the empty air around them. A long wall or road",
-                "with its cut and fill comes to some tens of thousands. Raising it lets bigger work",
-                "through, at the cost of a longer standing order and more ghost blocks drawn in the world.")
+            .comment("Most cells one blueprint or drawn pattern may set, including cells it digs out.",
+                "Also caps draft scans and sampled voxel layers, including overlapping layers.")
             .defineInRange("maxBuildCells", 262_144, 1, 4_194_304);
         MAX_BLUEPRINT_VOLUME = BUILDER
-            .comment("Widest span a blueprint may claim once read, in cells. This is the outer guard on a",
-                "malformed or hostile structure file, not a building size: it stops one from claiming a",
-                "volume too large to walk before its blocks are counted.")
+            .comment("Maximum bounding-box volume in cells for a blueprint or finished draft.",
+                "Bounds the volume walked before occupied cells are counted.")
             .defineInRange("maxBlueprintVolume", 33_554_432L, 1L, 1_073_741_824L);
         DRAW_SECONDS = BUILDER
             .comment("Longest one pattern may take to draw, in seconds, before it is stopped and refused.",
-                "Drawings run beside the game rather than in its tick, and patterns are trusted to read",
-                "and draw what they like within what they capture: this is the one limit held over them.")
+                "Includes both Starlark evaluation and native fitting.")
             .defineInRange("drawSeconds", 30, 1, 3_600);
         BUILDER.pop();
 

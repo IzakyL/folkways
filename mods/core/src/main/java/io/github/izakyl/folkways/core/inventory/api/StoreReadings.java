@@ -1,7 +1,8 @@
 package io.github.izakyl.folkways.core.inventory.api;
 
-import io.github.izakyl.folkways.core.inventory.api.port.PortReader.Entry;
-import io.github.izakyl.folkways.core.inventory.api.port.Room;
+import io.github.izakyl.folkways.core.facility.api.control.SlotSnapshot;
+import io.github.izakyl.folkways.core.facility.api.control.PortReader.Entry;
+import io.github.izakyl.folkways.core.facility.api.control.Room;
 import java.util.AbstractList;
 import java.util.ArrayList;
 import java.util.List;

@@ -47,7 +47,8 @@ public final class HoldingActions implements ActionServices {
         }
         return ways.apply(context.level())
             .map(ways -> Trip.to(() -> this.ways.apply(context.level()).orElse(ways), body.resident(),
-                body.locomotion(), body.mob(), footings, travelSpeed, noWay(), Urgency.WALKING, ColonyWays.FEEDBACK))
+                body.locomotion(), body.mob(), footings, travelSpeed, noWay(), Urgency.WALKING,
+                ColonyWays.FEEDBACK))
             .orElseGet(() -> Trip.afoot(body.locomotion(), footings, travelSpeed, noWay()))
             .map(trip -> trip);
     }

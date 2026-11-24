@@ -41,6 +41,22 @@
   text-color: #8f7f62;
 }
 
+// A card's own buttons draw their words themselves; on paper they wear the same oak tags. They match by class,
+// since a button subclass is not a `button` to the stylesheet.
+.folkways_desk .folkways_press:host {
+  base-background: sprite(folkways_core:textures/gui/desk/button.png, 0, 0, 16, 16, 4, 4, 4, 4);
+  hover-background: sprite(folkways_core:textures/gui/desk/button_hover.png, 0, 0, 16, 16, 4, 4, 4, 4);
+  pressed-background: sprite(folkways_core:textures/gui/desk/button_pressed.png, 0, 0, 16, 16, 4, 4, 4, 4);
+}
+.folkways_desk .folkways_press.__disabled__ {
+  base-background: sprite(folkways_core:textures/gui/desk/button_disabled.png, 0, 0, 16, 16, 4, 4, 4, 4);
+}
+// What is chosen or switched on stays pressed in, under the pointer too.
+.folkways_desk .folkways_press.folkways_chosen {
+  base-background: sprite(folkways_core:textures/gui/desk/button_pressed.png, 0, 0, 16, 16, 4, 4, 4, 4);
+  hover-background: sprite(folkways_core:textures/gui/desk/button_pressed.png, 0, 0, 16, 16, 4, 4, 4, 4);
+}
+
 // The list of pages: bare lines, a pencilled wash under the pointer, the open page shaded with a red ribbon
 .folkways_desk button.folkways_nav {
   base-background: empty;
@@ -129,15 +145,3 @@
 }
 
 // Container forms group settings by purpose instead of giving every entry a ledger row.
-.folkways_desk .folkways_form_section {
-  background: sprite(folkways_core:textures/gui/desk/card.png, 0, 0, 16, 16, 3, 3, 3, 3);
-}
-.folkways_desk .folkways_form_toggle {
-  background: color(#e0cda4);
-}
-.folkways_desk .folkways_form_on button .__button_text__ {
-  text-color: #3d6429;
-}
-.folkways_desk .folkways_form_off button .__button_text__ {
-  text-color: #7d7466;
-}

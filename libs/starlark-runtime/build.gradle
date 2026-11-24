@@ -1,0 +1,195 @@
+buildscript {
+    repositories {
+        mavenCentral()
+    }
+    dependencies {
+        classpath "org.ow2.asm:asm:9.8"
+    }
+}
+
+plugins {
+    id "java-library"
+}
+
+import org.objectweb.asm.ClassReader
+import org.objectweb.asm.ClassVisitor
+import org.objectweb.asm.ClassWriter
+import org.objectweb.asm.MethodVisitor
+import org.objectweb.asm.Opcodes
+
+group = project.maven_group
+version = project.starlark_version
+
+repositories {
+    maven {
+        url = "https://maven.neoforged.net/releases/"
+        content { includeGroup "com.eed3si9n.starlark" }
+    }
+    mavenCentral()
+}
+
+configurations {
+    upstream
+    compileOnly.extendsFrom upstream
+}
+
+dependencies {
+    upstream("com.eed3si9n.starlark:starlark:${project.starlark_version}") {
+        transitive = false
+    }
+}
+
+java {
+    toolchain.languageVersion = JavaLanguageVersion.of(project.java_release.toInteger())
+}
+
+// Keep the upstream API and instrument the allocation sites of the exact version we ship.
+def instrument = tasks.register("instrumentStarlark") {
+    inputs.files(configurations.upstream)
+    def destination = layout.buildDirectory.dir("instrumented")
+    outputs.dir(destination)
+    doLast {
+        if (project.starlark_version != "4.2.1") {
+            throw new GradleException("Review the Starlark allocation hooks before updating the interpreter")
+        }
+        def directory = destination.get().asFile
+        delete(directory)
+        copy {
+            from zipTree(configurations.upstream.singleFile)
+            into directory
+            exclude "META-INF/MANIFEST.MF"
+        }
+        fileTree(directory).matching { include "net/starlark/java/eval/*.class" }.each { file ->
+            def reader = new ClassReader(file.bytes)
+            def writer = new ClassWriter(reader, ClassWriter.COMPUTE_MAXS)
+            reader.accept(new AllocationClass(writer, reader.className.split("/")[-1]), 0)
+            file.bytes = writer.toByteArray()
+        }
+    }
+}
+
+tasks.named("jar") {
+    archiveFileName = "folkways-starlark-runtime.jar"
+    from(instrument)
+    manifest.attributes("Automatic-Module-Name": "folkways_starlark_runtime", "FMLModType": "GAMELIBRARY")
+}
+
+// Gradle normally supplies loose classes for compilation between Java projects.
+configurations.apiElements.outgoing.variants.remove(configurations.apiElements.outgoing.variants.classes)
+
+class AllocationClass extends ClassVisitor {
+    private final String owner
+
+    AllocationClass(ClassVisitor next, String owner) {
+        super(Opcodes.ASM9, next)
+        this.owner = owner
+    }
+
+    @Override
+    MethodVisitor visitMethod(int access, String name, String descriptor, String signature, String[] exceptions) {
+        def next = super.visitMethod(access, name, descriptor, signature, exceptions)
+        if (name == "<clinit>" || (owner == "StringModule" && name == "initCharStrings")) {
+            return next
+        }
+        return new AllocationMethod(next, owner, name)
+    }
+}
+
+class AllocationMethod extends MethodVisitor {
+    private static final String EVAL = "net/starlark/java/eval/"
+    private static final String HOOK = EVAL + "AllocationBudget"
+    private final String owner
+    private final String method
+
+    AllocationMethod(MethodVisitor next, String owner, String method) {
+        super(Opcodes.ASM9, next)
+        this.owner = owner
+        this.method = method
+    }
+
+    @Override
+    void visitCode() {
+        super.visitCode()
+        if ((owner == "Eval" && method in ["exec", "eval"]) || (owner == "Starlark" && method == "fastcall")
+                || (owner == 'RangeList$1' && method == "next")) {
+            hook("checkpoint", "()V")
+        }
+        if (owner == "EvalUtils" && method == "binaryOp") {
+            super.visitVarInsn(Opcodes.ALOAD, 0)
+            super.visitVarInsn(Opcodes.ALOAD, 1)
+            super.visitVarInsn(Opcodes.ALOAD, 2)
+            hook("binary", "(Lnet/starlark/java/syntax/TokenKind;Ljava/lang/Object;Ljava/lang/Object;)V")
+        }
+        if ((owner == "Starlark" && method == "toArray") || (owner == "StarlarkList" && method == "addElements")) {
+            super.visitVarInsn(Opcodes.ALOAD, owner == "Starlark" ? 0 : 1)
+            hook("rangeElements", "(Ljava/lang/Object;)V")
+        }
+        if (owner == "StringModule" && method == "join") {
+            super.visitVarInsn(Opcodes.ALOAD, 1)
+            super.visitVarInsn(Opcodes.ALOAD, 2)
+            hook("join", "(Ljava/lang/String;Ljava/lang/Object;)V")
+        }
+    }
+
+    @Override
+    void visitTypeInsn(int opcode, String type) {
+        if (opcode == Opcodes.ANEWARRAY) {
+            hook("interpreterReferences", "(I)I")
+        }
+        super.visitTypeInsn(opcode, type)
+    }
+
+    @Override
+    void visitIntInsn(int opcode, int operand) {
+        if (opcode == Opcodes.NEWARRAY) {
+            super.visitLdcInsn(([4: 1, 5: 2, 6: 4, 7: 8, 8: 1, 9: 2, 10: 4, 11: 8])[operand])
+            hook("array", "(II)I")
+        }
+        super.visitIntInsn(opcode, operand)
+    }
+
+    @Override
+    void visitMethodInsn(int opcode, String target, String name, String type, boolean isInterface) {
+        if (owner == "MethodDescriptor" && target == "java/lang/reflect/Method" && name == "invoke") {
+            hook("invoke", "(Ljava/lang/reflect/Method;" + type.substring(1))
+            return
+        }
+        if (owner == "Starlark" && target == EVAL + "StarlarkCallable" && name == "fastcall") {
+            hook("fastcall", "(L" + EVAL + "StarlarkCallable;" + type.substring(1))
+            return
+        }
+        if (target == "java/util/Arrays" && name == "copyOf" && type == "([Ljava/lang/Object;I)[Ljava/lang/Object;") {
+            hook("references", "(I)I")
+        }
+        if (target == "com/google/common/collect/Iterables" && name == "toArray") {
+            super.visitInsn(Opcodes.DUP2)
+            super.visitInsn(Opcodes.POP)
+            hook("materialize", "(Ljava/lang/Iterable;)V")
+        }
+        if (owner == "StarlarkList" && target == "java/util/Arrays" && name == "copyOf"
+                && type == "([Ljava/lang/Object;ILjava/lang/Class;)[Ljava/lang/Object;") {
+            hook("copyReferences", type)
+            return
+        }
+        if (target == "java/lang/StringBuilder" && name == "append" && type in [
+                "(C)Ljava/lang/StringBuilder;", "(Ljava/lang/String;)Ljava/lang/StringBuilder;",
+                "(Ljava/lang/CharSequence;)Ljava/lang/StringBuilder;",
+                "(Ljava/lang/CharSequence;II)Ljava/lang/StringBuilder;"]) {
+            hook("append", "(Ljava/lang/StringBuilder;" + type.substring(1))
+            return
+        }
+        if (target == "java/lang/StringBuilder" && name == "toString") {
+            hook("finishString", "(Ljava/lang/StringBuilder;)Ljava/lang/String;")
+            return
+        }
+        if (owner == "Dict" && target == "java/util/LinkedHashMap" && name == "put") {
+            hook("put", "(Ljava/util/LinkedHashMap;" + type.substring(1))
+            return
+        }
+        super.visitMethodInsn(opcode, target, name, type, isInterface)
+    }
+
+    private void hook(String name, String type) {
+        super.visitMethodInsn(Opcodes.INVOKESTATIC, HOOK, name, type, false)
+    }
+}

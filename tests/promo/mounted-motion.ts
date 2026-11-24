@@ -42,11 +42,11 @@ const MOTION = defineTask<Record<string, any>, MountedTick[]>({
   limits: { maxNodes: 2_000_000 },
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.core.api.colony.Colonies",
-      "io.github.izakyl.folkways.core.api.work.Node",
-      "io.github.izakyl.folkways.core.api.work.Stances",
-      "io.github.izakyl.folkways.core.api.terms.WorldSpaces",
-      "io.github.izakyl.folkways.core.engine.labor.Labor",
+      "io.github.izakyl.folkways.core.colony.api.Colonies",
+      "io.github.izakyl.folkways.core.work.api.Node",
+      "io.github.izakyl.folkways.core.world.api.Stances",
+      "io.github.izakyl.folkways.core.world.api.WorldSpaces",
+      "io.github.izakyl.folkways.core.runtime.Labor",
       "io.github.izakyl.folkways.vanilla.person.ResidentEntity",
       "io.github.izakyl.folkways.vanilla.combat.weapon.ResidentMounts",
       "net.neoforged.neoforge.event.tick.ServerTickEvent",

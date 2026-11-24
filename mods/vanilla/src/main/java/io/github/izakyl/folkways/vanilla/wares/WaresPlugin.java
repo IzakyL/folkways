@@ -6,6 +6,7 @@ import io.github.izakyl.folkways.core.front.api.ui.RegisteringUi;
 import java.util.Optional;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.BlockGetter;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.ChestBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.ChestType;
@@ -19,6 +20,11 @@ public final class WaresPlugin {
 
     public static void install(IEventBus modBus) {
         WaresBlockEntities.register(modBus);
+        net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(
+            io.github.izakyl.folkways.core.facility.api.DefinedFacilities.CoverageChanged.class, change ->
+                io.github.izakyl.folkways.core.colony.api.Colonies.all(change.server()).forEach(colony ->
+                    colony.service(WaresContent.ID, WaresPresence.class)
+                        .ifPresent(presence -> presence.refresh(change.server()))));
         modBus.addListener(Declaring.class, WaresContent::declare);
         modBus.addListener(Registering.class, WaresContent::enroll);
         modBus.addListener(RegisteringUi.class, event -> event.outline(WaresPlugin::otherHalf));
@@ -33,6 +39,9 @@ public final class WaresPlugin {
             return Optional.empty();
         }
         BlockPos other = pos.relative(ChestBlock.getConnectedDirection(state));
+        if (level instanceof Level world && !world.isLoaded(other)) {
+            return Optional.empty();
+        }
         return level.getBlockState(other).is(state.getBlock()) ? Optional.of(other) : Optional.empty();
     }
 }

@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { defineTask, javaTask, screen, tick } from "@izakyl/blockwright-minecraft";
+import { defineTask, javaTask, media, screen, tick } from "@izakyl/blockwright-minecraft";
 import { ancestorsOf, clickElement, panelElements } from "../ldlib2";
 import {
   foundColonyFast, foundingBox, openColonyPanelViaBook, waitForGroundedPlayer,
@@ -8,13 +8,29 @@ import { launchPair, type E2EPair } from "../shared/harness/pair";
 import { seededServer } from "../shared/harness/mod-settings";
 import { newRunId } from "../shared/harness/run-id";
 import { GROUND } from "../shared/harness/stage";
-import { waitForElement } from "../shared/harness/bw-helpers";
+import { cardRowsIn, openCardOf, textUnder, waitForPresent } from "../shared/ui/book-cards";
 import { settlePanel, typeCell } from "../shared/ui/site-panel";
 
-const KEY = "folkways.staffing.";
+const COUNT = "folkways.card.number.staffing_count.field";
+const PROFILES = "staffing_profiles";
 type Scene = { player: string; route: string; zone: string; melee: string; ranged: string };
 
-test("zone and route panels select interchangeable loadouts and total headcounts without resident pins",
+/** Presses the one act of the profile row naming `profile`, allowing or barring it on the card. */
+async function toggleProfile(server: any, client: any, profile: string) {
+  await waitForPresent(server, client, `folkways.card.rows.${PROFILES}.0`);
+  const elements = await panelElements(client);
+  const row = cardRowsIn(elements, PROFILES).find(one => textUnder(elements, one.id).includes(profile));
+  expect(row, `a row for ${profile}`).toBeTruthy();
+  const before = textUnder(elements, row!.id);
+  await clickElement(client, { id: row!.acts[0] }, { scrollIntoView: true });
+  // The card is redrawn from the change: wait for it, so typing afterwards lands in the field drawn last.
+  await expect.poll(async () => {
+    await settlePanel(server, client);
+    return textUnder(await panelElements(client), row!.id);
+  }).not.toBe(before);
+}
+
+test("zone and route cards select interchangeable loadouts and total headcounts without resident pins",
   async ({}, testInfo) => {
   test.setTimeout(360_000);
   const run = newRunId();
@@ -29,46 +45,44 @@ test("zone and route panels select interchangeable loadouts and total headcounts
     const founded = await foundColonyFast(server, client, player.name, { origin, residentCount: 2 });
     await openColonyPanelViaBook(server, client, player.name, founded.standBlock);
     const scene = await server.run(SETUP, { player: player.name });
-    await waitForElement(client, { id: KEY + "allowed" });
-    expect((await panelElements(client)).some(element => element.id === KEY + "title")).toBe(false);
-    await clickElement(client, { id: KEY + "allowed" });
-    await clickElement(client, { id: `folkways.choice.option.${scene.melee}` });
-    await clickElement(client, { id: `folkways.choice.option.${scene.ranged}` });
-    await clickElement(client, { id: "folkways.choice.confirm" });
-    await settlePanel(server, client);
+    await openCardOf(server, client, scene.player, scene.route);
+    await waitForPresent(server, client, COUNT);
+    await toggleProfile(server, client, "Melee guard");
+    await toggleProfile(server, client, "Bow guard");
     await expect.poll(async () => (await server.run(READ, scene)).allowed).toBe(2);
-    await typeCell(server, client, KEY + "headcount_label", "3");
+    await typeCell(server, client, COUNT, "3");
     await expect.poll(async () => { await tick.sprint(server, 3); return server.run(READ, scene); })
       .toMatchObject({ count: 3, allowed: 2, filled: 2 });
-    const routeUi = await panelElements(client);
-    expect(routeUi.filter(element => element.displayed && element.visible !== false
-      && ancestorsOf(routeUi, element).every(parent => parent.displayed && parent.visible !== false))
-      .map(element => element.text).join(" ")).not.toContain("This type has no configurable parameters.");
-    await typeCell(server, client, KEY + "headcount_label", "0");
+    await media.screenshot(client, { path: testInfo.outputPath("route-staffing.png") });
+    expect((await panelElements(client)).some(element => element.id === "folkways.card.button.staffing_retry"),
+      "a route offers to set out again").toBe(true);
+    await typeCell(server, client, COUNT, "0");
     await expect.poll(async () => { await tick.sprint(server, 3); return (await server.run(READ, scene)).filled; })
       .toBe(0);
-    await server.run(SELECT, { player: scene.player, target: scene.zone });
-    await waitForElement(client, { id: KEY + "allowed" });
-    await settlePanel(server, client);
-    await clickElement(client, { id: KEY + "allowed" });
-    await clickElement(client, { id: `folkways.choice.option.${scene.melee}` });
-    await clickElement(client, { id: "folkways.choice.confirm" });
-    await settlePanel(server, client);
-    await typeCell(server, client, KEY + "headcount_label", "1");
+    await screen.dismiss(client);
+    await openCardOf(server, client, scene.player, scene.zone);
+    await waitForPresent(server, client, COUNT);
+    await toggleProfile(server, client, "Melee guard");
+    await typeCell(server, client, COUNT, "1");
     await expect.poll(async () => {
       await tick.sprint(server, 3);
       return server.run(READ, { ...scene, route: scene.zone });
     })
       .toMatchObject({ count: 1, allowed: 1, filled: 0 });
-    await expect.poll(async () => (await panelElements(client)).filter(element => element.displayed)
-      .map(element => element.text).join(" ")).toContain("Ranged profile required");
+    // The card is not redrawn under a field being typed in: leave the field first.
+    await clickElement(client, { id: "folkways.card.lines" }, { scrollIntoView: true });
+    await expect.poll(async () => {
+      await tick.sprint(server, 3);
+      const elements = await panelElements(client);
+      return elements.filter(element => element.displayed && ancestorsOf(elements, element)
+        .every(parent => parent.displayed !== false)).map(element => element.text).join(" ");
+    }).toContain("Ranged profile required");
     await screen.dismiss(client);
   } catch (error) { pair?.failing(error); throw error; }
   finally { await pair?.teardown(testInfo); }
 });
 
 const IMPORTS = ["io.github.izakyl.folkways.core.front.api.ui.Pages",
-  "io.github.izakyl.folkways.core.front.ui.screen.ColonyShell",
   "io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutProfiles",
   "io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutProfile",
   "io.github.izakyl.folkways.vanilla.patrol.PatrolStaffing",
@@ -94,14 +108,8 @@ var route=colony.hold(PatrolContent.BEAT,new Claimed.Line(List.of(WorldPos.of(le
 var cells=new LinkedHashSet<WorldPos>();
 for(int x=0;x<2;x++){for(int z=0;z<2;z++){cells.add(WorldPos.of(level,at.below().offset(x,0,z)));}}
 var zone=colony.hold(SentryPosts.ZONE,new Claimed.Area(cells)).orElseThrow();
-ColonyShell.editSelection(player,route.id());
 return Map.of("player",player.getGameProfile().getName(),"route",route.id().toString(),"zone",zone.id().toString(),
  "melee",melee.id().toString(),"ranged",ranged.id().toString());` }) });
-const SELECT = defineTask<{ player: string; target: string }, boolean>({
-  name: "folkways.staffing.ui-select", side: "server",
-  source: javaTask({ imports: IMPORTS, body: `var a=Args.of(ctx);
-var player=ctx.server().getPlayerList().getPlayerByName(a.string("player"));
-ColonyShell.editSelection(player,UUID.fromString(a.string("target")));return true;` }) });
 const READ = defineTask<Scene, { count: number; allowed: number; filled: number }>({
   name: "folkways.staffing.ui-read", side: "server", source: javaTask({ imports: IMPORTS, body: `
 var a=Args.of(ctx);var player=ctx.server().getPlayerList().getPlayerByName(a.string("player"));

@@ -1,10 +1,11 @@
 package io.github.izakyl.folkways.vanilla.build;
 
-import io.github.izakyl.folkways.core.library.FileNames;
 import io.github.izakyl.folkways.core.front.api.Books;
+import io.github.izakyl.folkways.core.front.api.Category;
 import io.github.izakyl.folkways.core.front.api.Ghost;
-import io.github.izakyl.folkways.core.front.client.SelectorWindow;
 import io.github.izakyl.folkways.core.front.api.ui.Placing;
+import io.github.izakyl.folkways.core.front.client.SelectorWindow;
+import io.github.izakyl.folkways.core.library.FileNames;
 import io.github.izakyl.folkways.vanilla.FolkwaysVanillaConfig;
 import io.github.izakyl.folkways.vanilla.build.draft.Templates;
 import io.github.izakyl.folkways.vanilla.build.draft.client.LocalPatterns;
@@ -50,13 +51,13 @@ public final class HeldBlueprints {
                 player.closeContainer();
             }
         }));
-        Placing.shelve(new Placing.Shelf(BuildContent.BLUEPRINTS.nameKey(), BuildContent.BLUEPRINTS.icon(),
-            HeldBlueprints::pick));
+        Placing.shelve(new Placing.Shelf("folkways.tab.blueprints", ResourceLocation.withDefaultNamespace("map"),
+            HeldBlueprints::pick).in(Category.CONSTRUCTION));
     }
 
     // The same dialog on a screen of its own, which goes back to the view once a blueprint is picked.
     private static void pick() {
-        SelectorWindow.open(Minecraft.getInstance().screen, Component.translatable(BuildContent.BLUEPRINTS.nameKey()),
+        SelectorWindow.open(Minecraft.getInstance().screen, Component.translatable("folkways.tab.blueprints"),
             host -> BlueprintsPage.open(host, shelf(), entry -> take(entry, () -> {
             })));
     }

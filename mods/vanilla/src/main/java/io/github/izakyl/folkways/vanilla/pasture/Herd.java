@@ -4,7 +4,7 @@ import io.github.izakyl.folkways.core.base.persist.Reader;
 import io.github.izakyl.folkways.core.base.persist.Writer;
 import io.github.izakyl.folkways.core.colony.api.ColonyView;
 import io.github.izakyl.folkways.core.plan.api.Workshop;
-import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.world.api.Stances;
 import io.github.izakyl.folkways.core.work.api.WorkSite;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.core.world.api.WorldSpaces;
@@ -22,9 +22,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.UUID;
-import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.Shearable;
@@ -63,9 +61,6 @@ final class Herd {
     record Tally(Pen pen, Map<Job, List<Quarry>> work) {
     }
 
-    record Sight(ResourceLocation keeps, int target, int living, int adults, BlockPos where) {
-    }
-
     private record Seen(WorldPos at, Pen pen, Enclosure enclosure, Stances footings) {
     }
 
@@ -84,7 +79,6 @@ final class Herd {
     private final Set<UUID> claimed = new LinkedHashSet<>();
     private final Map<UUID, Enclosure> surveyed = new LinkedHashMap<>();
     private volatile Map<UUID, Enclosure> enclosures = Map.of();
-    private final List<Sight> sights = new ArrayList<>();
 
     Herd(Runnable changed, PastDay made) {
         this.changed = changed;
@@ -95,17 +89,12 @@ final class Herd {
         return made;
     }
 
-    List<Sight> sights() {
-        return List.copyOf(sights);
-    }
-
     Optional<Enclosure> enclosure(UUID zone) {
         return Optional.ofNullable(enclosures.get(zone));
     }
 
     void begin() {
         claimed.clear();
-        sights.clear();
         surveyed.clear();
     }
 
@@ -123,8 +112,6 @@ final class Herd {
                     adults++;
                 }
             }
-            sights.add(new Sight(pen.keeps().type(), pen.target(), standing.size(), adults,
-                pen.anchor().cell()));
             List<Animal> workable = new ArrayList<>(standing.size());
             for (Animal beast : standing) {
                 if (project(level, pen, enclosure, beast)) {
@@ -219,7 +206,7 @@ final class Herd {
         if (held != null && held.at().equals(at) && held.pen().equals(pen) && held.enclosure() == enclosure) {
             return true;
         }
-        Optional<Stances> cells = pen.workplaces(level, beast, enclosure);
+        Optional<Stances> cells = pen.workplaces(level, beast, at, enclosure);
         cells.ifPresentOrElse(where -> seen.put(who, new Seen(at, pen, enclosure, where)), () -> seen.remove(who));
         return cells.isPresent();
     }
@@ -254,10 +241,15 @@ final class Herd {
             if (drop == null || !claimed.add(id)) {
                 continue;
             }
-            WorldPos at = WorldSpaces.at(drop);
+            // An egg can be above the deck without Sable tracking it. The pen already knows its frame.
+            Optional<WorldPos> position = pen.locate(drop);
+            if (position.isEmpty()) {
+                continue;
+            }
+            WorldPos at = position.get();
             Dropped held = dropsSeen.get(id);
             if (held == null || !held.at().equals(at) || !held.pen().equals(pen) || held.enclosure() != enclosure) {
-                held = new Dropped(at, pen, enclosure, pen.workplaces(level, drop, enclosure));
+                held = new Dropped(at, pen, enclosure, pen.workplaces(level, drop, at, enclosure));
                 dropsSeen.put(id, held);
             }
             held.footings().ifPresent(where -> found.add(new Quarry(id, new WorkSite.AtEntity(id, at), where)));

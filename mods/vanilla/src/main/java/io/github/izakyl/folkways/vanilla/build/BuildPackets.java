@@ -1,13 +1,15 @@
 package io.github.izakyl.folkways.vanilla.build;
 
-import io.github.izakyl.folkways.core.library.FileNames;
 import io.github.izakyl.folkways.core.FolkwaysCoreMod;
-import io.github.izakyl.folkways.core.work.api.StructureCompat;
 import io.github.izakyl.folkways.core.front.api.Books;
+import io.github.izakyl.folkways.core.front.api.operation.Commissioning;
+import io.github.izakyl.folkways.core.library.FileNames;
+import io.github.izakyl.folkways.core.work.api.Joint;
+import io.github.izakyl.folkways.core.work.api.Joints;
+import io.github.izakyl.folkways.core.work.api.StructureCompat;
 import io.github.izakyl.folkways.vanilla.build.draft.Chosen;
 import io.github.izakyl.folkways.vanilla.build.draft.Drafting;
 import io.github.izakyl.folkways.vanilla.build.draft.Hint;
-import io.github.izakyl.folkways.vanilla.build.draft.Joint;
 import io.github.izakyl.folkways.vanilla.build.draft.Pattern;
 import io.github.izakyl.folkways.vanilla.build.draft.PatternPackets;
 import io.github.izakyl.folkways.vanilla.build.draft.Patterns;
@@ -19,6 +21,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -26,7 +29,6 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtAccounter;
 import net.minecraft.nbt.NbtIo;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.block.Mirror;
@@ -244,7 +246,7 @@ public final class BuildPackets {
             }
             Rounds.logged(Commissions.file(level, site.get(), pattern.get(), hint.get(), settings,
                     packet.facing(), packet.siteName(), Optional.of(player.getUUID()),
-                    player.getGameProfile().getName())
+                    player.getGameProfile().getName(), Optional.empty())
                 .thenAccept(said -> player.displayClientMessage(said.message(), true)));
         });
     }
@@ -261,31 +263,42 @@ public final class BuildPackets {
     }
 
     private static void raise(ServerPlayer player, Blueprint blueprint, BlockPos anchor) {
-        ServerLevel level = player.serverLevel();
+        Rounds.logged(raised(player.serverLevel(), blueprint, anchor).thenAccept(result -> {
+            if (!player.isRemoved()) {
+                refuse(player, result.message());
+            }
+        }));
+    }
+
+    /**
+     * Sets the blueprint down at once, as creative Build now does, and joins its joints. Completes with what to tell
+     * the player: that it was raised, or why it could not be.
+     */
+    static CompletableFuture<Commissioning.Result> raised(ServerLevel level, Blueprint blueprint, BlockPos anchor) {
+        Blueprint confirmed;
         try {
-            Blueprint confirmed = blueprint.confirm(level);
-            Rounds.logged(SchematicPlacement.print(level, confirmed, anchor).handle((done, failure) -> {
-                if (player.isRemoved()) {
-                    return null;
-                }
-                if (failure != null) {
-                    if (failure instanceof StructureCompat.Failure refused) {
-                        refuse(player, refused.component());
-                        return null;
-                    }
-                    throw new java.util.concurrent.CompletionException(failure);
-                }
-                for (Joint joint : confirmed.joints()) {
-                    Joint between = joint.moved(anchor);
-                    Joints.joiner().cost(level, between.from(), between.to())
-                        .ifPresent(cost -> Joints.joiner().join(level, between.from(), between.to(), cost));
-                }
-                player.displayClientMessage(Component.translatable("folkways.blueprint.raised", confirmed.name()), true);
-                return null;
-            }));
+            confirmed = blueprint.confirm(level);
         } catch (StructureCompat.Failure failed) {
-            refuse(player, failed.component());
+            return CompletableFuture.completedFuture(new Commissioning.Result(false, failed.component(),
+                Optional.of("raise_failed")));
         }
+        return SchematicPlacement.print(level, confirmed, anchor).handle((done, failure) -> {
+            if (failure != null) {
+                Throwable cause = failure instanceof java.util.concurrent.CompletionException wrapped
+                    && wrapped.getCause() != null ? wrapped.getCause() : failure;
+                if (cause instanceof StructureCompat.Failure refused) {
+                    return new Commissioning.Result(false, refused.component(), Optional.of("raise_failed"));
+                }
+                throw new java.util.concurrent.CompletionException(cause);
+            }
+            for (Joint joint : confirmed.joints()) {
+                Joint between = joint.moved(anchor);
+                Joints.joiner().cost(level, between.from(), between.to())
+                    .ifPresent(cost -> Joints.joiner().join(level, between.from(), between.to(), cost));
+            }
+            return new Commissioning.Result(true, Component.translatable("folkways.blueprint.raised",
+                confirmed.name()));
+        });
     }
 
     private static Component whyNot(CompoundTag file, ServerLevel level, String name,

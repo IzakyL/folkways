@@ -7,7 +7,7 @@ import io.github.izakyl.folkways.core.work.api.Ending;
 import io.github.izakyl.folkways.core.work.api.Node;
 import io.github.izakyl.folkways.core.work.api.NodeSpec;
 import io.github.izakyl.folkways.core.work.api.Outcome;
-import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.world.api.Stances;
 import io.github.izakyl.folkways.core.work.api.Urge;
 import io.github.izakyl.folkways.core.work.api.WorkEffort;
 import io.github.izakyl.folkways.core.work.api.WorkGesture;
@@ -18,7 +18,7 @@ import io.github.izakyl.folkways.core.world.api.Footing;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.core.world.api.WorldSpaces;
 import io.github.izakyl.folkways.core.effect.Stats;
-import io.github.izakyl.folkways.core.front.engine.charter.Charters;
+import io.github.izakyl.folkways.core.colony.charter.Charters;
 import io.github.izakyl.folkways.vanilla.person.ResidentEntity;
 import java.util.HashMap;
 import java.util.List;
@@ -236,11 +236,11 @@ final class Leisure {
                         .isPresent()) {
                     return false;
                 }
-                if (!chatting || target.distanceToSqr(who.body()) > 9) {
+                if (!chatting) {
                     // The invited partner waits while the initiator walks to the meeting point.
                     return elapsed == 0 && ++waiting < 200;
                 }
-            } else if (session.pet != null && target.distanceToSqr(who.body()) > 9) { return false; }
+            }
             if (++elapsed >= session.duration) { return false; }
             double recovery = session.recovery;
             if (session.kind.equals("chatting")) {
@@ -251,7 +251,7 @@ final class Leisure {
                 }
                 recovery *= social;
             }
-            living.mood(resident).enjoyed(session.kind, 1, session.duration, recovery, level.getGameTime());
+            living.assignMood(resident).enjoyed(session.kind, 1, session.duration, recovery, level.getGameTime());
             enjoyed++;
             living.changed();
             return true;
@@ -263,9 +263,11 @@ final class Leisure {
             if (finished) { return; }
             finished = true;
             if (enjoyed >= session.duration / 2) {
-                living.mood(resident).repetitions.merge(session.kind, 1, Integer::sum);
+                living.assignMood(resident).repetitions.merge(session.kind, 1, Integer::sum);
             }
-            if (session.restBreak && !resident.equals(session.peer) && enjoyed > 0) { living.mood(resident).nextBreak = level.getGameTime() + Mood.DAY / 2; }
+            if (session.restBreak && !resident.equals(session.peer) && enjoyed > 0) {
+                living.assignMood(resident).nextBreak = level.getGameTime() + Mood.DAY / 2;
+            }
             nextTry.put(resident, level.getGameTime() + 100 + level.random.nextInt(100));
             if (sessions.get(resident) == session) { cancel(resident); }
             living.changed();

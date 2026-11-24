@@ -4,7 +4,7 @@ import io.github.izakyl.folkways.core.colony.api.Colonies;
 import io.github.izakyl.folkways.core.colony.api.Colony;
 import io.github.izakyl.folkways.core.front.api.Books;
 import io.github.izakyl.folkways.core.front.engine.authority.ColonyAuthority;
-import io.github.izakyl.folkways.core.front.engine.charter.Charters;
+import io.github.izakyl.folkways.core.colony.charter.Charters;
 import java.util.Optional;
 import java.util.UUID;
 import net.minecraft.server.level.ServerPlayer;

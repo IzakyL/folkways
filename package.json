@@ -35,7 +35,9 @@
     "promo:storage": "npm run promo:take -- storage.take.ts",
     "promo:storage:film": "python3 tests/promo/film/storage.py",
     "promo:airport": "npm run promo:take -- airport.take.ts",
-    "promo:airport:film": "python3 tests/promo/film/airport.py"
+    "promo:airport:film": "python3 tests/promo/film/airport.py",
+    "promo:assistant": "npm run promo:take -- assistant-rail.take.ts assistant-door.take.ts assistant-smelter.take.ts assistant-walker.take.ts assistant-drill.take.ts --workers=1",
+    "promo:assistant:film": "python3 tests/promo/film/assistant.py"
   },
   "devDependencies": {
     "@izakyl/blockwright-cinema": "0.1.0-alpha.3",

@@ -8,7 +8,7 @@ import io.github.izakyl.folkways.core.plan.api.Produce;
 import io.github.izakyl.folkways.core.plan.api.Refinement;
 import io.github.izakyl.folkways.core.plan.api.Workshop;
 import io.github.izakyl.folkways.core.plan.internal.Message;
-import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.world.api.Stances;
 import io.github.izakyl.folkways.core.work.api.WorkSite;
 import io.github.izakyl.folkways.core.work.internal.PickUp;
 import io.github.izakyl.folkways.core.world.api.Reach;

@@ -9,6 +9,12 @@ from pathlib import Path
 def main():
     errors = []
     catalogs = {}
+    resource_roots = [*Path("mods").glob("*/src/main/resources"),
+                      *Path("tests/gametest").glob("*/*/resources")]
+    vanilla_resources = Path("mods/vanilla/src/main/resources")
+    for path in vanilla_resources.rglob("folkways_core"):
+        if path.is_dir() and path.parent.name in {"assets", "data"}:
+            errors.append(f"{path}: Vanilla resources must use folkways_vanilla")
     for locale in ("en_us", "zh_cn", "zh_hk", "zh_tw"):
         words = {}
         for path in Path("mods").glob(f"*/src/main/resources/assets/*/lang/{locale}.json"):
@@ -56,10 +62,12 @@ def main():
                 errors.append(f"{path}: missing translation {key}")
         for registry in re.findall(r'createRegistryKey\(\s*ResourceLocation.fromNamespaceAndPath\(\s*"(folkways_\w+)"\s*,\s*"([^"]+)"', source):
             namespace, kind = registry
-            for obsolete in Path("mods").glob(f"*/src/*/resources/data/*/folkways/{kind}"):
-                errors.append(f"{obsolete}: registry directory must use {namespace}/{kind}")
-    for path in Path("mods").glob("*/src/*/resources/*/folkways"):
-        errors.append(f"{path}: legacy namespace directory")
+            for root in resource_roots:
+                for obsolete in root.glob(f"data/*/folkways/{kind}"):
+                    errors.append(f"{obsolete}: registry directory must use {namespace}/{kind}")
+    for root in resource_roots:
+        for path in root.glob("*/folkways"):
+            errors.append(f"{path}: legacy namespace directory")
     if errors:
         raise SystemExit("\n".join(sorted(set(errors))))
     print(f"Content namespaces and four translation catalogs: OK ({len(catalogs['en_us'])} keys each)")

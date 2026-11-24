@@ -2,7 +2,7 @@ package io.github.izakyl.folkways.vanilla.build.draft;
 
 import com.google.common.hash.Hasher;
 import com.google.common.hash.Hashing;
-import io.github.izakyl.folkways.core.front.api.notice.Notice;
+import io.github.izakyl.folkways.core.card.api.notice.Notice;
 import java.nio.charset.StandardCharsets;
 import java.util.Optional;
 import java.util.TreeMap;

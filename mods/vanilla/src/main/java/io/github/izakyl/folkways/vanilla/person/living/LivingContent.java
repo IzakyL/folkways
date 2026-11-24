@@ -1,8 +1,20 @@
 package io.github.izakyl.folkways.vanilla.person.living;
 
+import io.github.izakyl.folkways.core.card.api.notice.Meter;
 import io.github.izakyl.folkways.core.colony.api.Colonies;
 import io.github.izakyl.folkways.core.colony.api.Colony;
+import io.github.izakyl.folkways.core.effect.Effects;
 import io.github.izakyl.folkways.core.extension.api.Declaring;
+import io.github.izakyl.folkways.core.front.api.Category;
+import io.github.izakyl.folkways.core.front.api.ColonyPanel;
+import io.github.izakyl.folkways.core.front.api.Delegation;
+import io.github.izakyl.folkways.core.front.api.Enrollment;
+import io.github.izakyl.folkways.core.front.api.Fronts;
+import io.github.izakyl.folkways.core.facility.api.FacilityExtent;
+import io.github.izakyl.folkways.core.front.api.HoldingKind;
+import io.github.izakyl.folkways.core.front.api.Registering;
+import io.github.izakyl.folkways.core.front.api.Schema;
+import io.github.izakyl.folkways.core.front.api.Shape;
 import io.github.izakyl.folkways.core.inventory.api.InventoryProviders;
 import io.github.izakyl.folkways.core.item.api.ItemFilter;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
@@ -14,15 +26,6 @@ import io.github.izakyl.folkways.core.resident.api.Resident;
 import io.github.izakyl.folkways.core.resident.api.Stake;
 import io.github.izakyl.folkways.core.work.api.Amount;
 import io.github.izakyl.folkways.core.work.api.WorkExertion;
-import io.github.izakyl.folkways.core.effect.Effects;
-import io.github.izakyl.folkways.core.front.api.Delegation;
-import io.github.izakyl.folkways.core.front.api.Enrollment;
-import io.github.izakyl.folkways.core.front.api.Facing;
-import io.github.izakyl.folkways.core.front.api.Fronts;
-import io.github.izakyl.folkways.core.front.api.Registering;
-import io.github.izakyl.folkways.core.front.api.Schema;
-import io.github.izakyl.folkways.core.front.api.Shape;
-import io.github.izakyl.folkways.core.front.api.notice.Meter;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
@@ -150,14 +153,32 @@ public final class LivingContent {
 
     // Draws onto the human residents' page rather than one of its own.
     public static void enroll(Registering registering) {
-        registering.facing(ID, colony -> colony.service(ID, LivingPresence.class)
-            .map(value -> (Facing) value));
+        registering.residentLines(ID, colony -> colony.service(ID, LivingPresence.class).map(value -> value));
+        registering.ghostSource(ID, colony -> colony.service(ID, LivingPresence.class).map(value -> value));
+        registering.panel(ID, colony -> colony.service(ID, LivingPresence.class).map(ColonyPanel.class::cast));
+        for (ResourceLocation delegation : List.of(BED, DINING)) {
+            registering.holding(delegation, colony -> colony.service(ID, LivingPresence.class)
+                .map(HoldingKind.class::cast));
+        }
+        registering.holding(DINING, colony -> Optional.of(new HoldingKind() {
+            @Override
+            public FacilityExtent extent(Held held, ServerLevel level) {
+                return held.zone().map(zone -> FacilityExtent.blocks(
+                    DiningSupplies.cabinetCells(level, DiningSupplies.cabinetBlocks(level, zone))))
+                    .orElse(FacilityExtent.EMPTY);
+            }
+        }));
         registering.enrollment(ID, new Enrollment(
-            List.of(new Delegation(BED, new Shape.Block(Housing::isBed, Housing::sleepingCell)),
+            List.of(new Delegation(BED, new Shape.Block(Housing::isBed, Housing::sleepingCell),
+                ResourceLocation.withDefaultNamespace("red_bed")).in(Category.LIVING),
                 new Delegation(DINING, new Shape.Volume(4096), new Schema(List.of(DINING_FOOD, DINING_SERVINGS, DINING_DRINK)),
                     ResourceLocation.withDefaultNamespace("cake"), () -> DiningTables.anyTable() ? Optional.empty()
-                        : Optional.of(Component.translatable("folkways.dining.requires_tables")))),
-            new Schema(List.of(FOOD_MODE, FOOD_SAFETY, FOOD)), List.of()));
+                        : Optional.of(Component.translatable("folkways.dining.requires_tables"))).in(Category.LIVING)),
+            new Schema(List.of(FOOD_MODE, FOOD_SAFETY, FOOD))));
+    }
+
+    public static void reconcileBeds(Colony colony, MinecraftServer server) {
+        colony.service(ID, LivingPresence.class).ifPresent(living -> living.reconcileBeds(server));
     }
 
     // What one more settler would ask of this colony; nothing, when it does not keep its residents living.

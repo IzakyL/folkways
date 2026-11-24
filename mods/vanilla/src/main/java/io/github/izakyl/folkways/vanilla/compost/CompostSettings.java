@@ -1,9 +1,12 @@
 package io.github.izakyl.folkways.vanilla.compost;
 
 import io.github.izakyl.folkways.core.colony.api.Colony;
-import io.github.izakyl.folkways.core.inventory.api.SlotSnapshot;
+import io.github.izakyl.folkways.core.facility.api.control.SlotSnapshot;
 import io.github.izakyl.folkways.core.item.api.Goods;
 import io.github.izakyl.folkways.core.front.api.Fronts;
+import io.github.izakyl.folkways.core.front.api.Schema;
+import io.github.izakyl.folkways.core.front.engine.colony.ColonyFront;
+import io.github.izakyl.folkways.core.front.engine.colony.ColonySettings;
 import io.github.izakyl.folkways.vanilla.farming.CropSeeds;
 import io.github.izakyl.folkways.vanilla.farming.FarmingContent;
 import java.util.Comparator;
@@ -18,25 +21,32 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.item.Item;
 
-/** Per-colony compost preferences, saved with the colony rather than a player's book. */
+/**
+ * Per-colony compost preferences. The switch and the default reserve are the composting scope's settings, shown on
+ * the book's settings page; a reserve set for one kind of seed is kept with the colony beside them.
+ */
 public final class CompostSettings {
     public static final ResourceLocation ID = ResourceLocation.fromNamespaceAndPath("folkways_vanilla", "compost_settings");
     public static final int DEFAULT_RESERVE = 64;
     public static final int MAX_RESERVE = 1_000_000;
-    private static final String ENABLED = "enabled";
-    private static final String DEFAULT = "default_reserve";
+    /** Whether residents compost surplus seeds at all; the composting scope's own setting. */
+    static final Schema.Setting.Flag ENABLED = new Schema.Setting.Flag("enabled",
+        "folkways.settings.compost.enabled", ResourceLocation.withDefaultNamespace("composter"), true);
+    /** The seeds kept back from composting, of every kind without a reserve of its own. */
+    static final Schema.Setting.Count DEFAULT = new Schema.Setting.Count("default_reserve",
+        "folkways.settings.compost.default_reserve", ResourceLocation.withDefaultNamespace("wheat_seeds"), 0,
+        MAX_RESERVE, DEFAULT_RESERVE);
+    static final Schema SCHEMA = new Schema(List.of(ENABLED, DEFAULT));
     private static final String OVERRIDES = "reserves";
 
     private CompostSettings() { }
 
     public static boolean enabled(Colony colony) {
-        CompoundTag tag = colony.kept(ID);
-        return !tag.contains(ENABLED, Tag.TAG_BYTE) || tag.getBoolean(ENABLED);
+        return Fronts.of(colony).settings(CompostContent.ID).flag(ENABLED.key());
     }
 
     public static int defaultReserve(Colony colony) {
-        CompoundTag tag = colony.kept(ID);
-        return tag.contains(DEFAULT, Tag.TAG_INT) ? clamp(tag.getInt(DEFAULT)) : DEFAULT_RESERVE;
+        return clamp(Fronts.of(colony).settings(CompostContent.ID).count(DEFAULT.key()));
     }
 
     public static int reserve(Colony colony, Item item) {
@@ -51,15 +61,11 @@ public final class CompostSettings {
     }
 
     public static void enabled(Colony colony, boolean enabled) {
-        CompoundTag tag = colony.kept(ID).copy();
-        tag.putBoolean(ENABLED, enabled);
-        colony.keep(ID, tag);
+        ColonyFront.of(colony).setSetting(CompostContent.ID, ENABLED.key(), new ColonySettings.Value.Flag(enabled));
     }
 
     public static void defaultReserve(Colony colony, int count) {
-        CompoundTag tag = colony.kept(ID).copy();
-        tag.putInt(DEFAULT, clamp(count));
-        colony.keep(ID, tag);
+        ColonyFront.of(colony).setSetting(CompostContent.ID, DEFAULT.key(), new ColonySettings.Value.Count(clamp(count)));
     }
 
     public static void reserve(Colony colony, Item item, int count) {

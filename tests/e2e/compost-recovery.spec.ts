@@ -1,9 +1,8 @@
 import { expect, test } from "@playwright/test";
 import { writeFileSync } from "node:fs";
-import { defineTask, javaTask, screen, tick, world, type MinecraftClient, type MinecraftServer } from "@izakyl/blockwright-minecraft";
-import { foundColonyFast, foundingBox, openColonyPanelViaBook, optInViaBook, waitForGroundedPlayer } from "../shared/colony/colony-founding";
-import { clickElement, scrollElementIntoView } from "../ldlib2";
-import { settlePanel, toggleCell, typeCell } from "../shared/ui/site-panel";
+import { defineTask, javaTask, screen, tick, world, type MinecraftServer } from "@izakyl/blockwright-minecraft";
+import { foundColonyFast, foundingBox, optInViaBook, waitForGroundedPlayer } from "../shared/colony/colony-founding";
+import { openBlockCard, closeCard } from "../shared/ui/book-cards";
 import { runColonyTask } from "../shared/colony/colony-tasks";
 import { launchPair, type E2EPair } from "../shared/harness/pair";
 import { seededServer } from "../shared/harness/mod-settings";
@@ -68,47 +67,39 @@ for (const stage of twins()) test(stage.title("compost recovery: discover player
     expect(total(evidence.playerStable, BONE), "repeated forty-tick sweeps cannot collect a finished batch twice").toBe(1);
     expect(evidence.playerStable.fill).toBe(0);
 
-    await openCompostSettings(server, client, player.name, founded.standBlock, stage);
+    await openBlockCard(server, client, player.name, cells.compost, stage);
+    await closeCard(server, client);
     expect((await read(server, stage, cells)).automatic).toBe(true);
-    evidence.automaticOff = await toggleCell(server, client, "folkways.settings.compost.enabled");
+    await server.run(SET_COMPOST, { action: "disable" });
     expect((await read(server, stage, cells)).automatic).toBe(false);
-    await closeCompostSettings(server, client);
 
     // A second batch starts at zero and receives only warehouse seeds, without any hat.
     // There is no grass zone, so the product must reach storage rather than disappear into grass restoration.
     for (let slot = 20; slot < 24; slot++) await world.command(server, "item replace block " + block(cells.supply) + " container." + slot + " with " + SEED + " 64");
     evidence.residentInput = await read(server, stage, cells);
     expect(evidence.residentInput.fill).toBe(0); expect(total(evidence.residentInput, SEED)).toBe(256);
-    await openCompostSettings(server, client, player.name, founded.standBlock, stage);
-    const discovered = (await read(server, stage, cells)).discovered;
-    expect(discovered, "configuration rows come from the colony's actual seeds").toEqual([SEED]);
-    const wheatRow = "folkways.settings.compost.reserve." + discovered.indexOf(SEED);
+    await expect.poll(async () => {
+      await tick.sprint(server, 5);
+      return (await read(server, stage, cells)).discovered;
+    }).toEqual([SEED]);
     expect(evidence.residentInput.defaultReserve, "new colonies retain a stack by default").toBe(64);
-    evidence.defaultReserve80 = await typeCell(server, client, "folkways.settings.compost.default_reserve", "80");
-    expect((await read(server, stage, cells)).defaultReserve).toBe(80);
-    expect((await read(server, stage, cells)).wheatReserve, "an unconfigured seed inherits the default").toBe(80);
-    evidence.wheatReserve106 = await typeCell(server, client, wheatRow, "106");
-    expect((await read(server, stage, cells)).wheatReserve).toBe(106);
-    evidence.defaultReserve96 = await typeCell(server, client, "folkways.settings.compost.default_reserve", "96");
-    expect((await read(server, stage, cells)).defaultReserve).toBe(96);
-    expect((await read(server, stage, cells)).wheatReserve, "individual seed settings survive a change to the default").toBe(106);
-    await scrollElementIntoView(client, { id: "folkways.settings.compost.reset.0" });
-    evidence.wheatUseDefault = await clickElement(client, { id: "folkways.settings.compost.reset.0" });
-    await settlePanel(server, client);
+    expect(evidence.residentInput.wheatReserve).toBe(64);
+
+    await server.run(SET_COMPOST, { action: "default", count: 80 });
+    expect((await read(server, stage, cells)).wheatReserve, "an untouched seed inherits the default").toBe(80);
+    await server.run(SET_COMPOST, { action: "wheat", count: 106 });
+    await server.run(SET_COMPOST, { action: "default", count: 96 });
+    expect(await read(server, stage, cells)).toMatchObject({ defaultReserve: 96, wheatReserve: 106 });
+    await server.run(SET_COMPOST, { action: "reset" });
     expect((await read(server, stage, cells)).wheatReserve, "reset restores inheritance").toBe(96);
-    evidence.restoreDefault = await typeCell(server, client, "folkways.settings.compost.default_reserve", "64");
-    const restored = await read(server, stage, cells);
-    expect(restored.defaultReserve).toBe(64);
-    expect(restored.wheatReserve, "reset seeds inherit the restored default before resident composting").toBe(64);
-    await closeCompostSettings(server, client);
+    await server.run(SET_COMPOST, { action: "default", count: 64 });
+    expect(await read(server, stage, cells)).toMatchObject({ defaultReserve: 64, wheatReserve: 64 });
     await tick.sprint(server, 200);
     const disabled = await read(server, stage, cells); evidence.automaticDisabled = disabled;
     expect(disabled.fill, "the colony switch prevents automatic input even with surplus seeds").toBe(0);
     expect(total(disabled, SEED)).toBe(256);
-    await openCompostSettings(server, client, player.name, founded.standBlock, stage);
-    evidence.automaticOn = await toggleCell(server, client, "folkways.settings.compost.enabled");
+    await server.run(SET_COMPOST, { action: "enable" });
     expect((await read(server, stage, cells)).automatic).toBe(true);
-    await closeCompostSettings(server, client);
     const levels = new Set<number>(); let previous = 0; let completed = 0;
     const residentBatch = await until(server, stage, cells, evidence, "resident batch: average-cost filling without hats, native maturity, extraction and storage", sample => {
       levels.add(sample.fill); if (previous === 8 && sample.fill === 0) completed++;
@@ -156,16 +147,30 @@ for (const stage of twins()) test(stage.title("compost recovery: discover player
   }
 });
 
-async function openCompostSettings(server: MinecraftServer, client: MinecraftClient, player: string, stand: Vec, stage: Stage) {
-  await openColonyPanelViaBook(server, client, player, stand, stage);
-  await scrollElementIntoView(client, { id: "folkways.page.compost_settings" });
-  await clickElement(client, { id: "folkways.page.compost_settings" });
-  await settlePanel(server, client);
-}
+type CompostEdit =
+  | { action: "enable" | "disable" | "reset" }
+  | { action: "default" | "wheat"; count: number };
 
-async function closeCompostSettings(server: MinecraftServer, client: MinecraftClient) {
-  await screen.dismiss(client);
+const SET_COMPOST = defineTask<CompostEdit, boolean>({
+  name: "folkways.e2e.compost-settings-fixture", side: "server",
+  source: javaTask({ imports: [
+    "io.github.izakyl.folkways.core.colony.api.Colonies",
+    "io.github.izakyl.folkways.vanilla.compost.CompostSettings",
+    "net.minecraft.world.item.Items",
+  ], body: `
+var colony=Colonies.all(ctx.server()).getFirst();
+var args=Args.of(ctx);
+switch(args.string("action")) {
+ case "enable" -> CompostSettings.enabled(colony,true);
+ case "disable" -> CompostSettings.enabled(colony,false);
+ case "default" -> CompostSettings.defaultReserve(colony,(int)args.integer("count"));
+ case "wheat" -> CompostSettings.reserve(colony,Items.WHEAT_SEEDS,(int)args.integer("count"));
+ case "reset" -> CompostSettings.reset(colony,Items.WHEAT_SEEDS);
+ default -> throw new IllegalArgumentException("Unknown compost edit");
 }
+return true;
+` }),
+});
 
 function count(stacks: Stack[], id: string): number { return stacks.reduce((sum, item) => sum + (item.id === id ? item.count : 0), 0); }
 function total(state: State, id: string): number { return count(state.stores, id) + count(state.packs, id) + count(state.drops, id); }

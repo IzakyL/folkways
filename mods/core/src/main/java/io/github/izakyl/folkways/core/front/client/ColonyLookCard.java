@@ -1,9 +1,9 @@
 package io.github.izakyl.folkways.core.front.client;
 
 import io.github.izakyl.folkways.core.resident.api.Doing;
-import io.github.izakyl.folkways.core.front.api.notice.Line;
-import io.github.izakyl.folkways.core.front.api.notice.Meter;
-import io.github.izakyl.folkways.core.front.api.notice.Sentence;
+import io.github.izakyl.folkways.core.card.api.notice.Line;
+import io.github.izakyl.folkways.core.card.api.notice.Meter;
+import io.github.izakyl.folkways.core.card.api.notice.Sentence;
 import io.github.izakyl.folkways.core.front.api.ui.Signs.Sign;
 import io.github.izakyl.folkways.core.front.api.ui.Signs;
 import java.util.ArrayList;
@@ -80,7 +80,7 @@ public final class ColonyLookCard {
                 continue;
             }
             stacks.add(new ItemStack(item));
-            counts.add(Signs.compact(stack.count()));
+            counts.add(stack.count() > 1 ? Signs.compact(stack.count()) : "");
         }
         return stacks.isEmpty() ? Optional.empty() : Optional.of(new Row.Goods(stacks, counts));
     }
@@ -101,7 +101,7 @@ public final class ColonyLookCard {
                 continue;
             }
             stacks.add(new ItemStack(item));
-            counts.add(Signs.compact(stack.count()));
+            counts.add(stack.count() > 1 ? Signs.compact(stack.count()) : "");
         }
         if (!stacks.isEmpty()) {
             rows.add(new Row.Grid(stacks, counts));

@@ -50,7 +50,7 @@ final class Ramble {
         if (aim != from) {
             return toward(now, limit);
         }
-        Optional<Reading> read =
+        Optional<TerrainReading> read =
             Look.at(level, realm, roamer, from, Set.of(), BlockPos.of(from), true, limit);
         if (read.isEmpty()) {
             return 0;
@@ -63,7 +63,7 @@ final class Ramble {
     // as it got), and the ways are laid along the trail it took there.
     private int toward(long now, int limit) {
         int start = net.reaching(from);
-        Optional<Reading> read = Look.at(level, realm, roamer, from, Set.of(BlockPos.of(aim)),
+        Optional<TerrainReading> read = Look.at(level, realm, roamer, from, Set.of(BlockPos.of(aim)),
             cell -> {
                 int there = net.reaching(cell);
                 return there >= 0 && (start < 0 || net.apart(start, there));
@@ -75,7 +75,7 @@ final class Ramble {
         return harvest(read.get(), read.get().swept().nodes(), now);
     }
 
-    private int harvest(Reading read, java.util.List<Node> swept, long now) {
+    private int harvest(TerrainReading read, java.util.List<Node> swept, long now) {
         Map<Node, Integer> anchor = new HashMap<>();
         Map<Node, Double> since = new HashMap<>();
         LongArrayList made = new LongArrayList();

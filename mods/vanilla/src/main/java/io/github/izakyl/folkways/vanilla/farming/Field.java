@@ -1,7 +1,8 @@
 package io.github.izakyl.folkways.vanilla.farming;
 
+import io.github.izakyl.folkways.core.facility.api.Facilities;
 import io.github.izakyl.folkways.core.work.api.Node;
-import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.world.api.Stances;
 import io.github.izakyl.folkways.core.world.api.Footing;
 import io.github.izakyl.folkways.core.world.api.Loaded;
 import io.github.izakyl.folkways.core.world.api.Reach;
@@ -61,7 +62,7 @@ final class Field {
     }
 
     // What one zone's scan found wanting: stands ripe to cut, ground to till, and stands to sow or frame to lay first.
-    record Tally(int ripe, int till, int sow) {
+    record Tally(int ripe, int till, int sow, int protectedCells) {
     }
 
     List<FieldChores> chores() {
@@ -81,8 +82,14 @@ final class Field {
         allowed.addAll(ground);
         Map<BlockPos, Boolean> footed = new HashMap<>();
         Plot plot = Plot.of(zone.cells());
+        int protectedCells = 0;
         for (BlockPos cell : ground) {
             if (!Loaded.around(level, cell, crop.reach())) {
+                continue;
+            }
+            if (Facilities.protectedAt(level, cell) || Facilities.protectedAt(level, cell.above())) {
+                protectedCells++;
+                allowed.remove(cell);
                 continue;
             }
             BlockState state = level.getBlockState(cell);
@@ -108,7 +115,8 @@ final class Field {
             }
         }
         stakeFrame(level, plot);
-        return new Tally(harvest.size() - ripeBefore, till.size() - tillBefore, plant.size() + frame.size() - sowBefore);
+        return new Tally(harvest.size() - ripeBefore, till.size() - tillBefore, plant.size() + frame.size() - sowBefore,
+            protectedCells);
     }
 
     void settle(long stamp) {

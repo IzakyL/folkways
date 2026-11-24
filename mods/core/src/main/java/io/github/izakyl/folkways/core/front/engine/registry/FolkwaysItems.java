@@ -24,7 +24,7 @@ public final class FolkwaysItems {
         new Item.Properties().stacksTo(1)
     );
 
-    // Identity token for virtual network recipes; deliberately absent from creative tabs.
+    // Saved AE2 jobs use this identity token. It is deliberately absent from creative tabs.
     public static final DeferredItem<Item> NETWORK_PATTERN = ITEMS.registerItem(
         "network_pattern", Item::new, new Item.Properties().stacksTo(1));
 

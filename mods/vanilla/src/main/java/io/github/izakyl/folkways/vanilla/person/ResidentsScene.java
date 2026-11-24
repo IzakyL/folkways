@@ -44,7 +44,7 @@ public final class ResidentsScene {
     }
 
     public static void program(SceneBuilder scene, SceneBuildingUtil util) {
-        scene.title("residents", "Residents: who comes, what they take on, how they look");
+        scene.title("residents", "Residents: who comes, what they do, how they look");
         PonderScenery.openWorld(scene, util, PLATE);
         PonderScenery.grassGround(scene, util, PLATE);
 
@@ -85,7 +85,7 @@ public final class ResidentsScene {
         scene.overlay().showOutline(PonderPalette.OUTPUT, "chest", util.select().position(chest), 90);
         scene.overlay()
             .showText(80)
-            .text("A newcomer needs room: a free bed joined with the book, and stored food for every resident plus one more mouth.")
+            .text("In Survival, a newcomer needs a registered free bed and stored food for everyone plus one.")
             .pointAt(util.vector().topOf(bedFoot))
             .placeNearTarget()
             .attachKeyFrame();
@@ -97,7 +97,7 @@ public final class ResidentsScene {
 
         scene.overlay()
             .showText(100)
-            .text("Someone must also be waiting. Newcomers gather over time, more slowly as the colony grows, and only a few wait at once. Let one in on the Human residents page brings the next, unless the server has switched arrivals off.")
+            .text("Someone must also be waiting. Newcomers gather over time, more slowly as the colony grows. Click Let one in on Workforce to admit the next.")
             .pointAt(spawnA.add(0.0, 1.5, 0.0))
             .placeNearTarget()
             .attachKeyFrame();
@@ -111,7 +111,7 @@ public final class ResidentsScene {
         scene.overlay().showOutline(PonderPalette.OUTPUT, "pen", pen, 150);
         scene.overlay()
             .showText(110)
-            .text("On the Workforce tab each resident has a cell per trade: click it to allow or forbid that trade, scroll it to rank it 1 to 4. You rank trades, never tasks, and a forbidden trade is never handed to him.")
+            .text("On Workforce, each resident has a cell per trade. Click to allow or forbid it; scroll to set its priority, 1 to 4. You rank trades, not tasks.")
             .pointAt(util.vector().topOf(4, 0, 4).add(0.0, 1.5, 0.0))
             .attachKeyFrame();
         scene.idle(20);
@@ -127,7 +127,7 @@ public final class ResidentsScene {
 
         scene.overlay()
             .showText(100)
-            .text("Working a trade earns experience. Each level draws a trade perk; levels 3, 6 and 10 also draw a shared perk, such as a brisker walk or a bigger pack. Open the resident's window to read his trades, levels and perks.")
+            .text("Working earns experience. Each level draws a perk for that trade; levels 3, 6 and 10 also draw a shared perk. The resident's window lists trades, levels and perks.")
             .pointAt(util.vector().topOf(harvested))
             .placeNearTarget()
             .attachKeyFrame();
@@ -135,7 +135,7 @@ public final class ResidentsScene {
 
         scene.overlay()
             .showText(100)
-            .text("A newcomer's name and look are drawn from this colony's name pool and look pool. Either pool can be edited entry by entry, or replaced whole by a set a data pack offers. After that, a resident's own window changes his name, surname and look one by one.")
+            .text("Newcomers get a name and look from the colony's Name pool and Look pool, which you edit from Workforce. A resident's own window can change both.")
             .pointAt(residentB.at().add(0.0, 1.8, 0.0))
             .placeNearTarget()
             .attachKeyFrame();
@@ -155,7 +155,7 @@ public final class ResidentsScene {
         residentA.walkTo(scene, util.vector().topOf(3, 0, 4));
         scene.overlay()
             .showText(90)
-            .text("Struck by a mob or a player, or caught by fire, a resident drops what he is at and runs away from it.")
+            .text("Hit by a mob or player, or set on fire, a resident drops what they are doing and runs.")
             .pointAt(residentA.at().add(0.0, 1.5, 0.0))
             .placeNearTarget()
             .attachKeyFrame();
@@ -164,7 +164,7 @@ public final class ResidentsScene {
         residentA.turnTo(scene, FACING_SOUTH);
         scene.overlay()
             .showText(90)
-            .text("If a resident dies, everyone who keeps the colony is told.")
+            .text("When a resident dies, every colony member is told.")
             .pointAt(residentA.at().add(0.0, 1.5, 0.0))
             .placeNearTarget()
             .attachKeyFrame();

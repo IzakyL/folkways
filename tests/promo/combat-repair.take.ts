@@ -77,8 +77,8 @@ test("combat: on-camera TNT breach and physical-store baseline repair", async ({
     }).toEqual({ creative: true, bookColony: scene.colony, aimedZone: fixture.zone });
     run.note("baselinePanelInput", await scene.client.run(DAMAGE_PANEL_INPUT));
     await input.click(scene.client, pointer, { button: "right" });
-    await waitForElement(scene.client, { id: "folkways.zoneconfig.action.record" });
-    await clickElement(scene.client, { id: "folkways.zoneconfig.action.record" });
+    await waitForElement(scene.client, { id: "folkways.card.button.record" });
+    await clickElement(scene.client, { id: "folkways.card.button.record" });
     await expect.poll(async () => {
       await tick.sprint(scene.server, 3);
       return (await scene.server.run(DAMAGE_PLANS, args)).baselines;

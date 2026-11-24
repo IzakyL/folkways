@@ -17,6 +17,7 @@ import io.github.izakyl.folkways.core.front.api.CoreSettings;
 import io.github.izakyl.folkways.core.front.api.FrontView;
 import io.github.izakyl.folkways.core.front.api.Fronts;
 import io.github.izakyl.folkways.core.front.api.Schema;
+import io.github.izakyl.folkways.core.front.engine.net.ColonyOverviews;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -42,9 +43,12 @@ public final class ColonyFront implements FrontView {
 
     public static final ResourceLocation OWNER =
         Fronts.OWNER;
+    /** Where the parameters of a colony's holdings and of the colony as a whole are kept. */
+    public static final ResourceLocation KEEP = ResourceLocation.fromNamespaceAndPath("folkways_core", "facilities");
 
-    private static final String TAG_DRAWN = "drawn";
-    private static final String TAG_SETTINGS = "settings";
+    private static final String TAG_HOLDINGS = "holdings";
+    private static final String TAG_COLONY = "colony";
+    private long keptRevision;
 
     private static final Map<UUID, ColonyFront> HELD = new ConcurrentHashMap<>();
 
@@ -82,7 +86,7 @@ public final class ColonyFront implements FrontView {
 
     public static ColonyFront of(Colony colony) {
         ColonyFront held = HELD.get(colony.id());
-        if (held != null && held.colony == colony) {
+        if (held != null && held.colony == colony && held.keptRevision == colony.keptRevision(KEEP)) {
             return held;
         }
         ColonyFront afresh = read(colony);
@@ -90,8 +94,14 @@ public final class ColonyFront implements FrontView {
         return afresh;
     }
 
+    public static void refresh(Colony colony) {
+        ColonyFront front = read(colony);
+        front.write();
+    }
+
     public static void forget(UUID colony) {
         HELD.remove(colony);
+        ColonyOverviews.forget(colony);
     }
 
     public static void forgetAll() {
@@ -218,6 +228,11 @@ public final class ColonyFront implements FrontView {
         return true;
     }
 
+    /** The settings chosen for any holding the book drew or pointed at: a zone, a path, a block or a point. */
+    public Optional<ColonySettings> drawn(UUID id) {
+        return colony.claim(id).map(this::settingsOf);
+    }
+
     private ColonySettings settingsOf(Claim holding) {
         ColonySettings chosen = drawn.get(holding.id());
         return chosen != null ? chosen : ColonySettings.byDefault(ColonySchemas.ofDelegation(holding.owner()));
@@ -266,26 +281,34 @@ public final class ColonyFront implements FrontView {
     }
 
     private void write() {
+        toolRules = null;
         drawn.keySet().removeIf(id -> colony.claim(id).isEmpty());
-        colony.keep(OWNER, save());
+        colony.keep(KEEP, save());
+        keptRevision = colony.keptRevision(KEEP);
+        ColonyOverviews.forget(colony.id());
+        HELD.put(colony.id(), this);
     }
 
     private CompoundTag save() {
         Writer writer = Writer.of();
-        Writer byHolding = writer.child(TAG_DRAWN);
-        drawn.forEach((id, held) -> byHolding.blob(id.toString(), held.save()));
-        Writer scopes = writer.child(TAG_SETTINGS);
-        settings.forEach((scope, held) -> scopes.blob(scope.toString(), held.save()));
+        Writer byHolding = writer.child(TAG_HOLDINGS);
+        drawn.forEach((id, held) -> byHolding.blob(id.toString(),
+            io.github.izakyl.folkways.core.facility.api.control.Value.saveAll(held.parameters())));
+        Writer scopes = writer.child(TAG_COLONY);
+        settings.forEach((scope, held) -> scopes.blob(scope.toString(),
+            io.github.izakyl.folkways.core.facility.api.control.Value.saveAll(held.parameters())));
         return writer.tag();
     }
 
     private static ColonyFront read(Colony colony) {
         ColonyFront front = new ColonyFront(colony);
-        Reader reader = Reader.of(colony.kept(OWNER));
+        front.keptRevision = colony.keptRevision(KEEP);
+        Reader reader = Reader.of(colony.kept(KEEP));
         if (reader.keys().isEmpty()) {
             return front;
         }
-        Reader byHolding = reader.child(TAG_DRAWN).orElseThrow();
+        CompoundTag kept = colony.kept(KEEP);
+        Reader byHolding = reader.child(TAG_HOLDINGS).orElseThrow();
         for (String key : byHolding.keys()) {
             UUID id = UUID.fromString(key);
             Optional<Claim> holding = colony.claim(id);
@@ -294,16 +317,26 @@ public final class ColonyFront implements FrontView {
                 continue;
             }
             ResourceLocation delegation = holding.get().owner();
-            ColonySettings loaded = ColonySettings.load(byHolding.child(key).orElseThrow());
+            ColonySettings loaded = ColonySettings.ofParameters(io.github.izakyl.folkways.core.facility.api.control.Value
+                .loadAll(parameters(kept.getCompound(TAG_HOLDINGS), key)));
             front.drawn.put(id, ColonySchemas.conformDelegation(delegation, loaded));
         }
         Map<ResourceLocation, ColonySettings> loaded = new LinkedHashMap<>();
-        Reader scopes = reader.child(TAG_SETTINGS).orElseThrow();
+        Reader scopes = reader.child(TAG_COLONY).orElseThrow();
         for (String key : scopes.keys()) {
             ResourceLocation scope = ResourceLocation.parse(key);
-            loaded.put(scope, ColonySettings.load(scopes.child(key).orElseThrow()));
+            loaded.put(scope, ColonySettings.ofParameters(io.github.izakyl.folkways.core.facility.api.control.Value
+                .loadAll(parameters(kept.getCompound(TAG_COLONY), key))));
         }
         loaded.forEach((scope, held) -> front.settings.put(scope, ColonySchemas.conform(scope, held)));
         return front;
+    }
+
+    // A malformed entry rejects the whole keep rather than quietly becoming defaults.
+    private static CompoundTag parameters(CompoundTag scopes, String key) {
+        if (!(scopes.get(key) instanceof CompoundTag held)) {
+            throw new IllegalArgumentException("malformed facility parameters for " + key);
+        }
+        return held;
     }
 }

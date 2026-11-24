@@ -1,0 +1,9 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "io.github.izakyl.folkways.vanilla.carts.mixin",
+  "plugin": "io.github.izakyl.folkways.core.shell.carts.CartMixinPlugin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": ["DrawnCartMixin"],
+  "injectors": { "defaultRequire": 1 }
+}

@@ -17,6 +17,7 @@ import { BUDGET } from "../shared/harness/budgets";
 import { frames, screenName, safeScreen } from "../shared/harness/bw-helpers";
 import { newRunId } from "../shared/harness/run-id";
 import { MODE_PROBE } from "../shared/ui/mode-layers";
+import { BOOK_TOOLBAR } from "../shared/colony/colony-founding";
 import { twins } from "../shared/harness/stage";
 
 const BOOK_ITEM = "folkways_core:colony_book";
@@ -25,6 +26,7 @@ const KEY_SPACE = 32;
 const KEY_LEFT_SHIFT = 340;
 const KEY_TAB = 258;
 const KEY_BACKSPACE = 259;
+const PATH_KIND = "Patrol route";
 const MARKED_SIZE = /^(\d+)x(\d+)x(\d+) marked/;
 
 for (const stage of twins()) test(stage.title("view from above: the book's box gesture worked with the mouse from a camera off the player"), async ({}, testInfo) => {
@@ -109,17 +111,21 @@ for (const stage of twins()) test(stage.title("view from above: the book's box g
     await frames(client, 4);
     const panel = await safeScreen(client);
     evidence.panel = screenName(panel);
-    expect(evidence.panel, "a right click opens the book's panel over the view").not.toContain("OverheadScreen");
+    expect(evidence.panel, "a right click hands the box to the farm picked, and opens its card over the view")
+      .not.toContain("OverheadScreen");
     expect(evidence.panel).not.toBe("");
 
     await safeAction(() => screen.dismiss(client));
     await tick.sprint(server, 5);
     await frames(client, 4);
     evidence.back = screenName(await safeScreen(client));
-    expect(evidence.back, "closing the panel gives the view from above back").toContain("OverheadScreen");
+    expect(evidence.back, "closing the card gives the view from above back").toContain("OverheadScreen");
 
-    // The buttons along the top do what the keys do: change the gesture, and deal with what is being drawn.
-    await screen.clickWidget(client, { label: "Draw a line" });
+    // The tools along the top pick what the book draws, a group and then a tool in it, and the buttons along the
+    // bottom deal with what is being drawn.
+    await screen.clickWidget(client, { label: "Defense" });
+    await frames(client, 4);
+    await screen.clickWidget(client, { label: PATH_KIND });
     await tick.sprint(server, 10);
     await frames(client, 4);
     await input.click(client, centre);
@@ -128,7 +134,7 @@ for (const stage of twins()) test(stage.title("view from above: the book's box g
     await tick.sprint(server, 3);
     await frames(client, 4);
     evidence.second_point = await readActionBar(client);
-    expect(evidence.second_point.text, "with the line gesture picked from the bar, two clicks set two points").toMatch(/^Point 2 set down/);
+    expect(evidence.second_point.text, "with a route picked from the toolbar, two clicks set two points").toMatch(/^Point 2 set down/);
     evidence.drawing = (await screen.widgets(client)).map((widget: any) => widget.label);
     expect(evidence.drawing, "a line of two points can be set up, taken back a point, or discarded")
       .toEqual(expect.arrayContaining(["Set it up", "Take back a point", "Discard", "Zones", "Paths", "Works", "Residents"]));
@@ -182,14 +188,26 @@ for (const stage of twins()) test(stage.title("view from above: the book's box g
     evidence.backspaced = { bar: await readActionBar(client), widgets: (await screen.widgets(client)).map((widget: any) => widget.label) };
     expect(evidence.backspaced.bar.text, "Backspace lets go of the line").toMatch(/^Let go of it/);
     expect(evidence.backspaced.widgets).not.toContain("Discard");
-    await drainActionBar(client);
+    // Tab opens the next group of the book's tools and stays in the build mode; the mode switch is its own control.
+    evidence.tabbed = [];
+    for (let step = 0; step < 3; step++) {
+      await tap(KEY_TAB);
+      await frames(client, 3);
+      evidence.tabbed.push({ mode: (await client.run(MODE_PROBE)).mode, open: (await client.run(BOOK_TOOLBAR)).picked });
+    }
+    expect(evidence.tabbed.map((step: any) => step.mode), "Tab never leaves the build mode")
+      .toEqual(["folkways_core:build", "folkways_core:build", "folkways_core:build"]);
+    expect(new Set(evidence.tabbed.map((step: any) => step.open)).size, "each Tab opens another group").toBe(3);
+    await screen.clickWidget(client, { label: "Control" });
+    await frames(client, 4);
+    expect((await client.run(MODE_PROBE)).mode, "the mode switch turns the view to RTS").toBe("folkways_core:rts");
+    evidence.rts = (await screen.widgets(client)).map((widget: any) => widget.label);
+    expect(evidence.rts, "RTS lays out neither the layers nor the book's tools").not.toContain("Zones");
+    expect(evidence.rts).not.toContain("Take in");
+    expect(evidence.rts).toEqual(expect.arrayContaining(["Build", "Control"]));
     await tap(KEY_TAB);
-    await tick.sprint(server, 5);
-    evidence.tabbed = await readActionBar(client);
-    const tabMode = await client.run(MODE_PROBE);
-    expect(tabMode.mode, "Tab leaves the last Build gesture for the next registered mode, Core's RTS")
-      .toBe("folkways_core:rts");
-    expect((await screen.widgets(client)).map((widget: any) => widget.label)).not.toContain("Draw a line");
+    await frames(client, 3);
+    expect((await client.run(MODE_PROBE)).mode, "Tab from RTS goes back to building").toBe("folkways_core:build");
 
     await input.key(client, { keyCode: KEY_V, action: "press" });
     await input.key(client, { keyCode: KEY_V, action: "release" });

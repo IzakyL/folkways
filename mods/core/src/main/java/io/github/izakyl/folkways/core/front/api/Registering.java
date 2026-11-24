@@ -11,8 +11,18 @@ public final class Registering extends Event implements IModBusEvent {
 
     public interface Registry {
         void enrollment(ResourceLocation owner, Enrollment enrollment);
+
         void admission(ResourceLocation owner, ResourceLocation residentKind, Admission how);
-        void facing(ResourceLocation owner, Function<Colony, Optional<Facing>> provider);
+
+        void residentLines(ResourceLocation owner, Function<Colony, Optional<ResidentLines>> provider);
+
+        void ghostSource(ResourceLocation owner, Function<Colony, Optional<GhostSource>> provider);
+
+        void memberPointing(ResourceLocation owner, Function<Colony, Optional<MemberPointing>> provider);
+
+        void holding(ResourceLocation delegation, Function<Colony, Optional<HoldingKind>> kind);
+
+        void panel(ResourceLocation owner, Function<Colony, Optional<ColonyPanel>> panel);
     }
 
     private final Registry registry;
@@ -43,8 +53,30 @@ public final class Registering extends Event implements IModBusEvent {
         registry.admission(owner, residentKind, how);
     }
 
-    public void facing(ResourceLocation owner, Function<Colony, Optional<Facing>> provider) {
+    public void residentLines(ResourceLocation owner, Function<Colony, Optional<ResidentLines>> provider) {
         writing(owner);
-        registry.facing(owner, provider);
+        registry.residentLines(owner, provider);
+    }
+
+    public void ghostSource(ResourceLocation owner, Function<Colony, Optional<GhostSource>> provider) {
+        writing(owner);
+        registry.ghostSource(owner, provider);
+    }
+
+    public void memberPointing(ResourceLocation owner, Function<Colony, Optional<MemberPointing>> provider) {
+        writing(owner);
+        registry.memberPointing(owner, provider);
+    }
+
+    // What a module makes of each thing the colony holds under this delegation; several modules may add to one.
+    public void holding(ResourceLocation delegation, Function<Colony, Optional<HoldingKind>> kind) {
+        writing(delegation);
+        registry.holding(delegation, kind);
+    }
+
+    // What the module shows on the book's own pages.
+    public void panel(ResourceLocation owner, Function<Colony, Optional<ColonyPanel>> panel) {
+        writing(owner);
+        registry.panel(owner, panel);
     }
 }

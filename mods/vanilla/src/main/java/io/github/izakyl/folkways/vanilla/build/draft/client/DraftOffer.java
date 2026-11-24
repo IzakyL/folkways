@@ -1,6 +1,7 @@
 package io.github.izakyl.folkways.vanilla.build.draft.client;
 
 import io.github.izakyl.folkways.core.front.api.Books;
+import io.github.izakyl.folkways.core.front.api.Category;
 import io.github.izakyl.folkways.core.front.api.ui.BoxOffers;
 import io.github.izakyl.folkways.core.front.api.ui.PathOffers;
 import io.github.izakyl.folkways.vanilla.build.BlueprintUploads;
@@ -41,10 +42,12 @@ public final class DraftOffer {
     public static void register(FMLClientSetupEvent event) {
         event.enqueueWork(() -> {
             BoxOffers.register(new BoxOffers.Offer(ID, DraftPanel.TOKEN, ResourceLocation.withDefaultNamespace("paper"),
-                (min, max, taking) -> DraftPanel.body(new Hint.Zone(min, max), DraftOffer::send, taking)));
+                (min, max, taking) -> DraftPanel.body(new Hint.Zone(min, max), DraftOffer::send, taking))
+                .in(Category.CONSTRUCTION));
             PathOffers.register(new PathOffers.Offer(ALONG, DraftPanel.TOKEN,
                 ResourceLocation.withDefaultNamespace("paper"),
-                (points, taking) -> DraftPanel.body(new Hint.Path(points), DraftOffer::send, taking)));
+                (points, taking) -> DraftPanel.body(new Hint.Path(points), DraftOffer::send, taking))
+                .in(Category.CONSTRUCTION));
         });
     }
 

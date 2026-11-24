@@ -22,12 +22,12 @@ import io.github.izakyl.folkways.core.work.api.PreemptReason;
 import io.github.izakyl.folkways.core.work.api.Recourse;
 import io.github.izakyl.folkways.core.work.api.Settlement;
 import io.github.izakyl.folkways.core.work.api.SoftPreempt;
-import io.github.izakyl.folkways.core.work.api.Stances;
 import io.github.izakyl.folkways.core.work.api.WorkAction;
 import io.github.izakyl.folkways.core.work.api.WorkBatch;
 import io.github.izakyl.folkways.core.work.api.WorkHolding;
 import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.core.work.support.Staged;
+import io.github.izakyl.folkways.core.world.api.Stances;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -36,7 +36,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
 
 /** Binds the original workshop action without changing its craft licence, tools or holding implementation. */
-final class ServiceNode implements Node, Staged {
+public final class ServiceNode implements Node, Staged {
 
     private final Node delegate;
     private final UUID worker;
@@ -52,11 +52,11 @@ final class ServiceNode implements Node, Staged {
         colonySupplied = delegate.recipeInputs().isEmpty() && !delegate.spec().needs().isEmpty();
     }
 
-    static Node bind(Node node, UUID worker) {
+    public static Node bind(Node node, UUID worker) {
         return bind(node, worker, false, () -> { });
     }
 
-    static Node bind(Node node, UUID worker, boolean committed, Runnable checkpoint) {
+    public static Node bind(Node node, UUID worker, boolean committed, Runnable checkpoint) {
         return new ServiceNode(node, worker, committed, checkpoint);
     }
 
@@ -120,6 +120,11 @@ final class ServiceNode implements Node, Staged {
     @Override
     public boolean arrived(ServerLevel level, Body body, Stances positions, boolean atStance) {
         return delegate.arrived(level, body, positions, atStance);
+    }
+
+    @Override
+    public boolean admits(ServerLevel level, net.minecraft.world.entity.Mob body) {
+        return delegate.admits(level, body);
     }
 
     @Override

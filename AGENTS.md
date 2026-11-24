@@ -5,8 +5,9 @@ this file does not repeat their content.
 
 ## Layout
 
-`mods/<dir>` holds one mod each (Core, Vanilla and extensions; Gradle subprojects). `tests/` holds the
-Playwright client suites driven by Blockwright. Locale catalogs live in `mods/*/src/main/resources/assets/*/lang/`.
+`mods/<dir>` holds one mod each (Core, Vanilla and extensions). Java tests and their resources live in
+`tests/gametest/<mod>/<set>/`. Playwright client suites also live under `tests/`. Locale catalogs live in
+`mods/*/src/main/resources/assets/*/lang/`.
 
 ## Environment
 
@@ -14,8 +15,11 @@ Worktrees share the heavy dependencies of the main checkout. The reference setup
 [`.codex/environments/environment.toml`](.codex/environments/environment.toml); follow it by hand in other tools.
 
 1. In the main checkout, run `npm ci` and `npm run setup` once, so `node_modules/` and `.blockwright-store/` exist.
-2. In each new worktree, symlink `node_modules` and `.blockwright-store` to the main checkout's directories,
-   keeping any that already exist, then run `npm run setup` to write that worktree's `.blockwright/mods.json`.
+   Keep secrets such as live provider keys in the main checkout's `.env` (see `.env.example`).
+2. In each new worktree, symlink `node_modules`, `.blockwright-store` and, when it exists, `.env` to the main
+   checkout's, keeping any that already exist, then run `npm run setup` to write that worktree's
+   `.blockwright/mods.json`. Removing a worktree deletes its git-ignored `tests/out/`, recorded takes included;
+   move what you want to keep out first.
 3. Never copy `.blockwright/mods.json` between checkouts: it holds absolute paths into the store of the
    checkout that wrote it and breaks once that checkout is removed. Rerun `npm run setup` instead.
 4. If the worktree's `package-lock.json` differs from the main checkout's, replace the `node_modules` link with
@@ -32,6 +36,8 @@ Worktrees share the heavy dependencies of the main checkout. The reference setup
 - [CONTRIBUTING.md](CONTRIBUTING.md): setup, checks, pull requests and code conventions.
   - Running checks or GameTests, and every `-P` test switch: [Validation](CONTRIBUTING.md#validation).
   - Naming, test placement, translations and patterns: [Conventions](CONTRIBUTING.md#conventions).
+- [DATAPACKS.md](DATAPACKS.md): the `folkways/` library folder, data-pack registries, tags and config files.
+  Consult when changing data-pack formats, shipped tags or config file names.
 - [SAVE_COMPATIBILITY.md](SAVE_COMPATIBILITY.md): versioning, the upgrade promise and the migration engine.
   Consult before changing anything persisted (NBT, keeps bags, attachments, block entities, components).
 - [THIRD_PARTY.md](THIRD_PARTY.md): license inventory for bundled code and assets.

@@ -1,5 +1,10 @@
 package io.github.izakyl.folkways.core.front.engine.colony;
 
+import net.minecraft.network.chat.Component;
+import java.util.function.Predicate;
+import java.util.Map;
+import java.util.LinkedHashMap;
+import io.github.izakyl.folkways.core.facility.api.Facilities;
 import io.github.izakyl.folkways.core.colony.api.Colony;
 import io.github.izakyl.folkways.core.front.api.Delegation;
 import io.github.izakyl.folkways.core.front.api.Shape;
@@ -13,6 +18,33 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 
 public final class ZoneDrafts {
+
+    private static final Map<ResourceLocation, Predicate<ColonySettings>> DEMOLITIONS = new LinkedHashMap<>();
+
+    public static void demolition(ResourceLocation delegation, Predicate<ColonySettings> settings) {
+        DEMOLITIONS.put(delegation, settings);
+    }
+
+    public static List<Facilities.Source> affected(ServerLevel level, ResourceLocation delegation, BlockPos first,
+            BlockPos second, ColonySettings chosen) {
+        var test = DEMOLITIONS.get(delegation);
+        var declared = Enrollments.delegation(delegation).orElse(null);
+        if (test == null || declared == null || declared.disabledReason().isPresent()
+                || !(declared.shape() instanceof Shape.Volume volume) || !test.test(settled(declared, chosen))) {
+            return List.of();
+        }
+        return Facilities.affected(level, cellsBetween(first, second, volume.maxCells()));
+    }
+
+    public static Component describeAffected(ServerLevel level, List<Facilities.Source> affected) {
+        var text = Component.translatable("folkways.preview.affected_facilities");
+        for (var source : affected) {
+            BlockPos anchor = source.anchor().block(level);
+            text.append("\n").append(level.getBlockState(anchor).getBlock().getName())
+                .append(" (" + anchor.toShortString() + ")");
+        }
+        return text;
+    }
 
     private ZoneDrafts() {
     }
@@ -61,9 +93,14 @@ public final class ZoneDrafts {
     private static Set<BlockPos> cellsBetween(BlockPos first, BlockPos second, int maxCells) {
         BlockPos min = BlockPos.min(first, second);
         BlockPos max = BlockPos.max(first, second);
-        long volume = (long) (max.getX() - min.getX() + 1) * (max.getY() - min.getY() + 1)
-            * (max.getZ() - min.getZ() + 1);
-        if (volume > maxCells) {
+        long x = (long) max.getX() - min.getX() + 1;
+        long y = (long) max.getY() - min.getY() + 1;
+        long z = (long) max.getZ() - min.getZ() + 1;
+        if (x > maxCells || y > maxCells || z > maxCells || x * y > maxCells || x * y * z > maxCells) {
+            return Set.of();
+        }
+        long volume = x * y * z;
+        if (volume == 0) {
             return Set.of();
         }
         Set<BlockPos> cells = new LinkedHashSet<>((int) volume);

@@ -26,6 +26,9 @@ public final class FolkwaysConfig {
     private static final ModConfigSpec.BooleanValue LOG_PLAN_HEARTBEAT;
     private static final ModConfigSpec.IntValue HEARTBEAT_CYCLES;
 
+    private static final ModConfigSpec.IntValue SCRIPT_ALLOCATION_MIB;
+    private static final ModConfigSpec.IntValue SCRIPT_CUMULATIVE_MIB;
+
     public static final ModConfigSpec SPEC;
 
     static {
@@ -100,6 +103,16 @@ public final class FolkwaysConfig {
             .defineInRange("heartbeatCycles", 10, 1, 600);
         BUILDER.pop();
 
+        BUILDER.push("scripts");
+        SCRIPT_ALLOCATION_MIB = BUILDER
+            .comment("Per-run pre-allocation budget for guarded Starlark operations, in MiB.")
+            .defineInRange("allocationMiB", 64, 1, 512);
+        SCRIPT_CUMULATIVE_MIB = BUILDER
+            .comment("Per-run cumulative JVM thread allocation limit for scripts and drafts, in MiB.",
+                "Folkways Java builtins are excluded. Starlark callbacks from them still count.")
+            .defineInRange("cumulativeAllocationMiB", 256, 1, 2048);
+        BUILDER.pop();
+
         SPEC = BUILDER.build();
     }
 
@@ -147,6 +160,14 @@ public final class FolkwaysConfig {
 
     public static int heartbeatCycles() {
         return read(HEARTBEAT_CYCLES);
+    }
+
+    public static long scriptAllocationBytes() {
+        return read(SCRIPT_ALLOCATION_MIB) * 1_048_576L;
+    }
+
+    public static long scriptCumulativeAllocationBytes() {
+        return read(SCRIPT_CUMULATIVE_MIB) * 1_048_576L;
     }
 
     private static <T> T read(ModConfigSpec.ConfigValue<T> value) {

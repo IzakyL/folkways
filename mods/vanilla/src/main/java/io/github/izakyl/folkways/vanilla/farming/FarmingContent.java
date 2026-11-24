@@ -1,6 +1,17 @@
 package io.github.izakyl.folkways.vanilla.farming;
 
+import io.github.izakyl.folkways.core.effect.Flag;
+import io.github.izakyl.folkways.core.effect.Modifier;
+import io.github.izakyl.folkways.core.effect.Stat;
+import io.github.izakyl.folkways.core.effect.perk.Perk;
 import io.github.izakyl.folkways.core.extension.api.Declaring;
+import io.github.izakyl.folkways.core.front.api.Category;
+import io.github.izakyl.folkways.core.front.api.Delegation;
+import io.github.izakyl.folkways.core.front.api.Enrollment;
+import io.github.izakyl.folkways.core.front.api.HoldingKind;
+import io.github.izakyl.folkways.core.front.api.Registering;
+import io.github.izakyl.folkways.core.front.api.Schema;
+import io.github.izakyl.folkways.core.front.api.Shape;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import io.github.izakyl.folkways.core.vocation.api.Vocation;
 import io.github.izakyl.folkways.core.vocation.api.VocationGroup;
@@ -8,17 +19,6 @@ import io.github.izakyl.folkways.core.vocation.api.VocationSpec;
 import io.github.izakyl.folkways.core.vocation.api.Vocations;
 import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.core.work.api.Workload;
-import io.github.izakyl.folkways.core.effect.Flag;
-import io.github.izakyl.folkways.core.effect.Modifier;
-import io.github.izakyl.folkways.core.effect.Stat;
-import io.github.izakyl.folkways.core.effect.perk.Perk;
-import io.github.izakyl.folkways.core.front.api.Delegation;
-import io.github.izakyl.folkways.core.front.api.Enrollment;
-import io.github.izakyl.folkways.core.front.api.Facing;
-import io.github.izakyl.folkways.core.front.api.Registering;
-import io.github.izakyl.folkways.core.front.api.Schema;
-import io.github.izakyl.folkways.core.front.api.Shape;
-import io.github.izakyl.folkways.core.front.api.panel.PageKind;
 import io.github.izakyl.folkways.vanilla.FolkwaysVanillaConfig;
 import java.util.List;
 import net.minecraft.resources.ResourceLocation;
@@ -43,9 +43,6 @@ public final class FarmingContent {
 
     public static final ResourceLocation PLOT =
         ResourceLocation.fromNamespaceAndPath("folkways_vanilla", "farm");
-
-    private static final PageKind PAGE = PageKind.boarded(ID, "folkways.page.farm",
-        ResourceLocation.withDefaultNamespace("wheat")).tools(VOCATION);
 
     public static final String QUICK_HANDS = "farming_quick_hands";
     public static final String REPLANT = "farming_replant";
@@ -114,12 +111,13 @@ public final class FarmingContent {
     }
 
     public static void enroll(Registering registering) {
-        registering.facing(ID, colony -> colony.service(ID, FarmPresence.class).map(Facing.class::cast));
+        registering.holding(PLOT,
+            colony -> colony.service(ID, FarmPresence.class).map(HoldingKind.class::cast));
         registering.enrollment(ID, new Enrollment(
             List.of(new Delegation(PLOT, new Shape.Volume(FolkwaysVanillaConfig.maxFarmCells()),
                 new Schema(List.of(crop(), harvestMode(), CLEAR_GRASS, CLEAR_FLOWERS)),
-                ResourceLocation.withDefaultNamespace("wheat"))),
-            Schema.none(), List.of(PAGE)));
+                ResourceLocation.withDefaultNamespace("wheat")).in(Category.FOOD)),
+            Schema.none()));
     }
 
     public static Vocation trade() {

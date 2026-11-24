@@ -16,17 +16,18 @@ final class StorePlaces {
     private final Map<ResourceKey<Level>, Map<ResourceLocation, List<WorldPos>>> published = new LinkedHashMap<>();
 
     private final Map<ResourceKey<Level>, List<WorldPos>> combined = new LinkedHashMap<>();
-    private final Map<ResourceKey<Level>, Set<WorldPos>> unique = new LinkedHashMap<>();
 
     boolean publish(ResourceLocation owner, ResourceKey<Level> dimension, List<WorldPos> stores) {
         Map<ResourceLocation, List<WorldPos>> here =
             published.computeIfAbsent(dimension, key -> new LinkedHashMap<>());
         List<WorldPos> had = stores.isEmpty() ? here.remove(owner) : here.put(owner, stores);
-        boolean changed = !(had == null ? stores.isEmpty() : had.equals(stores));
-        if (changed) {
-            combine(dimension);
+        if (had == null ? stores.isEmpty() : had.equals(stores)) {
+            return false;
         }
-        return changed;
+        // Keep each owner's offer, but only refresh inventory when the combined list changes.
+        List<WorldPos> before = in(dimension);
+        combine(dimension);
+        return !before.equals(in(dimension));
     }
 
     Set<ResourceKey<Level>> dimensions() {
@@ -37,28 +38,28 @@ final class StorePlaces {
         return combined.getOrDefault(dimension, List.of());
     }
 
-    Set<WorldPos> setIn(ResourceKey<Level> dimension) {
-        return unique.getOrDefault(dimension, Set.of());
-    }
-
     private void combine(ResourceKey<Level> dimension) {
         Set<WorldPos> found = new LinkedHashSet<>();
         published.getOrDefault(dimension, Map.of()).values().forEach(found::addAll);
         combined.put(dimension, List.copyOf(found));
-        unique.put(dimension, Set.copyOf(found));
     }
 
-    void forget(ResourceLocation owner) {
+    Set<ResourceKey<Level>> forget(ResourceLocation owner) {
+        Set<ResourceKey<Level>> changed = new LinkedHashSet<>();
         published.forEach((dimension, here) -> {
             if (here.remove(owner) != null) {
+                var before = in(dimension);
                 combine(dimension);
+                if (!before.equals(in(dimension))) {
+                    changed.add(dimension);
+                }
             }
         });
+        return changed;
     }
 
     void clear() {
         published.clear();
         combined.clear();
-        unique.clear();
     }
 }

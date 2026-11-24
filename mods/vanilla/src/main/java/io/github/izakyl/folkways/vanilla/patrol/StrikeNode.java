@@ -6,15 +6,16 @@ import io.github.izakyl.folkways.core.work.api.Ending;
 import io.github.izakyl.folkways.core.work.api.Node;
 import io.github.izakyl.folkways.core.work.api.NodeSpec;
 import io.github.izakyl.folkways.core.work.api.Outcome;
-import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.world.api.Stances;
 import io.github.izakyl.folkways.core.work.api.WorkSite;
 import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.core.work.api.Workload;
 import io.github.izakyl.folkways.core.work.api.Xp;
+import io.github.izakyl.folkways.core.combat.api.SpottedTargets.Spot;
 import io.github.izakyl.folkways.vanilla.combat.SpottedTargets;
 import io.github.izakyl.folkways.vanilla.combat.Threats;
 import io.github.izakyl.folkways.core.combat.api.WeaponAttack;
-import io.github.izakyl.folkways.vanilla.combat.weapon.Weapons;
+import io.github.izakyl.folkways.vanilla.combat.weapon.ResidentWeapons;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -34,13 +35,15 @@ final class StrikeNode implements Node {
     private boolean killed;
     private long advancedAt = Long.MIN_VALUE;
     private final BooleanSupplier authorized;
+    private final boolean directTravel;
 
     StrikeNode(ServerLevel level, Mob foe, Stances stances) {
-        this(level, foe, stances, () -> true);
+        this(level, foe, stances, () -> true, false);
     }
 
-    StrikeNode(ServerLevel level, Mob foe, Stances stances, BooleanSupplier authorized) {
+    StrikeNode(ServerLevel level, Mob foe, Stances stances, BooleanSupplier authorized, boolean directTravel) {
         this.authorized = authorized;
+        this.directTravel = directTravel;
         this.foe = foe.getUUID();
         // The foe, and the cell it is struck at, as the site holds them: aboard the ship it stands on, if it does.
         WorkSite site = WorkSite.on(foe);
@@ -55,6 +58,11 @@ final class StrikeNode implements Node {
     @Override
     public boolean mountedWork() {
         return true;
+    }
+
+    @Override
+    public boolean directTravel() {
+        return directTravel;
     }
 
     @Override
@@ -82,7 +90,7 @@ final class StrikeNode implements Node {
         }
         advancedAt = level.getGameTime();
         WeaponAttack previous = attack;
-        attack = Weapons.select(who, target, attack);
+        attack = ResidentWeapons.select(who, target, attack);
         if (attack == null) {
             return false;
         }
@@ -108,10 +116,13 @@ final class StrikeNode implements Node {
     }
 
     private boolean fire(ServerLevel level, Worker who, LivingEntity target) {
-        if (Weapons.indirect(who, target) || Weapons.longRange(who, target)) {
-            Optional<SpottedTargets> spots = Bodies.of(who.body()).flatMap(body -> body.colonyId())
-                .flatMap(id -> Colonies.of(level.getServer(), id)).map(SpottedTargets::of);
-            Optional<SpottedTargets.Spot> spot = spots.flatMap(shared -> shared.get(who.body(), foe));
+        var colony = Bodies.colonyOf(who.body()).flatMap(id -> Colonies.of(level.getServer(), id));
+        if (colony.filter(owner -> !ResidentWeapons.planned(owner, who, target)).isPresent()) {
+            return false;
+        }
+        if (ResidentWeapons.indirect(who, target) || ResidentWeapons.longRange(who, target)) {
+            Optional<SpottedTargets> spots = colony.map(SpottedTargets::of);
+            Optional<Spot> spot = spots.flatMap(shared -> shared.get(who.body(), foe));
             if (spot.isEmpty() || !attack.spottedTarget(target, spot.get().position(),
                 () -> authorized.getAsBoolean() && spots.get().resolve(spot.get(), who.body()).isPresent())) {
                 return false;
@@ -124,7 +135,7 @@ final class StrikeNode implements Node {
     public void released(ServerLevel level, Worker who, Ending how) {
         if (attack != null) {
             attack.stop();
-            Weapons.holster(who);
+            ResidentWeapons.holster(who);
         }
     }
 

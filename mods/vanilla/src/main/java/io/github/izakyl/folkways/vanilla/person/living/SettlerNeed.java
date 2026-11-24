@@ -1,7 +1,7 @@
 package io.github.izakyl.folkways.vanilla.person.living;
 
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
-import io.github.izakyl.folkways.core.front.api.notice.Notice;
+import io.github.izakyl.folkways.core.card.api.notice.Notice;
 import java.util.Optional;
 
 // What one more settler asks the colony for, and how much of it is there.

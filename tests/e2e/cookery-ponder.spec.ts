@@ -1,11 +1,12 @@
+import { seedInstance } from "@izakyl/blockwright-client";
 import { expect, test } from "@playwright/test";
 import { readFileSync, writeFileSync } from "node:fs";
 import { defineTask, input, javaTask, player, screen, tick, world } from "@izakyl/blockwright-minecraft";
-import { clickElement, hoverElement, panelElements } from "../ldlib2";
+import { clickElement, panelElements } from "../ldlib2";
 import { actsForColony, waitForGroundedPlayer } from "../shared/colony/colony-founding";
 import { launchPair, type E2EPair } from "../shared/harness/pair";
-import { tracePath } from "../shared/harness/out-paths";
-import { seededServer } from "../shared/harness/mod-settings";
+import { REPO_ROOT, tracePath } from "../shared/harness/out-paths";
+import { markSeeded, seededServer } from "../shared/harness/mod-settings";
 import { BUDGET } from "../shared/harness/budgets";
 import { frames, safeScreen, screenName } from "../shared/harness/bw-helpers";
 import { newRunId } from "../shared/harness/run-id";
@@ -52,7 +53,7 @@ const READ_MODS = defineTask<void, { native: boolean; extension: boolean; native
   name: "folkways.cookery.ponder-read-mods", side: "any", timeoutMs: 20_000,
   source: javaTask({ imports: ["net.neoforged.fml.ModList", "net.minecraft.core.registries.BuiltInRegistries", "net.minecraft.resources.ResourceLocation"], body: `
 return Map.of("native",ModList.get().isLoaded("kaleidoscope_cookery"),
-"extension",ModList.get().isLoaded("folkways_cookery"),
+"extension",io.github.izakyl.folkways.core.shell.api.OptionalIntegrations.COOKERY.enabled(),
 "nativePot",BuiltInRegistries.BLOCK.containsKey(ResourceLocation.fromNamespaceAndPath("kaleidoscope_cookery","pot")));
 ` }),
 });
@@ -69,8 +70,8 @@ const READ_REGISTRATION = defineTask<void, any>({
   source: javaTask({ imports: ["io.github.izakyl.folkways.core.front.api.ponder.Scenes", "io.github.izakyl.folkways.core.front.client.Lessons",
     "net.createmod.ponder.foundation.PonderIndex", "net.createmod.ponder.api.registration.StoryBoardEntry", "net.minecraft.resources.ResourceLocation"], body: `
 var rows=new ArrayList<Object>();var access=PonderIndex.getSceneAccess();
-for(var folder:Scenes.declared())if(folder.id().toString().equals("folkways_cookery:cookery"))for(var scene:folder.scenes()){
- var schematic=ResourceLocation.fromNamespaceAndPath("folkways_cookery",folder.id().getPath()+"/"+scene.id().getPath());
+for(var folder:Scenes.declared())if(folder.id().toString().equals("folkways_vanilla:cookery"))for(var scene:folder.scenes()){
+ var schematic=ResourceLocation.fromNamespaceAndPath("folkways_vanilla",folder.id().getPath()+"/"+scene.id().getPath());
  var registered=new ArrayList<Object>();
  for(var pair:access.getRegisteredEntries())if(pair.getValue().getSchematicLocation().equals(schematic)){
   var entry=pair.getValue();registered.add(Map.of("component",pair.getKey().toString(),"entryComponent",entry.getComponent().toString(),
@@ -80,7 +81,7 @@ for(var folder:Scenes.declared())if(folder.id().toString().equals("folkways_cook
   "registered",registered,"bound",Lessons.scenesFor(scene.id()).stream().map(entry->Map.of("component",entry.getComponent().toString(),
    "schematic",entry.getSchematicLocation().toString(),"sameBoard",entry.getBoard()==scene)).toList()));
 }
-return Map.of("scenes",rows,"folder",Lessons.scenesFor(ResourceLocation.fromNamespaceAndPath("folkways_cookery", "cookery")).stream()
+return Map.of("scenes",rows,"folder",Lessons.scenesFor(ResourceLocation.fromNamespaceAndPath("folkways_vanilla", "cookery")).stream()
  .map(entry->Map.of("component",entry.getComponent().toString(),"schematic",entry.getSchematicLocation().toString())).toList());
 ` }),
 });
@@ -90,8 +91,8 @@ const RELOAD_PONDER = defineTask<void, boolean>({
 });
 
 function assertRegistration(registry: any, installed: boolean) {
-  expect(registry.scenes.map((scene: any) => scene.id)).toEqual(installed ? SCENES.map(scene => "folkways_cookery:" + scene) : []);
-  expect(registry.folder.map((entry: any) => entry.schematic)).toEqual(installed ? SCENES.map(scene => "folkways_cookery:cookery/" + scene) : []);
+  expect(registry.scenes.map((scene: any) => scene.id)).toEqual(installed ? SCENES.map(scene => "folkways_vanilla:" + scene) : []);
+  expect(registry.folder.map((entry: any) => entry.schematic)).toEqual(installed ? SCENES.map(scene => "folkways_vanilla:cookery/" + scene) : []);
   expect(registry.folder.every((entry: any) => entry.component === "folkways_core:colony_book")).toBe(true);
   for (const scene of registry.scenes) {
     const components = [...new Set([...scene.items, "folkways_core:colony_book"])].sort();
@@ -126,7 +127,7 @@ const READ_LANGUAGE = defineTask<void, { locale: string; title: string }>({
   name: "folkways.cookery.ponder-read-language", side: "client", timeoutMs: 20_000,
   source: javaTask({ imports: ["net.minecraft.client.Minecraft", "net.minecraft.network.chat.Component"], body: `
 var minecraft=(Minecraft)ctx.client();return Map.of("locale",minecraft.getLanguageManager().getSelected(),
-"title",Component.translatable("folkways_cookery.ponder.cookery_orders.header").getString());
+"title",Component.translatable("folkways_vanilla.ponder.cookery_orders.header").getString());
 ` }),
 });
 
@@ -141,7 +142,7 @@ return ctx.server().getPlayerList().getPlayers().stream().map(player->Map.of(
 
 const LOCALES = (process.env.FOLKWAYS_PONDER_LANGUAGES ?? process.env.FOLKWAYS_PONDER_LANGUAGE ?? "en_us").split(",");
 const INSTALLATIONS = [
-  { kind: "native-only", installed: false, native: true, config: "blockwright.toml#cookery-native", title: "native Cookery remains independent without the optional extension" },
+  { kind: "native-only", installed: false, native: true, config: "blockwright.toml#cookery-native", title: "native Cookery remains available when the integration is disabled" },
   { kind: "complete", installed: true, native: true, config: "blockwright.toml#cookery", title: "all lessons, UI entries, keyframes and item links" },
 ] as const;
 for (const locale of LOCALES) for (const installation of INSTALLATIONS) test("cookery lessons" + (LOCALES.length > 1 ? " (" + locale + ")" : "") + ": " + installation.title, async ({}, testInfo) => {
@@ -153,23 +154,32 @@ for (const locale of LOCALES) for (const installation of INSTALLATIONS) test("co
   expect([1, 2, 3]).toContain(guiScale);
   const evidence: Record<string, any> = { installed, native: installation.native, installation: installation.kind, profile: installation.config, locale, guiScale, scenes: [] };
   try {
+    const serverInstance = seededServer("cookery-ponder-server-" + runId);
+    const clientInstance = "cookery-ponder-client-" + runId;
+    if (!installed) {
+      for (const instance of [serverInstance, clientInstance]) {
+        markSeeded(instance);
+        seedInstance(instance, { cwd: REPO_ROOT })
+          .write("config/folkways_core-integrations.toml", "kaleidoscope_cookery = false\n");
+      }
+    }
     pair = await launchPair({ config: installation.config,
-      server: { trace: tracePath("e2e", "cookery-ponder-server-" + runId), instance: seededServer("cookery-ponder-server-" + runId) },
-      client: { trace: tracePath("e2e", "cookery-ponder-client-" + runId), instance: "cookery-ponder-client-" + runId } });
+      server: { trace: tracePath("e2e", "cookery-ponder-server-" + runId), instance: serverInstance },
+      client: { trace: tracePath("e2e", "cookery-ponder-client-" + runId), instance: clientInstance } });
     const { server, client } = pair;
     evidence.serverMods = await server.run(READ_MODS); evidence.clientMods = await client.run(READ_MODS);
     for (const loaded of [evidence.serverMods, evidence.clientMods]) {
-      expect(loaded.extension, "optional behavior follows the Folkways extension mod id on both sides").toBe(installed);
+      expect(loaded.extension, "Cookery integration follows the startup setting on both sides").toBe(installed);
       expect(loaded.native, "the native kitchen mod has its own independent installation state").toBe(installation.native);
-      expect(loaded.nativePot, "native cookware remains registered with or without the extension").toBe(installation.native);
+      expect(loaded.nativePot, "native cookware remains registered with or without the integration").toBe(installation.native);
     }
     const grounded = await waitForGroundedPlayer(server); const name = grounded.name;
     if (locale !== "en_us") {
       await client.run(SET_LANGUAGE, { locale });
       await waitForResourceReload(client);
-      const catalog = JSON.parse(readFileSync("mods/cookery/src/main/resources/assets/folkways_cookery/lang/" + locale + ".json", "utf8"));
+      const catalog = JSON.parse(readFileSync("mods/vanilla/src/main/resources/assets/folkways_vanilla/lang/" + locale + ".json", "utf8"));
       await expect.poll(async () => client.run(READ_LANGUAGE), { timeout: 30_000 }).toEqual({
-        locale, title: catalog["folkways_cookery.ponder.cookery_orders.header"],
+        locale, title: catalog["folkways_vanilla.ponder.cookery_orders.header"],
       });
       await frames(client, 5);
     }
@@ -182,10 +192,10 @@ for (const locale of LOCALES) for (const installation of INSTALLATIONS) test("co
     await world.command(server, "ponder folkways_core:colony_book " + name); await frames(client, 5);
     expect(screenName(await safeScreen(client))).toMatch(/PonderUI/);
     evidence.bookQueue = await client.run(READ_SCENE, { seek: -1 });
-    expect(evidence.bookQueue.scenes.filter((id: string) => id.startsWith("folkways_cookery:cookery_"))).toEqual(installed ? SCENES.map(scene => "folkways_cookery:" + scene) : []);
+    expect(evidence.bookQueue.scenes.filter((id: string) => id.startsWith("folkways_vanilla:cookery_"))).toEqual(installed ? SCENES.map(scene => "folkways_vanilla:" + scene) : []);
     evidence.folders = await client.run(READ_FOLDERS);
-    expect(evidence.folders.folders.includes("folkways_cookery:cookery")).toBe(installed);
-    expect(evidence.folders.scenes.filter((id: string) => id.startsWith("folkways_cookery:cookery_"))).toEqual(installed ? SCENES.map(scene => "folkways_cookery:" + scene) : []);
+    expect(evidence.folders.folders.includes("folkways_vanilla:cookery")).toBe(installed);
+    expect(evidence.folders.scenes.filter((id: string) => id.startsWith("folkways_vanilla:cookery_"))).toEqual(installed ? SCENES.map(scene => "folkways_vanilla:" + scene) : []);
     await screen.dismiss(client);
     await world.command(server, "give " + name + " folkways_core:colony_book");
     await world.command(server, "item replace entity " + name + " weapon.mainhand with folkways_core:colony_book");
@@ -211,17 +221,16 @@ for (const locale of LOCALES) for (const installation of INSTALLATIONS) test("co
     };
     await shelf();
     const folders = await panelElements(client);
-    expect(folders.some(element => element.id === "folkways.lessons.folder.folkways_cookery.cookery")).toBe(installed);
-    expect(folders.some(element => element.id === "folkways.page.cookery"), "the kitchen page belongs to the optional Folkways extension").toBe(installed);
+    expect(folders.some(element => element.id === "folkways.lessons.folder.folkways_vanilla.cookery")).toBe(installed);
     if (!installed) return;
     // The folder stays unfolded for the session once opened, so it is opened once.
-    await clickElement(client, { id: "folkways.lessons.folder.folkways_cookery.cookery" }, { scrollIntoView: true });
+    await clickElement(client, { id: "folkways.lessons.folder.folkways_vanilla.cookery" }, { scrollIntoView: true });
     for (const lesson of SCENES) {
       await shelf();
-      await clickElement(client, { id: "folkways.lessons.scene.folkways_cookery." + lesson }, { scrollIntoView: true });
+      await clickElement(client, { id: "folkways.lessons.scene.folkways_vanilla." + lesson }, { scrollIntoView: true });
       await frames(client, 5); expect(screenName(await safeScreen(client))).toMatch(/LessonScreen/);
       const scene = await client.run(READ_SCENE, { seek: -1 });
-      expect(scene.id).toBe("folkways_cookery:" + lesson); expect(scene.scenes, "the visible lesson list contains the chosen scene once").toEqual(["folkways_cookery:" + lesson]); expect(scene.keyframes.length).toBeGreaterThanOrEqual(4); expect(scene.total).toBeGreaterThan(300);
+      expect(scene.id).toBe("folkways_vanilla:" + lesson); expect(scene.scenes, "the visible lesson list contains the chosen scene once").toEqual(["folkways_vanilla:" + lesson]); expect(scene.keyframes.length).toBeGreaterThanOrEqual(4); expect(scene.total).toBeGreaterThan(300);
       evidence.scenes.push(scene);
       for (const [index, time] of scene.keyframes.entries()) {
         const frame = await client.run(READ_SCENE, { seek: Math.min(Number(time) + 35, Number(scene.total) - 1) }); await frames(client, 4);
@@ -258,24 +267,16 @@ for (const locale of LOCALES) for (const installation of INSTALLATIONS) test("co
       await input.key(client, { keyCode: 256, action: "press" }); await input.key(client, { keyCode: 256, action: "release" }); await frames(client, 3);
     }
     await shelf();
-    await clickElement(client, { id: "folkways.lessons.play.folkways_cookery.cookery" }, { scrollIntoView: true }); await frames(client, 5);
+    await clickElement(client, { id: "folkways.lessons.play.folkways_vanilla.cookery" }, { scrollIntoView: true }); await frames(client, 5);
     const folderQueue = await client.run(READ_SCENE, { seek: -1 });
-    expect(folderQueue.id).toBe("folkways_cookery:cookery_orders"); expect(folderQueue.scenes).toEqual(SCENES.map(scene => "folkways_cookery:" + scene));
-    await openBook();
-    await hoverElement(client, { id: "folkways.page.cookery" }, { scrollIntoView: true });
-    await input.key(client, { keybind: "key.ponder.ponder", action: "press" });
-    await new Promise(resolve => setTimeout(resolve, 2500)); await frames(client, 3);
-    await input.key(client, { keybind: "key.ponder.ponder", action: "release" });
-    expect(screenName(await safeScreen(client))).toMatch(/LessonScreen/);
-    const hoverQueue = await client.run(READ_SCENE, { seek: -1 });
-    expect(hoverQueue.id).toBe("folkways_cookery:cookery_orders"); expect(hoverQueue.scenes).toEqual(SCENES.map(scene => "folkways_cookery:" + scene));
+    expect(folderQueue.id).toBe("folkways_vanilla:cookery_orders"); expect(folderQueue.scenes).toEqual(SCENES.map(scene => "folkways_vanilla:" + scene));
     const linkedItems = [...new Set<string>(evidence.registration.scenes.flatMap((scene: any) => scene.items))];
     for (const item of linkedItems) {
       await screen.dismiss(client); await world.command(server, "ponder " + item + " " + name); await frames(client, 5);
       expect(screenName(await safeScreen(client))).toMatch(/PonderUI/);
       const linked = await client.run(READ_SCENE, { seek: -1 });
       const expected = evidence.registration.scenes.filter((scene: any) => scene.items.includes(item)).map((scene: any) => scene.id);
-      expect(linked.scenes.filter(id => id.startsWith("folkways_cookery:cookery_")), "actual item UI keeps every distinct linked lesson once: " + item).toEqual(expected);
+      expect(linked.scenes.filter(id => id.startsWith("folkways_vanilla:cookery_")), "actual item UI keeps every distinct linked lesson once: " + item).toEqual(expected);
       evidence.itemLinks ??= []; evidence.itemLinks.push({ item, expected, firstScene: linked });
     }
   } catch (error) { pair?.failing(error); evidence.failure = String(error); throw error; }

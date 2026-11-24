@@ -1,13 +1,12 @@
 package io.github.izakyl.folkways.core.shell.fxntstorage;
 
-import io.github.izakyl.folkways.core.inventory.api.port.PortIdentity;
-import io.github.izakyl.folkways.core.inventory.api.port.StorePort;
-import io.github.izakyl.folkways.core.inventory.api.port.StorePorts;
-import io.github.izakyl.folkways.core.inventory.api.port.Usability;
+import io.github.izakyl.folkways.core.facility.api.Ports;
+import io.github.izakyl.folkways.core.facility.api.control.PortIdentity;
+import io.github.izakyl.folkways.core.facility.api.control.ItemPort;
 import io.github.izakyl.folkways.core.shell.storage.CellPort;
 import io.github.izakyl.folkways.core.shell.storage.NativeCells;
 import io.github.izakyl.folkways.core.shell.storage.ProxyPort;
-import io.github.izakyl.folkways.core.shell.storage.Verdicts;
+import io.github.izakyl.folkways.core.shell.storage.StorageTraits;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
 import java.util.List;
 import java.util.Optional;
@@ -35,11 +34,11 @@ public final class StorageIntegration {
     }
 
     public static void install() {
-        StorePorts.register(ResourceLocation.fromNamespaceAndPath("folkways_core", "create_storage"),
-            StorePorts.SPECIFIC, StorageIntegration::at);
+        Ports.registerItem(ResourceLocation.fromNamespaceAndPath("folkways_core", "create_storage"),
+            Ports.SPECIFIC, StorageIntegration::at);
     }
 
-    private static Optional<StorePort> at(ServerLevel level, BlockPos pos) {
+    private static Optional<ItemPort> at(ServerLevel level, BlockPos pos) {
         var entity = level.getBlockEntity(pos);
         WorldPos home = WorldPos.of(level, pos);
         if (entity instanceof StorageBoxEntity box) {
@@ -47,9 +46,9 @@ public final class StorageIntegration {
                 .mapToObj(slot -> NativeCells.handler(box.getItemHandler(), slot, 1)).toList();
             return Optional.of(new CellPort(PortIdentity.block(home), cells, () -> {
                 if (box.getBlockState().getValue(StorageBox.VOID_UPGRADE)) {
-                    return Verdicts.because("void");
+                    return StorageTraits.voiding(ItemStack.EMPTY);
                 }
-                return box.getFilter().getFilter().isEmpty() ? Usability.USABLE : Verdicts.because("filtered");
+                return box.getFilter().getFilter().isEmpty() ? StorageTraits.PLAIN : StorageTraits.unavailable("filtered");
             }, true));
         }
         if (entity instanceof SimpleStorageBoxEntity box) {
@@ -87,9 +86,16 @@ public final class StorageIntegration {
             };
             return Optional.of(new CellPort(PortIdentity.block(home), List.of(cell), () -> {
                 if (box.hasVoidUpgrade()) {
-                    return Verdicts.because("void");
+                    return StorageTraits.voiding(box.getFilterItem());
                 }
-                return box.hasCompactingUpgrade() ? Verdicts.because("compacting") : Usability.USABLE;
+                if (!box.hasCompactingUpgrade()) {
+                    return StorageTraits.PLAIN;
+                }
+                var chain = box.compactingChain;
+                if (chain != null && chain.tiers() > 1) {
+                    return StorageTraits.compacting(chain.t0().getDefaultInstance(), chain.t1().getDefaultInstance());
+                }
+                return StorageTraits.compacting();
             }, false));
         }
         if (entity instanceof ReserveStorageBoxEntity box) {
@@ -97,7 +103,7 @@ public final class StorageIntegration {
                 .mapToObj(slot -> NativeCells.handler(box.getItemHandler(), slot, 1)).toList();
             return Optional.of(new CellPort(PortIdentity.block(home), cells, () ->
                 box.getBlockState().getValue(ReserveStorageBox.VOID_UPGRADE)
-                    ? Verdicts.because("void") : Usability.USABLE, true));
+                    ? StorageTraits.voiding(ItemStack.EMPTY) : StorageTraits.PLAIN, true));
         }
         if (entity instanceof BackpackEntity backpack) {
             var layout = BackpackSlotLayout.createLayout();
@@ -111,10 +117,10 @@ public final class StorageIntegration {
                     UpgradeType type = UpgradeType.fromItem(upgrade.getItem());
                     if (!upgrade.isEmpty() && type != UpgradeType.CRAFTING && type != UpgradeType.JUKEBOX
                         && type != UpgradeType.FALLDAMAGE && type != UpgradeType.HEALTH && type != UpgradeType.FLIGHT) {
-                        return Verdicts.upgrade(upgrade);
+                        return StorageTraits.upgrade(upgrade);
                     }
                 }
-                return Usability.USABLE;
+                return StorageTraits.PLAIN;
             }, true));
         }
         if (entity instanceof StorageControllerEntity controller) {
@@ -128,7 +134,7 @@ public final class StorageIntegration {
                 .map(box -> WorldPos.of(level, box.blockPos)).toList();
             // The native controller accepts a player's items, but has no hand extraction interaction.
             return Optional.of(new ProxyPort(home, members, network != null && !members.isEmpty(),
-                Set.of(StorePort.Operation.PUT)));
+                Set.of(ItemPort.Operation.PUT)));
         }
         String id = BuiltInRegistries.BLOCK.getKey(level.getBlockState(pos).getBlock()).toString();
         if (entity instanceof StorageInterfaceEntity || id.equals("fxntstorage:storage_interface_filtered")

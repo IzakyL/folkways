@@ -31,7 +31,7 @@ final class CropCare extends SavedData {
     // Future payloads stay opaque even if Minecraft later saves this object.
     private CompoundTag preserved;
 
-    static CropCare of(ServerLevel level) {
+    static CropCare refresh(ServerLevel level) {
         return level.getDataStorage().computeIfAbsent(new SavedData.Factory<>(CropCare::new,
             (tag, registries) -> load(tag)), "folkways_crop_care");
     }
@@ -51,16 +51,20 @@ final class CropCare extends SavedData {
     }
 
     static void broken(BlockEvent.BreakEvent event) {
-        if (event.getLevel() instanceof ServerLevel level) { of(level).forget(event.getPos()); }
+        if (event.getLevel() instanceof ServerLevel level) {
+            refresh(level).forget(event.getPos());
+        }
     }
 
     static void placed(BlockEvent.EntityPlaceEvent event) {
-        if (event.getLevel() instanceof ServerLevel level) { of(level).forget(event.getPos()); }
+        if (event.getLevel() instanceof ServerLevel level) {
+            refresh(level).forget(event.getPos());
+        }
     }
 
     static void grown(CropGrowEvent.Post event) {
         if (!(event.getLevel() instanceof ServerLevel level)) { return; }
-        CropCare care = of(level);
+        CropCare care = refresh(level);
         Treatment treatment = care.crops.get(event.getPos().asLong());
         if (treatment == null) { return; }
         BlockState state = level.getBlockState(event.getPos());

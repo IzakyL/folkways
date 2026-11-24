@@ -1,3 +1,4 @@
+import "../shared/harness/env";
 import { defineConfig } from "@izakyl/blockwright-test";
 import { BUDGET } from "../shared/harness/budgets";
 

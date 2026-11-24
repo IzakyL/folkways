@@ -1,17 +1,16 @@
 import { launchPair, type E2EPair } from "../shared/harness/pair";
 import { expect, test } from "@playwright/test";
-import { screen, tick, world, type MinecraftServer } from "@izakyl/blockwright-minecraft";
+import { input, screen, tick, world, type MinecraftServer } from "@izakyl/blockwright-minecraft";
 import { cameraLookingAt } from "@izakyl/blockwright-minecraft/internal";
 import { copyFileSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import { clickElement } from "../ldlib2";
-import { foundColonyFast, setBookGesture, waitForGroundedPlayer, type Vec } from "../shared/colony/colony-founding";
-import { aimAndLeftClick, markBox, openBookPage } from "../shared/ui/zone-tools";
+import { chooseBookTool, foundColonyFast, setBookGesture, waitForGroundedPlayer, type Vec } from "../shared/colony/colony-founding";
+import { aimAndLeftClick, markBox, useBook } from "../shared/ui/zone-tools";
 import { HANDOFF_CONFIRM } from "../shared/ui/schematic-tools";
 import { settlePanel } from "../shared/ui/site-panel";
 import { CONFIG_PATH, VisualRun } from "../shared/capture/visual-kit";
 import { LayoutProbe } from "../shared/capture/layout-lint";
-import { clickTab } from "./ui-catalog";
 import { tracePath } from "../shared/harness/out-paths";
 import { seededOffThreadServer } from "../shared/harness/mod-settings";
 import { BUDGET } from "../shared/harness/budgets";
@@ -20,14 +19,11 @@ import { newRunId } from "../shared/harness/run-id";
 
 const BOOK_ITEM = "folkways_core:colony_book";
 const RESIDENT_COUNT = 2;
-const OFFER = "folkways.zoneconfig.offer.folkways_vanilla.draft";
+const OFFER = "offer:folkways_vanilla:draft";
 const CHOOSE = "folkways.draft.choose";
 const PATTERN = "folkways.draft.pattern.folkways_vanilla.terraced_field";
 const PREVIEW = "folkways.draft.preview";
 const BUILD = "folkways.draft.confirm";
-const BUILD_TAB = "folkways.page.build";
-const SHELF = "folkways.board.open.folkways_vanilla.build.0.0";
-const SHELF_WINDOW = "folkways.window.folkways_vanilla.blueprints";
 const HUT = "folkways.blueprints.entry.local.blueprint.hut";
 const HANDOFF_WINDOW = "folkways.window.blueprint_handoff";
 const HUT_ASSET = "tests/shared/assets/ghost-hut.nbt";
@@ -60,7 +56,7 @@ test("placing patterns and blueprints on camera", async ({}, testInfo) => {
     const max: Vec = { x: origin.x + 12, y: origin.y + 3, z: origin.z - 8 };
     await clearPlot(server, { ...min, x: min.x - 2, z: min.z - 2 }, { ...max, x: max.x + 2, z: max.z + 2 });
     await holdBook(server, playerName);
-    await setBookGesture(server, client, playerName, "box");
+    await chooseBookTool(server, client, OFFER);
     // The far corner hangs in the air: a glass post stands up to it for it to be clicked on, and is gone after.
     const post = { ...max, y: origin.y };
     await tryCommand(server, `fill ${commandPos(post)} ${commandPos(max)} minecraft:glass`);
@@ -70,9 +66,7 @@ test("placing patterns and blueprints on camera", async ({}, testInfo) => {
     await tick.sprint(server, 3);
     run.note("marked", marked.marked);
 
-    await openBookPage(server, client, playerName, founding.standBlock);
-    await waitForElement(client, { id: OFFER }, { timeoutMs: 8_000 });
-    await clickElement(client, { id: OFFER });
+    await useBook(client);
     await settlePanel(server, client);
     await waitForElement(client, { id: CHOOSE }, { timeoutMs: 8_000 });
     await clickElement(client, { id: CHOOSE });
@@ -107,7 +101,7 @@ test("placing patterns and blueprints on camera", async ({}, testInfo) => {
       hard: true,
     });
 
-    await openBookPage(server, client, playerName, founding.standBlock);
+    await useBook(client);
     await waitForElement(client, { id: BUILD }, { timeoutMs: 8_000 });
     await run.shot(client, "04-pattern-confirm", {
       subject: "Back in the window on the previewed pattern, which can now be built",
@@ -136,12 +130,11 @@ test("placing patterns and blueprints on camera", async ({}, testInfo) => {
     await holdBook(server, playerName);
     await setBookGesture(server, client, playerName, "point");
 
-    await openBookPage(server, client, playerName, founding.standBlock);
-    await clickTab(client, BUILD_TAB);
-    await settlePanel(server, client);
-    await clickElement(client, { id: SHELF }, { scrollIntoView: true });
-    await waitForElement(client, { id: SHELF_WINDOW }, { timeoutMs: 8_000 });
-    await clickElement(client, { id: "folkways.blueprints.choose" });
+    await input.key(client, { keyCode: 86, action: "press" });
+    await input.key(client, { keyCode: 86, action: "release" });
+    await screen.waitFor(client, "OverheadScreen");
+    await screen.clickWidget(client, { label: "Blueprints" });
+    await waitForElement(client, { id: "folkways.blueprints.search" }, { timeoutMs: 8_000 });
     await settlePanel(server, client);
     await run.shot(client, "06-blueprint-shelf", {
       subject: "The blueprint shelf: files from the server's and the player's own folkways/blueprint folders",
@@ -150,6 +143,8 @@ test("placing patterns and blueprints on camera", async ({}, testInfo) => {
     await run.lint(probe, "window:blueprint-shelf");
 
     await clickElement(client, { id: HUT }, { scrollIntoView: true });
+    await frames(client, 5);
+    await screen.dismiss(client);
     await settlePanel(server, client);
     await tryCommand(server, `gamemode creative ${playerName}`);
     const feet = { x: corner.x + 3.5, y: origin.y, z: corner.z + 12.5 };

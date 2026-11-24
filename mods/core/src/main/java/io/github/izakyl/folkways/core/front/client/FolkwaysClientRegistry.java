@@ -4,18 +4,22 @@ import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.front.client.ponder.PonderIntegration;
 import io.github.izakyl.folkways.core.front.api.ui.Picker;
 import io.github.izakyl.folkways.core.front.api.ui.Cues;
+import io.github.izakyl.folkways.core.front.api.ui.DeskLaunchers;
 import io.github.izakyl.folkways.core.front.api.ui.FilterStacks;
 import io.github.izakyl.folkways.core.front.api.ui.ItemChoice;
 import io.github.izakyl.folkways.core.front.api.ui.LonePanel;
 import io.github.izakyl.folkways.core.front.api.ui.Pages;
 import io.github.izakyl.folkways.core.front.api.ui.Placing;
-import io.github.izakyl.folkways.core.front.client.ponder.PonderIntegration;
 import io.github.izakyl.folkways.core.front.engine.item.ColonyBookItem;
 import io.github.izakyl.folkways.core.front.engine.registry.FolkwaysItems;
+import io.github.izakyl.folkways.core.front.ui.screen.Desk;
 import io.github.izakyl.folkways.core.front.ui.screen.LonePanels;
 import io.github.izakyl.folkways.core.front.ui.screen.Window;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.item.ItemProperties;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.item.ItemStack;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.ModList;
@@ -54,6 +58,7 @@ public final class FolkwaysClientRegistry {
             PonderIntegration.install();
             Pages.installOpening(BookPages::open);
             LonePanel.install(LonePanels::open);
+            DeskLaunchers.install(Desk::launchCurrent, LonePanels::openLauncher);
             Placing.install(HeldPlacement.HAND);
             SweepOffer.register();
             Picker.install(Window::aboveWindows);
@@ -61,11 +66,23 @@ public final class FolkwaysClientRegistry {
                 SelectorWindow.open(parent, stack -> chosen.accept(FilterStacks.parse(stack))));
             ItemProperties.register(FolkwaysItems.COLONY_BOOK.get(),
                 ResourceLocation.fromNamespaceAndPath(FolkwaysCoreMod.MOD_ID, "mode"),
-                (stack, level, entity, seed) -> switch (ColonyBookItem.gesture(stack)) {
+                (stack, level, entity, seed) -> switch (shownGesture(stack, entity)) {
                     case POINT -> 0.0F;
                     case BOX -> 1.0F;
                     case LINE -> 2.0F;
                 });
         });
+    }
+
+    // A book in the player's own hands shows the gesture it was just turned to, before the server's copy says so; any
+    // other stack, such as one drawn in a Ponder scene or on a button, shows the gesture it was dressed with.
+    private static io.github.izakyl.folkways.core.front.api.Shape.Gesture shownGesture(ItemStack stack,
+            LivingEntity entity) {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (entity != null && entity == minecraft.player
+                && (entity.getMainHandItem() == stack || entity.getOffhandItem() == stack)) {
+            return BookTools.gesture();
+        }
+        return ColonyBookItem.gesture(stack);
     }
 }

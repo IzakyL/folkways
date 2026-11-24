@@ -160,7 +160,7 @@ def draw(site):
         if not site.items(key):
             reject("error.material", translated(key))
     run = site.path.stretches[0]
-    band = run.sized(width = width, anchor = "center", parity = "low")
+    band = run.sized(width = width, anchor = "center", parity = "world_low")
     span = band.depth - 1
     rise = max(1, int(length / 12))
     shoulder = max(2, min(4, int(length / 10) + 1))

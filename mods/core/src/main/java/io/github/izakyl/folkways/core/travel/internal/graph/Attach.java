@@ -34,7 +34,7 @@ final class Attach {
         if (net.near(end, now) >= 0) {
             return new Result(Outcome.ON, 0);
         }
-        Optional<Reading> read = Look.at(level, realm, roamer, end, others, net::knows, aim, false, MOST_VISITED);
+        Optional<TerrainReading> read = Look.at(level, realm, roamer, end, others, net::knows, aim, false, MOST_VISITED);
         if (read.isEmpty()) {
             PathfindingLoad.attachFar();
             return new Result(Outcome.FAR, 0);
@@ -53,7 +53,7 @@ final class Attach {
         return new Result(Outcome.FAR, swept.visited());
     }
 
-    private static boolean lay(Waypoints net, Reading read, long now) {
+    private static boolean lay(Waypoints net, TerrainReading read, long now) {
         List<BlockPos> trail = new ArrayList<>(read.swept().nodes().size());
         for (Node node : read.swept().nodes()) {
             Optional<BlockPos> mine = read.on().toLocal(new BlockPos(node.x, node.y, node.z));

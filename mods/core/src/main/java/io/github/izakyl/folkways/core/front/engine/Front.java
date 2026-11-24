@@ -1,13 +1,14 @@
 package io.github.izakyl.folkways.core.front.engine;
 
 import io.github.izakyl.folkways.core.colony.api.KitRules;
+import io.github.izakyl.folkways.core.extension.api.Declaring;
 import io.github.izakyl.folkways.core.front.api.Fronts;
 import io.github.izakyl.folkways.core.front.api.ui.FilterStacks;
 import io.github.izakyl.folkways.core.front.api.ui.Pages;
 import io.github.izakyl.folkways.core.front.api.ui.RegisteringUi;
 import io.github.izakyl.folkways.core.front.engine.authority.ColonyAuthority;
-import io.github.izakyl.folkways.core.front.engine.charter.FtbTeams;
-import io.github.izakyl.folkways.core.front.engine.charter.Teams;
+import io.github.izakyl.folkways.core.colony.charter.FtbTeams;
+import io.github.izakyl.folkways.core.colony.charter.Teams;
 import io.github.izakyl.folkways.core.front.engine.colony.ColonyFront;
 import io.github.izakyl.folkways.core.front.engine.colony.LaborDebug;
 import io.github.izakyl.folkways.core.front.engine.item.BookLookup;
@@ -38,6 +39,14 @@ public final class Front {
         Pages.install(player -> ColonyAuthority.of(player, Optional.empty()).map(ColonyAuthority::colony));
         FilterStacks.install(new FilterStackCodec());
         FrontLifecycle.install();
+        io.github.izakyl.folkways.core.front.engine.colony.HeldFacilities.install();
+        io.github.izakyl.folkways.core.front.engine.colony.ColonyScopes.install();
+        io.github.izakyl.folkways.core.front.engine.colony.PanelFacilities.install();
+        modBus.addListener(Declaring.class, event ->
+            event.colony(Fronts.OWNER, scope -> {
+                ColonyFront.refresh(scope.colony());
+                scope.closed(why -> ColonyFront.forget(scope.colony().id()));
+            }));
         LaborDebug.install();
         BookLookup.install();
         if (ModList.get().isLoaded(FtbTeams.MOD_ID)) {
@@ -47,7 +56,6 @@ public final class Front {
         FolkwaysItems.register(modBus);
         FolkwaysPlayerAttachments.register(modBus);
         ColonyShell.register();
-        Pages.installSiteContext(ColonyShell::siteOf);
         modBus.addListener(RegisteringUi.class, PageKinds::registerUi);
         modBus.addListener(BuildCreativeModeTabContentsEvent.class, event -> {
             if (event.getTabKey() == CreativeModeTabs.TOOLS_AND_UTILITIES) {

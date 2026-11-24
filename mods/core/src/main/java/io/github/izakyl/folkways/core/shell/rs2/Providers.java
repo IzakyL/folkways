@@ -2,16 +2,21 @@ package io.github.izakyl.folkways.core.shell.rs2;
 
 import com.refinedmods.refinedstorage.api.autocrafting.Pattern;
 import com.refinedmods.refinedstorage.api.autocrafting.task.Task;
+import com.refinedmods.refinedstorage.api.network.Network;
+import io.github.izakyl.folkways.core.card.api.Card;
 import io.github.izakyl.folkways.core.colony.api.Colony;
 import io.github.izakyl.folkways.core.colony.api.ColonyView;
-import io.github.izakyl.folkways.core.front.api.panel.Board;
+import io.github.izakyl.folkways.core.front.api.ColonyPanel;
 import io.github.izakyl.folkways.core.item.api.Goods;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
-import io.github.izakyl.folkways.core.shell.crafting.ColonyRecipes;
-import io.github.izakyl.folkways.core.shell.crafting.DeviceSettings;
-import io.github.izakyl.folkways.core.shell.crafting.NetworkBuffers;
+import io.github.izakyl.folkways.core.shell.crafting.NetworkDeviceSettings;
+import io.github.izakyl.folkways.core.shell.crafting.NetworkExtensions;
+import io.github.izakyl.folkways.core.shell.rs2.NetworkPort;
+import io.github.izakyl.folkways.core.shell.rs2.Rs2Devices;
 import io.github.izakyl.folkways.core.work.api.Amount;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
+import io.github.izakyl.folkways.core.shell.crafting.ColonyRecipes;
+import io.github.izakyl.folkways.core.shell.crafting.NetworkBuffers;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -26,33 +31,34 @@ import net.minecraft.nbt.Tag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 
-final class Providers {
+public final class Providers implements NetworkExtensions.Attachment<NetworkPort, Network>, ColonyPanel {
 
     private static final ResourceLocation TASKS = ResourceLocation.fromNamespaceAndPath(
         "folkways_core", "rs2_provider_tasks");
     private final Colony colony;
     private final ColonyRecipes recipes;
-    private final Map<Devices.NetworkKey, ColonyProvider> providers = new HashMap<>();
+    private final Map<WorldPos, ColonyProvider> byDevice = new HashMap<>();
     private final List<ColonyProvider> all = new ArrayList<>();
     private final Map<String, Optional<Pattern>> built = new HashMap<>();
     private List<String> references = List.of();
     private long tags = -1;
     private NetworkBuffers buffers;
-    private final DeviceSettings settings;
+    private final NetworkDeviceSettings settings;
     private Map<Pattern, String> patterns = Map.of();
     private Map<Pattern, List<ItemSpec>> outputs = Map.of();
-    private final Map<Devices.NetworkKey, Filtered> filtered = new HashMap<>();
+    private final Map<Rs2Devices.NetworkKey, Filtered> filtered = new HashMap<>();
 
     private record Filtered(Map<Pattern, String> patterns, List<Object> key, Map<Pattern, String> offered) {
     }
 
-    Providers(Colony colony, DeviceSettings settings) {
+    Providers(Colony colony, NetworkDeviceSettings settings) {
         this.colony = colony;
         this.settings = settings;
         recipes = new ColonyRecipes(colony);
     }
 
-    void tick(MinecraftServer server) {
+    @Override
+    public void tick(MinecraftServer server, List<NetworkExtensions.Access<NetworkPort, Network>> devices) {
         if (buffers == null) {
             buffers = new NetworkBuffers(colony, ResourceLocation.fromNamespaceAndPath(
                 "folkways_core", "rs2_network_buffers"), server, recipes);
@@ -60,31 +66,24 @@ final class Providers {
                 all.add(ColonyProvider.load((CompoundTag) raw, buffers));
             }
         }
-        Map<Devices.NetworkKey, NetworkPort> ports = new LinkedHashMap<>();
-        Map<Devices.NetworkKey, List<WorldPos>> commissioning = new HashMap<>();
+        Map<Rs2Devices.NetworkKey, NetworkPort> ports = new LinkedHashMap<>();
+        Map<Rs2Devices.NetworkKey, List<WorldPos>> commissioning = new HashMap<>();
         List<NetworkBuffers.Access> access = new ArrayList<>();
-        for (var view : colony.views(server)) {
-            var level = view.level();
-            for (var at : colony.storesIn(view.dimension())) {
-                if (!level.isLoaded(at.block(level))) {
-                    continue;
-                }
-                Devices.at(level, at.block(level)).filter(port -> port.usability().usable()).ifPresent(port -> {
-                    // The network commissions residents only through a device whose panel allows it.
-                    if (settings.at(at).commission()) {
-                        ports.putIfAbsent((Devices.NetworkKey) port.identity().key(), port);
-                        commissioning.computeIfAbsent((Devices.NetworkKey) port.identity().key(),
-                            ignored -> new ArrayList<>()).add(at);
-                    }
-                    access.add(new NetworkBuffers.Access(port, port.node().getNetwork(), port.delivery(), task -> {
-                        port.cancel(task);
-                        all.stream().filter(provider -> provider.getTaskStatuses().stream()
-                            .anyMatch(status -> status.info().id().id().equals(task)))
-                            .forEach(provider -> provider.cancelTask(
-                                new com.refinedmods.refinedstorage.api.autocrafting.task.TaskId(task)));
-                    }));
-                });
+        for (var device : devices) {
+            NetworkPort port = device.port();
+            WorldPos at = port.identity().home();
+            if (settings.at(at).commission()) {
+                var key = (Rs2Devices.NetworkKey) port.identity().key();
+                ports.putIfAbsent(key, port);
+                commissioning.computeIfAbsent(key, ignored -> new ArrayList<>()).add(at);
             }
+            access.add(new NetworkBuffers.Access(port, device.grid(), device.delivery(), task -> {
+                device.cancel().accept(task);
+                all.stream().filter(provider -> provider.getTaskStatuses().stream()
+                    .anyMatch(status -> status.info().id().id().equals(task)))
+                    .forEach(provider -> provider.cancelTask(
+                        new com.refinedmods.refinedstorage.api.autocrafting.task.TaskId(task)));
+            }));
         }
         if (server.overworld().getGameTime() % 20 == 0) {
             recipes.refresh(server);
@@ -111,7 +110,8 @@ final class Providers {
         }
         buffers.tick(access);
         filtered.keySet().retainAll(ports.keySet());
-        Map<Devices.NetworkKey, ColonyProvider> attached = new LinkedHashMap<>();
+        Map<Rs2Devices.NetworkKey, ColonyProvider> attached = new LinkedHashMap<>();
+        byDevice.clear();
         for (var entry : ports.entrySet()) {
             NetworkPort port = entry.getValue();
             var network = port.node().getNetwork();
@@ -139,7 +139,9 @@ final class Providers {
             provider.connect(port);
             access.stream().filter(at -> at.network() == network)
                 .forEach(at -> provider.devices.add(at.port().identity().home()));
-            provider.patterns(offered(entry.getKey(), commissioning.get(entry.getKey())));
+            var terminals = commissioning.get(entry.getKey());
+            provider.patterns(offered(entry.getKey(), terminals));
+            terminals.forEach(at -> byDevice.put(at, provider));
             attached.put(entry.getKey(), provider);
         }
         for (ColonyProvider provider : List.copyOf(all)) {
@@ -153,13 +155,11 @@ final class Providers {
                 }
             }
         }
-        providers.clear();
-        providers.putAll(attached);
         save();
     }
 
     // Recomputed only when the recipes or a commissioning device's settings change.
-    private Map<Pattern, String> offered(Devices.NetworkKey network, List<WorldPos> through) {
+    private Map<Pattern, String> offered(Rs2Devices.NetworkKey network, List<WorldPos> through) {
         List<Object> key = new ArrayList<>();
         through.forEach(at -> key.addAll(List.of(at, settings.at(at))));
         Filtered cached = filtered.get(network);
@@ -192,19 +192,21 @@ final class Providers {
         return buffers == null ? List.of() : buffers.keeps(resident);
     }
 
-    Optional<Board> board(ResourceLocation page, ColonyView view) {
-        return buffers == null ? Optional.empty() : buffers.board(page, view);
+    @Override
+    public List<Card.Row> rows(Page page, ColonyView view) {
+        return buffers == null ? List.of() : buffers.rows(page, view);
     }
 
-    Optional<ColonyProvider> at(WorldPos device) {
-        return providers.values().stream().filter(provider -> provider.device.equals(device)).findFirst();
+    public Optional<ColonyProvider> at(WorldPos device) {
+        return Optional.ofNullable(byDevice.get(device));
     }
 
-    void close() {
+    @Override
+    public void close() {
         save();
         all.forEach(ColonyProvider::destroy);
         all.clear();
-        providers.clear();
+        byDevice.clear();
         if (buffers != null) {
             buffers.close();
         }

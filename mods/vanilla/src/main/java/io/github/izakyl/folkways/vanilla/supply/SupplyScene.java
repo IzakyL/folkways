@@ -41,19 +41,19 @@ final class SupplyScene {
         scene.overlay().showControls(util.vector().topOf(source), Pointing.DOWN, 70)
             .rightClick().withItem(new ItemStack(SupplyContent.ITEM.get()));
         scene.overlay().showText(90)
-            .text("Place and configure a creative supply box in Creative mode. Choose all items, or a whitelist of items, tags and searches.")
+            .text("In creative mode, place a creative supply box and set it to offer all items, or a whitelist of items, tags and searches.")
             .pointAt(util.vector().topOf(source)).placeNearTarget().attachKeyFrame();
         scene.idle(100);
         scene.overlay().showOutline(PonderPalette.GREEN, source, util.select().position(source), 90);
         scene.overlay().showText(90)
-            .text("Mark the box with the colony book. It supplies tasks; mark an ordinary chest separately to store their finished goods.")
+            .text("Take in the box with the book to supply tasks. Take in a plain chest too, for finished goods.")
             .pointAt(util.vector().topOf(store)).placeNearTarget().attachKeyFrame();
         scene.idle(100);
         var resident = PonderScenery.body(scene, PersonBody.RESIDENT.get(), util.vector().topOf(1, 0, 4), 180);
         resident.walkTo(scene, util.vector().topOf(1, 0, 3));
         resident.hold(scene, new ItemStack(Items.WHEAT, 3));
         scene.overlay().showText(90)
-            .text("Residents walk to the box and take only the finite amount their current job needs. A full pack or an unreachable box waits.")
+            .text("Residents take only what their current job needs. If their pack is full or the box is out of reach, they wait.")
             .pointAt(util.vector().topOf(source)).placeNearTarget().attachKeyFrame();
         scene.idle(100);
         resident.walkTo(scene, util.vector().topOf(3, 0, 3));
@@ -61,7 +61,7 @@ final class SupplyScene {
         resident.walkTo(scene, util.vector().topOf(5, 0, 3));
         resident.hold(scene, ItemStack.EMPTY);
         scene.overlay().showText(100)
-            .text("For a full production-chain test, whitelist base ingredients only and order the final dish. Intermediate foods and finished dishes must be made by the residents.")
+            .text("To test a full production chain, whitelist only raw ingredients and order the final dish. Residents must make everything in between.")
             .pointAt(util.vector().topOf(table)).placeNearTarget().attachKeyFrame();
         scene.idle(110);
     }

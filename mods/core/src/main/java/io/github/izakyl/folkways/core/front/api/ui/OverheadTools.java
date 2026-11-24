@@ -1,7 +1,6 @@
 package io.github.izakyl.folkways.core.front.api.ui;
 
-import io.github.izakyl.folkways.core.front.api.notice.Line;
-import io.github.izakyl.folkways.core.front.client.ZoneSelection;
+import io.github.izakyl.folkways.core.card.api.notice.Line;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -11,8 +10,8 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.navigation.ScreenRectangle;
 import net.minecraft.core.BlockPos;
-import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 
 /** Optional tools for the book's overhead view; selecting a tool grants no server authority. */
@@ -46,6 +45,14 @@ public final class OverheadTools {
         /** Space reserved at the bottom of the overhead view for this tool's controls. */
         default int bottomInset() {
             return 0;
+        }
+
+        /**
+         * The areas of the overhead view this tool's own controls cover now, such as its cards and docks, in GUI
+         * pixels. The view's other controls, its key hints and hover cards keep clear of them.
+         */
+        default List<ScreenRectangle> reserved() {
+            return List.of();
         }
 
         /** A pointer gesture can reserve the descent modifier without changing the camera's global bindings. */
@@ -124,63 +131,19 @@ public final class OverheadTools {
         }
     }
 
-    public interface FocusedTool {
-        ResourceLocation id();
-
-        default ResourceLocation mode() {
-            return BUILD;
-        }
-
-        String nameKey();
-
-        ResourceLocation icon();
-
-        void tick(UUID colony);
-
-        /** Read-only overlay refresh, including while another mode owns input. */
-        default void backgroundTick(Optional<UUID> colony) {
+    /**
+     * Passive world marks a module keeps over what the colony holds, drawn while the book is bound and told when
+     * hovered from above. They own no input: what they mark is opened and drawn like anything else the book holds.
+     */
+    public interface Marks {
+        /** Read-only refresh, every client tick, for the colony the book is bound to if any. */
+        default void tick(Optional<UUID> colony) {
         }
 
         default void reset() {
-            leave();
         }
-
-        List<Action> actions();
 
         List<Mark> marks();
-
-        Component status();
-
-        default Object selectionKey() {
-            return id();
-        }
-
-        void use(Optional<Box> box, Optional<Mark> aimed);
-
-        default void leave() {
-        }
-    }
-
-    public record Box(BlockPos min, BlockPos max) {
-    }
-
-    public static Optional<Box> box() {
-        return ZoneSelection.marked().map(marked -> new Box(marked.min(), marked.max()));
-    }
-
-    public static boolean drafting() {
-        return ZoneSelection.drafting();
-    }
-
-    public static void clearBox() {
-        ZoneSelection.clear();
-    }
-
-    public static void discardBox() {
-        ZoneSelection.discard();
-    }
-
-    public record Action(Component name, boolean on, Runnable run) {
     }
 
     /** Coordinates use the level's storage frame, just like the ordinary box editor. */
@@ -201,7 +164,7 @@ public final class OverheadTools {
 
     private static volatile List<Tool> tools = List.of();
     private static final Map<ResourceLocation, Handler> handlers = new HashMap<>();
-    private static final Map<ResourceLocation, FocusedTool> focusedTools = new LinkedHashMap<>();
+    private static final List<Marks> marks = new java.util.concurrent.CopyOnWriteArrayList<>();
     private static ResourceLocation selected;
     private static long selectionRevision;
 
@@ -223,20 +186,6 @@ public final class OverheadTools {
         return mode;
     }
 
-    public static boolean selectMode(ResourceLocation id) {
-        if (!modes.containsKey(id)) {
-            return false;
-        }
-        if (mode.equals(id)) {
-            return true;
-        }
-        deselect();
-        mode = id;
-        selectionRevision++;
-        tools.stream().filter(tool -> tool.mode().equals(id)).findFirst().ifPresent(tool -> select(tool.id()));
-        return true;
-    }
-
     static synchronized void register(Tool tool) {
         Objects.requireNonNull(tool);
         if (tools.stream().anyMatch(existing -> existing.id().equals(tool.id()))) {
@@ -250,35 +199,26 @@ public final class OverheadTools {
         tools = List.copyOf(next);
     }
 
-    /** Focused plugin tools share the toolbar and exclusive selection with tactical tools. */
-    public static synchronized void register(FocusedTool tool) {
-        Objects.requireNonNull(tool);
-        register(new Tool(tool.id(), tool.mode(), tool.nameKey(), tool.icon(), Camera.STANDARD, tool.nameKey(),
-            () -> tool.use(box(), Optional.empty())));
-        focusedTools.put(tool.id(), tool);
+    /** Passive marks are installed during client setup only. */
+    public static void registerMarks(Marks source) {
+        marks.add(Objects.requireNonNull(source));
     }
 
-    public static List<FocusedTool> all() {
-        return List.copyOf(focusedTools.values());
+    public static List<Marks> marks() {
+        return List.copyOf(marks);
     }
 
-    public static Optional<FocusedTool> active() {
-        return Optional.ofNullable(focusedTools.get(selected));
-    }
-
-    public static void select(FocusedTool tool) {
-        select(tool.id());
-    }
-
-    /** Leaving the overhead view clears focused state; tactical selection keeps its existing lifecycle. */
+    /** Leaving the overhead view keeps a tactical selection, as it always has. */
     public static void leave() {
-        if (active().isPresent()) {
-            deselect();
-        }
     }
 
     public static List<Tool> tools() {
         return tools;
+    }
+
+    /** The tools of one mode, in registration order. */
+    public static List<Tool> tools(ResourceLocation mode) {
+        return tools.stream().filter(tool -> tool.mode().equals(mode)).toList();
     }
 
     public static Optional<Tool> selected() {
@@ -299,7 +239,7 @@ public final class OverheadTools {
 
     public static void reset() {
         deselect();
-        focusedTools.values().forEach(FocusedTool::reset);
+        marks.forEach(Marks::reset);
     }
 
     public static Optional<Handler> selectedHandler() {
@@ -317,9 +257,6 @@ public final class OverheadTools {
         }
         if (!Objects.equals(selected, id)) {
             deselect();
-            if (focusedTools.containsKey(id)) {
-                ZoneSelection.clear();
-            }
             selectionRevision++;
         }
         selected = id;
@@ -329,15 +266,10 @@ public final class OverheadTools {
 
     public static void deselect() {
         selectedHandler().ifPresent(Handler::cancel);
-        FocusedTool old = active().orElse(null);
         if (selected != null) {
             selectionRevision++;
         }
         selected = null;
         mode = BUILD;
-        if (old != null) {
-            ZoneSelection.clear();
-            old.leave();
-        }
     }
 }

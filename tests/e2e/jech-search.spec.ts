@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { expect, test } from "@playwright/test";
 import { defineTask, input, javaTask, screen, world, type MinecraftClient } from "@izakyl/blockwright-minecraft";
 import { clickElement, panelElements } from "../ldlib2";
@@ -10,6 +11,7 @@ import { commandPos, frames, waitForElement } from "../shared/harness/bw-helpers
 import { newRunId } from "../shared/harness/run-id";
 import { waitForResourceReload } from "../shared/harness/resource-reload";
 import { GROUND } from "../shared/harness/stage";
+import { waitForPresent } from "../shared/ui/book-cards";
 import { clickTab } from "../shared/ui/colony-pages";
 
 const CHINESE = defineTask<void, string>({
@@ -127,8 +129,16 @@ for (const installed of [false, true]) test(`display search with JEC ${installed
     await world.command(server, `setblock ${commandPos(barrel)} minecraft:barrel{Items:[{Slot:0b,id:"minecraft:iron_ingot",count:13}]}`);
     expect((await optInViaBook(server, client, player, barrel, "chest")).member).toBe(true);
     await openColonyPanelViaBook(server, client, player, founded.standBlock);
-    await clickTab(client, "folkways.page.build");
-    await clickElement(client, { id: "folkways.settings.open.tool.folkways_vanilla.building.folkways_vanilla.build" }, { scrollIntoView: true });
+    await clickTab(client, "folkways.tab.settings");
+    const hash = createHash("md5").update("folkways_core:colony_settings/folkways_vanilla:building").digest();
+    hash[6] = (hash[6] & 0x0f) | 0x30;
+    hash[8] = (hash[8] & 0x3f) | 0x80;
+    const id = hash.toString("hex").replace(/^(........)(....)(....)(....)/, "$1-$2-$3-$4-");
+    const head = `folkways.book.scope.${id}`;
+    await waitForPresent(server, client, head);
+    await clickElement(client, { id: head });
+    await waitForPresent(server, client, "folkways.card.items.tool");
+    await clickElement(client, { id: "folkways.card.items.tool" });
     await waitForElement(client, { id: "folkways.selector.search" });
     for (const query of ["tieding", "td", "tie锭", "@minecraft TIEDING"]) {
       await search(client, "folkways.selector.search", query);

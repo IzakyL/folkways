@@ -8,7 +8,7 @@ import io.github.izakyl.folkways.core.plan.api.Produce;
 import io.github.izakyl.folkways.core.plan.api.Refinement;
 import io.github.izakyl.folkways.core.plan.api.Workshop;
 import io.github.izakyl.folkways.core.plan.api.WorkshopRecipes;
-import io.github.izakyl.folkways.core.plan.internal.Refinements;
+import io.github.izakyl.folkways.core.shell.crafting.PatternTimes;
 import io.github.izakyl.folkways.core.work.api.Amount;
 import io.github.izakyl.folkways.core.work.api.Need;
 import java.util.ArrayList;
@@ -41,7 +41,7 @@ public final class ColonyRecipes {
                 (at, inputs, yield, vocation, limit) -> Math.min(runs, limit));
             return workshop.options(demand, Grown.of(demand)).stream()
                 .filter(option -> WorkshopRecipes.materials(option.replacement()).equals(materials)).findFirst()
-                .flatMap(Refinements::expand);
+                .flatMap(WorkshopRecipes::prepare);
         }
 
         public WorkshopRecipes.Recipe materials(long runs) {

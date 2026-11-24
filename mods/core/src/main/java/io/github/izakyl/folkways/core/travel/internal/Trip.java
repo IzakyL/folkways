@@ -99,7 +99,8 @@ public final class Trip implements Conveyance {
             Optional<WorldPos> leaves = leg + 1 < legs.size() ? legs.get(leg + 1).from() : Optional.empty();
             Set<WorldPos> onward = leaves.isPresent() ? Set.of(leaves.get())
                 : leg + 1 >= legs.size() - 1 ? footings : legs.get(leg + 1).to();
-            stages.add(new Stage(ran.get().aboard(hop.get()), onward, Optional.empty(), false));
+            Conveyance crossing = ran.get().aboard(hop.get(), moving, speed, lost);
+            stages.add(new Stage(crossing, onward, Optional.empty(), false));
         }
         return Optional.of(new Trip(stages, feedback));
     }
@@ -186,6 +187,11 @@ public final class Trip implements Conveyance {
         @Override
         public Optional<Doing> doing() {
             return resolved == null ? Optional.of(Doing.open(Doings.WAITING)) : resolved.doing();
+        }
+
+        @Override
+        public boolean awaitingArrival() {
+            return resolved != null && resolved.awaitingArrival();
         }
 
         @Override
@@ -294,6 +300,11 @@ public final class Trip implements Conveyance {
     @Override
     public Optional<Doing> doing() {
         return at < stages.size() ? stages.get(at).carrying().doing() : Optional.empty();
+    }
+
+    @Override
+    public boolean awaitingArrival() {
+        return at < stages.size() && stages.get(at).carrying().awaitingArrival();
     }
 
     @Override

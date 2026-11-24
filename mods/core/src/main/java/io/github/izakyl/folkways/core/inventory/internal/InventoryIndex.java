@@ -10,16 +10,16 @@ import io.github.izakyl.folkways.core.inventory.api.InventorySnapshot.State;
 import io.github.izakyl.folkways.core.inventory.api.InventorySnapshot.Store;
 import io.github.izakyl.folkways.core.inventory.api.InventorySnapshot.Version;
 import io.github.izakyl.folkways.core.inventory.api.InventorySnapshot;
-import io.github.izakyl.folkways.core.inventory.api.SlotSnapshot;
+import io.github.izakyl.folkways.core.facility.api.control.SlotSnapshot;
 import io.github.izakyl.folkways.core.inventory.api.Stash;
 import io.github.izakyl.folkways.core.inventory.api.StoreRule;
 import io.github.izakyl.folkways.core.inventory.api.StoreReadings;
-import io.github.izakyl.folkways.core.inventory.api.port.PortIdentity;
-import io.github.izakyl.folkways.core.inventory.api.port.PortReader;
-import io.github.izakyl.folkways.core.inventory.api.port.Room;
-import io.github.izakyl.folkways.core.inventory.api.port.StorePort;
-import io.github.izakyl.folkways.core.inventory.api.port.StorePort.Operation;
-import io.github.izakyl.folkways.core.inventory.api.port.StorePorts;
+import io.github.izakyl.folkways.core.facility.api.control.PortIdentity;
+import io.github.izakyl.folkways.core.facility.api.control.PortReader;
+import io.github.izakyl.folkways.core.facility.api.control.Room;
+import io.github.izakyl.folkways.core.facility.api.control.ItemPort;
+import io.github.izakyl.folkways.core.facility.api.control.Port.Operation;
+import io.github.izakyl.folkways.core.inventory.api.port.StoreAccess;
 import io.github.izakyl.folkways.core.inventory.api.port.Usability;
 import io.github.izakyl.folkways.core.item.api.Containers;
 import io.github.izakyl.folkways.core.plan.api.Workshop;
@@ -29,6 +29,7 @@ import io.github.izakyl.folkways.core.world.api.BlockChanges;
 import io.github.izakyl.folkways.core.world.api.Reach;
 import io.github.izakyl.folkways.core.world.api.Stand;
 import io.github.izakyl.folkways.core.world.api.StandGeometry;
+import io.github.izakyl.folkways.core.world.api.Stances;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.core.world.api.WorldSpaces;
 import java.util.ArrayDeque;
@@ -85,7 +86,6 @@ public final class InventoryIndex implements ColonyInventory, InventoryFeedback 
     private final Map<ResourceKey<Level>, Long> membershipRead = new HashMap<>();
     private final Map<ResourceKey<Level>, Membership> membershipDue = new HashMap<>();
     private final Map<ResourceKey<Level>, Set<WorldPos>> members = new LinkedHashMap<>();
-    private final Map<ResourceKey<Level>, Set<WorldPos>> excluded = new HashMap<>();
 
     private record ProviderKey(ResourceLocation owner, ResourceKey<Level> dimension) {
     }
@@ -142,13 +142,13 @@ public final class InventoryIndex implements ColonyInventory, InventoryFeedback 
         }
         Container container = entry.provider == null ? null
             : entry.provider.open(level, new InventoryProviders.Endpoint(entry.endpoint.inventory(), stash.pos()));
-        StorePort port = entry.provider == null ? StorePorts.at(level, anchor).orElse(null)
+        ItemPort port = entry.provider == null ? StoreAccess.at(level, anchor).orElse(null)
             : container == null ? null : new SlotPort(PortIdentity.block(stash.pos()), container);
-        if (port == null || !port.usability().usable()) {
+        if (port == null || !StoreAccess.usability(level, port).usable()) {
             return Optional.empty();
         }
         // Diagnostics must not stall the server or publish a partial read as a difference.
-        PortReader reader = port.reader(level, entry.rules);
+        PortReader reader = port.reader(level, StoreTransfers.window(entry.rules));
         if (!reader.step(SLOTS_PER_STEP * STEPS)) {
             return Optional.empty();
         }
@@ -354,10 +354,11 @@ public final class InventoryIndex implements ColonyInventory, InventoryFeedback 
     }
 
     public void advance(ServerLevel level, InventorySources sources, Map<UUID, Body> present) {
+        // Membership comes from the supplied sources. StoreAccess checks whether physical access is allowed.
         Map<WorldPos, Set<WorldPos>> access = new LinkedHashMap<>();
         for (WorldPos at : sources.storesIn(level.dimension())) {
-            WorldSpaces.resolve(level.getServer(), at).flatMap(block -> StorePorts.at(block.level(), block.cell()))
-                .filter(port -> port.usability().usable()).flatMap(StorePort::proxyMembers).ifPresent(represented -> {
+            WorldSpaces.resolve(level.getServer(), at).flatMap(block -> StoreAccess.at(block.level(), block.cell()))
+                .filter(port -> StoreAccess.usability(level, port).usable()).flatMap(ItemPort::proxyMembers).ifPresent(represented -> {
                     for (WorldPos member : represented) {
                         access.computeIfAbsent(member, ignored -> new LinkedHashSet<>()).add(at);
                     }
@@ -433,13 +434,20 @@ public final class InventoryIndex implements ColonyInventory, InventoryFeedback 
         while (portsToCheck.hasNext() && checked-- > 0) {
             StoreEntry entry = portsToCheck.next();
             if (stores.get(entry.where) != entry || entry.provider != null || !entry.dimension.equals(level.dimension())
-                || entry.queued || entry.state != State.OBSERVED) {
+                || entry.queued || entry.state != State.OBSERVED && !entry.ownedStore) {
                 continue;
             }
-            StorePort port = StorePorts.at(level, entry.where.pos().block(level)).orElse(null);
+            BlockPos pos = entry.where.pos().block(level);
+            if (entry.ownedStore) {
+                if (level.isLoaded(pos) && !StoreAccess.unavailable(level, pos)) {
+                    dirty(entry);
+                }
+                continue;
+            }
+            ItemPort port = StoreAccess.at(level, pos).orElse(null);
             if (port == null || !Objects.equals(entry.physicalKey, port.identity().key())
                 || !Objects.equals(entry.revision, port.revision())
-                || !entry.usability.equals(entry.usability(port)) || level.getGameTime() - entry.checked >= 100) {
+                || !entry.usability.equals(entry.usability(level, port)) || level.getGameTime() - entry.checked >= 100) {
                 dirty(entry);
             }
         }
@@ -516,7 +524,6 @@ public final class InventoryIndex implements ColonyInventory, InventoryFeedback 
         Membership next = new Membership(dimension, sources);
         membershipDue.put(dimension, next);
         members.put(dimension, next.offered);
-        excluded.put(dimension, next.barred);
         enqueue(next);
         topology++;
         coverage++;
@@ -531,7 +538,8 @@ public final class InventoryIndex implements ColonyInventory, InventoryFeedback 
                 entry.rules = next;
                 if (entry.slotted) {
                     entry.slots = entry.slots.stream().map(slot -> new SlotSnapshot(slot.physicalSlot(),
-                        Stores.accessibleSlot(next, entry.slots.size(), slot.physicalSlot()),
+                        StoreTransfers.window(next).map(window -> window.accessibleSlot(slot.physicalSlot()))
+                            .orElse(slot.physicalSlot()),
                         slot.stackCopy(), slot.stackLimit(), slot.incarnation())).toList();
                     entry.entries = StoreReadings.entries(entry.slots);
                     if (entry.room instanceof Room.Slots shared && entry.usability.usable()) {
@@ -730,7 +738,6 @@ public final class InventoryIndex implements ColonyInventory, InventoryFeedback 
         identities.clear();
         residents.clear();
         members.clear();
-        excluded.clear();
         membershipRead.clear();
         membershipDue.clear();
         providerRead.clear();
@@ -758,6 +765,9 @@ public final class InventoryIndex implements ColonyInventory, InventoryFeedback 
         Map<Stash, State> storeCoverage = new LinkedHashMap<>();
         boolean missing = false;
         for (StoreEntry entry : stores.values()) {
+            if (entry.ownedStore) {
+                continue;
+            }
             stored.put(entry.where, new Store(entry.where, entry.aliases, entry.dimension, entry.incarnation,
                 entry.version(), entry.state, entry.labor, entry.rules, entry.slots, entry.refused, entry.approach,
                 entry.block, entry.entries, entry.room, entry.usability, entry.operations, entry.container, entry.storage));
@@ -916,36 +926,24 @@ public final class InventoryIndex implements ColonyInventory, InventoryFeedback 
 
         private final ResourceKey<Level> dimension;
         private final Set<WorldPos> offered = new LinkedHashSet<>();
-        private final Set<WorldPos> barred = new LinkedHashSet<>();
         private final Iterator<WorldPos> storesToAdd;
-        private final Iterator<WorldPos> withheld;
-        private final Iterator<Workshop> workshops;
         private Iterator<StoreEntry> cleanup;
 
         Membership(ResourceKey<Level> dimension, InventorySources sources) {
             this.dimension = dimension;
             storesToAdd = sources.storesIn(dimension).iterator();
-            withheld = sources.withheldIn(dimension).iterator();
-            workshops = sources.workshopsIn(dimension).iterator();
         }
 
         @Override
         boolean read(MinecraftServer server) {
             int limit = SLOTS_PER_STEP;
             while (limit-- > 0) {
-                if (withheld.hasNext()) {
-                    barred.add(withheld.next());
-                } else if (workshops.hasNext()) {
-                    Workshop workshop = workshops.next();
-                    if (workshop.withholdsStore()) {
-                        barred.add(workshop.site().where());
-                    }
-                } else if (storesToAdd.hasNext()) {
+                if (storesToAdd.hasNext()) {
                     WorldPos at = storesToAdd.next();
                     offered.add(at);
                     if (WorldSpaces.resolve(server, at)
-                        .flatMap(block -> StorePorts.at(block.level(), block.cell()))
-                        .flatMap(StorePort::proxyMembers).isPresent()) {
+                        .flatMap(block -> StoreAccess.at(block.level(), block.cell()))
+                        .flatMap(ItemPort::proxyMembers).isPresent()) {
                         continue;
                     }
                     Stash where = aliases.getOrDefault(at, Stash.at(at));
@@ -990,6 +988,7 @@ public final class InventoryIndex implements ColonyInventory, InventoryFeedback 
         final Set<WorldPos> aliases = new LinkedHashSet<>();
         boolean labor = true;
         boolean storage;
+        boolean ownedStore;
         InventoryProviders.Provider provider;
         InventoryProviders.Endpoint endpoint;
         List<StoreRule> rules = List.of();
@@ -1043,14 +1042,23 @@ public final class InventoryIndex implements ColonyInventory, InventoryFeedback 
             publish();
         }
 
+        private void splitAlias(WorldPos alias) {
+            aliases.remove(alias);
+            InventoryIndex.this.aliases.remove(alias);
+            if (offered(Set.of(alias))) {
+                Stash split = Stash.at(alias);
+                StoreEntry entry = stores.computeIfAbsent(split, at -> new StoreEntry(at, dimension));
+                dirty(entry);
+            }
+        }
+
         void eligibility() {
             boolean nextStorage = provider == null && aliases.stream().anyMatch(alias ->
                 members.values().stream().anyMatch(offered -> offered.contains(alias)));
-            boolean nextLabor = nextStorage
-                && aliases.stream().noneMatch(excluded.getOrDefault(dimension, Set.of())::contains);
-            if (labor != nextLabor || storage != nextStorage) {
-                labor = nextLabor;
-                storage = nextStorage;
+            boolean stock = nextStorage || provider != null && provider.suppliesStock();
+            if (labor != nextStorage || storage != stock) {
+                labor = nextStorage;
+                storage = stock;
                 policy++;
                 InventoryIndex.this.policy++;
             }
@@ -1077,7 +1085,25 @@ public final class InventoryIndex implements ColonyInventory, InventoryFeedback 
                     block = WorldSpaces.resolve(server, home).orElse(block);
                 }
             }
-            StorePort resolved = provider == null ? StorePorts.at(level, block.cell()).orElse(null) : null;
+            boolean owned = provider == null && StoreAccess.unavailable(level, block.cell());
+            if (owned != ownedStore) {
+                ownedStore = owned;
+                topology++;
+                InventoryIndex.this.topology++;
+            }
+            if (ownedStore) {
+                identities.remove(new PhysicalStore(dimension, physicalKey), this);
+                for (WorldPos alias : List.copyOf(aliases)) {
+                    if (!alias.equals(where.pos()) && WorldSpaces.resolve(server, alias)
+                            .filter(at -> !StoreAccess.unavailable(at.level(), at.cell())).isPresent()) {
+                        splitAlias(alias);
+                    }
+                }
+                state(State.UNSUPPORTED);
+                reading = null;
+                return true;
+            }
+            ItemPort resolved = provider == null ? StoreAccess.at(level, block.cell()).orElse(null) : null;
             if (provider == null && resolved != null) {
                 Object key = resolved.identity().key();
                 PhysicalStore physical = new PhysicalStore(dimension, key);
@@ -1096,16 +1122,12 @@ public final class InventoryIndex implements ColonyInventory, InventoryFeedback 
                 }
                 identities.put(physical, this);
                 for (WorldPos alias : List.copyOf(aliases)) {
-                    StorePort member = WorldSpaces.resolve(server, alias)
-                        .flatMap(at -> StorePorts.at(at.level(), at.cell())).orElse(null);
-                    if (member != null && !member.identity().key().equals(key)) {
-                        aliases.remove(alias);
-                        InventoryIndex.this.aliases.remove(alias);
-                        if (offered(Set.of(alias))) {
-                            Stash split = Stash.at(alias);
-                            StoreEntry entry = stores.computeIfAbsent(split, at -> new StoreEntry(at, dimension));
-                            dirty(entry);
-                        }
+                    ItemPort member = WorldSpaces.resolve(server, alias)
+                        .flatMap(at -> StoreAccess.at(at.level(), at.cell())).orElse(null);
+                    if (!alias.equals(where.pos()) && (member != null && !member.identity().key().equals(key)
+                            || WorldSpaces.resolve(server, alias)
+                                .filter(at -> StoreAccess.attached(at.level(), at.cell())).isPresent())) {
+                        splitAlias(alias);
                     }
                 }
             }
@@ -1173,7 +1195,7 @@ public final class InventoryIndex implements ColonyInventory, InventoryFeedback 
             }
             Container container = provider == null ? null
                 : provider.open(level, new InventoryProviders.Endpoint(endpoint.inventory(), where.pos()));
-            StorePort port = provider == null ? StorePorts.at(level, anchor).orElse(null)
+            ItemPort port = provider == null ? StoreAccess.at(level, anchor).orElse(null)
                 : container == null ? null : new SlotPort(PortIdentity.block(where.pos()), container);
             if (port == null) {
                 observeApproach(level);
@@ -1183,25 +1205,32 @@ public final class InventoryIndex implements ColonyInventory, InventoryFeedback 
             }
             if (port instanceof SlotPort slotPort) {
                 container = slotPort.container();
+                if (!Containers.known(container)) {
+                    observeApproach(level);
+                    state(State.UNSUPPORTED);
+                    reading = null;
+                    return true;
+                }
             }
-            Usability usable = usability(port);
+            Usability usable = usability(level, port);
             Map<WorldPos, Set<Operation>> allowed = new LinkedHashMap<>();
             for (WorldPos alias : aliases) {
-                StorePort member = provider == null ? WorldSpaces.resolve(server, alias)
-                    .flatMap(at -> StorePorts.at(at.level(), at.cell())).orElse(null) : port;
+                ItemPort member = provider == null ? WorldSpaces.resolve(server, alias)
+                    .flatMap(at -> StoreAccess.at(at.level(), at.cell())).orElse(null) : port;
                 if (member != null) {
                     allowed.put(alias, member.operations());
-                    if (!member.usability().usable()
+                    Usability memberUsability = StoreAccess.usability(level, member);
+                    if (!memberUsability.usable()
                         && !(usable instanceof Usability.Unusable verdict && verdict.lasting())) {
-                        usable = member.usability();
+                        usable = memberUsability;
                     }
                 }
             }
             for (WorldPos alias : aliases) {
                 for (WorldPos access : proxyAccess.getOrDefault(dimension, Map.of()).getOrDefault(alias, Set.of())) {
-                    StorePort proxy = WorldSpaces.resolve(server, access)
-                        .flatMap(at -> StorePorts.at(at.level(), at.cell())).orElse(null);
-                    if (proxy != null && proxy.usability().usable()) {
+                    ItemPort proxy = WorldSpaces.resolve(server, access)
+                        .flatMap(at -> StoreAccess.at(at.level(), at.cell())).orElse(null);
+                    if (proxy != null && StoreAccess.usability(level, proxy).usable()) {
                         Set<Operation> shared = new LinkedHashSet<>(proxy.operations());
                         shared.retainAll(port.operations());
                         allowed.put(access, Set.copyOf(shared));
@@ -1213,6 +1242,7 @@ public final class InventoryIndex implements ColonyInventory, InventoryFeedback 
                 operations = Map.copyOf(allowed);
                 policy++;
                 InventoryIndex.this.policy++;
+                reading = null;
                 approach = new Approach(approach.revision(), State.DIRTY, approach.stands());
             }
             Object current = level.getBlockEntity(anchor);
@@ -1286,14 +1316,14 @@ public final class InventoryIndex implements ColonyInventory, InventoryFeedback 
             return true;
         }
 
-        Usability usability(StorePort port) {
+        Usability usability(ServerLevel level, ItemPort port) {
             for (WorldPos alias : aliases) {
-                var reason = StorePorts.condemned(alias);
+                var reason = StoreAccess.observation(alias).map(observation -> observation.reason());
                 if (reason.isPresent()) {
                     return new Usability.Unusable(reason.get(), true);
                 }
             }
-            return port.usability();
+            return StoreAccess.usability(level, port);
         }
 
         private Set<WorldPos> approachesAt() {
@@ -1311,11 +1341,13 @@ public final class InventoryIndex implements ColonyInventory, InventoryFeedback 
                 Set<Stand> putting = new LinkedHashSet<>();
                 boolean declared = false;
                 for (WorldPos alias : approachesAt()) {
-                    var port = WorldSpaces.resolve(level.getServer(), alias)
-                        .flatMap(at -> StorePorts.at(at.level(), at.cell()));
-                    var supplied = port.flatMap(value -> value.approach(level));
-                    declared |= supplied.isPresent();
-                    Set<Stand> cells = supplied.orElseGet(() -> StandGeometry.footingsOf(level, alias));
+                    var block = WorldSpaces.resolve(level.getServer(), alias);
+                    var port = block.flatMap(at -> StoreAccess.at(at.level(), at.cell()));
+                    Set<Stand> cells = port.map(item -> item.stance(block.orElseThrow().level())
+                        .map(Stances::cells).orElseGet(Set::of).stream().map(Stand::new)
+                        .collect(java.util.stream.Collectors.toSet()))
+                        .orElseGet(() -> StandGeometry.footingsOf(level, alias));
+                    declared |= cells.stream().anyMatch(stand -> !alias.sameRealm(stand.cell()));
                     stands.addAll(cells);
                     Set<Operation> allowed = operations.getOrDefault(alias, Set.of());
                     if (allowed.contains(Operation.TAKE)) {
@@ -1347,13 +1379,13 @@ public final class InventoryIndex implements ColonyInventory, InventoryFeedback 
         List<SlotSnapshot> slots = List.of();
         Containers.Refusals refusals;
 
-        Reading(Entry entry, long generation, List<StoreRule> rules, ServerLevel level, StorePort port,
+        Reading(Entry entry, long generation, List<StoreRule> rules, ServerLevel level, ItemPort port,
                 Set<Item> cached) {
             this.entry = entry;
             this.generation = generation;
             this.rules = rules;
-            StorePort observed = port instanceof SlotPort slot ? slot.observing(entry.slotObservation) : port;
-            reader = observed.reader(level, rules);
+            ItemPort observed = port instanceof SlotPort slot ? slot.observing(entry.slotObservation) : port;
+            reader = StoreAccess.reader(observed, level, StoreTransfers.window(rules));
             revision = port.revision();
             this.cached = cached;
         }

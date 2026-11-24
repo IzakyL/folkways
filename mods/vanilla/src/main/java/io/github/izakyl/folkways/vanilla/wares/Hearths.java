@@ -2,8 +2,8 @@ package io.github.izakyl.folkways.vanilla.wares;
 
 import io.github.izakyl.folkways.core.item.api.Goods;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
-import io.github.izakyl.folkways.core.front.api.notice.Line;
-import io.github.izakyl.folkways.core.front.api.notice.Sentence;
+import io.github.izakyl.folkways.core.card.api.notice.Line;
+import io.github.izakyl.folkways.core.card.api.notice.Sentence;
 import io.github.izakyl.folkways.vanilla.wares.mixin.FurnaceAccessor;
 import java.util.ArrayList;
 import java.util.List;

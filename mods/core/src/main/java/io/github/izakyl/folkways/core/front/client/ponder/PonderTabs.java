@@ -3,8 +3,8 @@ package io.github.izakyl.folkways.core.front.client.ponder;
 import com.lowdragmc.lowdraglib2.gui.ui.ModularUI;
 import com.lowdragmc.lowdraglib2.gui.ui.UIElement;
 import io.github.izakyl.folkways.core.FolkwaysCoreMod;
-import io.github.izakyl.folkways.core.front.api.panel.PageKind;
 import io.github.izakyl.folkways.core.front.client.Lessons;
+import io.github.izakyl.folkways.core.front.ui.screen.PageKinds.BookPage;
 import io.github.izakyl.folkways.core.front.ui.screen.PageKinds;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -22,7 +22,7 @@ import net.neoforged.neoforge.client.event.ScreenEvent;
 @EventBusSubscriber(modid = FolkwaysCoreMod.CORE_ID, bus = EventBusSubscriber.Bus.GAME, value = Dist.CLIENT)
 public final class PonderTabs {
 
-    private static Map<String, PageKind> byToken;
+    private static Map<String, BookPage> byToken;
     private static Screen watching;
 
     private PonderTabs() {
@@ -64,10 +64,10 @@ public final class PonderTabs {
             PonderHint.clearHover();
             return;
         }
-        Map<String, PageKind> pages = pages();
+        Map<String, BookPage> pages = pages();
         for (UIElement element : ui.getLastHoveredElements()) {
             String token = element.getId();
-            PageKind kind = token == null ? null : pages.get(token);
+            BookPage kind = token == null ? null : pages.get(token);
             if (kind != null) {
                 ResourceLocation lesson = kind.lesson().orElse(kind.id());
                 PonderHint.hover(Lessons.has(lesson) ? lesson : null,
@@ -78,11 +78,11 @@ public final class PonderTabs {
         PonderHint.clearHover();
     }
 
-    private static Map<String, PageKind> pages() {
+    private static Map<String, BookPage> pages() {
         if (byToken == null) {
-            List<PageKind> declared = PageKinds.all();
-            Map<String, PageKind> built = new LinkedHashMap<>();
-            for (PageKind kind : declared) {
+            List<BookPage> declared = PageKinds.all();
+            Map<String, BookPage> built = new LinkedHashMap<>();
+            for (BookPage kind : declared) {
                 built.put(kind.nameKey(), kind);
             }
             byToken = Map.copyOf(built);

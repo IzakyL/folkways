@@ -25,6 +25,15 @@ public final class SableSpaces implements WorldSpaces.Source {
     }
 
     @Override
+    public java.util.List<Space> frames(Level level) {
+        SubLevelContainer container = SubLevelContainer.getContainer(level);
+        if (container == null) {
+            return java.util.List.of();
+        }
+        return container.getAllSubLevels().stream().flatMap(ship -> wrap(ship).stream()).toList();
+    }
+
+    @Override
     public Optional<Space> containing(Level level, BlockPos storage) {
         return wrap(Sable.HELPER.getContaining(level, storage));
     }
@@ -51,7 +60,7 @@ public final class SableSpaces implements WorldSpaces.Source {
             }
             BlockPos cell = BlockPos.containing(ship.logicalPose().transformPositionInverse(feet));
             if (ship.getPlot().getBoundingBox().contains(cell.getX(), cell.getY(), cell.getZ())
-                    && !level.getBlockState(cell).getCollisionShape(level, cell).isEmpty()) {
+                    && level.isLoaded(cell) && !level.getBlockState(cell).getCollisionShape(level, cell).isEmpty()) {
                 return wrap(ship);
             }
         }
@@ -74,6 +83,14 @@ public final class SableSpaces implements WorldSpaces.Source {
         }
 
         @Override
+        public Optional<net.minecraft.world.level.levelgen.structure.BoundingBox> bounds() {
+            var box = subLevel.getPlot().getBoundingBox();
+            return Optional.of(net.minecraft.world.level.levelgen.structure.BoundingBox.fromCorners(
+                local(new BlockPos(box.minX(), box.minY(), box.minZ())),
+                local(new BlockPos(box.maxX(), box.maxY(), box.maxZ()))));
+        }
+
+        @Override
         public BlockPos storageOrigin() {
             return subLevel.getPlot().getCenterBlock();
         }
@@ -85,10 +102,16 @@ public final class SableSpaces implements WorldSpaces.Source {
 
         @Override
         public Vec3 toWorld(Vec3 local, float partialTick) {
-            Pose3dc pose = subLevel instanceof ClientSubLevelAccess drawn
-                ? drawn.renderPose(partialTick)
-                : subLevel.logicalPose();
-            return pose.transformPosition(local.add(Vec3.atLowerCornerOf(storageOrigin())));
+            return pose(partialTick).transformPosition(local.add(Vec3.atLowerCornerOf(storageOrigin())));
+        }
+
+        @Override
+        public Vec3 toLocal(Vec3 world, float partialTick) {
+            return pose(partialTick).transformPositionInverse(world).subtract(Vec3.atLowerCornerOf(storageOrigin()));
+        }
+
+        private Pose3dc pose(float partialTick) {
+            return subLevel instanceof ClientSubLevelAccess drawn ? drawn.renderPose(partialTick) : subLevel.logicalPose();
         }
 
         @Override

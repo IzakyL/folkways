@@ -49,12 +49,19 @@ A player's client reads its own `<game>/folkways/` too, but only for building:
 **`pattern`** (`.star`)
 - A pattern defines `draw(site)`. A file with no `draw` is a library that other
   patterns can `load()`, for example
-  `load("folkways_vanilla:materials.star", "NAME")`.
+  `load("folkways_vanilla:materials.star", "NAME")`. Patterns can also load the standard modules
+  `@std//math` and `@std//text`.
 - A pattern may also set `knobs`, `lang`, `accepts` (for example `["zone"]` or
   `["path"]`), `phases`, `capture`, `detail` and `grain`. `detail = "bits"` needs
-  the Carving integration.
+  the Chisels & Bits integration in Core. Vanilla ships patterns such as
+  `folkways_vanilla:pavilion` in the built-in `mod/folkways_vanilla:chiselsandbits` pack.
 - Loading is capped at 200,000 Starlark steps. Drawing time is capped by
-  `blueprints.drawSeconds` (default 30 s).
+  `blueprints.drawSeconds` (default 30 s), including native fitting. Loading and Starlark
+  evaluation during drawing share Core’s script memory limits.
+- Each draft scan and the total number of voxel layers are capped by
+  `blueprints.maxBuildCells` (default 262,144).
+  The finished draft's bounding box is capped at 1,024 cells per edge and
+  `blueprints.maxBlueprintVolume` (default 33,554,432 cells).
 - Limits on what the server sends to each player:
   - 131,072 characters per pattern;
   - 256 patterns;
@@ -71,7 +78,7 @@ A player's client reads its own `<game>/folkways/` too, but only for building:
 - Vanilla structure files, placed whole and never stamped by patterns.
 - At placement, size is checked against `blueprints.maxBuildCells` and
   `blueprints.maxBlueprintVolume`.
-- **Capture Blueprint** saves a selected area under the name you give it. The
+- **Capture blueprint** saves a selected area under the name you give it. The
   file goes to both `<game>/folkways/blueprint/<name>.nbt` and
   `<game>/folkways/piece/<name>.nbt` on the server. Capture is refused when the
   name is already taken or the file would be larger than 2 MiB.
@@ -159,7 +166,7 @@ Item filters in patterns and colony settings also accept any `#tag`.
 | `folkways_core:store/allowed` | block | Lets a plain `Container` block enroll as a store |
 | `folkways_core:store/refused` | block | Never used as a store; overrides every integration and `store/allowed` |
 | `folkways_core:store/candidates` | block | Client hint for blocks that can be enrolled |
-| `folkways_core:network_access/take`, `/put`, `/craft` | block | The most an AE2, RS2 or QIO device may do; the **Network devices** page narrows it ([INTEGRATIONS.md](INTEGRATIONS.md)) |
+| `folkways_core:network_access/take`, `/put`, `/craft` | block | The most an AE2, RS2 or QIO device may do; its facility card under **Facilities** narrows it ([INTEGRATIONS.md](INTEGRATIONS.md)) |
 
 **Residents and movement**
 
@@ -219,7 +226,7 @@ Item filters in patterns and colony settings also accept any `#tag`.
 
 | Tag | Kind | Purpose |
 |---|---|---|
-| `folkways_cookery:cookery_sickles` | item | Sickles for the Cookery harvest mode |
+| `folkways_vanilla:cookery_sickles` | item | Sickles for the **Sickle** harvest method with Kaleidoscope Cookery |
 
 Folkways also reads `c:foods`, `c:tools` and `c:tools/melee_weapon`.
 
@@ -229,9 +236,19 @@ Server settings live in each world's `serverconfig/`:
 
 - `folkways_core-server.toml`
 - `folkways_vanilla-server.toml`
-- `folkways_create-server.toml`
-- `folkways_firearms-server.toml`
-- `folkways_carving-server.toml`
+- `folkways_core-create-server.toml`
+- `folkways_vanilla-create-server.toml`
+- `folkways_core-tacz-server.toml`
+- `folkways_core-chiselsandbits-server.toml`
+
+Core's `[scripts]` settings apply to each Starlark run, including loaded libraries.
+`allocationMiB` defaults to 64 MiB and rejects guarded operations before allocation.
+`cumulativeAllocationMiB` defaults to 256 MiB for scripts and draft drawing on JVMs that report
+per-thread allocation. It includes allocations reclaimed during the run. Folkways Java builtins
+are excluded from this cumulative count. Starlark operations and callbacks still count.
+Either refusal surfaces as a script error.
+
+Startup switches for optional integrations live in `config/folkways_core-integrations.toml` on both sides.
 
 Client settings live in `config/`: `folkways_core-client.toml`,
 `folkways-windows.properties` and `folkways-drawing-settings.properties`.

@@ -66,6 +66,10 @@ public final class BlueprintBook {
         return orders.size() >= MAX_BUILD_ORDERS;
     }
 
+    boolean isSingleUse(UUID blueprint) {
+        return singleUse.contains(blueprint);
+    }
+
     void singleUse(UUID blueprint) {
         singleUse.add(blueprint);
     }
@@ -110,6 +114,22 @@ public final class BlueprintBook {
         if (blueprints.get(source.id()) == source) {
             blueprints.put(source.id(), ready);
         }
+    }
+
+    // Explicit build preparation resolves an old target; lookup itself only returns the filed drawing.
+    Optional<Blueprint> confirmTarget(ServerLevel level, UUID id) {
+        Blueprint found = blueprints.get(id);
+        if (found == null) {
+            return Optional.empty();
+        }
+        found.compatible();
+        if (found.confirmed()) {
+            return Optional.of(found);
+        }
+        Blueprint resolved = found.confirm(level);
+        blueprints.put(id, resolved);
+        dirty.run();
+        return Optional.of(resolved);
     }
 
     Optional<Blueprint> blueprint(UUID id) {

@@ -31,6 +31,9 @@ public final class ColonySites {
     }
 
     private static Optional<Delegation> accepting(Collection<Delegation> declared, Level level, BlockPos pos) {
+        if (!level.isLoaded(pos)) {
+            return Optional.empty();
+        }
         Delegation fallback = null;
         for (Delegation delegation : declared) {
             if (delegation.shape() instanceof Shape.Point point && point.accepts().test(level, pos)) return Optional.of(delegation);

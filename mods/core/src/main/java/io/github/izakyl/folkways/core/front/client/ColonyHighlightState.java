@@ -2,22 +2,21 @@ package io.github.izakyl.folkways.core.front.client;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
+import io.github.izakyl.folkways.core.card.api.notice.Line;
 import io.github.izakyl.folkways.core.front.api.Ghost;
 import io.github.izakyl.folkways.core.front.api.GhostRecipes;
 import io.github.izakyl.folkways.core.front.api.Placard;
-import io.github.izakyl.folkways.core.front.api.ToolKinds;
 import io.github.izakyl.folkways.core.front.api.ZoneRing;
-import io.github.izakyl.folkways.core.front.api.notice.Line;
 import io.github.izakyl.folkways.core.front.api.ui.ModeOverlays;
 import io.github.izakyl.folkways.core.front.api.ui.OverheadTools;
-import io.github.izakyl.folkways.core.front.engine.charter.CurrentColony;
+import io.github.izakyl.folkways.core.command.combat.ui.CombatContent;
+import io.github.izakyl.folkways.core.colony.charter.CurrentColony;
 import io.github.izakyl.folkways.core.front.engine.colony.ColonyPath;
 import io.github.izakyl.folkways.core.front.engine.item.HeldBook;
 import io.github.izakyl.folkways.core.front.engine.net.ColonyOverviewPacket;
 import io.github.izakyl.folkways.core.front.engine.net.RequestColonyOverviewPacket;
 import io.github.izakyl.folkways.core.front.engine.net.ZoneSnapshot;
 import io.github.izakyl.folkways.core.front.ui.UiRegistrations;
-import io.github.izakyl.folkways.core.front.ui.screen.DomainPage;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
@@ -78,7 +77,6 @@ public final class ColonyHighlightState {
     private static long pingUntilMs;
 
     static {
-        DomainPage.install(ColonyHighlightState::pingBlock);
     }
 
     private ColonyHighlightState() {
@@ -90,8 +88,7 @@ public final class ColonyHighlightState {
         MEMBERS.clear();
         MEMBERS.addAll(packet.members());
         ZONES.clear();
-        packet.zones().stream().filter(zone -> !ToolKinds.contains(zone.delegation()))
-            .forEach(ZONES::add);
+        ZONES.addAll(packet.zones());
         Level level = Minecraft.getInstance().level;
         if (level != null) {
             owedGhosts = packet.ghosts();
@@ -461,7 +458,7 @@ public final class ColonyHighlightState {
                 card(middleOf(path.points(), PATH_HEAD_ROOM), titled(path.delegation(), path.id()), camera);
             }
         }
-        for (Placard placard : Layer.WORKS.cards() ? PLACARDS : List.<Placard>of()) {
+        for (Placard placard : showWorkCards() ? PLACARDS : List.<Placard>of()) {
             Vec3 anchor = switch (placard.outline()) {
                 case Placard.Outline.Box box -> {
                     AABB bounds = AABB.encapsulatingFullBlocks(box.min(), box.max());
@@ -494,7 +491,7 @@ public final class ColonyHighlightState {
             }
         }
         Aim aim = Aim.of(minecraft.player);
-        for (Placard placard : Layer.WORKS.cards() ? PLACARDS : List.<Placard>of()) {
+        for (Placard placard : showWorkCards() ? PLACARDS : List.<Placard>of()) {
             if (placard.outline() instanceof Placard.Outline.Box box
                     && hits(aim.in(minecraft.level, box.min()), AABB.encapsulatingFullBlocks(box.min(), box.max()))) {
                 return placard.lines();
@@ -503,6 +500,11 @@ public final class ColonyHighlightState {
         return ZoneSelection.aimedZone(minecraft.player)
             .map(zone -> titled(zone.delegation(), zone.id()))
             .orElse(List.of());
+    }
+
+    private static boolean showWorkCards() {
+        return Layer.WORKS.cards() && !(Overhead.on()
+            && OverheadTools.selected().filter(tool -> tool.id().equals(CombatContent.ID)).isPresent());
     }
 
     private static void card(Vec3 anchor, List<Line> lines, Vec3 camera) {

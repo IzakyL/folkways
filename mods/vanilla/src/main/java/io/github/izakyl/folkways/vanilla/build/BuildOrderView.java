@@ -1,11 +1,13 @@
 package io.github.izakyl.folkways.vanilla.build;
 
+import io.github.izakyl.folkways.core.front.api.Ghost;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
+import io.github.izakyl.folkways.core.work.api.Joint;
+import io.github.izakyl.folkways.core.work.api.Joints;
 import io.github.izakyl.folkways.core.work.api.Need;
+import io.github.izakyl.folkways.core.work.api.SchematicPrinter;
 import io.github.izakyl.folkways.core.work.api.StructureCompat;
 import io.github.izakyl.folkways.core.world.api.StructurePayload;
-import io.github.izakyl.folkways.core.front.api.Ghost;
-import io.github.izakyl.folkways.vanilla.build.draft.Joint;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -72,11 +74,11 @@ public record BuildOrderView(UUID id, BlockPos min, BlockPos max, int placed, in
             .filter(cell -> !met.contains(cell.getKey()) && !cell.getValue().isAir() && level.hasChunkAt(cell.getKey()))
             .sorted(Comparator.comparingDouble(cell -> cell.getKey().distSqr(near))).limit(most).toList();
         try (var processing = StructureCompat.processing()) {
-            Map<BlockPos, SchematicPlacement.Launch> shots = target.shots();
+            Map<BlockPos, SchematicPrinter.Launch> shots = target.shots();
             for (Map.Entry<BlockPos, BlockState> cell : candidates) {
                 BlockPos pos = cell.getKey();
                 BlockState wanted = cell.getValue();
-                SchematicPlacement.Launch shot = shots.get(pos);
+                SchematicPrinter.Launch shot = shots.get(pos);
                 int bytes = target.dataAt(pos).bytes();
                 if (bytes > payloadBytes || shot == null
                     || target.costs(level, shot, met).isEmpty()) {
@@ -120,7 +122,8 @@ public record BuildOrderView(UUID id, BlockPos min, BlockPos max, int placed, in
                 continue;
             }
             Joints.sketch(joint.from(), start, joint.to(), end).forEach((pos, state) -> {
-                if (owed.size() < most && !met.contains(pos) && level.getBlockState(pos).canBeReplaced()) {
+                if (owed.size() < most && !met.contains(pos) && level.isLoaded(pos)
+                        && level.getBlockState(pos).canBeReplaced()) {
                     owed.add(new Ghost(pos, state));
                 }
             });
@@ -141,7 +144,7 @@ public record BuildOrderView(UUID id, BlockPos min, BlockPos max, int placed, in
                 owed.merge(need.spec(), need.count(), Long::sum);
             }
             Set<BlockPos> quoted = new LinkedHashSet<>();
-            for (SchematicPlacement.Launch shot : target.shots().values()) {
+            for (SchematicPrinter.Launch shot : target.shots().values()) {
                 BlockPos anchor = shot.anchor();
                 if (carved.contains(anchor) || !quoted.add(anchor) || met.contains(anchor) || !level.hasChunkAt(anchor)
                     || target.satisfied(level, anchor)) {
@@ -152,7 +155,7 @@ public record BuildOrderView(UUID id, BlockPos min, BlockPos max, int placed, in
                 }
                 // A waterlogged block laid where no water stands has a bucket let into it after.
                 for (BlockPos cell : shot.produces()) {
-                    if (!met.contains(cell) && Step.soaked(target.wanted(cell))
+                    if (!met.contains(cell) && level.isLoaded(cell) && Step.soaked(target.wanted(cell))
                             && level.getFluidState(cell).getType() != Fluids.WATER) {
                         owed.merge(ItemSpec.of(Items.WATER_BUCKET), 1L, Long::sum);
                     }

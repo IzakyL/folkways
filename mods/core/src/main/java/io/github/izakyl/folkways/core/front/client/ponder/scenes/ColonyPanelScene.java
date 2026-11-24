@@ -33,7 +33,7 @@ public final class ColonyPanelScene {
     }
 
     public static void program(SceneBuilder scene, SceneBuildingUtil util) {
-        scene.title("colony_panel", "The colony panel");
+        scene.title("colony_panel", "The Colony Book's pages");
         PonderScenery.openWorld(scene, util, PLATE);
         PonderScenery.grassGround(scene, util, PLATE);
 
@@ -72,14 +72,14 @@ public final class ColonyPanelScene {
         scene.idle(55);
         scene.overlay()
             .showText(80)
-            .text("A right click with the book opens the colony panel. Its pages are listed down the left side, in three groups.")
+            .text("Right-click with the book to open it. Its pages are listed on the left.")
             .pointAt(middle)
             .attachKeyFrame();
         scene.idle(90);
 
         scene.overlay()
             .showText(90)
-            .text("Under Colony come its own pages. Workforce sets each resident's work priorities, and Overview sums the colony up.")
+            .text("Overview shows what needs attention. Workforce sets each resident's trades.")
             .pointAt(minerHead)
             .placeNearTarget()
             .attachKeyFrame();
@@ -88,7 +88,7 @@ public final class ColonyPanelScene {
         scene.overlay().showOutline(PonderPalette.GREEN, "stock", chestArea, 100);
         scene.overlay()
             .showText(100)
-            .text("Overview counts people, the idle among them, members, zones, and the kinds and sum of goods, then lists the stock held in the colony's containers. Refresh counts again.")
+            .text("Stock & orders lists what the colony's containers hold. Click Refresh to count again.")
             .pointAt(util.vector().blockSurface(chest, Direction.SOUTH))
             .placeNearTarget()
             .attachKeyFrame();
@@ -97,7 +97,7 @@ public final class ColonyPanelScene {
         scene.overlay().showOutline(PonderPalette.RED, "stock", chestArea, 90);
         scene.overlay()
             .showText(90)
-            .text("At its foot, Delete colony ends the colony for good. It only goes through once you type out the phrase it asks for.")
+            .text("Delete colony, under Settings → Advanced, ends the colony for good. You must type a phrase to confirm.")
             .pointAt(util.vector().blockSurface(chest, Direction.SOUTH))
             .placeNearTarget()
             .attachKeyFrame();
@@ -107,7 +107,7 @@ public final class ColonyPanelScene {
         scene.overlay().showOutline(PonderPalette.GREEN, "beds", beds, 110);
         scene.overlay()
             .showText(110)
-            .text("Under Production, every installed part of Folkways adds a page: Workshop for the stations, Household for the beds, and so on. Their own lists live there, like the fuel stations may burn and the food residents may eat.")
+            .text("Facilities lists everything the colony runs, such as stations and beds. Click one to open its card. Colony-wide lists, like fuel and food, are in Settings.")
             .pointAt(util.vector().topOf(furnace))
             .placeNearTarget()
             .attachKeyFrame();
@@ -118,7 +118,7 @@ public final class ColonyPanelScene {
         scene.idle(10);
         scene.overlay()
             .showText(100)
-            .text("Each trade’s page holds its tool list. The list controls which tools residents may acquire for that trade. Unconfigured lists inherit the trade’s kit defaults; an empty list allows no acquisitions.")
+            .text("Settings → Trade tools sets which tools each trade may use. A list left alone uses the trade's defaults; an empty list allows none.")
             .pointAt(minerHead)
             .placeNearTarget()
             .attachKeyFrame();
@@ -126,7 +126,7 @@ public final class ColonyPanelScene {
 
         scene.overlay()
             .showText(90)
-            .text("Lessons holds a folder for every installed part of Folkways. Open one to watch a single lesson, or all of them in a row.")
+            .text("Lessons groups every lesson by topic. Watch one, or click Watch all.")
             .pointAt(cookHead)
             .placeNearTarget()
             .attachKeyFrame();
@@ -134,7 +134,7 @@ public final class ColonyPanelScene {
 
         scene.overlay()
             .showText(100)
-            .text("Anywhere in the panel, hover a page's tab and hold the ponder key to play the lesson for that page.")
+            .text("Hover a page's tab and hold the ponder key to play that page's lesson.")
             .pointAt(middle)
             .attachKeyFrame();
         scene.idle(110);

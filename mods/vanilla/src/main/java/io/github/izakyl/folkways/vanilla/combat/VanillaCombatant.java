@@ -5,6 +5,8 @@ import io.github.izakyl.folkways.core.combat.api.Combatant;
 import io.github.izakyl.folkways.core.combat.api.Vehicles;
 import io.github.izakyl.folkways.core.combat.api.WeaponAttack;
 import io.github.izakyl.folkways.core.combat.api.WeaponRules;
+import io.github.izakyl.folkways.core.facility.api.Lease;
+import io.github.izakyl.folkways.core.work.api.Seating;
 import io.github.izakyl.folkways.core.equipment.api.EquipmentProfile;
 import io.github.izakyl.folkways.core.resident.api.Bodies;
 import io.github.izakyl.folkways.core.resident.api.Body;
@@ -12,11 +14,13 @@ import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutProfile;
 import io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutProfiles;
 import io.github.izakyl.folkways.vanilla.combat.weapon.ResidentMounts;
-import io.github.izakyl.folkways.vanilla.combat.weapon.Weapons;
+import io.github.izakyl.folkways.vanilla.combat.weapon.ResidentWeapons;
 import io.github.izakyl.folkways.vanilla.person.ResidentEntity;
 import io.github.izakyl.folkways.vanilla.person.fear.FearContent;
+import io.github.izakyl.folkways.vanilla.person.living.LivingContent;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.UUID;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
@@ -28,7 +32,7 @@ public final class VanillaCombatant implements Combatant {
 
     @Override
     public boolean freeToCommand(Mob mob) {
-        return !mob.isPassenger() || WeaponStations.ownsSeat(mob) || ResidentMounts.riding(mob)
+        return !mob.isPassenger() || Seating.holds(mob) || ResidentMounts.riding(mob)
             || Bodies.of(mob)
                 .filter(body -> Vehicles.of(mob.getVehicle())
                     .filter(provider -> provider.ownsSeat(body)).isPresent()).isPresent();
@@ -41,7 +45,8 @@ public final class VanillaCombatant implements Combatant {
 
     @Override
     public void disengage(Body body) {
-        WeaponStations.release(body.id());
+        Lease.release(body.id());
+        Seating.rise(body.mob());
         stand(body);
     }
 
@@ -54,37 +59,37 @@ public final class VanillaCombatant implements Combatant {
 
     @Override
     public double range(Worker who) {
-        return Weapons.range(who);
+        return ResidentWeapons.range(who);
     }
 
     @Override
     public double range(Worker who, LivingEntity target) {
-        return Weapons.range(who, target);
+        return ResidentWeapons.range(who, target);
     }
 
     @Override
     public boolean ranged(Worker who, LivingEntity target) {
-        return Weapons.ranged(who, target);
+        return ResidentWeapons.ranged(who, target);
     }
 
     @Override
     public WeaponAttack select(Worker who, LivingEntity target, WeaponAttack current) {
-        return Weapons.select(who, target, current);
+        return ResidentWeapons.select(who, target, current);
     }
 
     @Override
     public double range(Worker who, Entity target) {
-        return Weapons.range(who, target);
+        return ResidentWeapons.range(who, target);
     }
 
     @Override
     public boolean ranged(Worker who, Entity target) {
-        return Weapons.ranged(who, target);
+        return ResidentWeapons.ranged(who, target);
     }
 
     @Override
     public WeaponAttack select(Worker who, Entity target, WeaponAttack current) {
-        return Weapons.select(who, target, current);
+        return ResidentWeapons.select(who, target, current);
     }
 
     @Override
@@ -107,6 +112,16 @@ public final class VanillaCombatant implements Combatant {
     @Override
     public boolean hostile(Mob foe, LivingEntity resident) {
         return Threats.hostile(foe, resident);
+    }
+
+    @Override
+    public boolean hostile(Mob foe) {
+        return Threats.hostile(foe, foe.getTarget());
+    }
+
+    @Override
+    public boolean colonyPet(Entity entity, UUID colony) {
+        return LivingContent.colonyPet(entity, colony);
     }
 
     @Override

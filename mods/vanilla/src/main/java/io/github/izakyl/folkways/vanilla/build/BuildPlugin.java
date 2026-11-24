@@ -2,7 +2,7 @@ package io.github.izakyl.folkways.vanilla.build;
 
 import io.github.izakyl.folkways.core.extension.api.Declaring;
 import io.github.izakyl.folkways.core.front.api.Registering;
-import io.github.izakyl.folkways.core.front.api.ui.RegisteringUi;
+import io.github.izakyl.folkways.core.front.api.operation.Commissioning;
 import io.github.izakyl.folkways.core.library.Shelves;
 import io.github.izakyl.folkways.vanilla.build.draft.PatternPackets;
 import io.github.izakyl.folkways.vanilla.build.draft.Patterns;
@@ -21,10 +21,10 @@ public final class BuildPlugin {
     }
 
     public static void install(IEventBus modBus) {
+        Commissioning.install(new SurvivalCommissions());
         Shelves.register(Patterns.SHELF, Templates.SHELF, Templates.BLUEPRINTS);
         modBus.addListener(Declaring.class, BuildContent::declare);
         modBus.addListener(Registering.class, BuildContent::enroll);
-        modBus.addListener(RegisteringUi.class, event -> event.page(BuildContent.BLUEPRINTS.id(), BlueprintsPage::new));
         modBus.addListener(BuildPackets::registerPayloads);
         modBus.addListener(PatternPackets::registerPayloads);
         NeoForge.EVENT_BUS.addListener(AddReloadListenerEvent.class, event ->

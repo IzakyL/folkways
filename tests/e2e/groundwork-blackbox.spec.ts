@@ -5,9 +5,7 @@ import {
   foundColonyFast, foundingBox, probe, stockToolsForResidents, TRADE_TOOLS, waitForGroundedPlayer, type Vec,
 } from "../shared/colony/colony-founding";
 import { runColonyTask } from "../shared/colony/colony-tasks";
-import {
-  openBookPage, setBookGesture, zoneKindToken,
-} from "../shared/ui/zone-tools";
+import { openBookPage, setBookGesture, handShapeTo, zoneKindKey, CARD_WINDOW } from "../shared/ui/zone-tools";
 import { clickElement } from "../ldlib2";
 import { settlePanel } from "../shared/ui/site-panel";
 import { aimAndWorldLeftClick, blockHasItem } from "../shared/ui/world-ui";
@@ -88,6 +86,11 @@ for (const on of twins()) test(on.title("groundwork end-to-end: clear, fill, wee
 
     // Prepare each scene before confirmation: the next sweep files its current target and erases the zone.
     await setBookGesture(server, client, player, "box");
+    // Clear the boulder footprint and the player's approach before placing the marker blocks.
+    const approach = stage.world({ x: boulder.min.x - 2, y: ground, z: boulder.min.z - 2 });
+    const shelter = stage.stand({ x: founded.standBlock.x + 0.5, y: origin.y, z: founded.standBlock.z + 1.5 });
+    const nearby = `@e[type=folkways_vanilla:resident,x=${approach.x},y=${approach.y},z=${approach.z},dx=5,dy=4,dz=5]`;
+    await tryCommand(server, `execute as ${nearby} run tp @s ${shelter.x} ${shelter.y} ${shelter.z}`);
     await tryCommand(server, `setblock ${at(boulder.min)} minecraft:stone`);
     await tryCommand(server, `setblock ${at(boulder.max)} minecraft:stone`);
     await mark(server, client, player, boulder.min, boulder.max);
@@ -163,13 +166,8 @@ async function mark(server: MinecraftServer, client: MinecraftClient, player: st
 }
 
 async function confirmClearOrder(server: MinecraftServer, client: MinecraftClient, player: string, standBlock: Vec) {
-  await openBookPage(server, client, player, standBlock, stage);
-  const token = zoneKindToken("ground");
-  await waitForElement(client, { id: token }, { timeoutMs: 8_000 });
-  await clickElement(client, { id: token });
-  await settlePanel(server, client);
-  await waitForElement(client, { id: "folkways.zoneconfig.confirm" }, { timeoutMs: 8_000 });
-  await clickElement(client, { id: "folkways.zoneconfig.confirm" });
+  await handShapeTo(server, client, zoneKindKey("ground"));
+  await waitForElement(client, { id: CARD_WINDOW }, { timeoutMs: 8_000 });
   await screen.dismiss(client);
   await tick.sprint(server, 10);
 }

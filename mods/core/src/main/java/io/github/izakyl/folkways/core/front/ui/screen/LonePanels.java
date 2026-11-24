@@ -31,6 +31,7 @@ public final class LonePanels {
         window.body().addChildren(body.build(window));
         window.setOnClose(() -> back(parent));
         window.onDismiss(() -> back(parent));
+        desk.launchers();
         ModularUI ui = new ModularUI(UI.of(desk.root(),
             List.of(StylesheetManager.INSTANCE.getStylesheetSafe(StylesheetManager.MC),
                 StylesheetManager.INSTANCE.getStylesheetSafe(
@@ -38,6 +39,22 @@ public final class LonePanels {
             screen -> screen), minecraft.player);
         minecraft.setScreen(new Held(ui, title, parent));
         window.open();
+    }
+
+    public static void openLauncher(String id) {
+        Minecraft minecraft = Minecraft.getInstance();
+        Screen parent = minecraft.screen;
+        Desk desk = new Desk();
+        desk.launchers();
+        desk.onEmpty(() -> back(parent));
+        Component title = Component.translatable("folkways.panel.title");
+        ModularUI ui = new ModularUI(UI.of(desk.root(),
+            List.of(StylesheetManager.INSTANCE.getStylesheetSafe(StylesheetManager.MC),
+                StylesheetManager.INSTANCE.getStylesheetSafe(
+                    net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("folkways_core", "lss/desk.lss"))),
+            screen -> screen), minecraft.player);
+        minecraft.setScreen(new Held(ui, title, parent));
+        desk.launch(id);
     }
 
     private static void back(Screen parent) {

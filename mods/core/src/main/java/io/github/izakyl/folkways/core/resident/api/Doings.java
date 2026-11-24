@@ -18,6 +18,8 @@ public final class Doings {
 
     public static final ResourceLocation WORKING = named("working");
 
+    public static final ResourceLocation OPERATING = named("operating");
+
     public static final ResourceLocation WAITING = named("waiting");
 
     // No body is ever set to this: it is what a card shows for a body that is up to nothing.

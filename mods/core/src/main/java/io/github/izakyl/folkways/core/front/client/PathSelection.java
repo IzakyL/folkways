@@ -6,10 +6,8 @@ import io.github.izakyl.folkways.core.FolkwaysClientConfig;
 import io.github.izakyl.folkways.core.front.api.Shape;
 import io.github.izakyl.folkways.core.front.api.ui.ModeOverlays;
 import io.github.izakyl.folkways.core.front.api.ui.OverheadTools;
-import io.github.izakyl.folkways.core.front.api.ui.PathOffers;
 import io.github.izakyl.folkways.core.front.engine.item.HeldBook;
 import io.github.izakyl.folkways.core.front.engine.net.CreatePathPacket;
-import io.github.izakyl.folkways.core.front.ui.screen.Drawing;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -58,17 +56,6 @@ public final class PathSelection {
     /** The point the wheel moves: the last one set down, until another is picked up. */
     private static int held = -1;
 
-    static {
-        Drawing.install(Shape.Gesture.LINE, new Draft<Drawn>(PathSelection::drawn, PathSelection::clear,
-            path -> Component.translatable("folkways.zoneconfig.drawn", path.points().size()),
-            path -> path.points().size(),
-            (colony, line, delegation, settings) -> new CreatePathPacket(colony, line.points(), delegation, settings),
-            id -> PathOffers.of(id).map(offer -> (line, taking) -> offer.body().build(line.points(), taking))));
-        Drawing.offers(Shape.Gesture.LINE, () -> PathOffers.all().stream()
-            .map(offer -> new Drawing.Offered(offer.id(), offer.nameKey(), offer.icon()))
-            .toList());
-    }
-
     private PathSelection() {
     }
 
@@ -77,6 +64,10 @@ public final class PathSelection {
         public Drawn {
             points = List.copyOf(points);
         }
+    }
+
+    static List<BlockPos> points() {
+        return List.copyOf(POINTS);
     }
 
     public static Optional<Drawn> drawn() {
@@ -99,7 +90,7 @@ public final class PathSelection {
             return;
         }
         Optional<HeldBook> book = HeldBook.bound(player);
-        if (book.isEmpty() || (book.get().gesture() != Shape.Gesture.LINE || OverheadTools.active().isPresent())) {
+        if (book.isEmpty() || BookTools.gesture() != Shape.Gesture.LINE) {
             clear();
         }
     }
@@ -130,6 +121,7 @@ public final class PathSelection {
             return true;
         }
         POINTS.add(aimed.get());
+        BookTools.mark(player.level());
         held = POINTS.size() - 1;
         Draft.say(Component.translatable("folkways.path.point", POINTS.size()));
         return true;
@@ -164,6 +156,7 @@ public final class PathSelection {
         boolean along = !FolkwaysClientGameEvents.alternateDown();
         BlockPos moved = POINTS.get(held).relative(push(player), along ? FolkwaysClientConfig.away(step) : step);
         POINTS.set(held, moved);
+        BookTools.mark(player.level());
         // The player is told where the point shows, not the cell a ship keeps it in.
         BlockPos shown = Placed.shown(player.level(), moved);
         Draft.say(Component.translatable("folkways.path.moved", held + 1, shown.getX(), shown.getY(), shown.getZ()));

@@ -9,8 +9,8 @@ import io.github.izakyl.folkways.core.equipment.api.EquipmentProfiles;
 import io.github.izakyl.folkways.core.equipment.api.EquipmentSuppliers;
 import io.github.izakyl.folkways.core.equipment.api.GearSlot;
 import io.github.izakyl.folkways.core.equipment.api.GearSlots;
-import io.github.izakyl.folkways.core.front.api.notice.Notice;
-import io.github.izakyl.folkways.core.front.api.notice.Sentence;
+import io.github.izakyl.folkways.core.card.api.notice.Notice;
+import io.github.izakyl.folkways.core.card.api.notice.Sentence;
 import io.github.izakyl.folkways.core.front.api.ui.Pages;
 import io.github.izakyl.folkways.core.inventory.api.InventorySnapshot;
 import io.github.izakyl.folkways.core.item.api.Goods;
@@ -128,6 +128,9 @@ final class EquipmentDesk {
     }
 
     private static EquipmentProfile current(EquipmentProfiles profiles, CompoundTag request) {
+        if (!request.hasUUID("profile")) {
+            throw new IllegalArgumentException("missing profile");
+        }
         EquipmentProfile profile = profiles.get(request.getUUID("profile")).orElseThrow();
         if (request.getLong("revision") != profiles.revision(profile.id())) {
             throw new IllegalArgumentException("stale profile");

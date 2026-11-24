@@ -3,6 +3,8 @@ package io.github.izakyl.folkways.core.resident.api;
 import io.github.izakyl.folkways.core.base.Ledger;
 import io.github.izakyl.folkways.core.vocation.api.Vocation;
 import io.github.izakyl.folkways.core.effect.perk.PerkPool;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -12,6 +14,8 @@ public final class ResidentKinds {
 
     private static final Ledger<ResidentKind> KINDS =
         new Ledger<>("a sort of resident kind", ResidentKind::id);
+
+    private static final Map<ResourceLocation, Set<ResourceLocation>> BAREHANDED = new LinkedHashMap<>();
 
     private ResidentKinds() {
     }
@@ -33,6 +37,15 @@ public final class ResidentKinds {
 
     public static Optional<ResidentKind> of(ResourceLocation id) {
         return KINDS.of(id);
+    }
+
+    public static void registerBarehanded(ResourceLocation kind, ResourceLocation vocation) {
+        KINDS.of(kind).orElseThrow(() -> new IllegalStateException("Unknown resident kind " + kind));
+        BAREHANDED.computeIfAbsent(kind, id -> new LinkedHashSet<>()).add(vocation);
+    }
+
+    static boolean registeredBarehanded(ResourceLocation kind, ResourceLocation vocation) {
+        return BAREHANDED.getOrDefault(kind, Set.of()).contains(vocation);
     }
 
     // Whether a resident of this kind needs no tool for work done in this trade.

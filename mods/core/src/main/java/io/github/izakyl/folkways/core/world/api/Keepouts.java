@@ -1,6 +1,7 @@
 package io.github.izakyl.folkways.core.world.api;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.CopyOnWriteArrayList;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.BlockGetter;
@@ -25,14 +26,30 @@ public final class Keepouts {
         }
     }
 
-    private static final List<Keepout> SOURCES = new CopyOnWriteArrayList<>();
+    private record Entry(Level level, Object source, Keepout value) {
+    }
+
+    private static final List<Entry> SOURCES = new CopyOnWriteArrayList<>();
 
     private Keepouts() {
     }
 
-    public static Runnable install(Keepout source) {
-        SOURCES.add(source);
-        return () -> SOURCES.remove(source);
+    public static Runnable install(Keepout value) {
+        return install(new Object(), value);
+    }
+
+    public static Runnable install(Object source, Keepout value) {
+        return install(null, source, value);
+    }
+
+    public static Runnable install(Level level, Object source, Keepout value) {
+        Entry entry = new Entry(level, Objects.requireNonNull(source), Objects.requireNonNull(value));
+        SOURCES.add(entry);
+        return () -> SOURCES.removeIf(one -> one == entry);
+    }
+
+    public static void forget(Object source) {
+        SOURCES.removeIf(entry -> entry.source().equals(source));
     }
 
     public static boolean forbidden(Level level, int x, int y, int z) {
@@ -40,7 +57,11 @@ public final class Keepouts {
     }
 
     public static boolean forbidden(Level level, BlockGetter context, int x, int y, int z) {
-        for (Keepout source : SOURCES) {
+        for (Entry entry : SOURCES) {
+            if (entry.level() != null && entry.level() != level) {
+                continue;
+            }
+            Keepout source = entry.value();
             if (source.forbids(level, context, x, y, z)) {
                 return true;
             }
@@ -60,6 +81,7 @@ public final class Keepouts {
     // source remains a wall even when the forbidden areas touch one another.
     public static Keepout blockingEscapeFrom(Level level, BlockGetter context, BlockPos origin) {
         List<Keepout> remaining = SOURCES.stream()
+            .filter(entry -> entry.level() == null || entry.level() == level).map(Entry::value)
             .map(source -> source.blockingEscapeFrom(level, context, origin)).toList();
         return (host, x, y, z) -> remaining.stream().anyMatch(source -> source.forbids(host, x, y, z));
     }

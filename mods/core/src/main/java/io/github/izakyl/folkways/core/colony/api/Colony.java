@@ -60,7 +60,7 @@ public interface Colony {
     List<WorldPos> storesIn(ResourceKey<Level> dimension);
 
     // The resident's view of a slot port, with slot and admission rules applied. Non-slot ports return empty;
-    // use StorePorts for transfers and inventory().snapshot() for their goods.
+    // use StoreAccess for transfers and inventory().snapshot() for their goods.
     default Optional<Container> store(ServerLevel level, WorldPos at) {
         return Optional.empty();
     }
@@ -101,11 +101,6 @@ public interface Colony {
     // The colony's work standing still in that dimension, each told where it is; see Stall.
     List<Stall> stallsIn(ResourceKey<Level> dimension);
 
-    // Replaces every store this owner answers for itself in that dimension: its goods are reached only through what
-    // the owner offers, so the colony's work never counts them as a store's, whoever else offers it.
-    // Registered usable ports still offer storage room and PUT approaches.
-    void withhold(ResourceLocation owner, ResourceKey<Level> dimension, Collection<WorldPos> stores);
-
     // Replaces every rule this owner set on the colony's stores in that dimension.
     void rule(ResourceLocation owner, ResourceKey<Level> dimension, Collection<StoreRule> rules);
 
@@ -117,6 +112,10 @@ public interface Colony {
     void keep(ResourceLocation owner, CompoundTag tag);
 
     CompoundTag kept(ResourceLocation owner);
+
+    default long keptRevision(ResourceLocation owner) {
+        return kept(owner).hashCode();
+    }
 
     // Takes it up for `owner`; empty when a block or entity is already held, by this colony or another.
     Optional<Claim> hold(ResourceLocation owner, Claimed what);

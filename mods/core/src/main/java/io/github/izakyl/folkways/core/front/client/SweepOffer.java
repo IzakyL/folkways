@@ -8,6 +8,7 @@ import com.lowdragmc.lowdraglib2.gui.ui.event.UIEvents;
 import dev.vfyjxf.taffy.style.FlexDirection;
 import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import io.github.izakyl.folkways.core.front.api.Books;
+import io.github.izakyl.folkways.core.front.api.Category;
 import io.github.izakyl.folkways.core.front.api.Delegation;
 import io.github.izakyl.folkways.core.front.api.ui.BoxOffers;
 import io.github.izakyl.folkways.core.front.api.ui.Rows;
@@ -44,7 +45,7 @@ final class SweepOffer {
 
     static void register() {
         BoxOffers.register(new BoxOffers.Offer(ID, TOKEN, ResourceLocation.withDefaultNamespace("chest"),
-            SweepOffer::body));
+            SweepOffer::body).in(Category.TAKING));
     }
 
     private static UIElement body(BlockPos min, BlockPos max, Taking taking) {

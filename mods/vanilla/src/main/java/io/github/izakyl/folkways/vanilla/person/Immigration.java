@@ -3,7 +3,7 @@ package io.github.izakyl.folkways.vanilla.person;
 import io.github.izakyl.folkways.core.front.api.Admission;
 import io.github.izakyl.folkways.core.front.api.Endorsed;
 import io.github.izakyl.folkways.core.front.api.Endorsement;
-import io.github.izakyl.folkways.core.front.api.notice.Notice;
+import io.github.izakyl.folkways.core.card.api.notice.Notice;
 import io.github.izakyl.folkways.vanilla.FolkwaysVanillaConfig;
 import io.github.izakyl.folkways.vanilla.person.living.LivingContent;
 import io.github.izakyl.folkways.vanilla.person.living.SettlerNeed;
@@ -29,22 +29,12 @@ final class Immigration implements Admission {
     }
 
     private static Endorsed admit(Endorsement.Called called) {
-        if (!FolkwaysVanillaConfig.immigrationEnabled()) {
-            return new Endorsed.Refused(Notice.of(ImmigrationRefusal.SWITCHED_OFF));
-        }
-        PersonPresence people = queue(called).orElse(null);
-        if (people == null || people.waiting() <= 0) {
-            return new Endorsed.Refused(Notice.of(ImmigrationRefusal.NOBODY_WAITING));
-        }
-        int heads = PersonPresence.heads(called.view());
-        for (SettlerNeed need : LivingContent.settlerNeeds(called.colony(), called.view().level().getServer())) {
-            if (!need.complete()) {
-                called.colony().inventory().ensureObserved();
-                people.retry(called);
-                return new Endorsed.Pending();
-            }
-            if (!need.met(heads)) {
-                return new Endorsed.Refused(need.asRefusal(heads));
+        boolean creative = called.by().isCreative();
+        PersonPresence people = creative ? null : queue(called).orElse(null);
+        if (!creative) {
+            Optional<Endorsed> blocked = checkSettler(called, people);
+            if (blocked.isPresent()) {
+                return blocked.get();
             }
         }
         ResidentEntity person = PersonBody.RESIDENT.get().create(called.view().level());
@@ -57,8 +47,32 @@ final class Immigration implements Admission {
             person.discard();
             return new Endorsed.Refused(Notice.of(ImmigrationRefusal.NO_ROOM_IN_THE_WORLD));
         }
-        people.take();
+        if (people != null) {
+            people.take();
+        }
         return new Endorsed.Joins(person);
+    }
+
+    private static Optional<Endorsed> checkSettler(Endorsement.Called called, PersonPresence people) {
+        if (!FolkwaysVanillaConfig.immigrationEnabled()) {
+            return Optional.of(new Endorsed.Refused(Notice.of(ImmigrationRefusal.SWITCHED_OFF)));
+        }
+        if (people == null || people.waiting() <= 0) {
+            return Optional.of(new Endorsed.Refused(Notice.of(ImmigrationRefusal.NOBODY_WAITING)));
+        }
+        LivingContent.reconcileBeds(called.colony(), called.view().level().getServer());
+        int heads = PersonPresence.heads(called.view());
+        for (SettlerNeed need : LivingContent.settlerNeeds(called.colony(), called.view().level().getServer())) {
+            if (!need.complete()) {
+                called.colony().inventory().ensureObserved();
+                people.retry(called);
+                return Optional.of(new Endorsed.Pending());
+            }
+            if (!need.met(heads)) {
+                return Optional.of(new Endorsed.Refused(need.asRefusal(heads)));
+            }
+        }
+        return Optional.empty();
     }
 
     private static Optional<PersonPresence> queue(Endorsement.Called called) {

@@ -4,7 +4,7 @@ import io.github.izakyl.folkways.core.extension.api.Declaring;
 import io.github.izakyl.folkways.core.front.api.Enrollment;
 import io.github.izakyl.folkways.core.front.api.Registering;
 import io.github.izakyl.folkways.core.front.api.Schema;
-import io.github.izakyl.folkways.core.front.api.panel.PageKind;
+import io.github.izakyl.folkways.vanilla.wares.WaresContent;
 import java.util.List;
 import net.minecraft.resources.ResourceLocation;
 
@@ -31,9 +31,6 @@ public final class OrdersContent {
         "filter", "folkways.settings.orders.filter",
         ResourceLocation.withDefaultNamespace("hopper"), List.of());
 
-    static final PageKind PAGE = PageKind.boarded(ID, "folkways.panel.orders",
-        ResourceLocation.withDefaultNamespace("writable_book"));
-
     private static final Schema DRAFT = new Schema(List.of(ITEM, LOW, COUNT, FILTER));
 
     public static void declare(Declaring declaring) {
@@ -46,9 +43,9 @@ public final class OrdersContent {
     }
 
     public static void enroll(Registering registering) {
-        registering.facing(ID, colony -> colony.service(ID, OrdersPresence.class)
-            .map(value -> (io.github.izakyl.folkways.core.front.api.Facing) value));
-        registering.enrollment(ID, new Enrollment(List.of(), DRAFT, List.of(PAGE)));
+        registering.holding(WaresContent.STORE, colony -> colony.service(ID, OrdersPresence.class).map(state -> state));
+        registering.panel(ID, colony -> colony.service(ID, OrdersPresence.class).map(state -> state));
+        registering.enrollment(ID, new Enrollment(List.of(), DRAFT));
     }
 
 }

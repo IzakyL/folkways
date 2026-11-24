@@ -1,0 +1,22 @@
+[perks]
+	#The conductor's quick hands, as a multiplier on the wind-up of boarding and the rest
+	#of the rail work. One entry per rank, below 1 for faster.
+	conductingHaste = [0.92, 0.84, 0.76, 0.68]
+	#The courier's quick hands, as a multiplier on the wind-up of collecting a package.
+	#This ladder is deliberately shallower than the others: a courier's day is mostly walking,
+	#so a steep one would buy almost nothing. One entry per rank, below 1 for faster.
+	dispatchHaste = [0.92, 0.85, 0.78, 0.72]
+
+[labor]
+	#Wind-up, in ticks, for a courier lifting a package off a port. Shorter than a
+	#hauler's reach by default, on the grounds that a port hands its package over ready to
+	#carry. The courier's quick hands scale it.
+	# Default: 10
+	# Range: 0 ~ 1200
+	dispatchReachTicks = 10
+	#Ticks a resident spends settling into a seat, whether that is a rail carriage or a
+	#courier's post. The same value is both the wind-up planned for and the count the sitting
+	#body waits out, so the plan and the body agree on what sitting down costs.
+	# Default: 8
+	# Range: 0 ~ 200
+	seatTicks = 13

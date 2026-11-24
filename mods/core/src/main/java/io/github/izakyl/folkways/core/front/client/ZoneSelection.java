@@ -1,21 +1,19 @@
 package io.github.izakyl.folkways.core.front.client;
 
+import net.neoforged.neoforge.network.PacketDistributor;
+import net.minecraft.client.gui.screens.ConfirmScreen;
+import io.github.izakyl.folkways.core.front.engine.net.ZoneImpactPacket;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import io.github.izakyl.folkways.core.FolkwaysClientConfig;
 import io.github.izakyl.folkways.core.front.api.Shape;
-import io.github.izakyl.folkways.core.front.api.ui.BoxOffers;
-import io.github.izakyl.folkways.core.front.api.ui.OverheadTools;
 import io.github.izakyl.folkways.core.front.engine.item.HeldBook;
-import io.github.izakyl.folkways.core.front.engine.net.CreateZonePacket;
 import io.github.izakyl.folkways.core.front.engine.net.ZoneSnapshot;
-import io.github.izakyl.folkways.core.front.ui.screen.Drawing;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import net.minecraft.Util;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.client.renderer.MultiBufferSource;
@@ -45,25 +43,20 @@ public final class ZoneSelection {
     private static Direction aimedFace;
     private static int range = DEFAULT_RANGE;
 
-    private static final long OPENING_WINDOW_MS = 2000L;
-    private static UUID openingId;
     private static UUID selectedId;
 
-    private static long openingUntilMs;
-
-    static {
-        Drawing.install(Shape.Gesture.BOX, new Draft<Marked>(ZoneSelection::marked, ZoneSelection::clear,
-            ZoneSelection::measure, box -> box.sizeX() * box.sizeY() * box.sizeZ(),
-            (colony, box, delegation, settings) ->
-                new CreateZonePacket(colony, box.min(), box.max(), delegation, settings),
-            id -> BoxOffers.of(id).map(offer -> (box, taking) -> offer.body().build(box.min(), box.max(), taking))));
-        Drawing.offers(Shape.Gesture.BOX, () -> BoxOffers.all().stream()
-            .map(offer -> new Drawing.Offered(offer.id(), offer.nameKey(), offer.icon()))
-            .toList());
-        Drawing.selection(ZoneSelection::takeOpening);
+    private ZoneSelection() {
     }
 
-    private ZoneSelection() {
+    public static void confirmImpact(ZoneImpactPacket packet) {
+        Minecraft minecraft = Minecraft.getInstance();
+        var previous = minecraft.screen;
+        minecraft.setScreen(new ConfirmScreen(confirmed -> {
+            minecraft.setScreen(previous);
+            if (confirmed) {
+                PacketDistributor.sendToServer(packet.request());
+            }
+        }, Component.translatable("folkways.preview.clear"), packet.affected()));
     }
 
     public static void selected(UUID id) {
@@ -88,6 +81,13 @@ public final class ZoneSelection {
         public int sizeZ() {
             return max.getZ() - min.getZ() + 1;
         }
+    }
+
+    static java.util.List<BlockPos> corners() {
+        if (min != null) {
+            return java.util.List.of(min, max);
+        }
+        return origin == null ? java.util.List.of() : java.util.List.of(origin);
     }
 
     public static Optional<Marked> marked() {
@@ -123,7 +123,7 @@ public final class ZoneSelection {
         return marked().map(ZoneSelection::measure);
     }
 
-    private static Component measure(Marked box) {
+    static Component measure(Marked box) {
         BlockPos corner = shown(box.min());
         return Component.translatable("folkways.zoneconfig.size", box.sizeX(), box.sizeY(), box.sizeZ())
             .append(" ")
@@ -134,17 +134,6 @@ public final class ZoneSelection {
         return range;
     }
 
-    public static void openOn(UUID id) {
-        openingId = id;
-        openingUntilMs = Util.getMillis() + OPENING_WINDOW_MS;
-    }
-
-    private static UUID takeOpening() {
-        UUID id = Util.getMillis() <= openingUntilMs ? openingId : null;
-        openingId = null;
-        return id;
-    }
-
     public static void tick() {
         Minecraft minecraft = Minecraft.getInstance();
         Player player = minecraft.player;
@@ -153,7 +142,7 @@ public final class ZoneSelection {
             return;
         }
         Optional<HeldBook> book = HeldBook.bound(player);
-        if (book.isEmpty() || (book.get().gesture() != Shape.Gesture.BOX && OverheadTools.active().isEmpty())) {
+        if (book.isEmpty() || BookTools.gesture() != Shape.Gesture.BOX) {
             clear();
             return;
         }
@@ -183,6 +172,7 @@ public final class ZoneSelection {
         if (min != null) {
             clear();
         }
+        BookTools.mark(player.level());
         if (origin == null) {
             origin = clicked;
             Draft.say(Component.translatable("folkways.zone.corner"));
@@ -212,6 +202,7 @@ public final class ZoneSelection {
         if (aimedFace == null) {
             return true;
         }
+        BookTools.mark(minecraft.player.level());
         // The wheel pushes away from the player whatever it has hold of, as Create's quill does, so a box entered is
         // pushed the other way.
         Direction away = boxOfMarked().contains(Aim.of(minecraft.player).in(minecraft.player.level(), min).from())

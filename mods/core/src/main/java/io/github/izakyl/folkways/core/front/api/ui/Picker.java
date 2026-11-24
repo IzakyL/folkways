@@ -484,10 +484,14 @@ public final class Picker {
         return row;
     }
 
-    // A button reads from its left edge, as a line in a list does.
+    // A button reads from its left edge, as a line in a list does; a line too long for it rolls while hovered.
+    // The words clip to their own box: clipping the button would cut its oak tag down to the inside of its padding.
     private static void leftward(Button press) {
         press.layout(layout -> layout.justifyContent(AlignContent.FLEX_START).paddingHorizontal(4));
-        press.textStyle(style -> style.textAlignHorizontal(Horizontal.LEFT).textWrap(TextWrap.HIDE));
+        press.text.setOverflowVisible(false);
+        press.text.layout(layout -> layout.flexGrow(1).flexShrink(1).minWidth(0).height(12));
+        press.textStyle(style -> style.textAlignHorizontal(Horizontal.LEFT).adaptiveWidth(false)
+            .adaptiveHeight(false).textWrap(TextWrap.HOVER_ROLL));
     }
 
     private void wear(String key, UIElement row) {
@@ -867,26 +871,40 @@ public final class Picker {
             x = Math.max(0, (width - shownWidth) / 2);
             y = Math.max(0, (tall - shownHeight) / 2);
         } else {
-            // The dialog keeps to the window that asked for it, beside the button where there is room inside the
-            // frame, so it covers neither a window beside it nor a recipe viewer's list at the screen's edge. A
-            // window too small to hold it has it laid over its middle instead.
+            // The dialog leaves the window that asked for it in sight: it stands outside the window, level with
+            // the button, on the left where that has room (a recipe viewer's list keeps to the right edge), else on
+            // the right. A window too wide for that keeps it inside, beside the button; one too narrow for either
+            // has it under or over the button, and failing all, over the window's middle.
             float left = frame.getPositionX();
             float top = frame.getPositionY();
             float frameRight = left + frame.getSizeWidth();
             float frameBottom = Math.min(top + frame.getSizeHeight(), tall);
+            float roomRight = (width <= 0 ? Float.MAX_VALUE : width) - frameRight - HOST_GAP;
+            float roomLeft = left - HOST_GAP;
             float after = host.getPositionX() + host.getSizeWidth() + HOST_GAP;
             float before = host.getPositionX() - HOST_GAP - shownWidth;
-            if (shownWidth > frameRight - left) {
-                x = left + (frame.getSizeWidth() - shownWidth) / 2;
-            } else if (after + shownWidth <= frameRight) {
-                x = after;
-            } else if (before >= left) {
-                x = before;
+            float below = host.getPositionY() + host.getSizeHeight() + HOST_GAP;
+            float above = host.getPositionY() - HOST_GAP - shownHeight;
+            float level = Math.max(0, Math.min(host.getPositionY(), tall - shownHeight));
+            boolean inside = shownWidth <= frameRight - left;
+            if (shownWidth <= roomLeft) {
+                x = left - HOST_GAP - shownWidth;
+                y = level;
+            } else if (shownWidth <= roomRight) {
+                x = frameRight + HOST_GAP;
+                y = level;
+            } else if (inside && (after + shownWidth <= frameRight || before >= left)) {
+                x = after + shownWidth <= frameRight ? after : before;
+                y = shownHeight > frameBottom - top ? top + (frameBottom - top - shownHeight) / 2
+                    : Math.max(top, Math.min(level, frameBottom - shownHeight));
+            } else if (below + shownHeight <= tall || above >= 0) {
+                x = host.getPositionX();
+                y = below + shownHeight <= tall ? below : above;
             } else {
-                x = Math.max(left, Math.min(host.getPositionX(), frameRight - shownWidth));
+                x = left + (frame.getSizeWidth() - shownWidth) / 2;
+                y = shownHeight > frameBottom - top ? top + (frameBottom - top - shownHeight) / 2
+                    : Math.max(top, Math.min(level, frameBottom - shownHeight));
             }
-            y = shownHeight > frameBottom - top ? top + (frameBottom - top - shownHeight) / 2
-                : Math.max(top, Math.min(host.getPositionY(), frameBottom - shownHeight));
             x = Math.max(0, Math.min(x, (width <= 0 ? x + shownWidth : width) - shownWidth));
             y = Math.max(0, Math.min(y, tall - shownHeight));
         }

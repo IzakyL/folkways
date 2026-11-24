@@ -18,7 +18,7 @@ import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
  * What an offer drew over the shape in hand, shown standing in the world while its window is closed to look at it.
  * It belongs to that one shape: once the shape is moved, redrawn or let go, it goes too.
  */
-final class ShapePreview {
+public final class ShapePreview {
 
     private static final GhostRenderer GHOSTS = new GhostRenderer();
 
@@ -26,6 +26,9 @@ final class ShapePreview {
     private static Object shape;
     private static Supplier<? extends Optional<?>> drawn = Optional::empty;
     private static List<Ghost> ghosts = List.of();
+
+    private static Level confirmationLevel;
+    private static List<Ghost> confirmationGhosts = List.of();
 
     private ShapePreview() {
     }
@@ -36,10 +39,14 @@ final class ShapePreview {
         shape = over;
         drawn = current;
         ghosts = List.copyOf(shown);
-        Level level = Minecraft.getInstance().level;
-        if (level != null) {
-            GHOSTS.show(level, ghosts);
-        }
+        refresh();
+    }
+
+    /** Shows an external confirmation over the Book preview until the confirmation is resolved. */
+    public static void showConfirmation(List<Ghost> shown) {
+        confirmationGhosts = List.copyOf(shown);
+        confirmationLevel = shown.isEmpty() ? null : Minecraft.getInstance().level;
+        refresh();
     }
 
     /** Whether the preview standing now was made by this offer over this shape. */
@@ -61,20 +68,32 @@ final class ShapePreview {
         shape = null;
         drawn = Optional::empty;
         ghosts = List.of();
-        GHOSTS.clear();
+        refresh();
     }
 
     static void tick() {
-        if (offer == null) {
-            return;
-        }
+        refresh();
+    }
+
+    private static void refresh() {
         Level level = Minecraft.getInstance().level;
-        if (level == null || !drawn.get().equals(Optional.of(shape))) {
-            clear();
-            return;
+        if (confirmationLevel != level) {
+            confirmationLevel = null;
+            confirmationGhosts = List.of();
         }
-        // What stands in the ghosts' cells may change while they are looked at, and the marks follow it.
-        GHOSTS.show(level, ghosts);
+        if (offer != null && (level == null || !drawn.get().equals(Optional.of(shape)))) {
+            offer = null;
+            shape = null;
+            drawn = Optional::empty;
+            ghosts = List.of();
+        }
+        List<Ghost> shown = confirmationGhosts.isEmpty() ? ghosts : confirmationGhosts;
+        if (level == null || shown.isEmpty()) {
+            GHOSTS.clear();
+        } else {
+            // What stands in the ghosts' cells may change while they are looked at, and the marks follow it.
+            GHOSTS.show(level, shown);
+        }
     }
 
     static void render(RenderLevelStageEvent event) {

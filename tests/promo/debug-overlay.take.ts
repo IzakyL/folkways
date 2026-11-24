@@ -577,7 +577,7 @@ const PROBE = defineTask<Record<string, any>, any>({
   timeoutMs: 20_000,
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.core.colony.api.Colonies", "io.github.izakyl.folkways.core.front.api.notice.Line",
+      "io.github.izakyl.folkways.core.colony.api.Colonies", "io.github.izakyl.folkways.core.card.api.notice.Line",
       "io.github.izakyl.folkways.core.front.engine.colony.DebugFocus", "io.github.izakyl.folkways.core.front.engine.net.DebugTarget",
       "net.minecraft.core.BlockPos",
     ],

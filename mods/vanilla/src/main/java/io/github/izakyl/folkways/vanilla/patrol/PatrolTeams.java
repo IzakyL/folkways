@@ -6,7 +6,7 @@ import io.github.izakyl.folkways.core.resident.api.Body;
 import io.github.izakyl.folkways.core.work.api.Node;
 import io.github.izakyl.folkways.core.work.api.NodeSpec;
 import io.github.izakyl.folkways.core.work.api.Outcome;
-import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.world.api.Stances;
 import io.github.izakyl.folkways.core.work.api.Disposition;
 import io.github.izakyl.folkways.core.work.api.Urge;
 import io.github.izakyl.folkways.core.work.api.WorkSite;
@@ -16,6 +16,7 @@ import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.core.world.api.WorldSpaces;
 import io.github.izakyl.folkways.vanilla.FolkwaysVanillaConfig;
 import io.github.izakyl.folkways.core.combat.api.DefenseControl;
+import io.github.izakyl.folkways.core.combat.api.SpottedTargets.Spot;
 import io.github.izakyl.folkways.vanilla.combat.SpottedTargets;
 import io.github.izakyl.folkways.core.combat.api.GroupMotion;
 import io.github.izakyl.folkways.vanilla.combat.weapon.PatrolSupplies;
@@ -203,7 +204,7 @@ final class PatrolTeams {
     record Responder(UUID id, double distance, BooleanSupplier accept) {
     }
 
-    List<Responder> responders(Mob sentry, Mob target, SpottedTargets.Spot spot, Predicate<UUID> availableMember) {
+    List<Responder> responders(Mob sentry, Mob target, Spot spot, Predicate<UUID> availableMember) {
         List<Responder> responders = new ArrayList<>();
         long now = sentry.level().getGameTime();
         double radius = FolkwaysVanillaConfig.sentryCallRadius();

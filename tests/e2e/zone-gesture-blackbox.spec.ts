@@ -3,6 +3,7 @@ import { clickElement, panelElements } from "../ldlib2";
 import { tick } from "@izakyl/blockwright-minecraft";
 import {
   commandPos,
+  BOOK_TOOLBAR,
   createColonyViaBook,
   tryCommand,
   waitForGroundedPlayer,
@@ -19,6 +20,7 @@ import {
   openBookPage,
   releaseHeldZone,
   setBookGesture,
+  CARD_RELEASE,
   zoneCount,
 } from "../shared/ui/zone-tools";
 import { launchPair, type E2EPair } from "../shared/harness/pair";
@@ -73,7 +75,9 @@ for (const stage of twins()) test(stage.title("zone gesture: mark, push a face, 
 
     evidence.found = await createColonyViaBook(server, client, playerName, standBlock, stage);
 
+    // Sneak and the wheel turn the book to marking out; what the box becomes is picked once it is drawn.
     evidence.zone_mode = await setBookGesture(server, client, playerName, "box");
+    expect((await client.run(BOOK_TOOLBAR, undefined)).gesture, "the book now marks out ground").toBe("box");
     evidence.mark = await markBox(server, client, playerName, standAt, farmGround, farmGround, stage);
     const markedBefore = sizeOf(evidence.mark.marked?.text);
     expect(markedBefore, "after marking both corners the action bar must report the box size; if it does not, neither corner landed").not.toBeNull();
@@ -116,12 +120,12 @@ for (const stage of twins()) test(stage.title("zone gesture: mark, push a face, 
     const registry = await colonyRegistry(server);
     const box = { min: farmGround, max: { ...farmGround, y: farmGround.y + 1 } };
     evidence.hold = await holdZoneAndOpen(server, client, playerName, box, stage);
-    await waitForElement(client, { id: "folkways.selection.release" }, { timeoutMs: 8_000 });
-    evidence.click_release = await softly(() => clickElement(client, { id: "folkways.selection.release" }));
+    await waitForElement(client, { id: CARD_RELEASE }, { timeoutMs: 8_000 });
+    evidence.click_release = await softly(() => clickElement(client, { id: CARD_RELEASE }));
     await expect.poll(async () => {
       await tick.sprint(server, 3);
       return zoneCount(server, registry);
-    }, { timeout: 8_000, message: "pressing remove on the config page should remove this zone from the colony" }).toBe(0);
+    }, { timeout: 8_000, message: "pressing release on the zone's card should remove this zone from the colony" }).toBe(0);
     evidence.release = await releaseHeldZone(client);
   } catch (error) {
     pair?.failing(error);

@@ -1,5 +1,7 @@
 package io.github.izakyl.folkways.core.runtime;
 
+import io.github.izakyl.folkways.core.plan.api.RunBoundary;
+import io.github.izakyl.folkways.core.facility.api.DefinedFacilities;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import io.github.izakyl.folkways.core.work.api.NodeSpec;
 import io.github.izakyl.folkways.core.colony.api.Colony;
@@ -54,16 +56,17 @@ import io.github.izakyl.folkways.core.work.internal.Kit;
 import io.github.izakyl.folkways.core.work.internal.LaborIncident;
 import io.github.izakyl.folkways.core.work.internal.Phases;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
-import io.github.izakyl.folkways.core.front.api.notice.DebugText;
-import io.github.izakyl.folkways.core.front.api.notice.Line;
+import io.github.izakyl.folkways.core.base.task.ColonyLog;
+import io.github.izakyl.folkways.core.card.api.notice.DebugText;
+import io.github.izakyl.folkways.core.card.api.notice.Line;
 import io.github.izakyl.folkways.core.inventory.api.InventorySnapshot;
 import io.github.izakyl.folkways.core.inventory.api.Stash;
 import io.github.izakyl.folkways.core.plan.internal.Resource;
 import io.github.izakyl.folkways.core.combat.api.DefenseControl;
 import io.github.izakyl.folkways.core.equipment.api.EquipmentProfile;
 import io.github.izakyl.folkways.core.equipment.api.EquipmentProfiles;
-import io.github.izakyl.folkways.core.rts.combat.command.ResidentCommands;
-import io.github.izakyl.folkways.core.rts.combat.control.CombatSelectionOwnership;
+import io.github.izakyl.folkways.core.command.combat.command.ResidentCommands;
+import io.github.izakyl.folkways.core.command.combat.control.CombatSelectionOwnership;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Deque;
@@ -95,10 +98,12 @@ public final class ColonyLabor implements WorkListener {
     private static final long WAYS_ANSWER_TICKS = 20L;
 
     private final ColonyData colony;
+    private final LaborPlan planView;
     private final ResourceKey<Level> dimension;
 
     private Lanes lanes = Lanes.INLINE;
 
+    private final Set<UUID> runBoundaries = new LinkedHashSet<>();
     private final Phases phases = new Phases(this::ending);
     private record Ended(UUID node, Ending how) { }
     private final List<Ended> endings = new ArrayList<>();
@@ -153,6 +158,7 @@ public final class ColonyLabor implements WorkListener {
 
     public ColonyLabor(ColonyData colony, ResourceKey<Level> dimension) {
         this.colony = colony;
+        this.planView = new LaborPlan(colony);
         pipeline = new Pipeline(inbox, new Planner(new Claims(), new Cooldowns(), colony.colonyId()), new Scheduler(),
             this::planningProblem);
         this.works = colony.works();
@@ -182,7 +188,7 @@ public final class ColonyLabor implements WorkListener {
 
     @Override
     public boolean isApproaching(UUID node) {
-        return holder(node).map(resident -> runners.of(resident).approaching(node)).orElse(false);
+        return holder(node).flatMap(runners::find).map(runner -> runner.approaching(node)).orElse(false);
     }
 
     @Override
@@ -192,7 +198,7 @@ public final class ColonyLabor implements WorkListener {
 
     @Override
     public void controllerOrder(ServerLevel level, Body body) {
-        runners.of(body.id()).controllerTakeover(level, body, true);
+        runners.assign(body.id()).controllerTakeover(level, body, true);
     }
 
     @Override
@@ -215,7 +221,7 @@ public final class ColonyLabor implements WorkListener {
         close();
     }
 
-    public ColonyLabor current() {
+    public ColonyLabor reconcile() {
         if (!closed) {
             return this;
         }
@@ -237,100 +243,114 @@ public final class ColonyLabor implements WorkListener {
     }
 
     public void close() {
-        if (closed) {
-            return;
+        try (var ignored = ColonyLog.open(colony.colonyId())) {
+            if (closed) {
+                return;
+            }
+            closed = true;
+            pipeline.close(lanes.weave(), lanes.schedule());
+            works.unlisten(dimension, this);
+            runners.close();
+            for (UUID id : runBoundaries) {
+                if (phases.knows(id) && !phases.of(id).terminal()
+                        && phases.node(id) instanceof RunBoundary boundary) {
+                    boundary.paused();
+                }
+            }
+            runBoundaries.clear();
+            phases.retain(Set.of());
+            inputWorkers.clear();
+            plannedClaims = Map.of();
+            personal.retain(Set.of());
+            personalRequests.clear();
+            endings.clear();
+            withdrawnGone.clear();
+            stalls.clear();
+            offeredUrges.clear();
+            history.clear();
+            works.stalled(dimension, List.of());
         }
-        closed = true;
-        pipeline.close(lanes.weave(), lanes.schedule());
-        works.unlisten(dimension, this);
-        runners.close();
-        phases.retain(Set.of());
-        inputWorkers.clear();
-        plannedClaims = Map.of();
-        personal.retain(Set.of());
-        personalRequests.clear();
-        endings.clear();
-        withdrawnGone.clear();
-        stalls.clear();
-        offeredUrges.clear();
-        history.clear();
-        works.stalled(dimension, List.of());
     }
 
     public void run(ServerLevel level, Lanes lanes) {
-        if (closed) {
-            return;
-        }
-        this.lanes = lanes;
-        for (UUID drop : dropsToRead) {
-            if (level.getEntity(drop) instanceof ItemEntity item && item.isAlive()) {
-                spilled(item);
+        try (var ignored = ColonyLog.open(colony.colonyId())) {
+            if (closed) {
+                return;
             }
-        }
-        dropsToRead = List.of();
-        pipeline.applyReady(level);
-        settle(level);
-        Set<UUID> roster = enrolled();
-        runners.reconcile(this, roster);
-        for (var entry : List.copyOf(personalRequests.entrySet())) {
-            if (!roster.contains(entry.getValue().resident())) {
-                personal.cancelled(entry.getKey());
-                forgetPersonal(entry.getKey());
+            untaken.keySet().retainAll(graph.vertices().keySet());
+            this.lanes = lanes;
+            for (UUID drop : dropsToRead) {
+                if (level.getEntity(drop) instanceof ItemEntity item && item.isAlive()) {
+                    spilled(item);
+                }
             }
-        }
-        Map<UUID, Body> present = new LinkedHashMap<>();
-        for (Body body : colony.claims().bodiesIn(level)) {
-            if (!body.mob().isRemoved()) {
-                present.put(body.id(), body);
-            }
-        }
-        runners.checkAbsent(level, present.keySet());
-        runners.away(present.keySet(), colony.claims().carriedOff(), level.getGameTime());
-        ColonyView view = present.isEmpty() ? null : ColonySnapshot.of(colony, level);
-        Set<UUID> reserved = new LinkedHashSet<>();
-        Set<UUID> personalOnly = new LinkedHashSet<>();
-        var equipment = works.service(EquipmentProfiles.ID, EquipmentProfiles.class);
-        for (Body body : present.values()) {
-            Optional<EquipmentProfile> profile = equipment.flatMap(profiles -> profiles.assigned(body.id()));
-            Optional<EquipmentProfile> previous = equipmentRead.put(body.id(), profile);
-            if (previous != null && !previous.equals(profile)) {
-                // A reduced personal allowance can turn an idle resident's protected stock into cargo.
-                // Re-read the hand and ask the ordinary hauling planner to return that surplus.
-                survey.read(body.id());
-                inbox.raise(new Message.Idle(body.id()));
-            }
-            BodyRunner runner = runners.of(body.id());
-            runner.check(level, body);
-            boolean controlled = interrupt(level, view, body, runner);
-            if (controlled) {
-                reserved.add(body.id());
-            }
-            // Personal needs and commands still execute; an idle reserved body cannot claim a
-            // planned node.
-            if (!controlled || runner.executing()) {
-                tickChecked(runner, level, body);
-            }
-            if (runner.reservingUrge().isPresent()) {
-                personalOnly.add(body.id());
-            }
-        }
-        survey.reserved(reserved);
-        survey.personalOnly(personalOnly);
-        answer(level, present);
-        for (int round = 0; round < MOST_ROUNDS && !pipeline.weaving() && inbox.any(); round++) {
-            if (survey.waitingForInventory()) {
-                break;
-            }
-            plan(level);
-            answer(level, present);
-        }
-        if (level.getGameTime() >= scheduleWakeAt) {
-            scheduleWakeAt = Long.MAX_VALUE;
-            pipeline.wake(lanes.schedule(), level.getGameTime(), this::laid);
+            dropsToRead = List.of();
             pipeline.applyReady(level);
+            settle(level);
+            advanceRuns(level);
+            Set<UUID> roster = enrolled();
+            runners.reconcile(this, roster);
+            for (var entry : List.copyOf(personalRequests.entrySet())) {
+                if (!roster.contains(entry.getValue().resident())) {
+                    personal.cancelled(entry.getKey());
+                    forgetPersonal(entry.getKey());
+                }
+            }
+            Map<UUID, Body> present = new LinkedHashMap<>();
+            for (Body body : colony.claims().bodiesIn(level)) {
+                if (!body.mob().isRemoved()) {
+                    present.put(body.id(), body);
+                }
+            }
+            runners.checkAbsent(level, present.keySet());
+            runners.away(present.keySet(), colony.claims().carriedOff(), level.getGameTime());
+            ColonyView view = present.isEmpty() ? null : ColonySnapshot.of(colony, level);
+            Set<UUID> reserved = new LinkedHashSet<>();
+            Set<UUID> personalOnly = new LinkedHashSet<>();
+            var equipment = works.service(EquipmentProfiles.ID, EquipmentProfiles.class);
+            for (Body body : present.values()) {
+                Optional<EquipmentProfile> profile = equipment.flatMap(profiles -> profiles.assigned(body.id()));
+                Optional<EquipmentProfile> previous = equipmentRead.put(body.id(), profile);
+                if (previous != null && !previous.equals(profile)) {
+                    // A reduced personal allowance can turn an idle resident's protected stock into cargo.
+                    // Re-read the hand and ask the ordinary hauling planner to return that surplus.
+                    survey.read(body.id());
+                    inbox.raise(new Message.Idle(body.id()));
+                }
+                BodyRunner runner = runners.assign(body.id());
+                runner.check(level, body);
+                boolean controlled = interrupt(level, view, body, runner);
+                if (controlled) {
+                    reserved.add(body.id());
+                }
+                // Personal needs and commands still execute; an idle reserved body cannot claim a
+                // planned node.
+                if (!controlled || runner.executing()) {
+                    tickChecked(runner, level, body);
+                }
+                if (runner.reservingUrge().isPresent()) {
+                    personalOnly.add(body.id());
+                }
+            }
+            survey.reserved(reserved);
+            survey.personalOnly(personalOnly);
+            answer(level, present);
+            for (int round = 0; round < MOST_ROUNDS && !pipeline.weaving() && inbox.any(); round++) {
+                if (survey.waitingForInventory()) {
+                    break;
+                }
+                plan(level);
+                answer(level, present);
+            }
+            if (level.getGameTime() >= scheduleWakeAt) {
+                scheduleWakeAt = Long.MAX_VALUE;
+                pipeline.wake(lanes.schedule(), level.getGameTime(), this::laid);
+                pipeline.applyReady(level);
+            }
+            tellEndings();
+            var facilityStalls = DefinedFacilities.of(colony()).map(facilities -> facilities.stalls(dimension)).orElseGet(List::of);
+            stalls.changed(level.getGameTime(), facilityStalls).ifPresent(told -> works.stalled(dimension, told));
         }
-        tellEndings();
-        stalls.changed(level.getGameTime()).ifPresent(told -> works.stalled(dimension, told));
     }
 
     public void tick(BodyRunner runner, ServerLevel level, Body body) {
@@ -478,8 +498,37 @@ public final class ColonyLabor implements WorkListener {
         Known known = survey.known(ways, List.copyOf(workshops));
         readout.froze(known.hands().size(), inbox.size());
         pipeline.weave(lanes.weave(), lanes.schedule(), known, level.getGameTime(),
+            planView.wanted(level.getGameTime()),
             (batch, woven) -> woven(level, batch, woven), this::laid);
         pipeline.applyReady(level);
+    }
+
+    private void advanceRuns(ServerLevel level) {
+        for (UUID id : List.copyOf(runBoundaries)) {
+            Vertex vertex = graph.vertex(id);
+            if (vertex == null || phases.of(id).terminal()) {
+                runBoundaries.remove(id);
+                continue;
+            }
+            var boundary = (RunBoundary) vertex.node();
+            if (takeable(id, level).isEmpty()) {
+                continue;
+            }
+            try {
+                var ending = boundary.advance(level);
+                if (ending.orElse(null) instanceof Ending.Failed failure) {
+                    failed(id, failure.why());
+                } else if (ending.isPresent()) {
+                    phases.started(id);
+                    phases.handedOver(id);
+                    phases.finished(id);
+                    finished(id);
+                }
+            } catch (RuntimeException | LinkageError broken) {
+                Labor.LOGGER.error("run boundary {} threw advancing", id, broken);
+                failed(id, LaborRefusal.WORK_BROKE);
+            }
+        }
     }
 
     private void settle(ServerLevel level) {
@@ -615,7 +664,12 @@ public final class ColonyLabor implements WorkListener {
     }
 
     // Work that went or was grown afresh ends as the plan says; new work enters it.
+    LaborPlan planView() {
+        return planView;
+    }
+
     private void woven(ServerLevel level, List<Message> batch, Planner.Woven woven) {
+        planView.woven(batch, woven, level.getGameTime(), dimension);
         WeaveDelta delta = woven.delta();
         plannedClaims = woven.claims();
         Set<UUID> withdrawn = new LinkedHashSet<>();
@@ -690,6 +744,7 @@ public final class ColonyLabor implements WorkListener {
         refused = woven.refused();
         stalls.planned(woven.stalls(), level.getGameTime());
         diagnosis = new Diagnosis(shortfalls, diagnosis.unassigned(), refused);
+        planView.diagnosed(diagnosis);
         survey.asked(new Asks(weaveAsks.survey(), weaveAsks.looks(), weaveAsks.hands() || scheduleHands,
             weaveAsks.handsOf(), weaveAsks.wakeAt()));
         wakeAt = weaveAsks.wakeAt();
@@ -707,6 +762,9 @@ public final class ColonyLabor implements WorkListener {
         for (Node node : entered) {
             submittedNodes++;
             phases.entered(node, level);
+            if (node instanceof RunBoundary) {
+                runBoundaries.add(node.id());
+            }
             try {
                 node.planned(level).ifPresent(why -> decline(node.id(), why));
             } catch (RuntimeException | LinkageError broken) {
@@ -736,6 +794,8 @@ public final class ColonyLabor implements WorkListener {
         runners.follow(tours);
         schedule = new Schedule(tours, laid.unassigned());
         diagnosis = new Diagnosis(shortfalls, laid.unassigned(), refused);
+        planView.laid(schedule, laid.tick());
+        planView.diagnosed(diagnosis);
         if (laid.hands() != scheduleHands) {
             scheduleHands = laid.hands();
             survey.asked(new Asks(weaveAsks.survey(), Set.of(), weaveAsks.hands() || scheduleHands, Set.of(),
@@ -1363,11 +1423,11 @@ public final class ColonyLabor implements WorkListener {
     }
 
     public Hands hands(Body body, Placement placement) {
-        return new Hands(body, survey.stands(), placement, this::spilled, () -> routeOf(body.id()));
+        return new Hands(body, placement, this::spilled, () -> routeOf(body.id()));
     }
 
     private List<Node> routeOf(UUID resident) {
-        BodyRunner runner = runners.of(resident);
+        BodyRunner runner = runners.assign(resident);
         List<Node> ahead = new ArrayList<>();
         runner.inHand().ifPresent(ahead::add);
         for (UUID queued : runner.queued()) {
@@ -1483,8 +1543,8 @@ public final class ColonyLabor implements WorkListener {
         return new LaborCensus(submittedNodes, counted, planned, unassigned, missing, standing);
     }
 
-    public String heartbeat() {
-        return readout.line(graph.vertices(), phases, schedule, diagnosis, runners,
+    public String consumeHeartbeat() {
+        return readout.consumeLine(graph.vertices(), phases, schedule, diagnosis, runners,
             pipeline.busyFor(Util.getNanos())) + " limited=" + limitedSchedules;
     }
 
@@ -1523,7 +1583,6 @@ public final class ColonyLabor implements WorkListener {
     }
 
     public Collection<String> stalls() {
-        untaken.keySet().retainAll(graph.vertices().keySet());
         List<String> lines = new ArrayList<>(readout.stalls(graph.vertices(), phases, runners, this::untakenWhy,
             this::untakenKey));
         lines.addAll(readout.unassigned(graph, diagnosis, survey.hands()));
@@ -1547,7 +1606,7 @@ public final class ColonyLabor implements WorkListener {
             }
         }
         for (UUID holder : holders) {
-            BodyRunner runner = runners.of(holder);
+            BodyRunner runner = runners.find(holder).orElseThrow();
             StringBuilder route = new StringBuilder("route body=").append(holder.toString(), 0, 8)
                 .append(' ').append(runner.standing())
                 .append(runner.inHand().map(node -> " hand=" + detailOf(node.id())).orElse(""))

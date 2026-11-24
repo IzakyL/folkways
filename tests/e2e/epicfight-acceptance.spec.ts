@@ -97,8 +97,8 @@ test("Epic Fight V command pointer MOVE cancels a real pending native attack and
     await tick.sprint(pair.server, 2); await frames(pair.client, 8);
     await input.key(pair.client, { keyCode: 86 });
     await screen.waitFor(pair.client, "OverheadScreen", { timeoutMs: 8_000 });
-    const combat = (await screen.widgets(pair.client)).find(widget => /^RTS$/.test(widget.label?.trim() ?? ""));
-    expect(combat, "the combined profile exposes the real RTS combat tab").toBeTruthy();
+    const combat = (await screen.widgets(pair.client)).find(widget => /^Control$/.test(widget.label?.trim() ?? ""));
+    expect(combat, "the combined profile exposes the Control tab").toBeTruthy();
     await screen.clickWidget(pair.client, { label: combat!.label });
     await waitInput(pair, scene, evidence, "real V combat roster", value => value.combat && value.roster >= 1);
     const at = await pair.client.run(PROJECT, { ...origin, entity: scene.resident }); visible(at);
@@ -163,7 +163,8 @@ test("Epic Fight V command pointer MOVE cancels a real pending native attack and
     evidence.push({ step: "actual upstream RELEASE keyboard binding and active tool hints", value: release });
     expect(release.active).toBe(true); expect(release.type).toBe("KEYSYM");
     expect(release.code).toBeGreaterThan(0); expect(release.hints).toContain(release.name);
-    expect((await pair.client.run(INPUT_STATE)).buttons.some(button => button.kind === "RELEASE")).toBe(false);
+    // The dock shows bound groups only, and with a selection the cell that binds it to a free group.
+    expect((await pair.client.run(INPUT_STATE)).buttons.every(button => button.slot >= 1 && button.slot <= 9)).toBe(true);
     await input.key(pair.client, { keyCode: release.code });
     await waitInput(pair, scene, evidence, "real keyboard RELEASE clears server selection and control ownership", value =>
       value.selected.length === 0 && value.selection.length === 0 && !value.owned && !value.reserved);

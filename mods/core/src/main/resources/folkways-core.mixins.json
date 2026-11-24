@@ -4,12 +4,9 @@
   "package": "io.github.izakyl.folkways.core.shell.mixin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
-    "ColonyDisplayMixin",
-    "EntityUpgradeMixin",
-    "BlockEntityUpgradeMixin",
     "MobAccessor",
-    "PathfindingContextMixin",
-    "ServerConfigFolderMixin"
+    "CompoundContainerAccessor",
+    "BlockEntityAccessor"
   ],
   "injectors": {
     "defaultRequire": 1

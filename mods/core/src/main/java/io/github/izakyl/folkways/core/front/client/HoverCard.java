@@ -1,6 +1,7 @@
 package io.github.izakyl.folkways.core.front.client;
 
 import io.github.izakyl.folkways.core.front.api.ui.OverheadTools;
+import io.github.izakyl.folkways.core.front.api.ui.Signs;
 import io.github.izakyl.folkways.core.front.client.ColonyLookCard.Row;
 import io.github.izakyl.folkways.core.front.engine.net.LookLines;
 import java.util.List;
@@ -44,14 +45,18 @@ final class HoverCard {
                 }
                 case LookCardLayout.Piece.Text text ->
                     graphics.drawString(minecraft.font, text.text(), x + text.x(), y + text.y(), text.color(), false);
+                // In front of the item, as a slot lifts its count.
+                case LookCardLayout.Piece.Count count -> Signs.drawCount(graphics, minecraft.font, count.text(),
+                    x + count.x(), y + count.y(), count.color(), 200.0F);
             }
         }
     }
 
     // A resident stands in front of the ground they stand on, so their card comes before a zone's.
     private static List<Row> rows(Minecraft minecraft) {
-        if (OverheadTools.active().isPresent()) {
-            return ToolOverlay.aimed().map(mark -> ColonyLookCard.rows(mark.lines())).orElse(List.of());
+        Optional<OverheadTools.Mark> marked = ToolOverlay.aimed();
+        if (marked.isPresent()) {
+            return ColonyLookCard.rows(marked.get().lines());
         }
         if (Layer.RESIDENTS.cards()) {
             Optional<EntityHitResult> entity = Aim.of(minecraft.player).entity(minecraft.player);

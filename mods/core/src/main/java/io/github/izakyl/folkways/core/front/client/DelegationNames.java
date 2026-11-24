@@ -1,7 +1,7 @@
 package io.github.izakyl.folkways.core.front.client;
 
-import io.github.izakyl.folkways.core.front.api.notice.Notice;
-import io.github.izakyl.folkways.core.front.api.notice.Sentence;
+import io.github.izakyl.folkways.core.card.api.notice.Notice;
+import io.github.izakyl.folkways.core.card.api.notice.Sentence;
 import java.util.List;
 import net.minecraft.resources.ResourceLocation;
 

@@ -1,7 +1,7 @@
 package io.github.izakyl.folkways.core.front.api;
 
 import io.github.izakyl.folkways.core.resident.api.Body;
-import io.github.izakyl.folkways.core.front.api.notice.Notice;
+import io.github.izakyl.folkways.core.card.api.notice.Notice;
 
 public sealed interface Endorsed {
 

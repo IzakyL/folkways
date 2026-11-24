@@ -40,13 +40,6 @@ ordering = "AFTER"
 side = "BOTH"
 
 [[dependencies.${mod_id}]]
-modId = "folkways_create"
-type = "required"
-versionRange = "[${version}]"
-ordering = "AFTER"
-side = "BOTH"
-
-[[dependencies.${mod_id}]]
 modId = "create"
 type = "required"
 versionRange = "[6.0.10,6.1.0)"

@@ -8,14 +8,13 @@ import io.github.izakyl.folkways.core.colony.api.ColonyView;
 import io.github.izakyl.folkways.core.colony.api.Sweep;
 import io.github.izakyl.folkways.core.plan.api.Grown;
 import io.github.izakyl.folkways.core.plan.api.Workshop;
-import io.github.izakyl.folkways.core.front.api.Facing;
+import io.github.izakyl.folkways.core.front.api.HoldingKind;
 import io.github.izakyl.folkways.core.front.api.FrontView;
 import io.github.izakyl.folkways.core.front.api.Fronts;
 import io.github.izakyl.folkways.core.front.api.PastDay;
 import io.github.izakyl.folkways.core.front.api.ZoneView;
-import io.github.izakyl.folkways.core.front.api.notice.Line;
-import io.github.izakyl.folkways.core.front.api.notice.Notice;
-import io.github.izakyl.folkways.core.front.api.panel.Board;
+import io.github.izakyl.folkways.core.card.api.notice.Line;
+import io.github.izakyl.folkways.core.card.api.notice.Notice;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.LinkedHashMap;
@@ -25,16 +24,9 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.world.entity.EntityType;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
-import net.minecraft.world.item.SpawnEggItem;
 
-final class PasturePresence implements Facing {
+final class PasturePresence implements HoldingKind {
 
     private static final String TAG_MADE = "made";
 
@@ -63,7 +55,11 @@ final class PasturePresence implements Facing {
     }
 
     @Override
-    public List<Line> zoneLines(ZoneView zone, ColonyView view) {
+    public List<Line> lines(Held held, ColonyView view) {
+        ZoneView zone = held.zone().orElse(null);
+        if (zone == null) {
+            return List.of();
+        }
         if (zone.delegation().equals(PastureContent.APIARY)) {
             List<Line> lines = new ArrayList<>(apiaries.lines(zone));
             lines.addAll(made.lines(zone, view));
@@ -109,7 +105,7 @@ final class PasturePresence implements Facing {
         }
         retireAllBut(standing);
         herd.settle(server.overworld().getGameTime());
-        if (made.changed()) {
+        if (made.consumeChanged()) {
             remember();
         }
     }
@@ -117,7 +113,7 @@ final class PasturePresence implements Facing {
     public void closed(Closing why) {
         retireAllBut(Set.of());
         apiaries.close();
-        if (made.changed()) {
+        if (made.consumeChanged()) {
             remember();
         }
     }
@@ -154,44 +150,5 @@ final class PasturePresence implements Facing {
 
     private void remember() {
         colony.keep(PastureContent.ID, Writer.of(herd.save()).blob(TAG_MADE, made.save()).tag());
-    }
-
-    @Override
-    public Optional<Board> board(ResourceLocation page, ColonyView colony) {
-        if (!page.equals(PastureContent.PASTURE)) {
-            return Optional.empty();
-        }
-        int living = 0;
-        int target = 0;
-        List<Board.Row> rows = new ArrayList<>();
-        for (Herd.Sight pen : herd.sights()) {
-            living += pen.living();
-            target += pen.target();
-            rows.add(Board.Row.gauged(iconOf(pen.keeps()), nameOf(pen.keeps()),
-                Component.translatable("folkways.page.pasture.head", pen.living(), pen.target(),
-                    pen.adults()),
-                pen.living(), pen.target(),
-                List.of(new Board.Act.Ping(pen.where()))));
-        }
-        return Optional.of(new Board(
-            List.of(new Board.Figure("folkways.page.pasture.living",
-                    Component.literal(Integer.toString(living))),
-                new Board.Figure("folkways.page.pasture.target",
-                    Component.literal(Integer.toString(target)))),
-            rows,
-            Optional.of(Component.translatable("folkways.page.pasture.empty"))));
-    }
-
-    static ItemStack iconOf(ResourceLocation keeps) {
-        return BuiltInRegistries.ENTITY_TYPE.getOptional(keeps)
-            .map(SpawnEggItem::byId)
-            .<ItemStack>map(egg -> egg == null ? new ItemStack(Items.WHEAT) : new ItemStack(egg))
-            .orElseGet(() -> new ItemStack(Items.WHEAT));
-    }
-
-    static Component nameOf(ResourceLocation keeps) {
-        return BuiltInRegistries.ENTITY_TYPE.getOptional(keeps)
-            .map(EntityType::getDescription)
-            .orElseGet(() -> Component.literal(keeps.toString()));
     }
 }

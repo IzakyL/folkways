@@ -386,7 +386,7 @@ for (var queue : ((Map<?, ?>) particles.get(mc.particleEngine)).values()) {
         }
     }
 }
-var connections = Class.forName("io.github.izakyl.folkways.create.firefighting.ResidentSprayVisuals")
+var connections = Class.forName("io.github.izakyl.folkways.core.shell.create.firefighting.ResidentSprayVisuals")
     .getDeclaredField("ACTIVE");
 connections.setAccessible(true);
 return Map.of("active", damage && mc.screen != null && mc.screen.getClass().getSimpleName().equals("OverheadScreen"),

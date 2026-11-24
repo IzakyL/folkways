@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { defineTask, input, javaTask, media, screen, tick, world, type MinecraftClient } from "@izakyl/blockwright-minecraft";
-import { clickElement, panelElements, waitForElement, type Element } from "../ldlib2";
+import { clickElement, panelElements, waitForElement } from "../ldlib2";
 import { foundColonyFast, foundingBox, isColonyMember, openColonyPanelViaBook, optInViaBook, waitForGroundedPlayer } from "../shared/colony/colony-founding";
 import { launchPair, type E2EPair } from "../shared/harness/pair";
 import { tracePath } from "../shared/harness/out-paths";
@@ -9,6 +9,8 @@ import { BUDGET } from "../shared/harness/budgets";
 import { commandPos, frames } from "../shared/harness/bw-helpers";
 import { newRunId } from "../shared/harness/run-id";
 import { waitForResourceReload } from "../shared/harness/resource-reload";
+import { BOOK_TABS, facilityAt, openFacilityInBook } from "../shared/ui/book-cards";
+import { clickTab } from "../shared/ui/colony-pages";
 import { twins, type Vec } from "../shared/harness/stage";
 
 const SET_CHINESE = defineTask<void, string>({
@@ -22,7 +24,7 @@ const READ_TRANSLATION = defineTask<void, Record<string, string>>({
   name: "folkways.ui-feedback.read-translations", side: "client",
   source: javaTask({ imports: ["net.minecraft.network.chat.Component"], body: `
 var result=new LinkedHashMap<String,String>();
-for(var key:List.of("item.minecraft.diamond","block.kaleidoscope_cookery.tea_tree","folkways.doing.folkways_vanilla.taking_supplies.about","folkways.doing.folkways_cookery.leaving_millstone"))
+for(var key:List.of("item.minecraft.diamond","block.kaleidoscope_cookery.tea_tree","folkways.doing.folkways_vanilla.taking_supplies.about","folkways.doing.folkways_vanilla.leaving_millstone"))
  result.put(key,Component.translatable(key,Component.translatable("item.minecraft.diamond")).getString());
 return result;
 ` }),
@@ -31,7 +33,6 @@ const COLORS = ["white", "orange", "magenta", "light_blue", "yellow", "lime", "p
 const FIXTURE = ["wool", "concrete", "terracotta", "stained_glass", "candle"]
   .flatMap(kind => COLORS.map(color => "minecraft:" + color + "_" + kind)).concat("minecraft:diamond");
 const PREFIX = "folkways.metrics.stock.";
-const SUPPLY = "folkways.page.supply";
 
 for (const stage of twins()) test(stage.title("book feedback: bounded stock search in client language and supply membership visibility"), async ({}, testInfo) => {
   test.setTimeout(BUDGET.heavy);
@@ -45,7 +46,7 @@ for (const stage of twins()) test(stage.title("book feedback: bounded stock sear
     const grounded = await waitForGroundedPlayer(server); const name = grounded.name;
     const origin = { x: Math.round(grounded.pos.x) + 4, y: Math.round(grounded.pos.y), z: Math.round(grounded.pos.z) + 4 };
     await stage.lay(server, foundingBox(origin));
-    const founded = await foundColonyFast(server, client, name, { origin, residentCount: 1, stage });
+    const founded = await foundColonyFast(server, client, name, { origin, residentCount: 0, stage });
     await world.command(server, "gamerule doDaylightCycle false"); await world.command(server, "time set day");
     const boxes: Vec[] = Array.from({ length: 3 }, (_, i) => ({ x: origin.x + 3 + i, y: origin.y, z: origin.z + 6 }));
     for (let box = 0; box < boxes.length; box++) {
@@ -54,17 +55,15 @@ for (const stage of twins()) test(stage.title("book feedback: bounded stock sear
       expect((await optInViaBook(server, client, name, boxes[box]!, "chest", stage)).member).toBe(true);
     }
     const source = { x: origin.x - 6, y: origin.y, z: origin.z + 5 };
-    await openColonyPanelViaBook(server, client, name, founded.standBlock, stage);
-    await expect.poll(async () => shown(await panelElements(client), SUPPLY), { timeout: 10_000 }).toBe(false);
-    evidence.beforeBox = await panelElements(client);
-    await screen.dismiss(client);
-    await world.command(server, `setblock ${commandPos(stage.at(source))} folkways_vanilla:creative_supply_box`);
-    await openColonyPanelViaBook(server, client, name, founded.standBlock, stage);
-    expect(shown(await panelElements(client), SUPPLY), "a placed but unclaimed source stays hidden").toBe(false);
-    await screen.dismiss(client);
+    const sourceAt = stage.at(source);
+    expect(await facilityAt(server, name, sourceAt)).toBeNull();
+    await world.command(server, `setblock ${commandPos(sourceAt)} folkways_vanilla:creative_supply_box`);
+    expect(await facilityAt(server, name, sourceAt), "a placed but unclaimed source stays hidden").toBeNull();
     expect((await optInViaBook(server, client, name, source, "worksite", stage)).member).toBe(true);
+    const facility = await facilityAt(server, name, sourceAt);
+    expect(facility).toBeTruthy();
     await openColonyPanelViaBook(server, client, name, founded.standBlock, stage);
-    await clickElement(client, { id: SUPPLY }, { scrollIntoView: true });
+    await openFacilityInBook(server, client, facility!);
     evidence.claimed = await panelElements(client);
     // The book's native point gesture removes the same actual membership.
     await screen.dismiss(client);
@@ -76,7 +75,8 @@ for (const stage of twins()) test(stage.title("book feedback: bounded stock sear
     expect(await isColonyMember(server, source, stage)).toBe(false);
     await screen.dismiss(client);
     await openColonyPanelViaBook(server, client, name, founded.standBlock, stage);
-    await expect.poll(async () => shown(await panelElements(client), SUPPLY), { timeout: 10_000 }).toBe(false);
+    await clickTab(client, BOOK_TABS.facilities);
+    await waitForElement(client, { id: `folkways.book.facility.${facility}` }, { state: "absent" });
     await clickElement(client, { id: "folkways.tab.metrics" });
     await clickElement(client, { id: "folkways.metrics.refresh" });
     await expect.poll(async () => (await stock(client)).length, { timeout: 15_000 }).toBe(60);
@@ -107,7 +107,7 @@ for (const stage of twins()) test(stage.title("book feedback: bounded stock sear
     const words = await client.run(READ_TRANSLATION, undefined); evidence.translations = words;
     expect(words["block.kaleidoscope_cookery.tea_tree"]).toBe("茶树");
     expect(words["folkways.doing.folkways_vanilla.taking_supplies.about"]).toBe("正在领取补给中的钻石");
-    expect(words["folkways.doing.folkways_cookery.leaving_millstone"]).toBe("正在离开石磨");
+    expect(words["folkways.doing.folkways_vanilla.leaving_millstone"]).toBe("正在离开石磨");
     await openColonyPanelViaBook(server, client, name, founded.standBlock, stage);
     await clickElement(client, { id: "folkways.tab.metrics" });
     await search(client, "钻石");
@@ -127,7 +127,6 @@ for (const stage of twins()) test(stage.title("book feedback: bounded stock sear
   finally { await testInfo.attach("book-feedback-evidence.json", { body: JSON.stringify(evidence, null, 2), contentType: "application/json" }); await pair?.teardown(testInfo); }
 });
 
-function shown(elements: Element[], id: string) { return elements.some(e => e.id === id && e.displayed && e.visible && e.width > 0); }
 async function stock(client: MinecraftClient) {
   return (await panelElements(client)).filter(e => e.id?.startsWith(PREFIX) && e.displayed).map(e => e.id!);
 }

@@ -4,6 +4,7 @@ import io.github.izakyl.folkways.core.resident.api.Body;
 import io.github.izakyl.folkways.core.resident.api.Resident;
 import io.github.izakyl.folkways.core.transport.api.TransportTravel;
 import io.github.izakyl.folkways.core.travel.api.Hop;
+import io.github.izakyl.folkways.core.travel.api.Passages;
 import io.github.izakyl.folkways.core.travel.api.TrafficFeedback;
 import io.github.izakyl.folkways.core.travel.api.TravelSources;
 import io.github.izakyl.folkways.core.travel.internal.graph.Roamer;
@@ -11,6 +12,7 @@ import io.github.izakyl.folkways.core.travel.internal.graph.Roaming;
 import io.github.izakyl.folkways.core.travel.internal.graph.WayGraph;
 import io.github.izakyl.folkways.core.world.api.Closures;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -54,7 +56,34 @@ public final class ColonyWays {
     }
 
     public static Ways of(TravelSources colony, ServerLevel level) {
-        return singleThread ? new Answering(colony, level) : graph(colony, level).ways();
+        if (singleThread) {
+            return new Answering(colony, level);
+        }
+        Roaming known = GRAPHS.get(new Track(level.getServer(), level.dimension(), colony.colonyId()));
+        return new Requesting(colony, level, known == null ? TransportTravel.UNKNOWN : known.ways().estimates());
+    }
+
+    private record Requesting(TravelSources colony, ServerLevel level, TransportTravel estimates) implements Ways {
+        @Override
+        public Faring reckon(Resident who, WorldPos from, Set<WorldPos> goals) {
+            Roaming known = GRAPHS.get(new Track(level.getServer(), level.dimension(), colony.colonyId()));
+            return known == null ? Faring.LATER : known.ways().reckon(who, from, goals);
+        }
+
+        @Override
+        public Faring journey(Resident who, WorldPos from, Set<WorldPos> goals) {
+            return graph(colony, level).ways().journey(who, from, goals);
+        }
+
+        @Override
+        public Faring journey(Resident who, WorldPos from, Set<WorldPos> goals, Urgency urgency) {
+            return graph(colony, level).ways().journey(who, from, goals, urgency);
+        }
+
+        @Override
+        public Faring anyoneReaches(Set<WorldPos> goals) {
+            return graph(colony, level).ways().anyoneReaches(goals);
+        }
     }
 
     /** Reads only an already published graph; never creates or advances a roaming search. */
@@ -67,6 +96,12 @@ public final class ColonyWays {
     }
 
     private record Answering(TravelSources colony, ServerLevel level) implements Ways {
+
+        @Override
+        public Faring reckon(Resident who, WorldPos from, Set<WorldPos> goals) {
+            Roaming known = GRAPHS.get(new Track(level.getServer(), level.dimension(), colony.colonyId()));
+            return known == null ? Faring.LATER : known.ways().reckon(who, from, goals);
+        }
 
         @Override
         public Faring journey(Resident who, WorldPos from, Set<WorldPos> goals) {
@@ -89,13 +124,13 @@ public final class ColonyWays {
         }
 
         private Faring answered(Function<Ways, Faring> asking) {
-            return graph(colony, level).answered(asking, roamers(colony, level), hopsIn(colony),
+            return graph(colony, level).answered(asking, roamers(colony, level), hopsIn(colony, level),
                 level.getGameTime());
         }
     }
 
     public static boolean advance(TravelSources colony, ServerLevel level) {
-        return graph(colony, level).advance(roamers(colony, level), hopsIn(colony),
+        return graph(colony, level).advance(roamers(colony, level), hopsIn(colony, level),
             level.getGameTime());
     }
 
@@ -160,7 +195,14 @@ public final class ColonyWays {
         return List.copyOf(byKind.values());
     }
 
-    private static List<Hop> hopsIn(TravelSources colony) {
-        return colony.hops();
+    private static List<Hop> hopsIn(TravelSources colony, ServerLevel level) {
+        List<Hop> surveyed = colony.hops();
+        List<Hop> published = Passages.published(level, colony.colonyId());
+        if (published.isEmpty()) {
+            return surveyed;
+        }
+        List<Hop> found = new ArrayList<>(surveyed);
+        found.addAll(published);
+        return List.copyOf(found);
     }
 }

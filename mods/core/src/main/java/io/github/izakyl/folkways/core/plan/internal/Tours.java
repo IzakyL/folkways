@@ -1,5 +1,6 @@
 package io.github.izakyl.folkways.core.plan.internal;
 
+import io.github.izakyl.folkways.core.plan.api.RunBoundary;
 import io.github.izakyl.folkways.core.FolkwaysConfig;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import io.github.izakyl.folkways.core.resident.api.Gait;
@@ -1600,7 +1601,7 @@ final class Tours {
     private List<UUID> topological() {
         Map<UUID, Integer> waitingOn = new LinkedHashMap<>();
         for (UUID id : weave.vertices().keySet()) {
-            if (!settled.containsKey(id)) {
+            if (!settled.containsKey(id) && !(weave.vertex(id).node() instanceof RunBoundary)) {
                 waitingOn.put(id, 0);
             }
         }

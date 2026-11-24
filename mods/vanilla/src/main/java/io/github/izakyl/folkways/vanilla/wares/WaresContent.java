@@ -1,8 +1,16 @@
 package io.github.izakyl.folkways.vanilla.wares;
 
+import io.github.izakyl.folkways.core.effect.Modifier;
+import io.github.izakyl.folkways.core.effect.Stat;
+import io.github.izakyl.folkways.core.effect.perk.Perk;
 import io.github.izakyl.folkways.core.extension.api.Declaring;
+import io.github.izakyl.folkways.core.front.api.Delegation;
+import io.github.izakyl.folkways.core.front.api.Enrollment;
+import io.github.izakyl.folkways.core.front.api.Registering;
+import io.github.izakyl.folkways.core.front.api.Schema;
+import io.github.izakyl.folkways.core.front.api.Shape;
+import io.github.izakyl.folkways.core.inventory.api.port.StoreAccess;
 import io.github.izakyl.folkways.core.item.api.Containers;
-import io.github.izakyl.folkways.core.inventory.api.port.StorePorts;
 import io.github.izakyl.folkways.core.item.api.ItemFilter;
 import io.github.izakyl.folkways.core.vocation.api.Vocation;
 import io.github.izakyl.folkways.core.vocation.api.VocationGroup;
@@ -10,16 +18,6 @@ import io.github.izakyl.folkways.core.vocation.api.VocationSpec;
 import io.github.izakyl.folkways.core.vocation.api.Vocations;
 import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.core.work.api.Workload;
-import io.github.izakyl.folkways.core.effect.Modifier;
-import io.github.izakyl.folkways.core.effect.Stat;
-import io.github.izakyl.folkways.core.effect.perk.Perk;
-import io.github.izakyl.folkways.core.front.api.Delegation;
-import io.github.izakyl.folkways.core.front.api.Enrollment;
-import io.github.izakyl.folkways.core.front.api.Facing;
-import io.github.izakyl.folkways.core.front.api.Registering;
-import io.github.izakyl.folkways.core.front.api.Schema;
-import io.github.izakyl.folkways.core.front.api.Shape;
-import io.github.izakyl.folkways.core.front.api.panel.PageKind;
 import java.util.List;
 import net.minecraft.resources.ResourceLocation;
 
@@ -53,9 +51,6 @@ public final class WaresContent {
         List.of(ItemFilter.item(ResourceLocation.withDefaultNamespace("coal")),
             ItemFilter.item(ResourceLocation.withDefaultNamespace("charcoal"))));
 
-    private static final PageKind PAGE = PageKind.boarded(ID, "folkways.page.wares",
-        ResourceLocation.withDefaultNamespace("crafting_table")).tools(CRAFTING);
-
     public static final Stat BATCH = stat("crafting_batch", 1, 8);
     public static final Stat REFUND = stat("crafting_refund", 0, 1);
     public static final Stat BYPRODUCT = stat("crafting_byproduct", 0, 1);
@@ -85,6 +80,7 @@ public final class WaresContent {
 
     public static void declare(Declaring declaring) {
         declaring.vocation(VOCATION.ordered(100).grouped(VocationGroup.PROCESSING));
+        Stations.declare();
         declaring.refinement(Smelt.SMELTING);
         declaring.colony(ID, scope -> {
             CraftRecipes recipes = new CraftRecipes(scope.server());
@@ -98,14 +94,16 @@ public final class WaresContent {
     }
 
     public static void enroll(Registering registering) {
-        registering.facing(ID, colony -> colony.service(ID, WaresPresence.class)
-            .map(value -> (Facing) value));
+        registering.ghostSource(ID, colony -> colony.service(ID, WaresPresence.class).map(value -> value));
+        for (ResourceLocation delegation : List.of(STORE, STATION)) {
+            registering.holding(delegation, colony -> colony.service(ID, WaresPresence.class).map(state -> state));
+        }
         registering.enrollment(ID, new Enrollment(
-            List.of(new Delegation(STATION, new Shape.Block(Stations::isStation)),
+            List.of(new Delegation(STATION, new Shape.Block(Stations::isStation),
+                ResourceLocation.withDefaultNamespace("crafting_table")),
                 new Delegation(STORE, Shape.Block.fallback(
-                    StorePorts::candidate, Containers::chestAnchor))),
-            new Schema(List.of(FUEL)),
-            List.of(PAGE)));
+                    StoreAccess::candidate, Containers::chestAnchor), ResourceLocation.withDefaultNamespace("chest"))),
+            new Schema(List.of(FUEL))));
     }
 
     public static Vocation trade() {

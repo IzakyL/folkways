@@ -1,12 +1,16 @@
 import {
+  ancestorsOf,
+  childrenOf,
   clickElement,
   type Element,
   LDLIB2,
   type PanelRead,
   panelElements,
+  scrollElementIntoView,
   selectElement,
   HOVER_REFRESH_FRAMES,
 } from "../../ldlib2";
+import { anchorOf, clipBox } from "../../ldlib2/rules";
 import { PANEL_ROUTES } from "../../ldlib2/routes";
 import {
   defineTask,
@@ -19,7 +23,6 @@ import {
   type MinecraftServer,
 } from "@izakyl/blockwright-minecraft";
 import {
-  clickUnverified,
   frames,
   isSafeFailure,
   pressAtHovered,
@@ -37,10 +40,7 @@ type Vec = { x: number; y: number; z: number };
 
 
 const OPEN_ATTEMPTS = 3;
-const ENTER_ATTEMPTS = 20;
 
-
-export type BoardAct = { page: string; row: number; act: number; id: string };
 
 export async function openContainerScreen(client: MinecraftClient, chest: Vec, attempts = OPEN_ATTEMPTS,
   stage: Stage = GROUND) {
@@ -59,68 +59,6 @@ export async function openContainerScreen(client: MinecraftClient, chest: Vec, a
     + ` after ${attempts} attempts (use=${JSON.stringify(opened)}, screen=${JSON.stringify(screenName(seen))})`);
 }
 
-export async function enterSitePanel(server: MinecraftServer, client: MinecraftClient) {
-  await tick.sprint(server, 5);
-  await waitForElement(client, { id: "folkways.site.panel" }, { timeoutMs: 8_000 });
-  for (let attempt = 0; attempt < ENTER_ATTEMPTS; attempt++) {
-    if ((await laidOutBoardRows(client)).length > 0) {
-      return;
-    }
-    await safeAction(() => frames(client, 3));
-    await tick.sprint(server, 3);
-  }
-  const rows = await boardRows(client);
-  throw new Error(`site: after the chest's window opened, its panel drew no rows`
-    + ` (screen=${JSON.stringify(screenName(await safeScreen(client)))}`
-    + `; the tree has tokens for ${rows.length} rows but all are zero-size: ${JSON.stringify(rows.map((row) => row.id))})`);
-}
-
-async function laidOutBoardRows(client: MinecraftClient) {
-  return (await panelElements(client))
-    .filter((element) => element.width > 0 && /^folkways\.board\.row\./.test(element.id ?? ""));
-}
-
-export async function openSite(server: MinecraftServer, client: MinecraftClient, chest: Vec, stage: Stage = GROUND) {
-  const opened = await openContainerScreen(client, chest, OPEN_ATTEMPTS, stage);
-  const entered = await enterSitePanel(server, client);
-  return { opened, entered };
-}
-
-async function panelIds(client: MinecraftClient): Promise<string[]> {
-  const elements = await panelElements(client);
-  return elements.map((element) => element.id).filter((id): id is string => typeof id === "string");
-}
-
-export async function boardRows(client: MinecraftClient): Promise<{ page: string; row: number; id: string }[]> {
-  return (await panelIds(client))
-    .map((id) => /^folkways\.board\.row\.(.+)\.(\d+)$/.exec(id))
-    .filter((match): match is RegExpExecArray => match !== null)
-    .map((match) => ({ page: match[1], row: Number(match[2]), id: match[0] }))
-    .sort((a, b) => a.row - b.row);
-}
-
-export async function boardActs(client: MinecraftClient, verb: string, page?: string): Promise<BoardAct[]> {
-  const pattern = new RegExp(`^folkways\\.board\\.${verb}\\.(.+)\\.(\\d+)\\.(\\d+)$`);
-  return (await panelIds(client))
-    .map((id) => pattern.exec(id))
-    .filter((match): match is RegExpExecArray => match !== null)
-    .map((match) => ({ page: match[1], row: Number(match[2]), act: Number(match[3]), id: match[0] }))
-    .filter((found) => page === undefined || found.page === page)
-    .sort((a, b) => (a.row - b.row) || (a.act - b.act));
-}
-
-export async function boardAct(
-  client: MinecraftClient, verb: string, page: string, row: number, act = 0,
-): Promise<BoardAct> {
-  const acts = await boardActs(client, verb, page);
-  const found = acts.find((one) => one.row === row && one.act === act);
-  if (!found) {
-    throw new Error(`site: row ${row} on page ${page} has no ${verb} #${act}`
-      + ` (present: ${JSON.stringify(acts.map((one) => one.id))})`);
-  }
-  return found;
-}
-
 export async function elementBounds(client: MinecraftClient, id: string) {
   const found = selectElement(await panelElements(client), { id });
   return found ? { x: found.x, y: found.y, width: found.width, height: found.height } : null;
@@ -132,12 +70,8 @@ export async function settlePanel(server: MinecraftServer, client: MinecraftClie
 }
 
 const KEY_ENTER = 257;
-const KEY_A = 65;
 const KEY_BACKSPACE = 259;
-const KEY_DELETE = 261;
 const KEY_END = 269;
-
-const CLEAR_STROKES = 12;
 
 async function expectControl(
   client: MinecraftClient, token: string, ...kinds: string[]
@@ -185,18 +119,19 @@ export async function typeCell(
       return result;
     };
 
-    tried.focus = await tap("focus", () => clickUnverified(client, { id: token }));
-    tried.selectAll = await tap("select all", () => input.key(client, { keyCode: KEY_A, modifiers: ["ctrl"] }));
-    await tap("clear selection", () => input.key(client, { keyCode: KEY_BACKSPACE }));
+    tried.focus = await clickElement(client, { id: token }, { scrollIntoView: true });
+    // Clear the text with unmodified editing keys and check the buffer before typing.
+    const previous = await fieldText(client, token);
+    if (previous === undefined) {
+      throw new Error(`panel: could not read ${token} before typing`);
+    }
+    await tap("end", () => input.key(client, { keyCode: KEY_END }));
+    for (const _ of previous) {
+      await tap("backspace", () => input.key(client, { keyCode: KEY_BACKSPACE }));
+    }
     tried.cleared = await fieldText(client, token);
-    if (tried.cleared !== "") {
-      await tap("end", () => input.key(client, { keyCode: KEY_END }));
-      for (let stroke = 0; stroke < CLEAR_STROKES; stroke++) {
-        await tap("backspace", () => input.key(client, { keyCode: KEY_BACKSPACE }));
-      }
-      for (let stroke = 0; stroke < CLEAR_STROKES; stroke++) {
-        await tap("delete", () => input.key(client, { keyCode: KEY_DELETE }));
-      }
+    if (refused.length === 0 && tried.cleared !== "") {
+      throw new Error(`panel: ${token} still held ${JSON.stringify(tried.cleared)} after clearing`);
     }
     tried.typed = await tap("type", () => input.key(client, { text: value }));
     tried.commit = await tap("commit", () => input.key(client, { keyCode: KEY_ENTER }));
@@ -369,52 +304,29 @@ export async function wheelCell(
 const TRACK_NUDGES = 4;
 
 function scrollViewAround(elements: Element[], row: Element) {
-  // Other hidden pages can overlap this row geometrically. Follow its actual preorder ancestors.
-  let depth = row.depth;
-  for (let index = row.index - 1; index >= 0; index--) {
-    const ancestor = elements[index];
-    if (ancestor.depth >= depth) continue;
-    depth = ancestor.depth;
-    if (ancestor.className.endsWith(".ScrollerView") && ancestor.width > 0 && ancestor.height > 0) {
-      return { x: ancestor.x, y: ancestor.y, width: ancestor.width, height: ancestor.height };
-    }
+  const ancestors = ancestorsOf(elements, row).reverse();
+  const scroller = ancestors.find(element => element.className.endsWith(".ScrollerView"));
+  const viewport = ancestors.find(element => element.classes?.includes("__scroller_view_view-port__"));
+  if (!scroller || !viewport) {
+    throw new Error(`panel: ${row.id} is not in a scroll viewport`);
   }
-  const boxes = elements
-    .filter((element) => element.className.endsWith(".ScrollerView"))
-    .filter((element) => element.width > 0 && element.height > 0)
-    .filter((element) => row.x >= element.x && row.x <= element.x + element.width)
-    .filter((element) => row.y >= element.y && row.y + row.height <= element.y + element.height)
-    .sort((a, b) => a.width * a.height - b.width * b.height);
-  if (boxes.length === 0) {
-    throw new Error(`panel: ${row.id} is not in any scroll area`);
-  }
-  const view = boxes[0];
-  return { x: view.x, y: view.y, width: view.width, height: view.height };
+  return { scroller, viewport };
 }
 
-function horizontalTrack(elements: Element[], view: { x: number; y: number; width: number; height: number }) {
-  const bars = elements
-    .filter((element) => element.className.includes("Scroller$Horizontal"))
-    .filter((element) => element.width > 0 && element.height > 0)
-    .filter((element) => Math.abs(element.x - view.x) <= 1 && Math.abs(element.width - view.width) <= 1)
-    .filter((element) => Math.abs(element.y + element.height - (view.y + view.height)) <= 2);
-  if (bars.length === 0) {
-    throw new Error(`panel: no horizontal scrollbar below viewport ${JSON.stringify(view)} - the area does not overflow horizontally, `
-      + "or its horizontalScrollDisplay is NEVER");
+function horizontalTrack(elements: Element[], scroller: Element) {
+  const bar = childrenOf(elements, scroller).find(element =>
+    element.className.includes("Scroller$Horizontal") && element.displayed && element.width > 0);
+  if (!bar) {
+    throw new Error(`panel: no visible horizontal scrollbar in ${scroller.id ?? scroller.className}`);
   }
-  const bar = bars[0];
   // The Horizontal element includes the two arrow buttons. Only its middle child is the track;
   // clicking the arrows moves one step, so those positions cannot calibrate the scroll range.
-  const track = elements.slice(bar.index + 1).find(element => element.depth === bar.depth + 1
-    && element.className.endsWith(".UIElement") && element.width > 0 && element.height > 0);
+  const track = childrenOf(elements, bar).find(element =>
+    element.className.endsWith(".UIElement") && element.width > 0 && element.height > 0);
   if (!track) {
     throw new Error(`panel: no track inside horizontal scrollbar ${bar.index}`);
   }
-  return {
-    x: track.contentX,
-    y: Math.round(track.contentY + track.contentHeight / 2),
-    width: track.contentWidth,
-  };
+  return track;
 }
 
 async function clickTrackAt(
@@ -431,17 +343,30 @@ async function clickTrackAt(
   return cell.x;
 }
 
+// A row wider than its scroller can still be clipped on x after it has been wheeled into the page's view.
+async function revealVertically(client: MinecraftClient, anchor: string) {
+  try {
+    await scrollElementIntoView(client, { id: anchor });
+  } catch (error) {
+    if (!String(error).includes("a mouse wheel only scrolls vertically")) {
+      throw error;
+    }
+  }
+}
+
 export async function scrollCellIntoView(
   server: MinecraftServer, client: MinecraftClient, anchor: string, token: string,
   visibility: "full" | "center" = "full",
 ) {
+  await revealVertically(client, anchor);
   const elements = await panelElements(client);
   const cell = selectElement(elements, { id: token });
   const row = selectElement(elements, { id: anchor });
   if (!cell || !row) {
     throw new Error(`panel: no ${cell ? anchor : token} on this page`);
   }
-  const view = scrollViewAround(elements, row);
+  const { scroller, viewport } = scrollViewAround(elements, row);
+  const view = { x: viewport.contentX, width: viewport.contentWidth };
   const evidence: any = { anchor, token, viewport: view, cell: { x: cell.x, width: cell.width } };
   // Center clicks round to a whole pixel, so keep that point inside the viewport.
   const center = cell.width / 2;
@@ -453,7 +378,19 @@ export async function scrollCellIntoView(
     return evidence;
   }
 
-  const track = horizontalTrack(elements, view);
+  let trackElement = horizontalTrack(elements, scroller);
+  const clip = clipBox(elements, trackElement);
+  const trackY = Math.round(trackElement.contentY + trackElement.contentHeight / 2);
+  const trackClipped = clip !== undefined && (trackY < clip.y || trackY >= clip.y + clip.height);
+  if (trackClipped) {
+    // The Workforce track follows the last roster row and can be below the page viewport.
+    trackElement = await scrollElementIntoView(client, anchorOf(elements, trackElement));
+  }
+  const track = {
+    x: trackElement.contentX,
+    y: Math.round(trackElement.contentY + trackElement.contentHeight / 2),
+    width: trackElement.contentWidth,
+  };
   evidence.track = track;
   const atRight = await clickTrackAt(server, client, track, 1, token);
   const atLeft = await clickTrackAt(server, client, track, 0, token);
@@ -479,6 +416,9 @@ export async function scrollCellIntoView(
   }
   if (!inside(landed)) {
     throw new Error(`panel: ${token} scrolled to ${landed} outside the accepted range [${left}, ${right}] (${JSON.stringify(evidence)})`);
+  }
+  if (trackClipped) {
+    await revealVertically(client, anchor);
   }
   evidence.settled = true;
   return evidence;

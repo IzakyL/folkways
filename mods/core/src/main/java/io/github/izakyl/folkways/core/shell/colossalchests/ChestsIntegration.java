@@ -1,12 +1,11 @@
 package io.github.izakyl.folkways.core.shell.colossalchests;
 
-import io.github.izakyl.folkways.core.inventory.api.port.PortIdentity;
-import io.github.izakyl.folkways.core.inventory.api.port.StorePort;
-import io.github.izakyl.folkways.core.inventory.api.port.StorePorts;
-import io.github.izakyl.folkways.core.inventory.api.port.Usability;
+import io.github.izakyl.folkways.core.facility.api.Ports;
+import io.github.izakyl.folkways.core.facility.api.control.PortIdentity;
+import io.github.izakyl.folkways.core.facility.api.control.ItemPort;
 import io.github.izakyl.folkways.core.shell.storage.CellPort;
 import io.github.izakyl.folkways.core.shell.storage.NativeCells;
-import io.github.izakyl.folkways.core.shell.storage.Verdicts;
+import io.github.izakyl.folkways.core.shell.storage.StorageTraits;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
 import java.util.Optional;
 import net.minecraft.core.BlockPos;
@@ -29,15 +28,15 @@ public final class ChestsIntegration {
     }
 
     public static void install() {
-        StorePorts.register(ResourceLocation.fromNamespaceAndPath("folkways_core", "colossal_chests"),
-            StorePorts.SPECIFIC, ChestsIntegration::at);
+        Ports.registerItem(ResourceLocation.fromNamespaceAndPath("folkways_core", "colossal_chests"),
+            Ports.SPECIFIC, ChestsIntegration::at);
     }
 
-    private static Optional<StorePort> at(ServerLevel level, BlockPos pos) {
+    private static Optional<ItemPort> at(ServerLevel level, BlockPos pos) {
         WorldPos home = WorldPos.of(level, pos);
         if (level.getBlockEntity(pos) instanceof BlockEntityUncolossalChest chest) {
             return Optional.of(new CellPort(PortIdentity.block(home), NativeCells.container(chest.getInventory()),
-                () -> Usability.USABLE, true));
+                () -> StorageTraits.PLAIN, true));
         }
         var state = level.getBlockState(pos);
         if (!(state.getBlock() instanceof IBlockChestMaterial material)) {
@@ -55,11 +54,11 @@ public final class ChestsIntegration {
         PortIdentity identity = new PortIdentity(new ChestKey(WorldPos.of(level, core), chest), home);
         return Optional.of(new CellPort(identity, NativeCells.container(chest.getInventory()), () -> {
             if (GeneralConfig.creativeChests) {
-                return Verdicts.because("infinite");
+                return StorageTraits.source(net.minecraft.world.item.ItemStack.EMPTY);
             }
             return chest.isStructureComplete() && level.getBlockEntity(core) == chest
                 && core.equals(core(level, pos, material.getMaterial()))
-                ? Usability.USABLE : Verdicts.because("disconnected");
+                ? StorageTraits.PLAIN : StorageTraits.unavailable("disconnected");
         }, true));
     }
 

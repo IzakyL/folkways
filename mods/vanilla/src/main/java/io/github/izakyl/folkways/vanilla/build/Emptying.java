@@ -3,12 +3,12 @@ package io.github.izakyl.folkways.vanilla.build;
 import io.github.izakyl.folkways.core.colony.api.ClaimRelease;
 import io.github.izakyl.folkways.core.colony.api.Colony;
 import io.github.izakyl.folkways.core.inventory.api.InventorySnapshot;
-import io.github.izakyl.folkways.core.inventory.api.SlotSnapshot;
+import io.github.izakyl.folkways.core.facility.api.control.SlotSnapshot;
 import io.github.izakyl.folkways.core.inventory.api.StoreRule;
 import io.github.izakyl.folkways.core.item.api.Containers;
 import io.github.izakyl.folkways.core.plan.api.Delivery;
 import io.github.izakyl.folkways.core.plan.api.Grown;
-import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.world.api.Stances;
 import io.github.izakyl.folkways.core.world.api.Stand;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
 import java.util.ArrayList;
@@ -138,7 +138,7 @@ final class Emptying {
                         }
                         UUID id = UUID.randomUUID();
                         taking.put(at, new Trip(id, into, load.copy()));
-                        Delivery.Source source = new Delivery.Source(WorldPos.of(level, cell), loading.get(),
+                        Delivery.Source source = new Delivery.SlotSource(WorldPos.of(level, cell), loading.get(),
                             view.side(), slot, load, level.getBlockState(cell), level.getBlockEntity(cell));
                         asks.submit(level.dimension(), Grown.of(Delivery.from(id, BuildContent.ID, source, into,
                             unloading.get(), count -> { })), (node, how) -> {
@@ -189,7 +189,6 @@ final class Emptying {
     private void rule() {
         if (level == null) { return; }
         colony.ifPresent(one -> {
-            one.withhold(owner, level.dimension(), held.keySet());
             one.rule(owner, level.dimension(), held.keySet().stream()
                 .<StoreRule>map(at -> new StoreRule.Access(at, false, false)).toList());
         });

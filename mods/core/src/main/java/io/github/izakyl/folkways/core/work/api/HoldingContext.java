@@ -15,7 +15,8 @@ public record HoldingContext(ServerLevel level, Body body, Worker worker, Action
     // Private actions choose their own stance and share the outer node's input and output placement.
     public ActionHandle action(WorkAction action) {
         Placement plan = worker.placement();
-        Placement placed = new Placement(Set.of(), plan.carrying(), plan.from(), plan.into(), plan.draws());
+        Placement placed = new Placement(Set.of(), plan.carrying(), plan.from(), plan.into(), plan.draws(),
+            plan.reservations(), plan.stowing(), plan.settlement());
         return holdings.action(this, action, placed);
     }
 }

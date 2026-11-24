@@ -4,9 +4,9 @@ import io.github.izakyl.folkways.core.colony.api.Colony;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import io.github.izakyl.folkways.core.resident.api.Doings;
 import io.github.izakyl.folkways.core.work.api.Stall;
-import io.github.izakyl.folkways.core.front.api.notice.Line;
-import io.github.izakyl.folkways.core.front.api.notice.Notice;
-import io.github.izakyl.folkways.core.front.api.notice.Sentence;
+import io.github.izakyl.folkways.core.card.api.notice.Line;
+import io.github.izakyl.folkways.core.card.api.notice.Notice;
+import io.github.izakyl.folkways.core.card.api.notice.Sentence;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -61,7 +61,7 @@ public final class ColonyStalls {
     }
 
     // Filled with the goods the work went short of, else with what the work is done to, as a resident's balk is.
-    static Notice notice(Stall stall) {
+    public static Notice notice(Stall stall) {
         Notice.Arg filled = stall.goods().map(ColonyStalls::named)
             .orElseGet(() -> stall.about().map(Notice::named).orElseGet(() -> Notice.text("")));
         return Notice.of(stall.why(), filled);

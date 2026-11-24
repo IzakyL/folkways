@@ -7,27 +7,18 @@ import io.github.izakyl.folkways.core.colony.api.Colony;
 import io.github.izakyl.folkways.core.colony.api.ColonyView;
 import io.github.izakyl.folkways.core.colony.api.Sweep;
 import io.github.izakyl.folkways.core.plan.api.Grown;
-import io.github.izakyl.folkways.core.front.api.Facing;
+import io.github.izakyl.folkways.core.front.api.HoldingKind;
 import io.github.izakyl.folkways.core.front.api.Fronts;
 import io.github.izakyl.folkways.core.front.api.PastDay;
-import io.github.izakyl.folkways.core.front.api.ZoneView;
-import io.github.izakyl.folkways.core.front.api.notice.Line;
-import io.github.izakyl.folkways.core.front.api.panel.Board;
+import io.github.izakyl.folkways.core.card.api.notice.Line;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
-import net.minecraft.core.BlockPos;
-import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
 
-final class FishingPresence implements Facing {
+final class FishingPresence implements HoldingKind {
 
     private static final String TAG_MADE = "made";
 
@@ -49,45 +40,9 @@ final class FishingPresence implements Facing {
     }
 
     @Override
-    public List<Line> zoneLines(ZoneView zone, ColonyView view) {
-        return zone.delegation().equals(FishingContent.FISHERY) ? made.lines(zone, view) : List.of();
-    }
-
-    // A fishery with no water a fisher can cast into from it is listed as dry, pinging the ground marked out.
-    @Override
-    public Optional<Board> board(ResourceLocation page, ColonyView view) {
-        if (!page.equals(FishingContent.ID)) {
-            return Optional.empty();
-        }
-        Map<UUID, Spot> known = fisheries;
-        int count = 0;
-        long caught = 0;
-        List<Board.Row> rows = new ArrayList<>();
-        for (ZoneView zone : Fronts.of(colony).zonesIn(view.level())) {
-            if (!zone.delegation().equals(FishingContent.FISHERY) || zone.cells().isEmpty()) {
-                continue;
-            }
-            count++;
-            Spot spot = known.get(zone.id());
-            Component title = Component.translatable("folkways.delegation.folkways_vanilla.fish");
-            if (spot == null) {
-                BlockPos marked = zone.cells().stream().min(Comparator.comparingLong(BlockPos::asLong)).orElseThrow();
-                rows.add(new Board.Row(new ItemStack(Items.FISHING_ROD), title,
-                    Component.translatable("folkways.page.fish.dry"), List.of(new Board.Act.Ping(marked))));
-                continue;
-            }
-            long here = made.madeOn(zone, view).values().stream().mapToLong(Long::longValue).sum();
-            caught += here;
-            rows.add(new Board.Row(new ItemStack(Items.FISHING_ROD), title,
-                Component.translatable("folkways.page.fish.head", here),
-                List.of(new Board.Act.Ping(spot.water().block(view.level()))))
-                .told(made.told(zone, view)));
-        }
-        return Optional.of(new Board(
-            List.of(new Board.Figure("folkways.page.fish.count", Component.literal(Integer.toString(count))),
-                new Board.Figure("folkways.page.fish.caught", Component.literal(Long.toString(caught)))),
-            rows,
-            Optional.of(Component.translatable("folkways.page.fish.empty"))));
+    public List<Line> lines(Held held, ColonyView view) {
+        return held.zone().filter(zone -> zone.delegation().equals(FishingContent.FISHERY))
+            .map(zone -> made.lines(zone, view)).orElseGet(List::of);
     }
 
     public void tick(MinecraftServer server) {
@@ -120,7 +75,7 @@ final class FishingPresence implements Facing {
     }
 
     private void keepMade() {
-        if (made.changed()) {
+        if (made.consumeChanged()) {
             colony.keep(FishingContent.ID, Writer.of().blob(TAG_MADE, made.save()).tag());
         }
     }

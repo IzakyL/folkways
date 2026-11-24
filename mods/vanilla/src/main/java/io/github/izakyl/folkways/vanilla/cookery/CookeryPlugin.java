@@ -1,0 +1,28 @@
+package io.github.izakyl.folkways.vanilla.cookery;
+
+import io.github.izakyl.folkways.core.extension.api.Declaring;
+import io.github.izakyl.folkways.core.front.api.Registering;
+import io.github.izakyl.folkways.core.shell.api.OptionalIntegrations;
+import net.neoforged.bus.api.IEventBus;
+
+public final class CookeryPlugin {
+    private CookeryPlugin() {
+    }
+
+    public static void install(IEventBus modBus) {
+        if (OptionalIntegrations.TAVERN.enabled()) {
+            io.github.izakyl.folkways.vanilla.cookery.tavern.TavernCounters.register(modBus);
+        }
+        if (net.neoforged.fml.loading.FMLEnvironment.dist.isClient()) {
+            modBus.addListener(CookeryScenes::declare);
+        }
+        net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(
+            io.github.izakyl.folkways.vanilla.cookery.millstone.MillstoneDrive::joined);
+        modBus.addListener(Declaring.class, CookeryContent::declare);
+        modBus.addListener(io.github.izakyl.folkways.core.extension.api.Relating.class, event ->
+            event.defaultParticipation(io.github.izakyl.folkways.vanilla.person.PersonBody.ID,
+                io.github.izakyl.folkways.core.resident.api.Stake.urge(CookeryContent.ID),
+                io.github.izakyl.folkways.core.resident.api.Participation.ALWAYS));
+        modBus.addListener(Registering.class, CookeryContent::enroll);
+    }
+}

@@ -292,7 +292,7 @@ export async function carrierReady(server: MinecraftServer, tower: Vec, timeoutM
 }
 
 /**
- * A vehicle's controller as the firearms mod keeps it, read for the take's evidence; with `order`, first gives that
+ * A vehicle's controller as Core stores it, read for the take's evidence; with `order`, first gives that
  * order straight through the vehicle provider and reports its result (the take's own orders go through the card).
  */
 export const CONTROLLER = defineTask<Record<string, any>, any>({
@@ -315,7 +315,7 @@ if (a.has("order")) {
     a.has("airport") ? Optional.of(a.string("airport")) : Optional.empty());
   out.put("result", String.valueOf(Vehicles.of(e).orElseThrow().order(e, order)));
 }
-var type = Class.forName("io.github.izakyl.folkways.firearms.warfare.VehicleController");
+var type = Class.forName("io.github.izakyl.folkways.core.shell.warfare.VehicleController");
 var of = type.getDeclaredMethod("of", Class.forName("com.atsuishio.superbwarfare.entity.vehicle.base.VehicleEntity"));
 of.setAccessible(true);
 var controller = of.invoke(null, e);
@@ -328,7 +328,7 @@ var launch = launchField.get(controller);
 if (launch != null) {
   var shuttleField = launch.getClass().getDeclaredField("shuttle"); shuttleField.setAccessible(true);
   var shuttle = (net.minecraft.world.entity.Entity) shuttleField.get(launch);
-  var slackMethod = Class.forName("io.github.izakyl.folkways.firearms.warfare.VehicleCatapults")
+  var slackMethod = Class.forName("io.github.izakyl.folkways.core.shell.warfare.VehicleCatapults")
     .getDeclaredMethod("slack", Class.forName("com.atsuishio.superbwarfare.entity.vehicle.base.VehicleEntity"));
   slackMethod.setAccessible(true);
   out.put("slack", slackMethod.invoke(null, e));

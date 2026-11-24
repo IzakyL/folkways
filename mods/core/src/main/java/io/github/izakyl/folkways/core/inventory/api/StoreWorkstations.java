@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.core.inventory.api;
 
-import io.github.izakyl.folkways.core.inventory.api.port.StorePorts;
+import io.github.izakyl.folkways.core.inventory.api.port.StoreAccess;
 import io.github.izakyl.folkways.core.item.api.Containers;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
 import java.util.EnumSet;
@@ -58,14 +58,14 @@ public final class StoreWorkstations {
     /**
      * Read live declarations, excluding unloaded, unusable and condemned stores. This does not enroll a block:
      * the caller must check its colony's store membership. Consumers refresh these capabilities periodically,
-     * uses the store's footings, and checks again before executing work. No separate STATION claim is needed.
+     * uses the store's footings for navigation. No separate STATION claim is needed.
      * Providers grant only ordinary pack crafting; they do not expose or operate native upgrade inventories.
      */
     public static Set<Capability> at(ServerLevel level, BlockPos pos) {
-        if (!level.isLoaded(pos) || StorePorts.condemned(WorldPos.of(level, pos)).isPresent()) {
+        if (!level.isLoaded(pos) || StoreAccess.observation(WorldPos.of(level, pos)).isPresent()) {
             return Set.of();
         }
-        boolean usable = StorePorts.at(level, pos).map(port -> port.usability().usable())
+        boolean usable = StoreAccess.at(level, pos).map(port -> StoreAccess.usability(level, port).usable())
             .orElseGet(() -> Containers.at(level, pos).isPresent());
         if (!usable) {
             return Set.of();

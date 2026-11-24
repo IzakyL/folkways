@@ -2,6 +2,7 @@ package io.github.izakyl.folkways.core.shell.ae2;
 
 import appeng.api.networking.IGridNode;
 import appeng.api.stacks.AEKey;
+import io.github.izakyl.folkways.core.shell.crafting.NetworkExtensions;
 import io.github.izakyl.folkways.core.shell.crafting.TerminalPreferences;
 import java.util.HashSet;
 import java.util.Set;
@@ -20,7 +21,7 @@ public final class TerminalRecipes {
         var crafting = node.getGrid().getCraftingService();
         visible.removeIf(key -> {
             var patterns = crafting.getCraftingFor(key);
-            return !patterns.isEmpty() && patterns.stream().allMatch(ColonyPattern::isColonyPattern);
+            return !patterns.isEmpty() && patterns.stream().allMatch(NetworkExtensions::isExternalPattern);
         });
         return visible;
     }

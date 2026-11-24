@@ -7,14 +7,14 @@ import com.lowdragmc.lowdraglib2.gui.ui.elements.Button;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.TextField;
 import io.github.izakyl.folkways.core.colony.api.Colonies;
 import io.github.izakyl.folkways.core.colony.api.Colony;
-import io.github.izakyl.folkways.core.world.api.WorldPos;
-import io.github.izakyl.folkways.core.world.api.WorldSpaces;
 import io.github.izakyl.folkways.core.combat.api.LandingSites;
 import io.github.izakyl.folkways.core.front.api.Books;
 import io.github.izakyl.folkways.core.front.api.ui.Draw;
 import io.github.izakyl.folkways.core.front.api.ui.Pages;
 import io.github.izakyl.folkways.core.front.api.ui.Rows;
 import io.github.izakyl.folkways.core.front.api.ui.Tokens;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
+import io.github.izakyl.folkways.core.world.api.WorldSpaces;
 import java.util.List;
 import java.util.Optional;
 import net.minecraft.core.BlockPos;
@@ -112,11 +112,6 @@ public final class AirportPage implements Draw {
                 ? Optional.of(fixed) : Optional.empty();
         }
         List<BlockPos> towers = held(player, level.get());
-        Optional<BlockPos> site = Pages.siteOf(player).flatMap(pos -> Airports.at(level.get(), pos)
-            .map(Airport::tower)).filter(towers::contains);
-        if (site.isPresent()) {
-            return site;
-        }
         if (selected == null || !towers.contains(selected)) {
             selected = towers.isEmpty() ? null : towers.getFirst();
         }
@@ -126,7 +121,7 @@ public final class AirportPage implements Draw {
     private void change(Player player, int direction) {
         Pages.levelOf(player).ifPresent(level -> {
             List<BlockPos> towers = held(player, level);
-            if (!towers.isEmpty() && fixed == null && Pages.siteOf(player).isEmpty()) {
+            if (!towers.isEmpty() && fixed == null) {
                 int index = Math.max(0, towers.indexOf(selected));
                 selected = towers.get(Math.floorMod(index + direction, towers.size()));
             }

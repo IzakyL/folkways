@@ -26,8 +26,9 @@ export function cellLines(cells: HeldCell[]): string[] {
 }
 
 /** The ways on and off a ship the Sable passage finds for the colony right now. */
-export async function sableHops(server: MinecraftServer, colonyId: string): Promise<number> {
-  return Number((await runColonyTask(server, HOPS, { colony_id: colonyId })).hops);
+export async function sableHops(server: MinecraftServer, colonyId: string): Promise<{ steps: number; jumps: number }> {
+  const read = await runColonyTask(server, HOPS, { colony_id: colonyId });
+  return { steps: Number(read.steps), jumps: Number(read.jumps) };
 }
 
 /** Each of the colony's residents, with the structure it stands aboard, if any. */
@@ -81,7 +82,13 @@ const HOPS = defineTask<Record<string, any>, Record<string, any>>({
     body: `
 var colony=ColonyGround.of(ctx.server(),UUID.fromString(Args.of(ctx).string("colony_id"))).orElseThrow();
 // A fresh passage each read: the one the colony uses keeps what it found for ten ticks.
-return Map.of("hops",new SablePassage().hopsIn(colony).size());
+var hops = new SablePassage().hopsIn(colony);
+// SablePassage.aboard dispatches on fare identity. Both fares have the same cost.
+var jump = SablePassage.class.getDeclaredField("JUMP");
+jump.setAccessible(true);
+var jumpFare = jump.get(null);
+long jumps = hops.stream().filter(hop -> hop.fare() == jumpFare).count();
+return Map.of("steps", hops.size() - jumps, "jumps", jumps);
 `,
   }),
 });

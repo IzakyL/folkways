@@ -1,5 +1,6 @@
 package io.github.izakyl.folkways.core.combat.api;
 
+import io.github.izakyl.folkways.core.card.api.notice.Notice;
 import io.github.izakyl.folkways.core.colony.api.Colony;
 import io.github.izakyl.folkways.core.resident.api.Body;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
@@ -184,8 +185,20 @@ public final class Vehicles {
         }
     }
 
-    /** A translation key is carried intact to the requesting client. */
-    public record Result(boolean accepted, String key) {
+    /** A translation key and its arguments are carried intact to the requesting client. */
+    public record Result(boolean accepted, String key, List<Notice.Arg> arguments) {
+        public Result {
+            arguments = List.copyOf(arguments);
+        }
+
+        public Result(boolean accepted, String key) {
+            this(accepted, key, List.of());
+        }
+
+        public Component message() {
+            return new Notice(key, arguments).component();
+        }
+
         public static Result success() {
             return new Result(true, "combat.vehicle.accepted");
         }

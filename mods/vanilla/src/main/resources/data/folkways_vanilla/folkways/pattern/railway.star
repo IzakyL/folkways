@@ -15,6 +15,11 @@ knobs = [
 lang = {
     "en_us": {
         "title": "Railway",
+        "marking": ("Mark ground cells for path points. Track goes at Y+1. At an open end, mark the cell below the last rail "
+            + "or the ground cell just beyond it (path_point from rail_tracks). To join the middle of a line with no open end, "
+            + "mark the last point on the line after the turn, with the final stretch running along the line. "
+            + "The curve merges into the line. Leave about ten straight blocks on each side of the turn. "
+            + "Check rail_connections in draft() to see which ends joined."),
         "track": "Track",
         "ballast": "Ballast",
         "bed": "Bed",
@@ -25,10 +30,15 @@ lang = {
         "error.rail.straight": "Each stretch of track runs straight along an axis or a 45° diagonal; line its ends up",
         "error.rail.tight": "Too tight a bend: leave about ten blocks of straight track either side of each turn",
         "error.rail.track": "Choose the track to lay",
+        "error.rail.connect": "Cannot connect this railway end. Align it with the existing track and use ground Y=%s (track Y=%s).",
         "error.material": "Choose material for %s",
     },
     "zh_cn": {
         "title": "铁路",
+        "marking": ("路径点取地面格，轨道铺在 Y+1。接开放端时，取最后一格轨道正下方或往外紧邻的地面格"
+            + "（rail_tracks 返回的 path_point）。并入没有开放端的线路中段时，把最后一个点放在转弯后的既有线路上，"
+            + "让最后一段顺着线路方向。曲线会并入线路，转弯两侧各留约十格直线。"
+            + "用 draft() 的 rail_connections 查看两端是否接上。"),
         "track": "轨道",
         "ballast": "道砟",
         "bed": "路基",
@@ -39,10 +49,15 @@ lang = {
         "error.rail.straight": "每段轨道只能沿坐标轴或 45° 斜线笔直铺设：请对齐两端",
         "error.rail.tight": "转弯过急：每个转折点两侧请各留约十格直线",
         "error.rail.track": "请选择要铺设的轨道",
+        "error.rail.connect": "铁路端点无法对接。请与现有轨道对齐，并使用地面 Y=%s（轨道 Y=%s）。",
         "error.material": "请为%s选择材料",
     },
     "zh_hk": {
         "title": "鐵路",
+        "marking": ("路徑點取地面方塊，路軌鋪在 Y+1。接駁開放端時，選取最末一格路軌正下方或向外緊鄰的地面方塊"
+            + "（rail_tracks 回傳的 path_point）。併入沒有開放端的線路中段時，把最後一點放在轉彎後的現有線路上，"
+            + "讓最後一段沿着線路方向。曲線會併入線路，轉彎兩側各留約十格直線。"
+            + "用 draft() 的 rail_connections 查看兩端是否接駁。"),
         "track": "路軌",
         "ballast": "道砟",
         "bed": "路基",
@@ -53,10 +68,15 @@ lang = {
         "error.rail.straight": "每段路軌只能沿座標軸或 45° 斜線筆直鋪設：請對齊兩端",
         "error.rail.tight": "轉彎過急：每個轉折點兩側請各留約十格直線",
         "error.rail.track": "請選擇要鋪設的路軌",
+        "error.rail.connect": "鐵路端點無法接駁。請與現有路軌對齊，並使用地面 Y=%s（路軌 Y=%s）。",
         "error.material": "請為%s選擇材料",
     },
     "zh_tw": {
         "title": "鐵路",
+        "marking": ("路徑點取地面方塊，鐵軌鋪在 Y+1。對接開放端時，選取最後一格鐵軌正下方或往外緊鄰的地面方塊"
+            + "（rail_tracks 回傳的 path_point）。併入沒有開放端的路線中段時，把最後一點放在轉彎後的既有路線上，"
+            + "讓最後一段順著路線方向。曲線會併入路線，轉彎兩側各留約十格直線。"
+            + "用 draft() 的 rail_connections 查看兩端是否接上。"),
         "track": "鐵軌",
         "ballast": "道砟",
         "bed": "路基",
@@ -67,6 +87,7 @@ lang = {
         "error.rail.straight": "每段鐵軌只能沿座標軸或 45° 斜線筆直鋪設：請對齊兩端",
         "error.rail.tight": "轉彎過急：每個轉折點兩側請各留約十格直線",
         "error.rail.track": "請選擇要鋪設的鐵軌",
+        "error.rail.connect": "鐵路端點無法對接。請與現有鐵軌對齊，並使用地面 Y=%s（鐵軌 Y=%s）。",
         "error.material": "請為%s選擇材料",
     },
 }
@@ -175,8 +196,39 @@ def grades(leg, first, last):
         return found
     reject("error.rail.grade")
 
-def route(site):
+def track_shape(sx, sz):
+    if sx != 0 and sz != 0:
+        return "pd" if sx * sz > 0 else "nd"
+    return "zo" if sz != 0 else "xo"
+
+def endpoint(site, mark, sx, sz, track):
+    rail_kind = track + "|#create:tracks"
+    wanted = track_shape(sx, sz)
+    # The mark can be under the last rail or in the first new cell beyond it.
+    for dy in [1, 0, -1]:
+        at = point(mark.x, mark.y + dy, mark.z)
+        if site.matches(at, track) and site.block_property(at, "shape") == wanted:
+            return point(at.x, at.y - 1, at.z), at
+    outside = point(mark.x + sx, mark.y + 1, mark.z + sz)
+    if site.matches(outside, track) and site.block_property(outside, "shape") == wanted:
+        return mark, outside
+    for dy in [1, 0, 2, -1, 3, -2]:
+        y = mark.y + dy
+        for dx in range(-1, 2):
+            for dz in range(-1, 2):
+                if site.matches(point(mark.x + dx, y, mark.z + dz), rail_kind):
+                    absolute = y + site.altitude
+                    reject("error.rail.connect", absolute - 1, absolute)
+    for offset in range(-2, 3):
+        for dx, dz in [(-2, offset), (2, offset), (offset, -2), (offset, 2)]:
+            if site.matches(point(mark.x + dx, mark.y + 1, mark.z + dz), rail_kind):
+                report("rail_nearby", 1)
+                return mark, None
+    return mark, None
+
+def route(site, track):
     points = site.path.points
+    resolved = [points[0]]
     legs = []
     x, y, z = points[0].x, points[0].y, points[0].z
     for index in range(1, len(points)):
@@ -186,6 +238,21 @@ def route(site):
         legs.append({"x": x, "z": z, "sx": sx, "sz": sz, "n": steps, "y0": y, "y1": points[index].y,
             "diagonal": sx != 0 and sz != 0, "head": 0, "tail": steps})
         x, y, z = x + steps * sx, points[index].y, z + steps * sz
+        resolved.append(point(x, y, z))
+    first = legs[0]
+    last = legs[-1]
+    start, start_rail = endpoint(site, resolved[0], -first["sx"], -first["sz"], track)
+    finish, finish_rail = endpoint(site, resolved[-1], last["sx"], last["sz"], track)
+    if resolved[-1] != points[-1]:
+        marked, marked_rail = endpoint(site, points[-1], last["sx"], last["sz"], track)
+        if marked_rail != None and marked_rail != finish_rail:
+            reject("error.rail.connect", marked.y + site.altitude, marked.y + site.altitude + 1)
+    resolved[0], resolved[-1] = start, finish
+    first["y0"], last["y1"] = start.y, finish.y
+    site.resolved_path(resolved)
+    report("rail_start_connected", 0 if start_rail == None else 1)
+    report("rail_end_connected", 0 if finish_rail == None else 1)
+    connected = [at for at in [start_rail, finish_rail] if at != None]
     bends = []
     for index in range(len(legs) - 1):
         one = legs[index]
@@ -198,7 +265,7 @@ def route(site):
         if leg["tail"] - leg["head"] < 1:
             reject("error.rail.tight")
         leg["climbs"] = grades(leg, leg["head"], leg["tail"])
-    return legs, bends
+    return legs, bends, connected
 
 def level(leg, s):
     height = leg["y0"]
@@ -496,17 +563,13 @@ def tunnel_column(site, out, sample, x, z, q, way):
         if state != None:
             put(out, x, y, z, "masonry", state)
 
-def rails(site, legs, bends):
-    material = site.items("track")
-    if not material:
-        reject("error.rail.track")
+def rails(track, legs, bends):
     laid = {}
     joints = []
     ends = []
     for leg in legs:
         sx, sz = leg["sx"], leg["sz"]
-        shape = ("pd" if sx * sz > 0 else "nd") if leg["diagonal"] else ("zo" if sz != 0 else "xo")
-        state = "%s[shape=%s]" % (material[0], shape)
+        state = "%s[shape=%s]" % (track, track_shape(sx, sz))
         inside = []
         for first, last, low, high in leg["climbs"]:
             inside.extend(range(first + 1, last))
@@ -522,16 +585,13 @@ def rails(site, legs, bends):
             joints.append(joint(ends[index][1], ends[index + 1][0]))
     return laid, joints
 
-def meets(site, line, columns):
-    material = site.items("track")
-    if not material:
-        reject("error.rail.track")
-    found = {}
+def meets(site, line, columns, track, connected):
+    found = {(at.x, at.z): True for at in connected}
     for key, best in columns.items():
         x, z = key
         floor = lower(line[best[1]]["f"] + 0.25)
         for y in range(floor - 1, floor + 4):
-            if site.matches(point(x, y, z), material[0]):
+            if site.matches(point(x, y, z), track):
                 found[key] = True
                 break
     return found
@@ -547,16 +607,22 @@ def draw(site):
     for key in ["ballast", "bed", "masonry", "accent"]:
         if not site.items(key):
             reject("error.material", translated(key))
-    legs, bends = route(site)
+    material = site.items("track")
+    if not material:
+        reject("error.rail.track")
+    track = material[0]
+    legs, bends, connected = route(site, track)
+    laid, joints = rails(track, legs, bends)
+    rail_columns = {(at.x, at.z): True for at in laid if at not in connected}
     line = samples(legs, bends)
     found = classify(site, line)
     arches(site, line, found)
     out = {}
     columns = raster(line)
-    met = meets(site, line, columns)
+    met = meets(site, line, columns, track, connected)
     for key, best in columns.items():
         x, z = key
-        if met and beside(met, x, z):
+        if key in met or (key not in rail_columns and met and beside(met, x, z)):
             continue
         sample = line[best[1]]
         far = root(best[0])
@@ -578,9 +644,9 @@ def draw(site):
                 open_column(site, out, x, z, q, sample["f"], sample["abut"], ground)
             else:
                 slope(site, out, x, z, q, f, way, ground)
-    laid, joints = rails(site, legs, bends)
     for at, state in laid.items():
-        out[at] = ("track", state)
+        if at not in connected:
+            out[at] = ("track", state)
     grouped = {}
     for at, made in out.items():
         role, state = made

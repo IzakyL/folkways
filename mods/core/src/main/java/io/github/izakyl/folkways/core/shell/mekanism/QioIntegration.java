@@ -1,7 +1,7 @@
 package io.github.izakyl.folkways.core.shell.mekanism;
 
-import io.github.izakyl.folkways.core.inventory.api.port.StorePort;
-import io.github.izakyl.folkways.core.inventory.api.port.StorePorts;
+import io.github.izakyl.folkways.core.facility.api.Ports;
+import io.github.izakyl.folkways.core.facility.api.control.ItemPort;
 import io.github.izakyl.folkways.core.shell.storage.NativeCells;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
 import java.util.EnumSet;
@@ -30,27 +30,27 @@ public final class QioIntegration {
     }
 
     public static void install() {
-        StorePorts.register(ResourceLocation.fromNamespaceAndPath("folkways_core", "qio"),
-            StorePorts.SPECIFIC, QioIntegration::at);
+        Ports.registerItem(ResourceLocation.fromNamespaceAndPath("folkways_core", "qio"),
+            Ports.SPECIFIC, QioIntegration::at);
     }
 
-    private static Optional<StorePort> at(ServerLevel level, BlockPos pos) {
-        if (!(level.getBlockEntity(pos) instanceof TileEntityQIOComponent device)) {
+    private static Optional<ItemPort> at(ServerLevel level, BlockPos pos) {
+        if (!(level.getBlockEntity(pos) instanceof TileEntityQIOComponent component)) {
             return Optional.empty();
         }
         WorldPos home = WorldPos.of(level, pos);
-        if (!(device instanceof TileEntityQIODashboard)) {
+        if (!(component instanceof TileEntityQIODashboard)) {
             // Drive arrays expose drives, not their goods. Automation devices do not grant resident access.
             return Optional.of(NativeCells.refused(home,
-                device instanceof TileEntityQIODriveArray ? "hand_access" : "buffer"));
+                component instanceof TileEntityQIODriveArray ? "hand_access" : "buffer"));
         }
-        EnumSet<StorePort.Operation> operations = EnumSet.noneOf(StorePort.Operation.class);
-        if (device.getBlockState().is(TAKE)) {
-            operations.add(StorePort.Operation.TAKE);
+        EnumSet<ItemPort.Operation> operations = EnumSet.noneOf(ItemPort.Operation.class);
+        if (component.getBlockState().is(TAKE)) {
+            operations.add(ItemPort.Operation.TAKE);
         }
-        if (device.getBlockState().is(PUT)) {
-            operations.add(StorePort.Operation.PUT);
+        if (component.getBlockState().is(PUT)) {
+            operations.add(ItemPort.Operation.PUT);
         }
-        return Optional.of(new QioPort(level, pos, device, operations));
+        return Optional.of(new QioPort(level, pos, component, operations));
     }
 }

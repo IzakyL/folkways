@@ -1,6 +1,7 @@
 package io.github.izakyl.folkways.vanilla.build.draft;
 
-import io.github.izakyl.folkways.core.front.api.notice.Notice;
+import io.github.izakyl.folkways.core.card.api.notice.Notice;
+import io.github.izakyl.folkways.core.work.api.Joint;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -44,6 +45,7 @@ final class Derivation {
     private final Map<String, Integer> siblings = new HashMap<>();
     private final Map<Long, Integer> occupancy = new HashMap<>();
     private final Map<String, Random> rolls = new HashMap<>();
+    private List<BlockPos> resolvedPath = List.of();
     private final Map<String, Double> reports = new LinkedHashMap<>();
     private int painted;
     private int queued;
@@ -139,6 +141,14 @@ final class Derivation {
     EvalException reject(Notice notice) {
         explanation = notice;
         return stop(DraftRefusal.PATTERN_FAILED, notice.key() + " " + notice.args());
+    }
+
+    void resolvedPath(List<BlockPos> points) {
+        resolvedPath = List.copyOf(points);
+    }
+
+    List<BlockPos> resolvedPath() {
+        return resolvedPath;
     }
 
     Map<String, Double> reports() {
@@ -319,10 +329,10 @@ final class Derivation {
         return owner != null && current != null && current.within(owner);
     }
 
-    private void paintFinished() {
+    private void paintFinished() throws EvalException {
         while (painted < parts.size() && parts.get(painted).phase() < phase) {
             Massing.Part part = parts.get(painted).part();
-            BoundingBox box = part.solid().bounds();
+            BoundingBox box = Vocabulary.checkedScan(part.solid().bounds());
             {
                 for (int y = box.minY(); y <= box.maxY(); y++) {
                     Drafting.checkTime();
@@ -334,6 +344,9 @@ final class Derivation {
                             long key = BlockPos.asLong(x, y, z);
                             Integer before = occupancy.get(key);
                             if (before == null || part.over().takes(parts.get(before).part())) {
+                                if (before == null && occupancy.size() >= Lattice.maxCells()) {
+                                    throw stop(DraftRefusal.SITE_TOO_LARGE, "too many cells in earlier phases");
+                                }
                                 occupancy.put(key, painted);
                             }
                         }

@@ -1,3 +1,22 @@
+import blockwright.minecraft.core.Sync;
+import dev.blockwright.api.Context;
+import io.github.izakyl.folkways.core.front.api.Schema;
+import io.github.izakyl.folkways.core.item.api.ItemSpec;
+import io.github.izakyl.folkways.core.work.api.StructureCompat;
+import io.github.izakyl.folkways.vanilla.build.draft.Chosen;
+import io.github.izakyl.folkways.vanilla.build.draft.Commission;
+import io.github.izakyl.folkways.vanilla.build.draft.Draft;
+import io.github.izakyl.folkways.vanilla.build.draft.Drafting;
+import io.github.izakyl.folkways.vanilla.build.draft.Drawn;
+import io.github.izakyl.folkways.vanilla.build.draft.Hint;
+import io.github.izakyl.folkways.vanilla.build.draft.Patterns;
+import io.github.izakyl.folkways.vanilla.build.draft.World;
+import java.util.ArrayList;
+import java.util.Map;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.resources.ResourceLocation;
 
 public final class Task {
 
@@ -6,7 +25,7 @@ public final class Task {
         var report = new ArrayList<Object>();
         int x = 0;
         for (String name : new String[] {"torii", "rotunda"}) {
-            var pattern = Patterns.find(ResourceLocation.fromNamespaceAndPath("folkways_carving", name))
+            var pattern = Patterns.find(ResourceLocation.fromNamespaceAndPath("folkways_vanilla", name))
                 .orElseThrow();
             var defaults = new CompoundTag();
             for (var setting : pattern.knobs().settings()) {
@@ -17,7 +36,7 @@ public final class Task {
             var anchor = new BlockPos(x, 1, 0);
             var commission = new Commission(new Hint.Zone(anchor, anchor.offset(name.equals("torii") ? 8 : 7, 15,
                 name.equals("torii") ? 2 : 7)),
-                Chosen.load(pattern.knobs(), defaults), World.NONE, Direction.NORTH, 7);
+                Chosen.normalize(pattern.knobs(), defaults), World.NONE, Direction.NORTH, 7);
             var drawn = Drafting.draw(pattern, commission).join();
             if (!(drawn instanceof Drawn.Ready ready)) {
                 throw new IllegalStateException(name + ": " + drawn);

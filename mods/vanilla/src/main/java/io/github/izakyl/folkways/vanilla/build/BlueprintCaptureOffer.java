@@ -3,6 +3,7 @@ package io.github.izakyl.folkways.vanilla.build;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Button;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.TextField;
 import io.github.izakyl.folkways.core.front.api.Books;
+import io.github.izakyl.folkways.core.front.api.Category;
 import io.github.izakyl.folkways.core.front.api.ui.BoxOffers;
 import io.github.izakyl.folkways.core.front.api.ui.Rows;
 import io.github.izakyl.folkways.core.front.api.ui.Tokens;
@@ -40,6 +41,6 @@ public final class BlueprintCaptureOffer {
                 return Rows.page().addChildren(Rows.text(Component.translatable("folkways.blueprints.capture.hint")),
                     Rows.row().addChildren(Rows.name(Component.translatable("folkways.blueprints.capture.name")), name),
                     Rows.actions(save));
-            })));
+            }).in(Category.CONSTRUCTION)));
     }
 }

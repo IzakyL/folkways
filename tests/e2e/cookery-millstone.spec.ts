@@ -3,7 +3,7 @@ import { writeFileSync } from "node:fs";
 import { defineTask, javaTask, player, screen, tick, world, type MinecraftClient, type MinecraftServer } from "@izakyl/blockwright-minecraft";
 import { clickElement } from "../ldlib2";
 import { foundColonyFast, foundingBox, optInViaBook, vocationPriority, waitForGroundedPlayer } from "../shared/colony/colony-founding";
-import { deliverOrderViaSitePanel, filedOrdersAt } from "../shared/colony/membership-optin";
+import { deliverOrderViaCard, filedOrdersAt } from "../shared/colony/membership-optin";
 import { runColonyTask } from "../shared/colony/colony-tasks";
 import { scrollCellIntoView, wheelCell } from "../shared/ui/site-panel";
 import { showVocationColumn } from "../shared/ui/vocation-groups";
@@ -58,7 +58,7 @@ for (const stage of twins()) test(stage.title("millstone interruption: release, 
     const priority = await vocationPriority(server, worker, CRAFTING);
     expect(priority, "the actual resident starts with the crafting vocation").toBeGreaterThan(0);
     expect(total(evidence.initial, WHEAT)).toBe(3); expect(total(evidence.initial, FLOUR)).toBe(0);
-    evidence.flourOrder = await deliverOrderViaSitePanel(server, client, player.name, cells.flour, FLOUR, 3, stage);
+    evidence.flourOrder = await deliverOrderViaCard(server, client, player.name, cells.flour, FLOUR, 3, stage);
     await screen.dismiss(client);
     const grinding = await until(server, stage, cells, evidence, "native binding", state => state.bound && state.input?.id === WHEAT && state.input.count > 0, 4000, 10);
     expect(grinding.boundUuid, "the saved native EntityId identifies the actual sole resident").toBe(worker);
@@ -91,7 +91,7 @@ for (const stage of twins()) test(stage.title("millstone interruption: release, 
     expect(finished.residents[0].exiting, "the first order waits for real departure").toBe(false);
     expect(finished.drops, "native mill output is not also ejected as loose duplicates").toEqual([]);
     const beforeNext = finished.residents[0];
-    evidence.nextOrder = await deliverOrderViaSitePanel(server, client, player.name, cells.next, PLANKS, 2, stage);
+    evidence.nextOrder = await deliverOrderViaCard(server, client, player.name, cells.next, PLANKS, 2, stage);
     const next = await until(server, stage, cells, evidence, "next task after leaving the mill", state => count(state.chests.next, PLANKS) === 2, 3000, 20);
     evidence.next = next;
     expect(next.residents[0].uuid).toBe(worker);

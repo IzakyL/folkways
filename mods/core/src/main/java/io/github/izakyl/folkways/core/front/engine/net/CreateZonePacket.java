@@ -1,5 +1,6 @@
 package io.github.izakyl.folkways.core.front.engine.net;
 
+import java.util.Optional;
 import io.github.izakyl.folkways.core.FolkwaysCoreMod;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
@@ -11,7 +12,8 @@ import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
 
-public record CreateZonePacket(UUID colonyId, BlockPos min, BlockPos max, ResourceLocation delegation, CompoundTag settings)
+public record CreateZonePacket(UUID colonyId, BlockPos min, BlockPos max, ResourceLocation delegation,
+        CompoundTag settings, Optional<UUID> confirmation)
     implements CustomPacketPayload {
 
     public static final Type<CreateZonePacket> TYPE = new Type<>(
@@ -22,10 +24,16 @@ public record CreateZonePacket(UUID colonyId, BlockPos min, BlockPos max, Resour
         BlockPos.STREAM_CODEC, CreateZonePacket::max,
         ResourceLocation.STREAM_CODEC, CreateZonePacket::delegation,
         ByteBufCodecs.COMPOUND_TAG, CreateZonePacket::settings,
+        ByteBufCodecs.optional(UUIDUtil.STREAM_CODEC), CreateZonePacket::confirmation,
         CreateZonePacket::new);
 
     public CreateZonePacket {
         settings = settings == null ? new CompoundTag() : settings.copy();
+    }
+
+    public CreateZonePacket(UUID colonyId, BlockPos min, BlockPos max, ResourceLocation delegation,
+            CompoundTag settings) {
+        this(colonyId, min, max, delegation, settings, Optional.empty());
     }
 
     @Override

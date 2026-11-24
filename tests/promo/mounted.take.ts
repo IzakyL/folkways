@@ -451,7 +451,7 @@ const POSTS = defineTask<Record<string, any>, any>({
   side: "server",
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.core.api.colony.Colonies",
+      "io.github.izakyl.folkways.core.colony.api.Colonies",
       "io.github.izakyl.folkways.core.front.engine.colony.ColonyFront",
       "io.github.izakyl.folkways.core.front.engine.colony.ColonySettings",
       "io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutProfiles",
@@ -486,10 +486,10 @@ const ORDERS = defineTask<Record<string, any>, any>({
   side: "server",
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.core.api.colony.Colonies",
-      "io.github.izakyl.folkways.core.api.resident.body.Bodies",
-      "io.github.izakyl.folkways.core.api.terms.WorldPos",
-      "io.github.izakyl.folkways.core.rts.combat.command.ResidentCommands",
+      "io.github.izakyl.folkways.core.colony.api.Colonies",
+      "io.github.izakyl.folkways.core.resident.api.Bodies",
+      "io.github.izakyl.folkways.core.world.api.WorldPos",
+      "io.github.izakyl.folkways.core.command.combat.command.ResidentCommands",
       "net.minecraft.core.BlockPos",
       "net.minecraft.world.entity.Mob",
     ],
@@ -534,8 +534,8 @@ const WORKSHOP_KITS = defineTask<Record<string, any>, Array<{ uuid: string; torc
   side: "server",
   source: javaTask({
     imports: [
-      "io.github.izakyl.folkways.core.api.colony.Colonies",
-      "io.github.izakyl.folkways.core.api.terms.ItemSpec",
+      "io.github.izakyl.folkways.core.colony.api.Colonies",
+      "io.github.izakyl.folkways.core.item.api.ItemSpec",
       "io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutProfile",
       "io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutProfiles",
       "io.github.izakyl.folkways.vanilla.person.ResidentEntity",

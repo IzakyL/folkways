@@ -33,8 +33,12 @@
 
 **`pattern`（`.star`）**
 - 样式需要定义 `draw(site)`。没有 `draw` 的文件视为共享库，供其他样式用 `load()` 引用，例如 `load("folkways_vanilla:materials.star", "NAME")`。
-- 样式还可以设置 `knobs`、`lang`、`accepts`（例如 `["zone"]` 或 `["path"]`）、`phases`、`capture`、`detail` 和 `grain`。`detail = "bits"` 需要 Carving 联动。
-- 载入时最多执行 200,000 步 Starlark；绘制时间受 `blueprints.drawSeconds` 限制（默认 30 秒）。
+  样式也可加载标准模块 `@std//math` 和 `@std//text`。
+- 样式还可以设置 `knobs`、`lang`、`accepts`（例如 `["zone"]` 或 `["path"]`）、`phases`、`capture`、`detail` 和 `grain`。`detail = "bits"` 需要 Core 的 Chisels & Bits 联动。
+  Vanilla 在内置数据包 `mod/folkways_vanilla:chiselsandbits` 中提供 `folkways_vanilla:pavilion` 等样式。
+- 载入时最多执行 200,000 步 Starlark；绘制时间受 `blueprints.drawSeconds` 限制（默认 30 秒），包括原生适配。载入与绘制中的 Starlark 执行共用 Core 的脚本内存上限。
+- 每次草图扫描的格数和体素总层数均受 `blueprints.maxBuildCells` 限制（默认 262,144 格）。
+  成品草图的包围盒每边最多 1,024 格，总体积受 `blueprints.maxBlueprintVolume` 限制（默认 33,554,432 格）。
 - 服务器发给每名玩家的内容有以下上限：
   - 每个样式 131,072 个字符；
   - 最多 256 个样式；
@@ -125,7 +129,7 @@ resident_model/<模型>/
 | `folkways_core:store/allowed` | 方块 | 允许普通 `Container` 方块纳入为仓库 |
 | `folkways_core:store/refused` | 方块 | 永不作为仓库，优先于所有联动和 `store/allowed` |
 | `folkways_core:store/candidates` | 方块 | 客户端提示哪些方块可以纳入 |
-| `folkways_core:network_access/take`、`/put`、`/craft` | 方块 | AE2、RS2 或 QIO 设备最多能做什么，再由“网络设备”页收窄（见 [INTEGRATIONS.zh-CN.md](INTEGRATIONS.zh-CN.md)） |
+| `folkways_core:network_access/take`、`/put`、`/craft` | 方块 | AE2、RS2 或 QIO 设备最多能做什么，再由**设施**中对应的设施卡片收窄（见 [INTEGRATIONS.zh-CN.md](INTEGRATIONS.zh-CN.md)） |
 
 **居民与移动**
 
@@ -185,7 +189,7 @@ resident_model/<模型>/
 
 | 标签 | 类型 | 作用 |
 |---|---|---|
-| `folkways_cookery:cookery_sickles` | 物品 | Cookery 收割模式使用的镰刀 |
+| `folkways_vanilla:cookery_sickles` | 物品 | 森罗厨房联动中用于镰刀收获方式的镰刀 |
 
 Folkways 还会读取 `c:foods`、`c:tools` 和 `c:tools/melee_weapon`。
 
@@ -195,8 +199,17 @@ Folkways 还会读取 `c:foods`、`c:tools` 和 `c:tools/melee_weapon`。
 
 - `folkways_core-server.toml`
 - `folkways_vanilla-server.toml`
-- `folkways_create-server.toml`
-- `folkways_firearms-server.toml`
-- `folkways_carving-server.toml`
+- `folkways_core-create-server.toml`
+- `folkways_vanilla-create-server.toml`
+- `folkways_core-tacz-server.toml`
+- `folkways_core-chiselsandbits-server.toml`
+
+Core 的 `[scripts]` 设置适用于每次 Starlark 运行，包括加载的脚本库。
+`allocationMiB` 默认为 64 MiB，在受保护的操作分配内存前检查预算。
+`cumulativeAllocationMiB` 默认为 256 MiB，在支持线程分配统计的 JVM 上同时适用于脚本和草图绘制。
+累计值包括运行期间已回收的内存。Folkways 的 Java 内置函数不计入累计值，Starlark 操作和回调仍计入。
+超出任一上限都会返回脚本错误。
+
+启动时的可选联动开关位于 `config/folkways_core-integrations.toml`，适用于客户端和服务器。
 
 客户端设置位于 `config/`：`folkways_core-client.toml`、`folkways-windows.properties` 和 `folkways-drawing-settings.properties`。

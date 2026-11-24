@@ -1,11 +1,11 @@
 package io.github.izakyl.folkways.vanilla.combat.weapon;
 
-import io.github.izakyl.folkways.core.combat.api.Loadouts;
-import io.github.izakyl.folkways.core.combat.api.WeaponAttack;
 import io.github.izakyl.folkways.core.colony.api.Colonies;
+import io.github.izakyl.folkways.core.combat.api.Loadouts;
+import io.github.izakyl.folkways.core.combat.api.WeaponAdapter;
+import io.github.izakyl.folkways.core.combat.api.WeaponAttack;
 import io.github.izakyl.folkways.core.resident.api.Bodies;
 import io.github.izakyl.folkways.core.work.api.Worker;
-import io.github.izakyl.folkways.vanilla.combat.FireSafety;
 import io.github.izakyl.folkways.vanilla.combat.Threats;
 import io.github.izakyl.folkways.vanilla.person.ResidentEntity;
 import io.github.izakyl.folkways.vanilla.person.mixin.ProjectileWeaponInvoker;
@@ -60,7 +60,7 @@ final class NativeWeaponAttack implements WeaponAttack {
     }
 
     static WeaponAttack barehanded(Worker worker) {
-        NativeWeaponAttack attack = new NativeWeaponAttack(worker, Weapons.MELEE, Kind.MELEE, true);
+        NativeWeaponAttack attack = new NativeWeaponAttack(worker, ResidentWeapons.MELEE, Kind.MELEE, true);
         if (attack.resident != null) {
             if (attack.resident.weaponDrawn() || attack.resident.hasActiveAttack()) {
                 return null;
@@ -285,7 +285,6 @@ final class NativeWeaponAttack implements WeaponAttack {
             && explicitPermission.getAsBoolean())
             && (observedTarget == null || observedTarget == foe && observedPermission.getAsBoolean())
             && body.hasLineOfSight(foe)
-            && (kind == Kind.MELEE || FireSafety.clear(body, foe))
             && body.distanceTo(foe) <= Loadouts.using(weapon())
             .map(provider -> provider.range(weapon())).orElseGet(adapter::range)
             + (kind == Kind.MELEE ? foe.getBbWidth() + MountedMelee.reach(body) : 0);

@@ -202,7 +202,7 @@ async function stageLine(pair: PromoPair, run: ReturnType<typeof take>) {
   const riderUuids = crew.slice(1).map((one) => one.uuid);
   const roles: any[] = [];
   for (const rider of riderUuids) {
-    roles.push(await setVocationPriorityViaPanel(server, client, playerName, founding.standBlock, rider, "folkways_create:conducting", 0));
+    roles.push(await setVocationPriorityViaPanel(server, client, playerName, founding.standBlock, rider, "folkways_vanilla:conducting", 0));
   }
   run.note("crew", { conductorUuid, riderUuids, roles });
   await world.command(server, `item replace entity ${playerName} inventory.0 from entity ${playerName} weapon.mainhand`);

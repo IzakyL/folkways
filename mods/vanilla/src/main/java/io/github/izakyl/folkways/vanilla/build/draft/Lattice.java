@@ -51,15 +51,14 @@ public final class Lattice {
             BoundingBox box = part.solid().bounds();
             reach = reach == null ? box : Solid.union(reach, box);
         }
-        if (Extent.of(reach.getXSpan(), reach.getYSpan(), reach.getZSpan()).isEmpty()) {
+        if (!Extent.fits(reach, FolkwaysVanillaConfig.maxBlueprintVolume())) {
             return Optional.empty();
         }
         Long2IntOpenHashMap covered = new Long2IntOpenHashMap();
         covered.defaultReturnValue(UNCOVERED);
         int most = maxCells();
         for (int index = 0; index < parts.size(); index++) {
-            paint(parts, index, covered);
-            if (covered.size() > most) {
+            if (!paint(parts, index, covered, most)) {
                 return Optional.empty();
             }
         }
@@ -81,10 +80,10 @@ public final class Lattice {
         return Optional.of(lattice);
     }
 
-    private static void paint(List<Massing.Part> parts, int index, Long2IntOpenHashMap covered) {
+    private static boolean paint(List<Massing.Part> parts, int index, Long2IntOpenHashMap covered, int most) {
         Massing.Part part = parts.get(index);
         if (part.skin() instanceof Skin.Fitted fitted && fitted.fit() == Fit.CONNECTED) {
-            return;
+            return true;
         }
         BoundingBox box = part.solid().bounds();
         for (int y = box.minY(); y <= box.maxY(); y++) {
@@ -109,9 +108,13 @@ public final class Lattice {
                         }
                     }
                     covered.put(cell, index << MASK_BITS | mask);
+                    if (covered.size() > most) {
+                        return false;
+                    }
                 }
             }
         }
+        return true;
     }
 
     VoxelFit voxels() {

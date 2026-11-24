@@ -1,5 +1,6 @@
 package io.github.izakyl.folkways.vanilla.build.draft;
 
+import io.github.izakyl.folkways.core.work.api.Joint;
 import io.github.izakyl.folkways.core.work.api.StructureCompat;
 import io.github.izakyl.folkways.core.world.api.StructurePayload;
 import java.util.ArrayList;

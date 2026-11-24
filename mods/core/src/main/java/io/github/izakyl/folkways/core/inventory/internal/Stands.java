@@ -1,7 +1,7 @@
 package io.github.izakyl.folkways.core.inventory.internal;
 
 import io.github.izakyl.folkways.core.inventory.api.Stash;
-import io.github.izakyl.folkways.core.inventory.api.port.StorePort.Operation;
+import io.github.izakyl.folkways.core.facility.api.control.Port.Operation;
 import io.github.izakyl.folkways.core.world.api.Stand;
 import java.util.Collection;
 import java.util.LinkedHashMap;

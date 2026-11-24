@@ -10,17 +10,19 @@ import { newRunId } from "../shared/harness/run-id";
 import { mustCommand } from "../shared/ui/world-ui";
 import { PREPARE_RESIDENTS, PROJECT, type Vec } from "../shared/combat/rts-fixtures";
 import { foundBookColony, layFloor, openRtsTool } from "../shared/combat/overhead";
+import { SPAWN, SELECT_VEHICLES } from "../shared/combat/rts-vehicle";
 
 // The profile loads the capture fixture so NeoForge checks the active EGL context, keeping Superb Warfare
 // feature validation intact even with the early window disabled.
 const CONFIG = process.env.FOLKWAYS_WARFARE_RTS_CONFIG ?? "blockwright.toml#warfare-rts";
 const WINDOW = "folkways.window.folkways_rts_unit";
+const FACILITY_CARD = "folkways.card.body";
 const DETAILS = "folkways.window.folkways_rts_unit_details";
 const SECOND_HULL = process.env.FOLKWAYS_SECOND_HULL ?? "superbwarfare:bmp_2";
 
 type Units = {
   units: { id: string; kind: string; members: number; seats: number; reserved: number; aboard: number;
-    altitude: string }[];
+    altitude: string; facilityMove: boolean; routePoints: number }[];
   focus: string; selected: string[]; vehicles: string[];
 };
 
@@ -84,6 +86,7 @@ test("RTS command card: select a vehicle, board it, pick its profile; squads, ai
     await clickEntity(client, origin, lav);
     await waitUnits(client, server, "LAV focused", value => value.focus === lav && value.selected.length === 0);
     await waitForElement(client, { id: WINDOW });
+    await waitForElement(client, { id: FACILITY_CARD });
     await waitForElement(client, { id: "folkways.rts.unit.board" });
     await frames(client, 5);
     await shoot("03-vehicle-window-empty");
@@ -99,6 +102,8 @@ test("RTS command card: select a vehicle, board it, pick its profile; squads, ai
       (value.units.find(entry => entry.id === lav)?.aboard ?? 0) > 0, 1600);
     const crew = seated.units.find(unit => unit.id === lav)!;
     expect(crew.aboard).toBeGreaterThan(0);
+    await waitUnits(client, server, "crewed LAV exposes the facility move routine",
+      value => value.units.some(unit => unit.id === lav && unit.facilityMove));
     await waitForElement(client, { id: "folkways.rts.unit.release_idle" });
     await frames(client, 5);
     await shoot("05-command-card-seated");
@@ -120,6 +125,8 @@ test("RTS command card: select a vehicle, board it, pick its profile; squads, ai
     await shoot("05d-move-armed");
     const ground = await client.run(PROJECT, { x: origin.x, y: origin.y, z: origin.z + 8, entity: "" });
     await input.click(client, { x: ground.x, y: ground.y }, { button: "left" });
+    await waitUnits(client, server, "facility move reached the native controller",
+      value => value.units.some(unit => unit.id === lav && unit.routePoints > 0));
 
     // A vehicle with residents is a mixed selection: the card stays with the shared commands, details close.
     await dragAround(client, origin, residents.slice(0, 2));
@@ -214,25 +221,12 @@ async function dragAround(client: MinecraftClient, origin: Vec, entities: string
   await input.drag(client, { from, to, steps: 8, button: "left" });
 }
 
-const SPAWN = defineTask<{ type: string } & Vec, string>({
-  name: "folkways.rts-vehicle-window.spawn-vehicle", side: "server",
-  source: javaTask({
-    imports: ["net.minecraft.core.registries.BuiltInRegistries", "net.minecraft.resources.ResourceLocation",
-      "net.minecraft.server.MinecraftServer"],
-    body: `
-var a=Args.of(ctx);var level=((MinecraftServer)ctx.server()).overworld();
-var entity=BuiltInRegistries.ENTITY_TYPE.get(ResourceLocation.parse(a.string("type"))).create(level);
-entity.moveTo(a.integer("x")+0.5,a.integer("y"),a.integer("z")+0.5,180,0);
-level.addFreshEntity(entity);return entity.getUUID().toString();`,
-  }),
-});
-
 const READ_UNITS = defineTask<void, Units>({
   name: "folkways.rts-vehicle-window.read-units", side: "client",
   source: javaTask({
     imports: ["java.util.Map", "java.util.Set", "java.util.List", "java.util.ArrayList",
       "io.github.izakyl.folkways.core.front.api.ui.OverheadTools",
-      "io.github.izakyl.folkways.core.rts.combat.net.ClientUnits"],
+      "io.github.izakyl.folkways.core.command.combat.net.ClientUnits"],
     body: `
 var units=new ArrayList<Map<String,Object>>();
 for(var unit:ClientUnits.units()){
@@ -242,33 +236,22 @@ for(var unit:ClientUnits.units()){
     for(var e:mc.level.entitiesForRendering()){if(e.getUUID().equals(id))return e.getVehicle()!=null&&e.getVehicle().getUUID().equals(unit.id());}
     return false;}).orElse(false)).count();
   units.add(Map.of("id",unit.id().toString(),"kind",unit.kind().name(),"members",unit.members().size(),
-    "seats",unit.seats().size(),"reserved",reserved,"aboard",aboard,"altitude",unit.altitude().name()));
+    "seats",unit.seats().size(),"reserved",reserved,"aboard",aboard,"altitude",unit.altitude().name(),
+    "routePoints",unit.status().route().points().size(),"facilityMove",unit.facility().stream()
+      .flatMap(facility->facility.card().elements().stream())
+      .anyMatch(element->element instanceof io.github.izakyl.folkways.core.card.api.Card.Element.Target target
+        && target.defaultCommand()
+        && target.pick()==io.github.izakyl.folkways.core.card.api.Card.Pick.GROUND)));
 }
 var handler=OverheadTools.selectedHandler().orElse(null);
 String focus="";List<String> selected=List.of();List<String> vehicles=List.of();
 if(handler!=null&&handler.getClass().getName().endsWith(".CombatController")){
   var type=handler.getClass();
   var f=type.getDeclaredMethod("focus");f.setAccessible(true);
-  focus=((java.util.Optional<?>)f.invoke(handler)).map(u->((io.github.izakyl.folkways.core.rts.combat.net.UnitSnapshot.Unit)u).id().toString()).orElse("");
+  focus=((java.util.Optional<?>)f.invoke(handler)).map(u->((io.github.izakyl.folkways.core.command.combat.net.UnitSnapshot.Unit)u).id().toString()).orElse("");
   var s=type.getDeclaredField("selected");s.setAccessible(true);selected=((Set<?>)s.get(handler)).stream().map(Object::toString).toList();
   var v=type.getDeclaredField("vehicles");v.setAccessible(true);vehicles=((Set<?>)v.get(handler)).stream().map(Object::toString).toList();
 }
 return Map.of("units",units,"focus",focus,"selected",selected,"vehicles",vehicles);`,
-  }),
-});
-
-const SELECT_VEHICLES = defineTask<{ ids: string[] }, boolean>({
-  name: "folkways.rts-vehicle-window.select-vehicles", side: "client",
-  source: javaTask({
-    imports: ["java.util.Set", "java.util.UUID", "java.util.List",
-      "io.github.izakyl.folkways.core.front.api.ui.OverheadTools"],
-    body: `
-var a=Args.of(ctx);var ids=new java.util.ArrayList<UUID>();
-for(String id:a.strings("ids"))ids.add(UUID.fromString(id));
-var handler=OverheadTools.selectedHandler().orElseThrow();var type=handler.getClass();
-var one=type.getDeclaredMethod("selectVehicle",UUID.class);one.setAccessible(true);one.invoke(handler,ids.get(0));
-var add=type.getDeclaredMethod("selectVehicles",Set.class,boolean.class);add.setAccessible(true);
-for(var id:ids.subList(1,ids.size()))add.invoke(handler,Set.of(id),true);
-return true;`,
   }),
 });

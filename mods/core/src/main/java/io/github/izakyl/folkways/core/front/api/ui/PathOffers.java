@@ -2,6 +2,7 @@ package io.github.izakyl.folkways.core.front.api.ui;
 
 import com.lowdragmc.lowdraglib2.gui.ui.UIElement;
 import io.github.izakyl.folkways.core.base.Ledger;
+import io.github.izakyl.folkways.core.front.api.Category;
 import java.util.List;
 import java.util.Optional;
 import net.minecraft.core.BlockPos;
@@ -30,7 +31,17 @@ public final class PathOffers {
         return OFFERS.of(id);
     }
 
-    public record Offer(ResourceLocation id, String nameKey, ResourceLocation icon, Body body) {
+    /** Something a drawn shape can be handed to; the category groups it with the book's other drawing tools. */
+    public record Offer(ResourceLocation id, String nameKey, ResourceLocation icon, Body body, ResourceLocation category) {
+
+        public Offer(ResourceLocation id, String nameKey, ResourceLocation icon, Body body) {
+            this(id, nameKey, icon, body, Category.OTHER.id());
+        }
+
+        /** The same offer, grouped under that category. */
+        public Offer in(Category category) {
+            return new Offer(id, nameKey, icon, body, category.id());
+        }
     }
 
     @FunctionalInterface

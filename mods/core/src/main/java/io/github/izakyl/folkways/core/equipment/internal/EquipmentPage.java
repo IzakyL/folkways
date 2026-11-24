@@ -15,7 +15,7 @@ import io.github.izakyl.folkways.core.colony.api.Colony;
 import io.github.izakyl.folkways.core.equipment.api.GearGroup;
 import io.github.izakyl.folkways.core.equipment.api.GearSlot;
 import io.github.izakyl.folkways.core.equipment.api.GearSlots;
-import io.github.izakyl.folkways.core.front.api.notice.Sentence;
+import io.github.izakyl.folkways.core.card.api.notice.Sentence;
 import io.github.izakyl.folkways.core.front.api.ui.Draw;
 import io.github.izakyl.folkways.core.front.api.ui.ItemPicker;
 import io.github.izakyl.folkways.core.front.api.ui.Pages;
@@ -135,6 +135,9 @@ public final class EquipmentPage implements Draw {
         client = player.level().isClientSide();
         UIElement content = Rows.page();
         var binding = DataBindingBuilder.stringC2S(raw -> {
+            if (raw.isEmpty()) {
+                return;
+            }
             if (player instanceof ServerPlayer server) {
                 try {
                     desk.apply(server, TagParser.parseTag(raw.substring(raw.indexOf('\n') + 1)));

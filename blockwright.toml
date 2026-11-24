@@ -12,24 +12,16 @@ properties = { "online-mode" = "false", "level-seed" = "folkways-e2e", "allow-fl
 connect = "127.0.0.1:25565"
 options = { guiScale = "1", fullscreen = "false", overrideWidth = "1280", overrideHeight = "720" }
 
-# Folkways jars gathered by Gradle; integration extensions are enabled by their profiles.
+# Folkways jars gathered by Gradle. Optional jars are enabled by their profiles.
 [mods.folkways_core]
 path = "build/libs/folkways-core-*.jar"
 
 [mods.folkways_vanilla]
 path = "build/libs/folkways-vanilla-*.jar"
 
-[mods.folkways_create]
-path = "build/libs/folkways-create-*.jar"
-
-[mods.folkways_golems]
-path = "build/libs/folkways-golems-*.jar"
-
-# The optional Folkways extension is installed beside its native mod only by Cookery profiles.
-[mods.folkways_cookery]
-path = "build/libs/folkways-cookery-*.jar"
+[mods.folkways_assistant]
+path = "build/libs/folkways-assistant-*.jar"
 target = []
-
 
 [mods.kaleidoscope_cookery]
 url = "https://cdn.modrinth.com/data/v17FatAc/versions/g8w0b2ly/kaleidoscopecookery-1.6.0-neoforge%2Bmc1.21.1.jar"
@@ -43,10 +35,6 @@ sha512 = "2481f11727ee303004d2e849739651f63bc28493a79d2e6a784f45632fc92e27ce4a43
 target = []
 
 # Chisels & Bits bundles Scena and its API/core; the extracted jars are compile-only fixtures.
-[mods.folkways_carving]
-path = "build/libs/folkways-carving-*.jar"
-target = []
-
 [mods.chiselsandbits]
 url = "https://mediafilez.forgecdn.net/files/7441/123/chisels-and-bits-neoforge-21.1.33.jar"
 sha512 = "ee16a40ad028668ce85418b4351a3d05a976fd1e109b104be2b7c2aac0b03e6042c5fe3545f5b62b2d53f19e83d18a74ecc27ec317865d049e2dff3529a4c4f5"
@@ -160,6 +148,12 @@ url = "https://cdn.modrinth.com/data/oWaK0Q19/versions/44pLdPGg/create-aeronauti
 sha512 = "dc7e8e1148fa442243889ba29412207137e1bb86206e6c92bc0a589f1374a466e93de22bdbf14f753984d86c29308fbbdc0f14a4b9618b14c0ac1666a36b46f5"
 target = []
 
+# Walking machines on Sable sub-levels (Create addon); compiled against, installed by the Sable promo profiles.
+[mods.let_it_walk]
+url = "https://mediafilez.forgecdn.net/files/9540/966/let_it_walk-0.1.5.jar"
+sha512 = "96c762ec2128c2dd090aa6df9fc970d008178dbd103324543a0c377e2f9808593395ebbfb83114ea702bbfac53202cea3a5f061fe040db1ed3fbef183a1d6d4f"
+target = []
+
 # Sable 2.x's Veil requires Sodium >=0.8.12-alpha.2; keep Iris on its Sodium 0.8-compatible line.
 [mods.sodium]
 url = "https://cdn.modrinth.com/data/AANobbMI/versions/uMOpc5uV/sodium-neoforge-0.8.13%2Bmc1.21.1.jar"
@@ -237,8 +231,8 @@ target = []
 
 # Measures folkways itself, mixins included; off unless BLOCKWRIGHT_COVERAGE=1 (npm run test:coverage).
 [coverage]
-mods = ["folkways_core", "folkways_vanilla", "folkways_create", "folkways_golems", "folkways_cookery"]
-sources = ["mods/core/src/main/java", "mods/vanilla/src/main/java", "mods/create/src/main/java", "mods/golems/src/main/java", "mods/cookery/src/main/java"]
+mods = ["folkways_core", "folkways_vanilla"]
+sources = ["mods/core/src/main/java", "mods/vanilla/src/main/java"]
 
 [profile.bench.neoforge]
 jvm_args = ["-Xmx3G"]
@@ -329,6 +323,40 @@ sodium = { target = ["client"] }
 iris = { target = ["client"] }
 sable = { target = ["server", "client"] }
 create-aeronautics = { target = ["server", "client"] }
+let_it_walk = { target = ["server", "client"] }
+
+# The assistant promo: the usual light, camera and sound, a Chinese client with the assistant on K, and Create Big
+# Cannons and Let it Walk! for the machines it calibrates.
+[profile.promo-assistant.neoforge]
+jvm_args = ["-Xmx4G"]
+
+[profile.promo-assistant.neoforge.server]
+world = "vanilla"
+properties = { "level-seed" = "folkways-promo", "view-distance" = "12", "spawn-monsters" = "false", "level-type" = "minecraft:flat", "generator-settings" = '{"biome":"minecraft:plains","features":false,"lakes":false,"layers":[{"block":"minecraft:bedrock","height":1},{"block":"minecraft:dirt","height":3},{"block":"minecraft:grass_block","height":1}],"structure_overrides":[]}' }
+
+[profile.promo-assistant.neoforge.client]
+game_args = ["--width", "1920", "--height", "1080"]
+options = { version = "3955", lang = "zh_cn", guiScale = "2", overrideWidth = "1920", overrideHeight = "1080", maxFps = "260", renderDistance = "12", graphicsMode = "1", entityShadows = "true", entityDistanceScaling = "4.0", biomeBlendRadius = "3", ao = "true", tutorialStep = "none", pauseOnLostFocus = "false", bobView = "false", fovEffectScale = "0.0", soundCategory_music = "0.0", soundCategory_record = "0.0", soundCategory_ambient = "0.0", "key_key.folkways.assistant" = "key.keyboard.k" }
+
+[profile.promo-assistant.neoforge.client.display]
+device = "gpu"
+width = 1920
+height = 1080
+
+[profile.promo-assistant.mods]
+folkways_assistant = { target = ["server", "client"] }
+sodium = { target = ["client"] }
+iris = { target = ["client"] }
+sable = { target = ["server", "client"] }
+create-aeronautics = { target = ["server", "client"] }
+let_it_walk = { target = ["server", "client"] }
+createbigcannons = { target = ["server", "client"] }
+ritchiesprojectilelib = { target = ["server", "client"] }
+# The smelter segment keeps the colony's stock in a Tom's Simple Storage network.
+toms_storage = { target = ["server", "client"] }
+# The chat is filmed: the recipe viewers' item lists would crowd the screen beside it.
+emi = { target = [] }
+jei = { target = [] }
 
 # The same light, camera and sound as the other promos, with the native kitchen installed.
 [profile.promo-cookery.neoforge]
@@ -352,7 +380,7 @@ sodium = { target = ["client"] }
 iris = { target = ["client"] }
 sable = { target = ["server", "client"] }
 create-aeronautics = { target = ["server", "client"] }
-folkways_cookery = { target = ["server", "client"] }
+let_it_walk = { target = ["server", "client"] }
 kaleidoscope_cookery = { target = ["server", "client"] }
 kaleidoscope_tavern = { target = ["server", "client"] }
 
@@ -380,6 +408,7 @@ sodium = { target = ["client"] }
 iris = { target = ["client"] }
 sable = { target = ["server", "client"] }
 create-aeronautics = { target = ["server", "client"] }
+let_it_walk = { target = ["server", "client"] }
 touhou_little_maid = { target = ["server", "client"] }
 
 # The promo profile over generated terrain, for shots that fly above the landscape.
@@ -404,6 +433,7 @@ sodium = { target = ["client"] }
 iris = { target = ["client"] }
 sable = { target = ["server", "client"] }
 create-aeronautics = { target = ["server", "client"] }
+let_it_walk = { target = ["server", "client"] }
 
 # The promo's client over the bench's land (Terralith biomes over Tectonic landforms), for shots of works standing
 # in real country: hills to terrace and mine, water to bridge. The game is in Chinese, as the film's viewers read it.
@@ -438,6 +468,11 @@ touhou_little_maid = { target = ["server", "client"] }
 [profile.rts.mods]
 folkways_vanilla = { target = ["server", "client"] }
 
+# RTS with Create on both sides, for the gantry facility and its travel map.
+[profile.rts-create.mods]
+folkways_vanilla = { target = ["server", "client"] }
+create = { target = ["server", "client"] }
+
 # The e2e pair with Shoulder Surfing Reloaded on the client, for the book's aim under its camera.
 [profile.shoulder.mods]
 shouldersurfing = { target = ["client"] }
@@ -454,11 +489,9 @@ sable = { target = ["server", "client"] }
 
 # The cookery integration runs against the real kitchen mod, on the ground and aboard a ship.
 [profile.cookery.mods]
-folkways_cookery = { target = ["server", "client"] }
 kaleidoscope_cookery = { target = ["server", "client"] }
 
 [profile.cookery-sable.mods]
-folkways_cookery = { target = ["server", "client"] }
 kaleidoscope_cookery = { target = ["server", "client"] }
 sable = { target = ["server", "client"] }
 # The e2e pair with FTB Teams on both sides, for a colony handed to a party.
@@ -467,19 +500,27 @@ ftbteams = { target = ["server", "client"] }
 ftblibrary = { target = ["server", "client"] }
 architectury = { target = ["server", "client"] }
 
-# Native Cookery alone must not activate the separately installed Folkways extension.
+# Native Cookery with the integration disabled by the test startup config.
 [profile.cookery-native.mods]
 kaleidoscope_cookery = { target = ["server", "client"] }
 
 # Visual coverage includes every Cookery lesson, including the optional Tavern.
 [profile.cookery-tavern.mods]
-folkways_cookery = { target = ["server", "client"] }
 kaleidoscope_cookery = { target = ["server", "client"] }
 kaleidoscope_tavern = { target = ["server", "client"] }
 
-[mods.folkways_firearms]
-path = "build/libs/folkways-firearms-*.jar"
-target = []
+[mods.createbigcannons]
+url = "https://cdn.modrinth.com/data/GWp4jCJj/versions/bOiDu0LS/createbigcannons-5.11.7%2Bmc.1.21.1.jar"
+sha512 = "24f414dfbb973a0f4d9c9b2aa059edc7bed4d23b4f39eb1f7d23a1d6b437e3b5d64cca6e4b85ff7eb2815743fa711d54ad652bffe96d1eb1234544716006440d"
+
+[mods.ritchiesprojectilelib]
+url = "https://cdn.modrinth.com/data/B3pb093D/versions/hZ6B2Z0x/ritchiesprojectilelib-2.1.2%2Bmc.1.21.1-neoforge.jar"
+sha512 = "6d64c84505a5a8fbb96d106603065465c5a2314ec09636900c5c1a31014c12fa68f1a41e758313cbf0d6f95d9a1f53bd67339020f7d8db0e184c23f66aee0330"
+
+[profile.cbc-sable.mods]
+createbigcannons = { target = ["server", "client"] }
+ritchiesprojectilelib = { target = ["server", "client"] }
+sable = { target = ["server", "client"] }
 
 [mods.superbwarfare]
 url = "https://cdn.modrinth.com/data/Cd3DYqzn/versions/bl7W8fjU/superbwarfare-0.8.9.2-mc1.21.1-c22d98c2.jar"
@@ -492,7 +533,6 @@ sha512 = "b8c3942f4d33179edf3f102f3d870b99dd436f8b8236dbbd31aa51b888162c692cfd88
 target = []
 
 [profile.warfare.mods]
-folkways_firearms = { target = ["client", "server"] }
 superbwarfare = { target = ["client", "server"] }
 kotlinforforge = { target = ["client", "server"] }
 
@@ -504,11 +544,9 @@ target = []
 
 [profile.tacz.mods]
 tacz = { target = ["server", "client"] }
-folkways_firearms = { target = ["server", "client"] }
 
 [profile.tacz_models.mods]
 tacz = { target = ["server", "client"] }
-folkways_firearms = { target = ["server", "client"] }
 touhou_little_maid = { target = ["server", "client"] }
 
 [profile.weapon_poses.neoforge.client.display]
@@ -521,16 +559,11 @@ folkways_capture = { target = ["client"] }
 # The tower page is filmed: the recipe viewers' item lists would crowd the screen beside it.
 emi = { target = [] }
 jei = { target = [] }
-folkways_firearms = { target = ["server", "client"] }
 superbwarfare = { target = ["server", "client"] }
 kotlinforforge = { target = ["server", "client"] }
 tacz = { target = ["server", "client"] }
 
 # Create activates firefighting when the pinned addon is installed.
-
-[mods.folkways_epicfight]
-path = "build/libs/folkways-epicfight-*.jar"
-target = []
 
 [mods.epicfight]
 url = "https://cdn.modrinth.com/data/vu3NZ5Ma/versions/8HHhJt6i/epic-fight-21.17.3.1-mc1.21.1-neoforge.jar"
@@ -543,11 +576,9 @@ sha512 = "f0d4cb80163efd03f17c2791c235600cbadfca294f7d33d2b05256044239a449a3342e
 target = []
 
 [profile.firefighting.mods]
-folkways_create = { target = ["server", "client"] }
 createfirefightingadd = { target = ["server", "client"] }
 
 [profile.firefighting_visuals.mods]
-folkways_create = { target = ["server", "client"] }
 createfirefightingadd = { target = ["server", "client"] }
 sodium = { target = ["client"] }
 iris = { target = ["client"] }
@@ -564,7 +595,6 @@ jvm_args = ["-Xmx2G", "-Dfolkways.epicfight.evidence=true"]
 
 [profile.epicfight.mods]
 epicfight = { target = ["server", "client"] }
-folkways_epicfight = { target = ["server", "client"] }
 
 # The second offline client uses the same native integration for multiplayer pairing coverage.
 # Pairing and render evidence is test-only; the acceptance specs read it.
@@ -576,7 +606,6 @@ account = { username = "EpicFightGuest", uuid = "00000000000000000000000000ef002
 
 [profile.epicfight-guest.mods]
 epicfight = { target = ["server", "client"] }
-folkways_epicfight = { target = ["server", "client"] }
 
 # RTS input is included in Vanilla for the combined Epic Fight acceptance scenarios.
 # Pairing and render evidence is test-only; the acceptance specs read it.
@@ -585,7 +614,6 @@ jvm_args = ["-Xmx2G", "-Dfolkways.epicfight.evidence=true"]
 
 [profile.epicfight-acceptance.mods]
 epicfight = { target = ["server", "client"] }
-folkways_epicfight = { target = ["server", "client"] }
 folkways_vanilla = { target = ["server", "client"] }
 
 [mods.folkways_capture]
@@ -617,12 +645,11 @@ sodium = { target = ["client"] }
 iris = { target = ["client"] }
 sable = { target = ["server", "client"] }
 create-aeronautics = { target = ["server", "client"] }
+let_it_walk = { target = ["server", "client"] }
 folkways_vanilla = { target = ["server", "client"] }
-folkways_firearms = { target = ["server", "client"] }
 superbwarfare = { target = ["server", "client"] }
 kotlinforforge = { target = ["server", "client"] }
 tacz = { target = ["server", "client"] }
-folkways_create = { target = ["server", "client"] }
 createfirefightingadd = { target = ["server", "client"] }
 folkways_capture = { target = ["client"] }
 # The tower page is filmed: the recipe viewers' item lists would crowd the screen beside it.
@@ -646,7 +673,6 @@ height = 1080
 [profile.warfare-rts.mods]
 # NeoForge must query the active EGL context instead of the GLFW NO_API placeholder.
 folkways_capture = { target = ["client"] }
-folkways_firearms = { target = ["client", "server"] }
 superbwarfare = { target = ["client", "server"] }
 kotlinforforge = { target = ["client", "server"] }
 
@@ -660,7 +686,6 @@ width = 1600
 height = 900
 
 [profile.carving.mods]
-folkways_carving = { target = ["server", "client"] }
 chiselsandbits = { target = ["server", "client"] }
 
 [profile.carving.neoforge.client.display]
@@ -685,7 +710,6 @@ width = 1920
 height = 1080
 
 [profile.promo-candb.mods]
-folkways_carving = { target = ["server", "client"] }
 chiselsandbits = { target = ["server", "client"] }
 
 [profile.promo-candb-land.neoforge]
@@ -709,12 +733,7 @@ lithostitched = { target = ["server", "client"] }
 terralith = { target = ["server", "client"] }
 tectonic = { target = ["server", "client"] }
 
-folkways_carving = { target = ["server", "client"] }
 chiselsandbits = { target = ["server", "client"] }
-
-[mods.folkways_carts]
-path = "build/libs/folkways-carts-*.jar"
-target = []
 
 [mods.astikorcartsredux]
 url = "https://cdn.modrinth.com/data/mnLFouB0/versions/JtPCk233/astikorcartsredux-1.2.4.jar"
@@ -722,7 +741,6 @@ sha512 = "d6ecf33be5065cffdd449167396f538bd89bfd8a38d86957bab1551869aebd1c026350
 target = []
 
 [profile.carts.mods]
-folkways_carts = { target = ["server", "client"] }
 astikorcartsredux = { target = ["server", "client"] }
 
 # The promo's flat land, light, camera and sound with the cart lines installed, for the mounted promo (riders, mounted
@@ -747,8 +765,33 @@ height = 1080
 sodium = { target = ["client"] }
 iris = { target = ["client"] }
 folkways_vanilla = { target = ["server", "client"] }
-folkways_carts = { target = ["server", "client"] }
 astikorcartsredux = { target = ["server", "client"] }
+
+# Opt-in live assistant check; credentials are seeded only into the client instance by its spec.
+[profile.assistant-live.neoforge]
+jvm_args = [
+  "-Xmx2G", "-Dfolkways.assistant.provider=deepseek", "-Dfolkways.assistant.baseUrl=https://api.deepseek.com",
+  "-Dfolkways.assistant.model=deepseek-v4-flash",
+]
+
+[profile.assistant-live.neoforge.client]
+options = { version = "3955", lang = "en_us", guiScale = "2", tutorialStep = "none", "key_key.folkways.assistant" = "key.keyboard.k" }
+
+[profile.assistant-live.neoforge.client.display]
+device = "software"
+
+[profile.assistant-live.mods]
+folkways_assistant = { target = ["server", "client"] }
+
+# Local multimodal assistant check; its spec seeds a loopback provider without real credentials.
+[profile.assistant-screenshot.neoforge.client]
+options = { version = "3955", lang = "en_us", guiScale = "2", tutorialStep = "none", "key_key.folkways.assistant" = "key.keyboard.k" }
+
+[profile.assistant-screenshot.neoforge.client.display]
+device = "software"
+
+[profile.assistant-screenshot.mods]
+folkways_assistant = { target = ["server", "client"] }
 
 [mods.ae2]
 url = "https://cdn.modrinth.com/data/XxWD5pD3/versions/DxZ2waV0/appliedenergistics2-19.2.19.jar"
@@ -962,7 +1005,7 @@ height = 900
 
 # Diesel flight verification only; excluded from default instances.
 
-# The airport and Superb Warfare vehicle promo: Airline's patterns and tower, Firearms' vehicle units, and Distant Horizons.
+# The airport and Superb Warfare vehicle promo: Airline's patterns and tower, Vanilla's vehicle units, and Distant Horizons.
 [profile.promo-airport.neoforge]
 jvm_args = ["-Xmx6G"]
 
@@ -985,12 +1028,19 @@ distanthorizons = { target = ["client", "server"] }
 sable = { target = ["server", "client"] }
 # The carrier floats on a levitite keel.
 create-aeronautics = { target = ["server", "client"] }
-folkways_create = { target = ["server", "client"] }
+let_it_walk = { target = ["server", "client"] }
 folkways_airline = { target = ["server", "client"] }
-folkways_firearms = { target = ["server", "client"] }
 superbwarfare = { target = ["server", "client"] }
 kotlinforforge = { target = ["server", "client"] }
 folkways_capture = { target = ["client"] }
 # The tower page is filmed: the recipe viewers' item lists would crowd the screen beside it.
 emi = { target = [] }
 jei = { target = [] }
+
+# Held facility and resident cards from the optional integrations.
+[profile.visual-holdings.mods]
+kaleidoscope_cookery = { target = ["server", "client"] }
+astikorcartsredux = { target = ["server", "client"] }
+folkways_capture = { target = ["client"] }
+superbwarfare = { target = ["server", "client"] }
+kotlinforforge = { target = ["server", "client"] }

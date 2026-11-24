@@ -4,6 +4,7 @@ import com.lowdragmc.lowdraglib2.LDLib2;
 import com.lowdragmc.lowdraglib2.gui.sync.bindings.impl.DataBindingBuilder;
 import com.lowdragmc.lowdraglib2.gui.texture.ItemStackTexture;
 import com.lowdragmc.lowdraglib2.gui.ui.UIElement;
+import com.lowdragmc.lowdraglib2.gui.ui.data.TextWrap;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Button;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Label;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.ScrollerView;
@@ -24,32 +25,34 @@ import io.github.izakyl.folkways.core.front.api.ui.Draw;
 import io.github.izakyl.folkways.core.front.api.ui.ItemPicker;
 import io.github.izakyl.folkways.core.front.api.ui.Pages;
 import io.github.izakyl.folkways.core.front.api.ui.Rows;
+import io.github.izakyl.folkways.core.front.api.ui.Segments;
 import io.github.izakyl.folkways.core.front.api.ui.Tokens;
 import io.github.izakyl.folkways.core.front.client.PersonalCameraControls;
 import io.github.izakyl.folkways.core.front.engine.colony.ColonyFront;
-import io.github.izakyl.folkways.core.front.engine.colony.ColonySchemas;
 import io.github.izakyl.folkways.core.front.engine.colony.ColonySettings;
 import io.github.izakyl.folkways.core.front.engine.colony.ColonyZone;
 import io.github.izakyl.folkways.core.front.engine.colony.LaborDebug;
-import java.util.ArrayList;
+import io.github.izakyl.folkways.core.front.engine.operation.SettingChanges;
+import io.github.izakyl.folkways.core.shell.api.OptionalIntegrations;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 
 public final class SettingsPage implements Draw {
 
     static final int CONTROL_MIN = 28;
-
-    private static final int MOST_RULES = 64;
 
     public sealed interface Scope {
 
@@ -83,7 +86,7 @@ public final class SettingsPage implements Draw {
             resetLayout));
 
         // The wheel is the player's own, kept in their client config: the server side of the page leaves it alone.
-        Toggle invertWheel = Controls.tick();
+        Toggle invertWheel = ScreenControls.tick();
         if (LDLib2.isRemote()) {
             invertWheel.setOn(FolkwaysClientConfig.invertWheel(), false);
             invertWheel.setOnToggleChanged(FolkwaysClientConfig::invertWheel);
@@ -94,7 +97,7 @@ public final class SettingsPage implements Draw {
             Rows.name(Component.translatable("folkways.settings.invert_wheel")),
             invertWheel));
 
-        Toggle forgetDrawingSettings = Controls.tick();
+        Toggle forgetDrawingSettings = ScreenControls.tick();
         if (LDLib2.isRemote()) {
             forgetDrawingSettings.setOn(!FolkwaysClientConfig.rememberDrawingSettings(), false);
             forgetDrawingSettings.setOnToggleChanged(on -> FolkwaysClientConfig.rememberDrawingSettings(!on));
@@ -106,7 +109,7 @@ public final class SettingsPage implements Draw {
             forgetDrawingSettings));
 
         // Like the wheel, the player's own, in their client config.
-        Toggle overlaysWithoutBook = Controls.tick();
+        Toggle overlaysWithoutBook = ScreenControls.tick();
         if (LDLib2.isRemote()) {
             overlaysWithoutBook.setOn(FolkwaysClientConfig.overlaysWithoutBook(), false);
             overlaysWithoutBook.setOnToggleChanged(FolkwaysClientConfig::overlaysWithoutBook);
@@ -118,7 +121,20 @@ public final class SettingsPage implements Draw {
         overlaysName.style(style -> style.tooltips(overlaysTip));
         table.addChildren(Rows.row().addChildren(Rows.icon(ItemStack.EMPTY), overlaysName, overlaysWithoutBook));
 
-        Toggle globalTacticalControls = Controls.tick();
+        // The camera's steering is the player's own too.
+        Toggle edgeScrollCamera = ScreenControls.tick();
+        if (LDLib2.isRemote()) {
+            edgeScrollCamera.setOn(FolkwaysClientConfig.edgeScrollCamera(), false);
+            edgeScrollCamera.setOnToggleChanged(FolkwaysClientConfig::edgeScrollCamera);
+        }
+        Tokens.name(edgeScrollCamera, "folkways.settings.edge_scroll_camera");
+        Component edgeTip = Component.translatable("folkways.settings.edge_scroll_camera.tooltip");
+        edgeScrollCamera.style(style -> style.tooltips(edgeTip));
+        UIElement edgeName = Rows.name(Component.translatable("folkways.settings.edge_scroll_camera"));
+        edgeName.style(style -> style.tooltips(edgeTip));
+        table.addChildren(Rows.row().addChildren(Rows.icon(ItemStack.EMPTY), edgeName, edgeScrollCamera));
+
+        Toggle globalTacticalControls = ScreenControls.tick();
         if (LDLib2.isRemote()) {
             globalTacticalControls.setOn(PersonalCameraControls.globalTacticalControls(), false);
             globalTacticalControls.setOnToggleChanged(PersonalCameraControls::globalTacticalControls);
@@ -135,23 +151,62 @@ public final class SettingsPage implements Draw {
             globalTacticalControls));
 
         Razing razing = new Razing();
-        Toggle debugLogs = Controls.tick();
+        UIElement advanced = Rows.table();
+        Toggle debugLogs = ScreenControls.tick();
         debugLogs.bind(DataBindingBuilder.bool(() -> LaborDebug.enabled(player), on -> LaborDebug.set(player, on)).build());
         Tokens.name(debugLogs, "folkways.settings.debug_logs");
         debugLogs.style(style -> style.tooltips(Component.translatable("folkways.settings.debug_logs.tip")));
-        table.addChildren(Rows.row().addChildren(
+        advanced.addChildren(Rows.row().addChildren(
             Rows.icon(ItemStack.EMPTY), Rows.name(Component.translatable("folkways.settings.debug_logs")), debugLogs));
-        table.addChildren(Rows.row().addChildren(
+        advanced.addChildren(Rows.row().addChildren(
             Rows.icon(ItemStack.EMPTY),
             Rows.name(Component.translatable("folkways.settings.colony")),
             razing.asker(player)));
 
+        // The colony's settings first, scope by scope, then this player's own, then what is rarely wanted.
         ScrollerView scroller = Rows.fills(Rows.box());
-        scroller.addScrollViewChild(table);
+        scroller.addScrollViewChild(Rows.page().addChildren(integrationNotices(player),
+            new ScopeCards().build(player),
+            Rows.heading(Component.translatable("folkways.book.settings.client")), table,
+            Rows.heading(Component.translatable("folkways.book.settings.advanced")), advanced));
 
         UIElement page = Rows.page().addChildren(scroller, razing.confirmation(player, scroller));
         page.layout(layout -> layout.flexGrow(1).flexShrink(1).minHeight(0));
         return page;
+    }
+
+    private static UIElement integrationNotices(Player player) {
+        UIElement notices = Rows.table();
+        notices.setDisplay(false);
+        notices.addSyncValue(DataBindingBuilder.tagS2C(() -> {
+            CompoundTag reading = new CompoundTag();
+            ListTag messages = new ListTag();
+            if (player instanceof ServerPlayer server) {
+                for (var status : OptionalIntegrations.disabled()) {
+                    Component message = switch (status.reason()) {
+                        case MANUAL -> Component.translatable("folkways.settings.integration.manual", status.name());
+                        case INCOMPATIBLE -> Component.translatable("folkways.settings.integration.incompatible",
+                            status.name(), status.installedVersion(), status.verifiedRange());
+                    };
+                    messages.add(Pages.text(server.registryAccess(), message));
+                }
+            }
+            reading.put("messages", messages);
+            return reading;
+        }).onSyncReceived(tag -> {
+            notices.clearAllChildren();
+            if (tag instanceof CompoundTag reading && reading.get("messages") instanceof ListTag messages) {
+                for (Tag message : messages) {
+                    Label label = Rows.name(Pages.readText(player.registryAccess(), message));
+                    label.textStyle(style -> style.textWrap(TextWrap.WRAP).adaptiveHeight(true));
+                    UIElement row = Rows.row().addChildren(Rows.icon(new ItemStack(Items.PAPER)), label);
+                    row.layout(layout -> layout.heightAuto().minHeight(Rows.ROW_HEIGHT));
+                    notices.addChildren(row);
+                }
+            }
+            notices.setDisplay(!notices.getChildren().isEmpty());
+        }).build().getSyncValue());
+        return notices;
     }
 
     static UIElement tools(Player player, Vocation vocation, String context) {
@@ -175,7 +230,7 @@ public final class SettingsPage implements Draw {
         UIElement control = switch (setting) {
             case Schema.Setting.Items items -> opener(player, scope, items);
             case Schema.Setting.Count count -> {
-                TextField field = Controls.count(count.min(), count.max());
+                TextField field = ScreenControls.count(count.min(), count.max());
                 field.bind(DataBindingBuilder.string(
                     () -> Integer.toString(countOf(player, where, count)),
                     typed -> setCount(player, where, count, typed)).build());
@@ -183,7 +238,7 @@ public final class SettingsPage implements Draw {
             }
             case Schema.Setting.Choice choice -> picker(player, where, choice);
             case Schema.Setting.Flag flag -> {
-                Toggle toggle = Controls.tick();
+                Toggle toggle = ScreenControls.tick();
                 toggle.bind(DataBindingBuilder.bool(
                     () -> flagOf(player, where, flag),
                     on -> setFlag(player, where, flag, on)).build());
@@ -195,12 +250,28 @@ public final class SettingsPage implements Draw {
         return control;
     }
 
+    // A choice of a few options lays them side by side; a longer one is picked from a list. Only the count decides,
+    // as the page is built on the server too, which knows neither the font nor the player's words.
     private static UIElement picker(Player player, Scope where, Schema.Setting.Choice choice) {
+        if (Segments.few(choice.options().size())) {
+            Segments segments = new Segments("folkways.settings.value." + choice.key(), choice.options().stream()
+                .map(id -> new Picker.Row(id.toString(), Picker.labelOf(id), Picker.iconOf(id))).toList(),
+                choice.byDefault().toString(), key -> { });
+            segments.addSyncValue(DataBindingBuilder.stringS2C(() -> choiceOf(player, where, choice).toString())
+                .onSyncReceived(segments::mark).build().getSyncValue());
+            Picker.Asking asking = new Picker.Asking(segments, (key, option) -> {
+                if (key.equals(choice.key())) {
+                    setChoice(player, where, choice, option);
+                }
+            });
+            segments.onPick(key -> asking.ask(choice.key(), ResourceLocation.parse(key)));
+            return segments;
+        }
         Label shown = Rows.worn(Component.empty());
         shown.bind(DataBindingBuilder.componentS2C(() -> label(player, where, choice)).build());
         Button press = Rows.wearing();
         press.layout(layout -> layout.widthAuto().minWidth(CONTROL_MIN).flexShrink(0));
-        UIElement worn = Controls.worn(choice.byDefault());
+        UIElement worn = ScreenControls.worn(choice.byDefault());
         press.addChildren(worn, shown);
         ResourceLocation[] current = { choice.byDefault() };
         press.addSyncValue(DataBindingBuilder.stringS2C(() -> choiceOf(player, where, choice).toString())
@@ -296,7 +367,7 @@ public final class SettingsPage implements Draw {
     }
 
     static void setCount(Player player, Scope where, Schema.Setting.Count count, String typed) {
-        Integer wanted = Controls.parse(typed);
+        Integer wanted = ScreenControls.parse(typed);
         if (wanted == null) {
             return;
         }
@@ -324,22 +395,7 @@ public final class SettingsPage implements Draw {
     }
 
     static List<ItemFilter> keptItems(Schema.Setting.Items items, List<ItemFilter> filters) {
-        List<ItemFilter> kept = new ArrayList<>();
-        for (ItemFilter filter : filters) {
-            if (kept.size() < MOST_RULES && allowed(items, filter) && !kept.contains(filter)) {
-                kept.add(filter);
-            }
-        }
-        return List.copyOf(kept);
-    }
-
-    private static boolean allowed(Schema.Setting.Items items, ItemFilter filter) {
-        return switch (filter.kind()) {
-            case ITEM -> BuiltInRegistries.ITEM.getOptional(filter.id())
-                .filter(item -> item != Items.AIR && (!items.blocks() || item instanceof BlockItem))
-                .isPresent();
-            case TAG, QUERY -> !items.single();
-        };
+        return SettingChanges.keptItems(items, filters);
     }
 
     static List<ItemFilter> itemsOf(Player player, Scope where, Schema.Setting.Items items) {
@@ -385,26 +441,11 @@ public final class SettingsPage implements Draw {
     }
 
     private static void write(Colony colony, Scope where, String key, ColonySettings.Value value) {
-        ColonyFront front = ColonyFront.of(colony);
         switch (where) {
-            case Scope.AtColony at -> front.setSetting(at.scope(), key, value);
-            case Scope.OnPath on -> front.path(on.path()).ifPresent(path -> {
-                Schema schema = schemaOf(on.delegation());
-                if (schema.find(key).isPresent()) {
-                    front.setDrawn(path.id(), path.settings().with(key, value).conformedTo(schema));
-                }
-            });
-            case Scope.OnZone on -> front.zone(on.zone()).ifPresent(zone -> {
-                Schema schema = schemaOf(on.delegation());
-                if (schema.find(key).isPresent()) {
-                    front.setDrawn(zone.id(), zone.settings().with(key, value).conformedTo(schema));
-                }
-            });
+            case Scope.AtColony at -> SettingChanges.set(colony, at.scope(), Optional.empty(), key, value);
+            case Scope.OnPath on -> SettingChanges.set(colony, on.delegation(), Optional.of(on.path()), key, value);
+            case Scope.OnZone on -> SettingChanges.set(colony, on.delegation(), Optional.of(on.zone()), key, value);
         }
-    }
-
-    static Schema schemaOf(ResourceLocation delegation) {
-        return ColonySchemas.ofDelegation(delegation);
     }
 
     static Optional<ColonyZone> zoneOf(Colony colony, UUID id) {

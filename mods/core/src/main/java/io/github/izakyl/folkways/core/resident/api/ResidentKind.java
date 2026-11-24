@@ -70,7 +70,7 @@ public record ResidentKind(ResourceLocation id, Growth growth, Locomotion locomo
     }
 
     public boolean worksBarehanded(ResourceLocation trade) {
-        return barehanded.contains(trade);
+        return barehanded.contains(trade) || ResidentKinds.registeredBarehanded(id, trade);
     }
 
     public Optional<Body> read(Entity entity) {

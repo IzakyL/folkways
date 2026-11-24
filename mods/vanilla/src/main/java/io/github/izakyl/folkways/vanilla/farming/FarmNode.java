@@ -1,5 +1,7 @@
 package io.github.izakyl.folkways.vanilla.farming;
 
+import io.github.izakyl.folkways.core.work.api.LaborRefusal;
+import io.github.izakyl.folkways.core.facility.api.Facilities;
 import io.github.izakyl.folkways.core.resident.api.RefusalKind;
 import io.github.izakyl.folkways.core.work.api.Ending;
 import io.github.izakyl.folkways.core.work.api.Node;
@@ -71,7 +73,10 @@ abstract class FarmNode implements Node {
     public final Outcome commit(ServerLevel level, Worker who) {
         if (!chore.tending().permits(chore)) return refuse(FarmRefusal.GROUND_TAKEN);
         List<ItemStack> supplied = who.supplied();
-        Outcome done = work(level, who, chore.job());
+        Job job = chore.job();
+        Outcome done = java.util.stream.Stream.concat(job.cells().stream(), job.canopy().stream())
+            .anyMatch(cell -> Facilities.protectedAt(level, cell))
+            ? Outcome.failed(LaborRefusal.PROTECTED_FACILITY) : work(level, who, job);
         PastDay made = chore.tending().made();
         made.record(spec, done, level.getGameTime());
         if (done instanceof Outcome.Done finished) {

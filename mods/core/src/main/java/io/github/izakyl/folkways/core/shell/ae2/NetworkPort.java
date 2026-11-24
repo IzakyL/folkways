@@ -1,6 +1,7 @@
 package io.github.izakyl.folkways.core.shell.ae2;
 
 import appeng.api.config.Actionable;
+import appeng.api.config.Settings;
 import appeng.api.implementations.blockentities.IChestOrDrive;
 import appeng.api.networking.IGridNode;
 import appeng.api.stacks.AEItemKey;
@@ -8,18 +9,19 @@ import appeng.api.stacks.AEKeyType;
 import appeng.api.stacks.KeyCounter;
 import appeng.api.storage.MEStorage;
 import appeng.api.storage.cells.IBasicCellItem;
-import io.github.izakyl.folkways.core.inventory.api.StoreRule;
-import io.github.izakyl.folkways.core.inventory.api.port.PortIdentity;
-import io.github.izakyl.folkways.core.inventory.api.port.PortReader;
-import io.github.izakyl.folkways.core.inventory.api.port.Pull;
-import io.github.izakyl.folkways.core.inventory.api.port.Room;
-import io.github.izakyl.folkways.core.inventory.api.port.StorePort;
-import io.github.izakyl.folkways.core.inventory.api.port.StorePorts;
-import io.github.izakyl.folkways.core.inventory.api.port.TransferResult;
-import io.github.izakyl.folkways.core.inventory.api.port.Usability;
+import appeng.parts.storagebus.StorageBusPart;
+import io.github.izakyl.folkways.core.facility.api.control.ItemPort;
+import io.github.izakyl.folkways.core.facility.api.control.PortIdentity;
+import io.github.izakyl.folkways.core.facility.api.control.PortReader;
+import io.github.izakyl.folkways.core.facility.api.control.Pull;
+import io.github.izakyl.folkways.core.facility.api.control.Room;
+import io.github.izakyl.folkways.core.facility.api.control.SlotWindow;
+import io.github.izakyl.folkways.core.facility.api.control.TransferResult;
+import io.github.izakyl.folkways.core.facility.api.ExternalAttachments;
 import io.github.izakyl.folkways.core.item.api.Goods;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import io.github.izakyl.folkways.core.shell.crafting.CraftedPort;
+import io.github.izakyl.folkways.core.shell.crafting.ExternalRoom;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -30,10 +32,11 @@ import java.util.OptionalLong;
 import java.util.Set;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
 
-final class NetworkPort implements StorePort {
+public final class NetworkPort implements ItemPort {
 
     private final ServerLevel level;
     private final BlockPos pos;
@@ -54,7 +57,7 @@ final class NetworkPort implements StorePort {
         this.buffer = buffer;
     }
 
-    IGridNode node() {
+    public IGridNode node() {
         return node;
     }
 
@@ -70,10 +73,10 @@ final class NetworkPort implements StorePort {
         return node.getGrid().getStorageService().getInventory();
     }
 
-    StorePort delivery() {
+    public ItemPort delivery() {
         return new CraftedPort(this, (item, count, simulate) ->
             storage().insert(AEItemKey.of(item), count, simulate ? Actionable.SIMULATE
-                : Actionable.MODULATE, Devices.source(node)));
+                : Actionable.MODULATE, Ae2Devices.source(node)));
     }
 
     void cancel(java.util.UUID task) {
@@ -88,36 +91,45 @@ final class NetworkPort implements StorePort {
     }
 
     @Override
-    public PortIdentity identity() {
-        WorldPos at = WorldPos.of(level, pos);
-        return node == null ? PortIdentity.block(at) : new PortIdentity(Devices.key(node), at);
+    public WorldPos anchor() {
+        return identity().home();
     }
 
     @Override
-    public Usability usability() {
-        var condemned = StorePorts.condemned(WorldPos.of(level, pos));
-        if (condemned.isPresent()) {
-            return new Usability.Unusable(condemned.get(), true);
+    public PortIdentity identity() {
+        WorldPos at = WorldPos.of(level, pos);
+        if (node == null || node.getGrid() == null) {
+            return PortIdentity.block(at);
         }
+        var group = ExternalAttachments.group(level, node.getGrid());
+        return new PortIdentity(group.size() > 1 ? group : craftingKey(), at);
+    }
+
+    public Ae2Devices.NetworkKey craftingKey() {
+        return Ae2Devices.key(node);
+    }
+
+    @Override
+    public Optional<Component> unavailable(ServerLevel level) {
         if (buffer) {
-            return Usability.because(Devices.reason("buffer"));
+            return Optional.of(Ae2Devices.reason("buffer"));
         }
         if (ambiguous) {
-            return Usability.because(Devices.reason("ambiguous"));
+            return Optional.of(Ae2Devices.reason("ambiguous"));
         }
         if (node == null) {
-            return Usability.because(Devices.reason("disconnected"));
+            return Optional.of(Ae2Devices.reason("disconnected"));
         }
         if (!node.isPowered()) {
-            return Usability.because(Devices.reason("unpowered"));
+            return Optional.of(Ae2Devices.reason("unpowered"));
         }
         if (!node.meetsChannelRequirements()) {
-            return Usability.because(Devices.reason("no_channel"));
+            return Optional.of(Ae2Devices.reason("no_channel"));
         }
         if (!node.isActive()) {
-            return Usability.because(Devices.reason("booting"));
+            return Optional.of(Ae2Devices.reason("booting"));
         }
-        return Usability.USABLE;
+        return Optional.empty();
     }
 
     @Override
@@ -131,9 +143,22 @@ final class NetworkPort implements StorePort {
         return OptionalLong.of(level.getGameTime() / 20);
     }
 
+    long count(ItemSpec wanted) {
+        long amount = 0;
+        for (var entry : storage().getAvailableStacks()) {
+            if (entry.getKey() instanceof AEItemKey item && Goods.matches(item.toStack(), wanted)) {
+                amount += entry.getLongValue();
+            }
+        }
+        return amount;
+    }
+
     @Override
-    public PortReader reader(ServerLevel world, List<StoreRule> rules) {
-        boolean usable = usability().usable();
+    public PortReader reader(ServerLevel world, Optional<SlotWindow> window) {
+        if (window.isPresent()) {
+            return PortReader.EMPTY;
+        }
+        boolean usable = valid(world);
         var cursor = usable ? storage().getAvailableStacks().iterator()
             : new KeyCounter().iterator();
         return new PortReader() {
@@ -165,9 +190,25 @@ final class NetworkPort implements StorePort {
     Room.Pool room() {
         long items = 0;
         long types = Long.MAX_VALUE;
-        long existing = storage().getAvailableStacks().keySet().size();
+        var existingKeys = storage().getAvailableStacks().keySet();
+        long existing = existingKeys.size();
+        var group = ExternalAttachments.group(level, node.getGrid());
         Map<ItemSpec, Long> limits = new LinkedHashMap<>();
+        ExternalRoom external = new ExternalRoom();
+        var source = Ae2Devices.source(node);
         for (IGridNode member : node.getGrid().getNodes()) {
+            if (member.isActive() && member.getOwner() instanceof StorageBusPart bus
+                    && bus.getLevel() instanceof ServerLevel busLevel
+                    && bus.getConfigManager().getSetting(Settings.ACCESS).isAllowInsertion()) {
+                var side = bus.getSide();
+                BlockPos target = bus.getBlockEntity().getBlockPos().relative(side);
+                Object connected = ExternalStorage.networkAt(busLevel, target, side.getOpposite());
+                if (connected != null && group.contains(connected)) {
+                    continue;
+                }
+                bus.mountInventories((mounted, priority) -> external.add(busLevel, target, side.getOpposite(),
+                    (stack, limit) -> mounted.insert(AEItemKey.of(stack), limit, Actionable.SIMULATE, source)));
+            }
             if (member.isActive() && member.getOwner() instanceof IChestOrDrive drive) {
                 for (int slot = 0; slot < drive.getCellCount(); slot++) {
                     if (!(drive.getCellItem(slot) instanceof IBasicCellItem cell)
@@ -198,7 +239,7 @@ final class NetworkPort implements StorePort {
                         ItemStack stack = item.getDefaultInstance();
                         if (!stack.isEmpty()) {
                             long accepted = inventory.insert(AEItemKey.of(stack), free,
-                                Actionable.SIMULATE, Devices.source(node));
+                                Actionable.SIMULATE, source);
                             if (accepted > 0) {
                                 limits.merge(Goods.specOf(stack), accepted, Math::addExact);
                             }
@@ -207,6 +248,12 @@ final class NetworkPort implements StorePort {
                 }
             }
         }
+        long externalItems = external.mergeInto(limits);
+        items = ExternalRoom.add(items, externalItems);
+        long externalTypes = external.newKindRoom(goods -> !existingKeys.contains(AEItemKey.of(Goods.display(goods))));
+        types = ExternalRoom.add(types == Long.MAX_VALUE ? 0 : types, externalTypes);
+        limits.replaceAll((goods, limit) -> Math.min(limit, storage().insert(
+            AEItemKey.of(Goods.display(goods)), limit, Actionable.SIMULATE, source)));
         return new Room.Pool(items, items == 0 ? 0 : types, Optional.of(limits));
     }
 
@@ -225,35 +272,26 @@ final class NetworkPort implements StorePort {
     }
 
     @Override
-    public TransferResult take(ServerLevel world, List<Pull> requested, List<StoreRule> rules, boolean simulate) {
-        if (!usability().usable()) {
+    public TransferResult take(ServerLevel world, List<Pull> requested, Optional<SlotWindow> window, boolean simulate) {
+        if (!valid(world)) {
             return new TransferResult.Refused(TransferResult.Why.UNUSABLE);
         }
-        if (!operations.contains(Operation.TAKE) || !StoreRule.takes(rules)
-                || rules.stream().anyMatch(StoreRule.Slots.class::isInstance)
-                || !requested.stream().allMatch(pull -> admits(rules, pull))) {
+        if (!operations.contains(Operation.TAKE)
+                || window.isPresent()) {
             return new TransferResult.Refused(TransferResult.Why.NOT_ALLOWED);
         }
-        return Transfers.take(level, pos, storage(), Devices.source(node), requested, simulate);
+        return Transfers.take(level, pos, storage(), Ae2Devices.source(node), requested, simulate);
     }
 
     @Override
-    public TransferResult put(ServerLevel world, List<ItemStack> goods, List<StoreRule> rules,
-                              boolean directed, boolean simulate) {
-        if (!usability().usable()) {
+    public TransferResult put(ServerLevel world, List<ItemStack> goods, Optional<SlotWindow> window, boolean simulate) {
+        if (!valid(world)) {
             return new TransferResult.Refused(TransferResult.Why.UNUSABLE);
         }
-        if (!operations.contains(Operation.PUT) || rules.stream().anyMatch(StoreRule.Slots.class::isInstance)
-                || !directed && (!StoreRule.stores(rules)
-                    || goods.stream().anyMatch(stack -> !StoreRule.admits(rules, stack)))) {
+        if (!operations.contains(Operation.PUT) || window.isPresent()) {
             return new TransferResult.Refused(TransferResult.Why.NOT_ALLOWED);
         }
-        return Transfers.put(level, pos, storage(), Devices.source(node), goods, room(), typeCost(), simulate);
+        return Transfers.put(level, pos, storage(), Ae2Devices.source(node), goods, room(), typeCost(), simulate);
     }
 
-    // On a network device the panel's item filter bounds taking as well as putting.
-    private static boolean admits(List<StoreRule> rules, Pull pull) {
-        return pull instanceof Pull.Exact exact ? StoreRule.admits(rules, exact.stack())
-            : StoreRule.admits(rules, ((Pull.Matching) pull).spec());
-    }
 }

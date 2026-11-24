@@ -52,7 +52,7 @@ test("combat: close tactical command demonstration", async ({}, testInfo) => {
     await frames(client, 10);
     await input.key(client, { keyCode: 86 });
     await screen.waitFor(client, "OverheadScreen", { timeoutMs: 8000 });
-    const combat = (await screen.widgets(client)).find((w) => /^RTS$/.test(w.label?.trim() ?? ""));
+    const combat = (await screen.widgets(client)).find((w) => /^(Control|控制)$/.test(w.label?.trim() ?? ""));
     expect(combat, "combat mode must render").toBeTruthy();
     await screen.clickWidget(client, { label: combat!.label });
     await input.scroll(client, { yOffset: 1 });

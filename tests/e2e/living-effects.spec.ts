@@ -37,6 +37,9 @@ for (const stage of twins()) test(stage.title("residents use idle activities and
     expect(residents.entities.length).toBe(2);
     expect((await details(server, residents.entities[0].uuid)).join("\n")).toContain("Basic bed");
     const { x, y, z } = origin;
+    // Keep residents off the cells about to become solid walls, furniture and roof.
+    const clear = stage.stand({ x: x + 2.5, y, z: z + 2.5 });
+    await mustCommand(server, `tp @e[type=folkways_vanilla:resident] ${clear.x} ${clear.y} ${clear.z}`);
     await mustCommand(server, `fill ${at(x - 1, y, z - 1)} ${at(x - 1, y + 2, z + 4)} minecraft:stone`);
     await mustCommand(server, `fill ${at(x + 5, y, z - 1)} ${at(x + 5, y + 2, z + 4)} minecraft:stone`);
     await mustCommand(server, `fill ${at(x, y, z - 1)} ${at(x + 4, y + 2, z - 1)} minecraft:stone`);

@@ -4,26 +4,22 @@ import com.simibubi.create.content.contraptions.actors.seat.SeatBlock;
 import com.simibubi.create.content.contraptions.actors.seat.SeatEntity;
 import io.github.izakyl.folkways.core.colony.api.Colonies;
 import io.github.izakyl.folkways.core.colony.api.Colony;
-import io.github.izakyl.folkways.core.plan.api.Grown;
-import io.github.izakyl.folkways.core.work.api.Ending;
-import io.github.izakyl.folkways.core.work.api.Node;
-import io.github.izakyl.folkways.core.work.api.NodeSpec;
-import io.github.izakyl.folkways.core.work.api.Outcome;
-import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.facility.api.Post;
+import io.github.izakyl.folkways.core.facility.api.Posts;
+import io.github.izakyl.folkways.core.facility.api.control.PostKey;
+import io.github.izakyl.folkways.core.world.api.WorldPos;
+import io.github.izakyl.folkways.core.world.api.Stances;
 import io.github.izakyl.folkways.core.work.api.WorkGesture;
 import io.github.izakyl.folkways.core.work.api.WorkSite;
-import io.github.izakyl.folkways.core.work.api.Worker;
-import io.github.izakyl.folkways.core.work.api.Workload;
 import io.github.izakyl.folkways.core.world.api.WorldSpaces;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.phys.AABB;
+import net.minecraft.world.entity.Mob;
 
 final class TowerDuty {
     private TowerDuty() {
@@ -39,20 +35,34 @@ final class TowerDuty {
         return tower.relative(level.getBlockState(tower).getValue(AirportTowerBlock.FACING));
     }
 
-    static boolean staffed(ServerLevel level, BlockPos tower) {
+    static List<Post> posts(ServerLevel level, Colony colony) {
+        return colony.claims(AirportColony.TOWER).stream()
+            .flatMap(holding -> holding.what().singleCell().stream())
+            .flatMap(at -> WorldSpaces.storage(level, at).stream())
+            .flatMap(pos -> post(level, pos, colony.id()).stream())
+            .toList();
+    }
+
+    private static PostKey key(ServerLevel level, BlockPos tower, UUID colony) {
+        return new PostKey(AirportColony.ID, colony, WorldSpaces.at(level, tower).toString());
+    }
+
+    private static Optional<Post> post(ServerLevel level, BlockPos tower, UUID owner) {
         if (!Airports.validTower(level, tower)) {
-            return false;
+            return Optional.empty();
         }
-        var colony = colony(level, tower);
         BlockPos seat = seat(level, tower);
-        if (colony.isEmpty() || !level.hasChunkAt(seat)
-                || !(level.getBlockState(seat).getBlock() instanceof SeatBlock)) {
-            return false;
+        if (!level.hasChunkAt(seat) || !(level.getBlockState(seat).getBlock() instanceof SeatBlock)) {
+            return Optional.empty();
         }
-        return level.getEntitiesOfClass(SeatEntity.class, new AABB(seat)).stream()
-            .flatMap(entity -> entity.getPassengers().stream())
-            .anyMatch(body -> !(body instanceof Player) && body.isAlive()
-                && colony.get().residents().stream().anyMatch(resident -> resident.id().equals(body.getUUID())));
+        return Stances.of(level, List.of(seat.north(), seat.east(), seat.south(), seat.west()))
+            .map(approach -> new Post(key(level, tower, owner), WorkSite.at(level, seat), approach,
+                ref -> false, new Post.Demand(Post.Staffing.STANDING), new TowerSeat(tower, seat, owner)));
+    }
+
+    static boolean staffed(ServerLevel level, BlockPos tower) {
+        return colony(level, tower).flatMap(owner -> post(level, tower, owner.id())
+            .flatMap(place -> Posts.of(owner).map(posts -> posts.staffed(level, place)))).orElse(false);
     }
 
     static TowerCoverage.Tower describe(ServerLevel level, BlockPos tower) {
@@ -78,91 +88,58 @@ final class TowerDuty {
         BlockPos pos = tower.getBlockPos();
         var colony = colony(level, pos);
         if (!colony.map(Colony::id).equals(Optional.ofNullable(tower.dutyColony))) {
-            if (tower.dutyColony != null && tower.dutyWork != null) {
-                Colonies.of(level.getServer(), tower.dutyColony)
-                    .ifPresent(old -> old.withdraw(AirportColony.ID, tower.dutyWork));
-            }
+            withdraw(tower, level);
             tower.dutyColony = colony.map(Colony::id).orElse(null);
-            tower.dutyWork = null;
             AirportRegistry.of(level).changed(pos);
             Airports.request(level, pos);
         }
-        if (colony.isEmpty() || tower.dutyWork != null || !level.hasChunkAt(seat(level, pos))
-                || !(level.getBlockState(seat(level, pos)).getBlock() instanceof SeatBlock)) {
-            return;
-        }
-        UUID work = UUID.randomUUID();
-        tower.dutyWork = work;
-        colony.get().submit(AirportColony.ID, level.dimension(), Grown.of(new Watch(work, level, pos)),
-            (id, ending) -> {
-                if (work.equals(tower.dutyWork)) {
-                    tower.dutyWork = null;
-                }
-            });
+        tower.dutyWork = colony.flatMap(owner -> post(level, pos, owner.id())
+            .flatMap(place -> Posts.of(owner).map(posts -> posts.offer(level, place)))).orElse(null);
     }
 
     static void withdraw(AirportTower tower, ServerLevel level) {
-        UUID work = tower.dutyWork;
-        UUID colony = tower.dutyColony;
+        UUID owner = tower.dutyColony;
         tower.dutyWork = null;
         tower.dutyColony = null;
-        if (work != null && colony != null) {
-            Colonies.of(level.getServer(), colony).ifPresent(old -> old.withdraw(AirportColony.ID, work));
+        if (owner != null) {
+            Colonies.of(level.getServer(), owner).flatMap(Posts::of)
+                .ifPresent(posts -> posts.withdraw(key(level, tower.getBlockPos(), owner)));
         }
     }
 
-    private static final class Watch implements Node, Workload.Continuous {
-        private final BlockPos tower;
-        private final BlockPos seat;
-        private final NodeSpec spec;
+    private record TowerSeat(BlockPos tower, BlockPos seat, UUID owner) implements Post.Station {
 
-        private Watch(UUID id, ServerLevel level, BlockPos tower) {
-            this.tower = tower;
-            seat = seat(level, tower);
-            Stances stances = Stances.of(level, List.of(seat.north(), seat.east(), seat.south(), seat.west()))
-                .orElseThrow();
-            spec = NodeSpec.of(id, AirportColony.ID, WorkSite.at(level, seat), stances, this)
-                .gesture(new WorkGesture() {
-                    @Override
-                    public void perform(LivingEntity body, int tick, BlockPos at) {
-                        if (!body.isPassenger() && ready(level) && !SeatBlock.isSeatOccupied(level, seat)) {
-                            SeatBlock.sitDown(level, seat, body);
-                        }
-                    }
-
-                    @Override
-                    public void release(LivingEntity body) {
-                        WorkGesture.SIT.release(body);
-                    }
-                }).done();
+        @Override
+        public Set<WorldPos> reachFrom(ServerLevel level, Post post) {
+            return Set.of(WorldSpaces.at(level, seat));
         }
 
         @Override
-        public NodeSpec spec() {
-            return spec;
+        public boolean available(ServerLevel level, Post post) {
+            return Airports.validTower(level, tower) && level.hasChunkAt(seat)
+                && !SeatBlock.isSeatOccupied(level, seat);
         }
 
         @Override
-        public boolean ready(ServerLevel level) {
-            return Airports.validTower(level, tower) && level.hasChunkAt(seat) && seat.equals(seat(level, tower))
-                && level.getBlockState(seat).getBlock() instanceof SeatBlock;
+        public boolean take(ServerLevel level, Post post, Mob body) {
+            if (!body.isPassenger() && available(level, post)) {
+                SeatBlock.sitDown(level, seat, body);
+            }
+            return present(level, post, body);
         }
 
         @Override
-        public boolean holds(ServerLevel level, Worker who) {
-            return ready(level) && colony(level, tower).map(colony -> colony.residents().stream()
-                .anyMatch(resident -> resident.id().equals(who.resident().id()))).orElse(false)
-                && who.body().getVehicle() instanceof SeatEntity entity && entity.blockPosition().equals(seat);
+        public boolean present(ServerLevel level, Post post, Mob body) {
+            return Airports.validTower(level, tower) && seat.equals(TowerDuty.seat(level, tower))
+                && colony(level, tower).filter(value -> value.id().equals(owner)).isPresent()
+                && body.getVehicle() instanceof SeatEntity entity && entity.blockPosition().equals(seat);
         }
 
         @Override
-        public Outcome commit(ServerLevel level, Worker who) {
-            return Outcome.done();
-        }
-
-        @Override
-        public void released(ServerLevel level, Worker who, Ending how) {
-            WorkGesture.SIT.release(who.body());
+        public void leave(Mob body) {
+            if (body.getVehicle() instanceof SeatEntity entity && entity.blockPosition().equals(seat)) {
+                WorkGesture.SIT.release(body);
+            }
         }
     }
 }

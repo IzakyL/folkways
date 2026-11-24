@@ -23,27 +23,25 @@ const RESIDENTS = 2;
 
 const MEMBER_CELLS = RESIDENTS + 1;
 
-const PERSISTED = [
-  { domain: "folkways_vanilla:living", key: "hunger" },
-  { domain: "folkways_vanilla:person", key: "waiting" },
-] as const;
-
 const DUMP = defineTask<{ player: string; ox: number; oy: number; oz: number }, ColonyTaskValue>({
   name: "folkways.colony.dump",
   side: "server",
   timeoutMs: 20_000,
   source: javaTask({
     imports: [
+      "io.github.izakyl.folkways.core.card.api.notice.Line",
       "io.github.izakyl.folkways.core.colony.api.Colony",
       "io.github.izakyl.folkways.core.colony.internal.Contributions",
       "io.github.izakyl.folkways.core.colony.api.Claimed",
       "io.github.izakyl.folkways.core.colony.api.Claim",
-      "io.github.izakyl.folkways.core.front.engine.charter.CurrentColony",
+      "io.github.izakyl.folkways.core.colony.charter.CurrentColony",
+      "io.github.izakyl.folkways.core.front.api.ColonyPanel",
       "io.github.izakyl.folkways.core.front.engine.colony.ColonyGround",
       "io.github.izakyl.folkways.core.front.engine.authority.ColonyAuthority",
       "net.minecraft.core.BlockPos",
       "net.minecraft.nbt.CompoundTag",
       "net.minecraft.nbt.Tag",
+      "net.minecraft.network.chat.contents.TranslatableContents",
       "net.minecraft.resources.ResourceLocation",
       "net.minecraft.server.MinecraftServer",
       "net.minecraft.server.level.ServerPlayer",
@@ -128,6 +126,17 @@ for (Contributions.Entry domain : Contributions.all()) {
 }
 Collections.sort(domains);
 out.put("domains", domains);
+ResourceLocation person = ResourceLocation.parse("folkways_vanilla:person");
+Object presence = colony.service(person, Object.class).orElse(null);
+if (presence instanceof ColonyPanel panel) {
+    for (var row : panel.rows(ColonyPanel.Page.RESIDENTS, colony.view(player.serverLevel()))) {
+        if (row.title() instanceof Line.Text text
+                && text.component().getContents() instanceof TranslatableContents label
+                && label.getKey().equals("folkways.settlers.waiting")) {
+            out.put("waiting_settlers", label.getArgs()[0]);
+        }
+    }
+}
 out.put("ok", Boolean.TRUE);
 return out;
 `,
@@ -239,18 +248,20 @@ function substantial(state: ColonyTaskValue, path: string) {
   const domains = (state.domains ?? []) as string[];
   expect(domains.length, `after ${path} founding Contributions.all() is empty - `
     + `this dump is comparing nothing${seen()}`).toBeGreaterThan(0);
-  // Fear and breathing only declare urges on each body: neither keeps a presence on the colony.
-  const urgeOnly = ["folkways_vanilla:fear ", "folkways_vanilla:breathing "];
-  const unsettled = domains.filter((line) => !urgeOnly.some((prefix) => line.startsWith(prefix))
+  // Fear and breathing declare body urges. Front refreshes saved UI state and registers cleanup.
+  const withoutPresence = ["folkways_vanilla:fear ", "folkways_vanilla:breathing ", "folkways_core:front "];
+  const unsettled = domains.filter((line) => !withoutPresence.some((prefix) => line.startsWith(prefix))
     && line.includes("presence=none"));
   expect(unsettled, `after ${path} founding some domains left no presence on the colony`).toEqual([]);
-  for (const { domain, key } of PERSISTED) {
-    const line = domains.find((entry) => entry.startsWith(`${domain} `));
-    expect(line, `after ${path} founding ${domain} is not in Contributions.all()${seen()}`).toBeDefined();
-    expect(line, `after ${path} founding the tag ${domain} left has no ${key} - `
-      + `founding always sets this entry, so missing it means the dump is blind, not that the state changed`)
-      .toContain(`${key}:`);
-  }
+  const living = domains.find((entry) => entry.startsWith("folkways_vanilla:living "));
+  expect(living, `after ${path} founding the living domain has no persisted hunger entry${seen()}`)
+    .toContain("hunger:");
+
+  // These paths admit as a creative player, so recruitment leaves the settler queue untouched.
+  const person = domains.find((entry) => entry.startsWith("folkways_vanilla:person "));
+  expect(person, `after ${path} founding the person domain should have a presence and an empty saved tag${seen()}`)
+    .toMatch(/^folkways_vanilla:person presence=(?!none )\S+ kept=\[\]$/);
+  expect(state.waiting_settlers, `after ${path} founding the settler queue should be empty${seen()}`).toBe(0);
 }
 
 const IDENTITY = new Set(["colony_id", "$task", "ok"]);

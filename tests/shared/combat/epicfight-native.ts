@@ -17,7 +17,7 @@ export type Evidence = Array<{ step: string; value: unknown }>;
 export type Pixel = { x: number; y: number; width: number; height: number };
 export type InputState = { combat: boolean; roster: number; selected: string[]; selection: string[]; owned: boolean; reserved: boolean;
   routeRequest: number; accepted: boolean; intent: string; pending: boolean; points: Vec[]; groupKind: string; groupComplete: boolean;
-  buttons: Array<{ kind: string; x: number; y: number; width: number; height: number }> };
+  buttons: Array<{ slot: number; x: number; y: number; width: number; height: number }> };
 
 export const IMPORTS = ["java.util.Set", "java.util.Optional", "java.util.UUID", "java.util.List", "java.util.Map", "java.util.ArrayList", "java.util.LinkedHashMap",
   "net.neoforged.fml.ModList",
@@ -28,7 +28,7 @@ export const IMPORTS = ["java.util.Set", "java.util.Optional", "java.util.UUID",
   "io.github.izakyl.folkways.core.colony.api.Colonies", "io.github.izakyl.folkways.core.colony.api.Claimed", "io.github.izakyl.folkways.core.world.api.WorldPos",
   "io.github.izakyl.folkways.vanilla.person.PersonBody", "io.github.izakyl.folkways.vanilla.person.PersonContent", "io.github.izakyl.folkways.vanilla.person.ResidentEntity",
   "io.github.izakyl.folkways.vanilla.person.look.ResidentLooks", "io.github.izakyl.folkways.core.combat.api.DefenseControl",
-  "io.github.izakyl.folkways.epicfight.ResidentEpicFightPatch", "io.github.izakyl.folkways.core.combat.api.WeaponAttack",
+  "io.github.izakyl.folkways.vanilla.epicfight.ResidentEpicFightPatch", "io.github.izakyl.folkways.core.combat.api.WeaponAttack",
   "yesman.epicfight.api.animation.types.AttackAnimation", "io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutProfiles", "io.github.izakyl.folkways.vanilla.combat.weapon.LoadoutProfile", "io.github.izakyl.folkways.core.item.api.ItemSpec", "io.github.izakyl.folkways.vanilla.patrol.PatrolContent", "io.github.izakyl.folkways.vanilla.patrol.PatrolStaffing"];
 export const SETUP = defineTask<Vec & { colony: string; player: string; weapon: Weapon; autonomous: boolean }, Scene>({ name: "folkways.epicfight.acceptance.actual-fixture", side: "server", source: javaTask({ imports: IMPORTS, body: `
 var a=Args.of(ctx);var level=((MinecraftServer)ctx.server()).overworld();
@@ -79,8 +79,8 @@ out.put("x",body.getX());out.put("y",body.getY());out.put("z",body.getZ());out.p
 
 export const RENDER = defineTask<Scene, Render>({ name: "folkways.epicfight.acceptance.observe-real-draw", side: "client", source: javaTask({ imports: [
   "net.minecraft.client.Minecraft", "net.neoforged.fml.ModList", "io.github.izakyl.folkways.vanilla.person.ResidentEntity",
-  "io.github.izakyl.folkways.vanilla.person.look.ResidentLooks", "io.github.izakyl.folkways.epicfight.ResidentEpicFightPatch",
-  "io.github.izakyl.folkways.epicfight.client.ResidentRenderEvidence", "yesman.epicfight.api.animation.types.AttackAnimation"], body: `
+  "io.github.izakyl.folkways.vanilla.person.look.ResidentLooks", "io.github.izakyl.folkways.vanilla.epicfight.ResidentEpicFightPatch",
+  "io.github.izakyl.folkways.vanilla.epicfight.client.ResidentRenderEvidence", "yesman.epicfight.api.animation.types.AttackAnimation"], body: `
 var a=Args.of(ctx);var mc=Minecraft.getInstance();var out=new LinkedHashMap<String,Object>();out.put("present",false);out.put("patch",false);out.put("draws",0L);out.put("tick",-1L);out.put("mesh","");out.put("texture","");out.put("expectedTexture","");out.put("sourceRenderer","");out.put("entryScale",0);out.put("animation","");out.put("attackAnimation",false);out.put("motion","");out.put("rts",ModList.get().isLoaded("folkways_vanilla"));
 for(var entity:mc.level.entitiesForRendering())if(entity.getUUID().toString().equals(a.string("resident"))&&entity instanceof ResidentEntity body){
  out.put("present",true);var patch=ResidentEpicFightPatch.of(body);out.put("patch",patch!=null);out.put("expectedTexture",ResidentLooks.of(body).appearance().skin().texture().toString());
@@ -103,7 +103,7 @@ export const GUI_SCALE = defineTask<void, boolean>({ name: "folkways.epicfight.a
 /** Read the actual configured keyboard entry point; never invoke the controller action or change bindings. */
 export const RELEASE_BINDING = defineTask<void, { active: boolean; code: number; type: string; name: string; label: string; hints: string[] }>({
   name: "folkways.epicfight.acceptance.observe-release-key", side: "client", source: javaTask({ imports: [
-    "java.util.Map", "java.util.List", "io.github.izakyl.folkways.core.rts.client.CombatKeys",
+    "java.util.Map", "java.util.List", "io.github.izakyl.folkways.core.command.client.CombatKeys",
     "io.github.izakyl.folkways.core.front.api.ui.OverheadTools"], body: `
 var handler=OverheadTools.selectedHandler().orElseThrow();var mapping=CombatKeys.RELEASE;
 var hints=handler.cues().stream().map(cue->cue.binding()==null?"":cue.binding()).toList();
@@ -113,21 +113,28 @@ return Map.of("active",handler.getClass().getName().endsWith(".CombatController"
 type ClientInputState = Omit<InputState, "selection" | "owned" | "reserved" | "points" | "groupKind" | "groupComplete">;
 export const INPUT_STATE = defineTask<void, ClientInputState>({ name: "folkways.epicfight.acceptance.observe-real-input-ack", side: "client", source: javaTask({ imports: [
   "java.util.Map", "java.util.List", "java.util.Set", "java.util.LinkedHashMap", "java.util.ArrayList",
-  "io.github.izakyl.folkways.core.front.api.ui.OverheadTools", "io.github.izakyl.folkways.core.rts.combat.net.CombatPackets"], body: `
+  "io.github.izakyl.folkways.core.front.api.ui.OverheadTools", "io.github.izakyl.folkways.core.command.combat.net.CombatPackets"], body: `
 var out=new LinkedHashMap<String,Object>();var handler=OverheadTools.selectedHandler().orElse(null);boolean combat=handler!=null&&handler.getClass().getName().endsWith(".CombatController");
 out.put("combat",combat);out.put("roster",CombatPackets.roster().size());out.put("selected",List.of());out.put("buttons",List.of());var route=CombatPackets.route().orElse(null);
 out.put("routeRequest",route==null?0L:route.request());out.put("accepted",route!=null&&route.accepted());out.put("intent",route==null?"":route.intent().name());out.put("pending",CombatPackets.routePending());
 if(combat){
  var selected=handler.getClass().getDeclaredField("selected");selected.setAccessible(true);out.put("selected",((Set<?>)selected.get(handler)).stream().map(Object::toString).toList());
  var cardsField=handler.getClass().getDeclaredField("cards");cardsField.setAccessible(true);var cards=cardsField.get(handler);var hitsField=cards.getClass().getDeclaredField("hits");hitsField.setAccessible(true);
- var buttons=new ArrayList<Map<String,Object>>();for(var hit:(List<?>)hitsField.get(cards)){
-  var actionMethod=hit.getClass().getDeclaredMethod("action");actionMethod.setAccessible(true);var action=actionMethod.invoke(hit);var kindMethod=action.getClass().getDeclaredMethod("kind");kindMethod.setAccessible(true);
-  var row=new LinkedHashMap<String,Object>();row.put("kind",kindMethod.invoke(action).toString());for(var key:List.of("x","y","width","height")){var accessor=hit.getClass().getDeclaredMethod(key);accessor.setAccessible(true);row.put(key,accessor.invoke(hit));}buttons.add(row);
- }out.put("buttons",buttons);
+ var buttons = new ArrayList<Map<String,Object>>();
+ for (var hit : (List<?>) hitsField.get(cards)) {
+  var row = new LinkedHashMap<String,Object>();
+  for (var key : List.of("slot", "x", "y", "width", "height")) {
+   var accessor = hit.getClass().getDeclaredMethod(key);
+   accessor.setAccessible(true);
+   row.put(key, accessor.invoke(hit));
+  }
+  buttons.add(row);
+ }
+ out.put("buttons", buttons);
 }return out;` }) });
 export const CONTROL_STATE = defineTask<Scene, Pick<InputState, "selection" | "owned" | "reserved" | "points" | "groupKind" | "groupComplete">>({
   name: "folkways.epicfight.acceptance.observe-authoritative-control", side: "server", source: javaTask({ imports: [...IMPORTS,
-    "io.github.izakyl.folkways.core.rts.combat.control.CombatSelectionOwnership", "io.github.izakyl.folkways.core.rts.combat.group.UnitGroups"], body: `
+    "io.github.izakyl.folkways.core.command.combat.control.CombatSelectionOwnership", "io.github.izakyl.folkways.core.command.combat.group.UnitGroups"], body: `
 var a=Args.of(ctx);var server=(MinecraftServer)ctx.server();var player=server.getPlayerList().getPlayerByName(a.string("player"));var colony=Colonies.of(server,UUID.fromString(a.string("colony"))).orElseThrow();
 var body=(ResidentEntity)player.serverLevel().getEntity(UUID.fromString(a.string("resident")));var ownership=CombatSelectionOwnership.of(colony);var snapshot=ownership.snapshot(player);var group=UnitGroups.of(colony).ofResident(body.id()).orElse(null);
 return Map.of("selection",snapshot.selection().stream().map(Object::toString).toList(),"owned",ownership.owns(player,body),"reserved",ownership.reserved(body.id()),

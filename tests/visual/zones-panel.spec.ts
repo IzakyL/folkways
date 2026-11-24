@@ -1,30 +1,34 @@
 import { launchPair, type E2EPair } from "../shared/harness/pair";
 import { expect, test } from "@playwright/test";
-import { defineTask, input, javaTask, screen, tick, type MinecraftClient, type MinecraftServer } from "@izakyl/blockwright-minecraft";
-import { clickElement, panelElements } from "../ldlib2";
-import { createColonyViaBook, openColonyPanelViaBook, optInViaBook, waitForGroundedPlayer, type Vec } from "../shared/colony/colony-founding";
+import { input, screen, tick, type MinecraftClient, type MinecraftServer } from "@izakyl/blockwright-minecraft";
+import { panelElements } from "../ldlib2";
+import { createColonyViaBook, optInViaBook, waitForGroundedPlayer, type Vec } from "../shared/colony/colony-founding";
 import {
   colonyRegistry,
   createMarkedZone,
   holdZoneAndOpen,
-  openBookPage,
   setBookGesture,
   zoneCount,
+  chooseBookTool,
+  useBook,
+  zoneKindKey,
   zoneChoiceSettingAt,
 } from "../shared/ui/zone-tools";
 import { aimAndWorldLeftClick } from "../shared/ui/world-ui";
-import { buttonText, pickChoice } from "../shared/ui/site-panel";
-import { captureZoneEditors } from "./ui-catalog";
+import { CARD_WINDOW, closeCard, settleCard, waitForPresent } from "../shared/ui/book-cards";
+import { cellText, pickChoice } from "../shared/ui/site-panel";
+import { captureZoneCards } from "./ui-catalog";
+import { ponderCatalog } from "../shared/capture/ponder";
 import { CONFIG_PATH, VisualRun } from "../shared/capture/visual-kit";
 import { tracePath } from "../shared/harness/out-paths";
 import { seededOffThreadServer } from "../shared/harness/mod-settings";
 import { BUDGET } from "../shared/harness/budgets";
-import { commandPos, frames, safeAction, tryCommand, clickUnverified } from "../shared/harness/bw-helpers";
+import { commandPos, frames, tryCommand } from "../shared/harness/bw-helpers";
 import { newRunId } from "../shared/harness/run-id";
 
 const BOOK_ITEM = "folkways_core:colony_book";
 
-test("the zone panel on camera", async ({}, testInfo) => {
+test("zone cards on camera", async ({}, testInfo) => {
   test.setTimeout(BUDGET.heavy);
   const run = new VisualRun("zones-panel");
   const runId = newRunId();
@@ -62,6 +66,23 @@ test("the zone panel on camera", async ({}, testInfo) => {
     await tryCommand(server, `setblock ${commandPos(memberChest)} minecraft:chest{Items:[]}`);
     await tick.sprint(server, 3);
     await optInViaBook(server, client, playerName, memberChest, "chest");
+
+    await input.key(client, { keyCode: 86, action: "press" });
+    await input.key(client, { keyCode: 86, action: "release" });
+    await screen.waitFor(client, "OverheadScreen");
+    const catalog = ponderCatalog("en_us");
+    const dining = (await screen.widgets(client)).find(widget =>
+      widget.label === catalog["folkways.delegation.folkways_vanilla.dining"]);
+    expect(dining, "the toolbar lists dining with no table provider").toBeDefined();
+    expect(dining!.enabled).toBe(false);
+    expect(dining!.tooltip).toContain(catalog["folkways.dining.requires_tables"]);
+    await input.move(client, { x: dining!.x + dining!.width / 2, y: dining!.y + dining!.height / 2 });
+    await frames(client, 15);
+    await run.shot(client, "dining-disabled-tooltip", {
+      subject: "The view from above explains why dining is unavailable without a supported table mod",
+      worldState: { dining }, hard: true,
+    });
+    await screen.dismiss(client);
     await setBookGesture(server, client, playerName, "box");
 
     const mark = async (box: { min: Vec; max: Vec }) => {
@@ -79,9 +100,11 @@ test("the zone panel on camera", async ({}, testInfo) => {
       min: { x: origin.x - 6, y: groundY, z: origin.z + 3 },
       max: { x: origin.x - 3, y: groundY, z: origin.z + 6 },
     };
+    await chooseBookTool(server, client, zoneKindKey("farm"));
     await mark(farmBox);
     run.note("farm_created", await createMarkedZone(server, client, playerName, standBlock, "farm"));
     await tick.sprint(server, 5);
+    await chooseBookTool(server, client, zoneKindKey("pasture"));
     await mark(pastureBox);
     run.note("pasture_created", await createMarkedZone(server, client, playerName, standBlock, "pasture"));
     await tick.sprint(server, 5);
@@ -89,138 +112,61 @@ test("the zone panel on camera", async ({}, testInfo) => {
     const zones = await zoneCount(server, await colonyRegistry(server));
     expect(zones, "both zones should be registered on the server").toBeGreaterThanOrEqual(2);
 
-    await openBookPage(server, client, playerName, standBlock);
-    await tick.sprint(server, 5);
-    await safeAction(() => frames(client, 3));
-    const plain = await tokensOf(client);
-    expect(plain.filter((id) => /^folkways\.(zones\.|zoneconfig\.|selection\.)/.test(id)),
-      "opening the book directly should not include zone pages").toEqual([]);
-    await safeAction(() => screen.dismiss(client));
-
     run.note("farm_opened", await holdZoneAndOpen(server, client, playerName, farmBox));
-    await expect.poll(async () => (await tokensOf(client)).includes("folkways.selection.back"),
-      { timeout: 8000 }).toBe(true);
-    expect((await tokensOf(client)).includes("folkways.tab.zones")).toBe(false);
-    await tick.sprint(server, 5);
-    await safeAction(() => frames(client, 3));
-    const settings = (await tokensOf(client)).filter((id) => id.startsWith("folkways.zoneconfig.setting."));
-    run.note("farm_settings", settings);
-    expect(settings.length, "the farm zone should have at least one settings row (crop)").toBeGreaterThan(0);
+    await settleCard(server, client);
+    const crop = "folkways.card.choice.crop.open";
+    await waitForPresent(server, client, crop);
     await run.shot(client, "02-zone-settings-farm", {
-      subject: "Settings page opened by right-clicking a farm with the book: key on the left, current value on the right (click to cycle); remove the zone at the top",
-      worldState: { settings, tokens: await tokensOf(client) },
-      hard: true,
+      subject: "Right-clicking a farm with the book opens its facility card",
+      worldState: { tokens: await tokensOf(client) }, hard: true,
     });
-    await safeAction(() => screen.dismiss(client));
+    await closeCard(server, client);
 
     const spareBox = {
       min: { x: origin.x + 3, y: groundY, z: origin.z - 6 },
       max: { x: origin.x + 6, y: groundY, z: origin.z - 3 },
     };
+    await chooseBookTool(server, client, zoneKindKey("farm"));
     await mark(spareBox);
-    await openBookPage(server, client, playerName, standBlock);
-    await tick.sprint(server, 5);
-    await safeAction(() => frames(client, 3));
-    const offered = await tokensOf(client);
-    expect(offered.includes("folkways.tab.zones")).toBe(false);
-    run.note("kind_offers", offered.filter((id) => id.startsWith("folkways.zoneconfig.")));
-    expect(
-      offered.some((id) => id.startsWith("folkways.zoneconfig.kind.")),
-      `After marking a box and opening the book, the new zone page should show a row for each kind. The page had: ${JSON.stringify(offered)}`,
-    ).toBe(true);
-    await run.shot(client, "03-drawing-question", {
-      subject: "Box marked but not confirmed: the book's new zone page asks 'what is this zone' at the top, one row per kind below, size and confirm/cancel at the end",
-      worldState: { box: spareBox, tokens: offered },
-      hard: true,
-    });
-
-    const kindRows = (await panelElements(client)).filter(element =>
-      offered.includes(element.id ?? "") && element.id?.startsWith("folkways.zoneconfig.kind."));
-    const dining = kindRows.find(element => element.id === "folkways.zoneconfig.kind.folkways_vanilla.dining");
-    expect(dining, "dining remains discoverable without a table provider").toBeDefined();
-    expect(dining!.active).toBe(false);
-    expect(await run.hover(client, dining!.id!, 12)).toBeTruthy();
-    const tooltip = await client.run(defineTask<void, { lines: string[]; expected: string }>({
-      name: "folkways.visual.disabled-dining-tooltip", side: "client",
-      source: javaTask({ imports: ["net.minecraft.client.Minecraft", "net.minecraft.network.chat.Component",
-        "com.lowdragmc.lowdraglib2.gui.ui.ModularUI"], body: `
-var ui = ModularUI.of(Minecraft.getInstance().screen);
-return Map.of("lines", ui.getTooltipTexts().stream().map(Component::getString).toList(),
-    "expected", Component.translatable("folkways.dining.requires_tables").getString());
-` }),
-    }));
-    expect(tooltip.lines).toContain(tooltip.expected);
-    run.note("disabled_dining_tooltip", tooltip);
-    await run.shot(client, "dining-disabled-tooltip", {
-      subject: "Dining is disabled with an explanation when no supported table mod is installed",
-      worldState: tooltip, hard: true,
-    });
-    const kinds = kindRows.filter(element => element.active).map(element => element.id!);
-    run.note("discovered_zone_types", kinds);
-    for (const id of kinds) {
-      await clickElement(client, { id });
-      await frames(client, 5);
-      await input.move(client, { x: 0, y: 0 });
-      await run.shot(client, `parameters-${id}`, {
-        subject: `Zone purpose options: ${id}`, worldState: { type: id, tokens: await tokensOf(client) }, hard: true,
-      });
-    }
-
-    await clickElement(client, { id: "folkways.zoneconfig.kind.folkways_vanilla.farm" });
-    await safeAction(() => frames(client, 4));
-    await expect.poll(async () => (await tokensOf(client)).includes("folkways.draft.value.crop"),
-      { timeout: 8000 }).toBe(true);
-    await run.shot(client, "04-draft-parameters", {
-      subject: "New zone: choose type and options before confirming", worldState: {}, hard: true,
-    });
-
+    await useBook(client);
+    await settleCard(server, client);
     const registry = await colonyRegistry(server);
-    const defaultCrop = await zoneChoiceSettingAt(server, registry, "crop", 0);
+    await expect.poll(() => zoneCount(server, registry)).toBe(zones + 1);
+    await waitForPresent(server, client, crop);
+    await run.shot(client, "04-new-farm-card", {
+      subject: "Completing a farm box opens its card immediately", worldState: { box: spareBox }, hard: true,
+    });
+    const defaultCrop = await zoneChoiceSettingAt(server, registry, "crop", zones);
     const otherCrop = defaultCrop === "minecraft:carrots" ? "minecraft:potatoes" : "minecraft:carrots";
-    const picked = await pickChoice(server, client, "folkways.draft.value.crop", otherCrop,
-      () => buttonText(client, "folkways.draft.value.crop"),
+    await pickChoice(server, client, crop, otherCrop, () => cellText(client, crop),
       () => run.shot(client, "05-choice-picker", {
-        subject: "Choice picker: every option listed, the pick highlighted, applied only on Confirm",
-        worldState: { option: otherCrop }, hard: true,
+        subject: "Selecting a crop on the farm card", worldState: { option: otherCrop }, hard: true,
       }));
-    expect(picked.changes).toBe(1);
-    await clickUnverified(client, { id: "folkways.zoneconfig.confirm" });
-    await expect.poll(() => zoneCount(server, registry), { timeout: 8000 }).toBe(3);
-    expect(await zoneChoiceSettingAt(server, registry, "crop", 2)).not.toBe(defaultCrop);
-    await expect.poll(async () => (await tokensOf(client)).includes("folkways.zoneconfig.value.crop"),
-      { timeout: 8000 }).toBe(true);
-    await clickElement(client, { id: "folkways.selection.back" });
-    await expect.poll(async () => (await tokensOf(client)).includes("folkways.tab.residents"),
-      { timeout: 8000 }).toBe(true);
-    expect((await tokensOf(client)).includes("folkways.tab.zones")).toBe(false);
+    await expect.poll(async () => {
+      await tick.sprint(server, 3);
+      return zoneChoiceSettingAt(server, registry, "crop", zones);
+    }).toBe(otherCrop);
+    await closeCard(server, client);
 
-    await screen.dismiss(client);
-    await setBookGesture(server, client, playerName, "line");
-    await aimAndWorldLeftClick(server, client, playerName, spareBox.min);
-    await aimAndWorldLeftClick(server, client, playerName, spareBox.max);
+    await chooseBookTool(server, client, "kind:folkways_vanilla:patrol");
+    const line = { min: { x: origin.x - 5, y: groundY, z: origin.z - 5 },
+      max: { x: origin.x - 3, y: groundY, z: origin.z - 5 } };
+    await mark(line);
     await frames(client, 5);
     await run.shot(client, "path-world", {
-      subject: "Path draft in the world", worldState: { box: spareBox }, hard: true,
+      subject: "Patrol path draft in the world", worldState: { line }, hard: true,
     });
-    await openColonyPanelViaBook(server, client, playerName, standBlock);
-    await frames(client, 5);
-    await run.shot(client, "path-types", {
-      subject: "Path purpose picker (empty state when no purposes are registered)", worldState: {}, hard: true,
+    await useBook(client);
+    await tick.sprint(server, 5);
+    await waitForPresent(server, client, CARD_WINDOW);
+    await settleCard(server, client);
+    await run.shot(client, "path-card", {
+      subject: "The completed patrol path opens its facility card", worldState: { line }, hard: true,
     });
-    const paths = (await tokensOf(client)).filter(id => id.startsWith("folkways.zoneconfig.kind."));
-    for (const id of paths) {
-      await clickElement(client, { id });
-      await frames(client, 5);
-      await run.shot(client, `path-parameters-${id}`, {
-        subject: `Path purpose options: ${id}`, worldState: { type: id }, hard: true,
-      });
-    }
-    await screen.dismiss(client);
+    await closeCard(server, client);
     await setBookGesture(server, client, playerName, "point");
-    await captureZoneEditors(server, client, run, playerName);
-    run.expectTaken(["02-zone-settings-farm", "03-drawing-question",
-      "04-draft-parameters", "05-choice-picker", "dining-disabled-tooltip", "path-world", "path-types",
-      ...kinds.map(id => `parameters-${id}`), ...paths.map(id => `path-parameters-${id}`)]);
+    await captureZoneCards(server, client, run, playerName);
+    run.expectTaken(["dining-disabled-tooltip", "02-zone-settings-farm", "04-new-farm-card", "05-choice-picker", "path-world", "path-card"]);
   } catch (error) {
     pair?.failing(error);
     throw error;

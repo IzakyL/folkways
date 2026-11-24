@@ -18,6 +18,9 @@ public record Face(Map<String, List<Option>> offered, Map<String, Map<String, St
     /** The word a pattern is called by; a knob is worded under its key, an option under "knob.option". */
     public static final String TITLE = "title";
 
+    /** Optional instructions for placing the pattern's marks. */
+    public static final String MARKING = "marking";
+
     public Face {
         Map<String, List<Option>> options = new LinkedHashMap<>();
         offered.forEach((knob, listed) -> options.put(knob, List.copyOf(listed)));

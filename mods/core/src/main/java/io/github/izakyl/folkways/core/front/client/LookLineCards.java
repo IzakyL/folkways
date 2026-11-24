@@ -1,6 +1,6 @@
 package io.github.izakyl.folkways.core.front.client;
 
-import io.github.izakyl.folkways.core.front.api.notice.Line;
+import io.github.izakyl.folkways.core.card.api.notice.Line;
 import io.github.izakyl.folkways.core.front.api.ui.OverheadTools;
 import io.github.izakyl.folkways.core.front.client.ColonyLookCard.Row;
 import io.github.izakyl.folkways.core.front.engine.net.LookLines;
@@ -12,6 +12,8 @@ import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 
 public final class LookLineCards {
     private static final double RANGE = 32.0D;
+    // The view from above stands far off, often well past the walking range, and residents still need their cards.
+    private static final double OVERHEAD_RANGE = 96.0D;
     private static final float SCALE = 0.025F;
     private static final double HEAD_ROOM = 0.5D;
 
@@ -53,7 +55,8 @@ public final class LookLineCards {
         Vec3 camera = event.getCamera().getPosition();
         Vec3 anchor = entity.getPosition(partialTick).add(0.0D, entity.getBbHeight() + HEAD_ROOM, 0.0D);
         List<Row> rows = ColonyLookCard.rows(lines);
-        if (anchor.distanceToSqr(camera) > RANGE * RANGE || rows.isEmpty()) {
+        double range = Overhead.on() ? OVERHEAD_RANGE : RANGE;
+        if (anchor.distanceToSqr(camera) > range * range || rows.isEmpty()) {
             return false;
         }
         WorldCards.queue(anchor, rows, SCALE, WorldCards.Look.PLATE, camera);

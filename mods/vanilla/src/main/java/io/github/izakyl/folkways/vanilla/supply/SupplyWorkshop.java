@@ -12,12 +12,11 @@ import io.github.izakyl.folkways.core.work.api.Amount;
 import io.github.izakyl.folkways.core.work.api.Node;
 import io.github.izakyl.folkways.core.work.api.NodeSpec;
 import io.github.izakyl.folkways.core.work.api.Outcome;
-import io.github.izakyl.folkways.core.work.api.Stances;
+import io.github.izakyl.folkways.core.world.api.Stances;
 import io.github.izakyl.folkways.core.work.api.WorkSite;
 import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.core.work.api.Workload;
 import io.github.izakyl.folkways.core.work.support.Leaves;
-import io.github.izakyl.folkways.core.work.support.WorkStances;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
 import java.util.Comparator;
 import java.util.List;
@@ -76,9 +75,6 @@ record SupplyWorkshop(UUID key, Colony colony, WorldPos at, Stances stances, Sup
 
         public Outcome commit(ServerLevel level, Worker who) {
             if (!valid(level)) return Outcome.failed(SupplyRefusal.SOURCE_CHANGED);
-            if (who.body().level() != level || !WorkStances.standingIn(who.body(), stances)) {
-                return Outcome.failed(SupplyRefusal.OUT_OF_REACH);
-            }
             if (room(who.pack(), goods) < goods.getCount()) return Outcome.failed(SupplyRefusal.NO_ROOM);
             used = true;
             source.generated(goods);

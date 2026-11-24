@@ -365,7 +365,7 @@ export function staffing(l: Layout, humans: number): Staffing {
   const want: Array<[Trade, number, string]> = [
     ...work.map(([t, , basis], i): [Trade, number, string] => [t, sizes[i], `${basis}, of ${shared} shared by the work`]),
     ...(haulers ? [[trade("hauler", ["folkways_core:hauling"], []), haulers, `${HAULER_SHARE} of everyone but the drivers`] as [Trade, number, string]] : []),
-    [trade("driver", ["folkways_create:conducting"], [], false), drivers, `${trains} trains x 2`],
+    [trade("driver", ["folkways_vanilla:conducting"], [], false), drivers, `${trains} trains x 2`],
   ];
   let start = 0;
   return want.map(([t, size, basis]) => { const seg = { trade: t, start, size, basis }; start += size; return seg; });
