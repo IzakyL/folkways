@@ -38,6 +38,7 @@ import io.github.izakyl.folkways.core.work.api.Need;
 import io.github.izakyl.folkways.core.work.api.Node;
 import io.github.izakyl.folkways.core.work.api.NodeSpec;
 import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Readiness;
 import io.github.izakyl.folkways.core.work.api.WorkSite;
 import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.core.work.api.Workload;
@@ -386,8 +387,8 @@ final class LaneTransport implements TransportMode {
             }
 
             @Override
-            public boolean ready(ServerLevel level) {
-                return deadline >= 0 && total(matching(level)) - baseline >= count;
+            public Readiness readiness(ServerLevel level) {
+                return Readiness.of(deadline >= 0 && total(matching(level)) - baseline >= count);
             }
 
             @Override

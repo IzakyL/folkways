@@ -5,8 +5,8 @@ this file does not repeat their content.
 
 ## Layout
 
-`mods/<dir>` holds one mod each (Core, Vanilla and extensions). Java tests and their resources live in
-`tests/gametest/<mod>/<set>/`. Playwright client suites also live under `tests/`. Locale catalogs live in
+`mods/<dir>` holds one mod each (Core, Vanilla and extensions). GameTests and their resources live in
+`tests/gametest/<suite>/`, with shared fixtures under `tests/gametest/fixtures/`. Playwright client suites also live under `tests/`. Locale catalogs live in
 `mods/*/src/main/resources/assets/*/lang/`.
 
 ## Environment
@@ -34,7 +34,7 @@ Worktrees share the heavy dependencies of the main checkout. The reference setup
 - [INTEGRATIONS.md](INTEGRATIONS.md): each third-party integration from the player's side, with supported
   versions and limits. Consult when changing an integration's behavior or version range.
 - [CONTRIBUTING.md](CONTRIBUTING.md): setup, checks, pull requests and code conventions.
-  - Running checks or GameTests, and every `-P` test switch: [Validation](CONTRIBUTING.md#validation).
+  - Running checks or GameTests, choosing suites and selecting tests: [Validation](CONTRIBUTING.md#validation).
   - Naming, test placement, translations and patterns: [Conventions](CONTRIBUTING.md#conventions).
 - [DATAPACKS.md](DATAPACKS.md): the `folkways/` library folder, data-pack registries, tags and config files.
   Consult when changing data-pack formats, shipped tags or config file names.

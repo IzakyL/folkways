@@ -2,6 +2,7 @@ package io.github.izakyl.folkways.vanilla.pasture;
 
 import io.github.izakyl.folkways.core.work.api.NodeSpec;
 import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Readiness;
 import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.core.front.api.PastDay;
 import java.util.UUID;
@@ -24,8 +25,8 @@ abstract class AnimalNode extends PenNode {
     }
 
     @Override
-    public final boolean ready(ServerLevel level) {
-        return standing(level) != null;
+    public final Readiness readiness(ServerLevel level) {
+        return Readiness.of(standing(level) != null);
     }
 
     @Override

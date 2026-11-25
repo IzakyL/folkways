@@ -14,7 +14,7 @@ import {
   type MinecraftServer,
 } from "@izakyl/blockwright-minecraft";
 import { errorSummary } from "@izakyl/blockwright-client";
-import { clickElement, panelElements } from "../../ldlib2";
+import { clickElement, panelElements, scrollElementIntoView } from "../../ldlib2";
 import { ADMIT_SETTLERS, BIND_COLONY, MARK_MEMBERS, runColonyTask } from "./colony-tasks";
 import {
   commandPos,
@@ -91,7 +91,7 @@ const OPT_IN_ATTEMPTS = 4;
 const TICKS_PER_DAY = 24000;
 const GATHER_TICKS = 260;
 
-const ADMIT_CALLS = 8;
+const ADMIT_CALLS = Number(process.env.FOLKWAYS_ADMIT_CALLS ?? 8);
 
 const FOUNDING_PAD = 20;
 const FOUNDING_HEIGHT = 6;
@@ -592,14 +592,15 @@ export async function setVocationPriorityViaPanel(
   try {
     steps.open = await openColonyPanelViaBook(server, client, playerName, standBlock);
     steps.tab = await softly(() => clickElement(client, { id: "folkways.tab.residents" }));
-    await waitForElement(client, { id: rowId }, { timeoutMs: 10_000 });
+    // A resident's row can sit below the roster's viewport; scrollCellIntoView reveals it.
+    await waitForElementOnPage(client, rowId, 10_000);
     // A trade's column may sit past the table's right edge, so it is only on the page until it is scrolled to.
     await waitForElementOnPage(client, cellId, 8_000);
     // The table shows one column per vocation group until the vocation's group is opened.
     steps.group = await showVocationColumn(server, client, "folkways.resident", vocation, cellId);
     steps.scrolled = await scrollCellIntoView(server, client, rowId, cellId);
     if ((target === 0) !== (current === 0)) {
-      steps.toggle = await softly(() => clickElement(client, { id: cellId }));
+      steps.toggle = await softly(() => clickElement(client, { id: cellId }, { scrollIntoView: true }));
       steps.gestures++;
       await tick.sprint(server, 5);
       current = await vocationPriority(server, residentUuid, vocation);
@@ -607,6 +608,7 @@ export async function setVocationPriorityViaPanel(
     }
     for (let turn = 0; turn < PRIORITY_NOTCHES && current !== target && target !== 0; turn++) {
       await scrollCellIntoView(server, client, rowId, cellId);
+      await scrollElementIntoView(client, { id: cellId });
       steps[`scroll_${turn}`] = await wheelCell(server, client, cellId, target > current ? 1 : -1);
       steps.gestures++;
       await tick.sprint(server, 5);

@@ -422,16 +422,25 @@ public final class BodyRunner {
         route.clear();
     }
 
-    public void cancelNodes(Set<UUID> nodes) {
+    public void cancelNodes(Set<UUID> nodes, Set<UUID> continued) {
+        route.removeAll(nodes);
         if (lastBody == null || !(lastBody.mob().level() instanceof ServerLevel level)) {
             return;
         }
         for (Suspended work : List.copyOf(suspended)) {
-            if (nodes.contains(work.node().id())) {
+            if (continued.contains(work.node().id())) {
+                suspended.remove(work);
+                labor.holdings().forgetSuspended(work.node().id());
+                ended(level, lastBody, work.node(), work.placement(), Ending.REPLACED);
+            } else if (nodes.contains(work.node().id())) {
                 endSuspended(level, lastBody, work, Ending.REVOKED, false);
             }
         }
-        if (holding().filter(nodes::contains).isPresent()) {
+        if (holding().filter(continued::contains).isPresent()) {
+            release(level, lastBody, PreemptReason.REPLACED);
+            ended(level, lastBody, current, placement, Ending.REPLACED);
+            clear();
+        } else if (holding().filter(nodes::contains).isPresent()) {
             drop("replaced");
         }
     }

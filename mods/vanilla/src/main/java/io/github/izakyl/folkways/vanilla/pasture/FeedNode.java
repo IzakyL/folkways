@@ -3,6 +3,7 @@ package io.github.izakyl.folkways.vanilla.pasture;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import io.github.izakyl.folkways.core.work.api.Need;
 import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Readiness;
 import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.core.work.api.Xp;
 import java.util.List;
@@ -42,8 +43,8 @@ final class FeedNode extends PenNode {
     }
 
     @Override
-    public boolean ready(ServerLevel level) {
-        return pair(level, pen) != null;
+    public Readiness readiness(ServerLevel level) {
+        return Readiness.of(pair(level, pen) != null);
     }
 
     @Override

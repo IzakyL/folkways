@@ -19,6 +19,7 @@ import io.github.izakyl.folkways.core.work.api.NodeSpec;
 import io.github.izakyl.folkways.core.work.api.NodeState;
 import io.github.izakyl.folkways.core.work.api.Outcome;
 import io.github.izakyl.folkways.core.work.api.PreemptReason;
+import io.github.izakyl.folkways.core.work.api.Readiness;
 import io.github.izakyl.folkways.core.work.api.Recourse;
 import io.github.izakyl.folkways.core.work.api.Settlement;
 import io.github.izakyl.folkways.core.work.api.SoftPreempt;
@@ -32,6 +33,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Consumer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
 
@@ -97,11 +99,11 @@ public final class ServiceNode implements Node, Staged {
     }
 
     @Override
-    public boolean ready(ServerLevel level) {
+    public Readiness readiness(ServerLevel level) {
         var entity = level.getEntity(worker);
-        return entity != null && Bodies.of(entity)
+        return Readiness.of(entity != null && Bodies.of(entity)
             .filter(NetworkBuffers::enabled).isPresent()
-            && (committed ? delegate.settled(level) : delegate.ready(level));
+            && (committed ? delegate.settled(level) : delegate.readiness(level).isReady()));
     }
 
     @Override
@@ -155,6 +157,11 @@ public final class ServiceNode implements Node, Staged {
     @Override
     public Optional<RefusalKind> planned(ServerLevel level) {
         return delegate.planned(level);
+    }
+
+    @Override
+    public Optional<RefusalKind> planned(ServerLevel level, Consumer<RefusalKind> fail) {
+        return delegate.planned(level, fail);
     }
 
     @Override

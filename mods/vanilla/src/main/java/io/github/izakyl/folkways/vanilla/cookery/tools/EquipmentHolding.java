@@ -78,7 +78,7 @@ final class EquipmentHolding extends ProcessHolding {
 
     @Override
     protected boolean ready(HoldingContext context, WorkAction operation) {
-        return ((ToolAction) operation).ready(context.level());
+        return ((ToolAction) operation).readiness(context.level()).isReady();
     }
 
     @Override

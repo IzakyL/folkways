@@ -12,6 +12,7 @@ import io.github.izakyl.folkways.core.work.api.LaborRefusal;
 import io.github.izakyl.folkways.core.work.api.NodeSpec;
 import io.github.izakyl.folkways.core.work.api.Outcome;
 import io.github.izakyl.folkways.core.world.api.Stances;
+import io.github.izakyl.folkways.core.work.api.Readiness;
 import io.github.izakyl.folkways.core.work.api.WorkAction;
 import io.github.izakyl.folkways.core.work.api.WorkSite;
 import io.github.izakyl.folkways.core.work.api.Worker;
@@ -54,18 +55,18 @@ abstract class ToolAction implements WorkAction {
             ? Optional.of(CookeryRefusal.STATION_CHANGED) : Optional.empty();
     }
 
-    public boolean ready(ServerLevel level) {
+    public Readiness readiness(ServerLevel level) {
         if (service.stock.waitingForResident(lease)) {
-            return false;
+            return Readiness.notYet();
         }
         InventorySnapshot observed = service.colony.inventory().snapshot();
         var store = observed.store(at);
         if (store.isPresent() && store.get().state() == InventorySnapshot.State.OBSERVED
             || store.isEmpty() && !observed.coverage().membershipPending()) {
-            return true;
+            return Readiness.READY;
         }
         service.colony.inventory().ensureObserved(Stash.at(at));
-        return false;
+        return Readiness.notYet();
     }
 
     // These are real container transfers, outside the food graph's consumable inputs. If an adapter throws partway

@@ -1,0 +1,15 @@
+{
+  "required": true,
+  "minVersion": "0.8.5",
+  "package": "io.github.izakyl.folkways.core.runtime.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "GameTestWritesMixin",
+    "GameTestMethodsMixin",
+    "GameTestListMixin",
+    "GameTestRegistryMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

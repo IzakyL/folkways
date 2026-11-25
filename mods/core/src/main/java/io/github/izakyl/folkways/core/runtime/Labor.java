@@ -1,6 +1,7 @@
 package io.github.izakyl.folkways.core.runtime;
 
 import io.github.izakyl.folkways.core.FolkwaysConfig;
+import io.github.izakyl.folkways.core.colony.api.LooseGoods;
 import io.github.izakyl.folkways.core.colony.internal.ColonyData;
 import io.github.izakyl.folkways.core.colony.internal.ColonyMemberWrites;
 import io.github.izakyl.folkways.core.colony.internal.ColonyRegistry;
@@ -50,6 +51,12 @@ public final class Labor {
 
     public Labor() {
         running = this;
+    }
+
+    // Goods left lying for a colony are picked up by its labor in the dimension they lie in, when it runs there.
+    public static void installLooseGoods() {
+        LooseGoods.install((colony, drop) ->
+            site(colony, drop.level().dimension()).ifPresent(site -> site.leftLoose(drop)));
     }
 
     public static Optional<ColonyLabor> site(UUID colony, ResourceKey<Level> dimension) {

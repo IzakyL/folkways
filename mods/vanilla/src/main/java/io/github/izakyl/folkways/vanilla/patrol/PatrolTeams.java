@@ -8,6 +8,7 @@ import io.github.izakyl.folkways.core.work.api.NodeSpec;
 import io.github.izakyl.folkways.core.work.api.Outcome;
 import io.github.izakyl.folkways.core.world.api.Stances;
 import io.github.izakyl.folkways.core.work.api.Disposition;
+import io.github.izakyl.folkways.core.work.api.Readiness;
 import io.github.izakyl.folkways.core.work.api.Urge;
 import io.github.izakyl.folkways.core.work.api.WorkSite;
 import io.github.izakyl.folkways.core.work.api.Worker;
@@ -333,7 +334,7 @@ final class PatrolTeams {
             "patrol_team/" + team.id + "/" + resident + "/" + generation);
         return List.of(new Urge(intent, 1.5, true, () -> new Node() {
             private final NodeSpec spec = NodeSpec.of(UUID.randomUUID(), PatrolContent.ID,
-                new WorkSite.AtBlock(at), Stances.at(at), (Workload.Continuous) (level, who) -> ready(level))
+                new WorkSite.AtBlock(at), Stances.at(at), (Workload.Continuous) (level, who) -> readiness(level).isReady())
                 .vocation(PatrolContent.trade()).doing(PatrolContent.PATROLLING).done();
 
             @Override
@@ -357,8 +358,8 @@ final class PatrolTeams {
             }
 
             @Override
-            public boolean ready(ServerLevel level) {
-                return team.generation == generation && team(resident).orElse(null) == team;
+            public Readiness readiness(ServerLevel level) {
+                return Readiness.of(team.generation == generation && team(resident).orElse(null) == team);
             }
 
             @Override

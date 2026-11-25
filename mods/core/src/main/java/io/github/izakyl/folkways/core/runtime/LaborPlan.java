@@ -66,7 +66,8 @@ public final class LaborPlan {
     }
 
     public enum Type {
-        SUBMITTED, WITHDRAWN, OFFERED, STARTED, FINISHED, FAILED, RELEASED, LEFT, IDLE, PACK_BUSY, ANSWERED
+        SUBMITTED, WITHDRAWN, OFFERED, NOT_READY, READY, STARTED, FINISHED, FAILED,
+        RELEASED, LEFT, IDLE, PACK_BUSY, ANSWERED
     }
 
     public record Event(Type type, UUID node, UUID resident, RefusalKind why, long tick, ResourceKey<Level> dimension) {
@@ -174,6 +175,8 @@ public final class LaborPlan {
     private void record(Message message, long tick, ResourceKey<Level> dimension) {
         UUID node = switch (message) {
             case Message.Withdrawn withdrawn -> withdrawn.node();
+            case Message.NotReady pending -> pending.node();
+            case Message.Ready ready -> ready.node();
             case Message.Started started -> started.node();
             case Message.Finished finished -> finished.node();
             case Message.Failed failed -> failed.node();
@@ -192,6 +195,8 @@ public final class LaborPlan {
             case Message.Submitted ignored -> Type.SUBMITTED;
             case Message.Withdrawn ignored -> Type.WITHDRAWN;
             case Message.Offered ignored -> Type.OFFERED;
+            case Message.NotReady ignored -> Type.NOT_READY;
+            case Message.Ready ignored -> Type.READY;
             case Message.Started ignored -> Type.STARTED;
             case Message.Finished ignored -> Type.FINISHED;
             case Message.Failed ignored -> Type.FAILED;

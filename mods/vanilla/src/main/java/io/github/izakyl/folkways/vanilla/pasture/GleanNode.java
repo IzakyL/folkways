@@ -2,6 +2,7 @@ package io.github.izakyl.folkways.vanilla.pasture;
 
 import io.github.izakyl.folkways.core.work.api.Amount;
 import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Readiness;
 import io.github.izakyl.folkways.core.work.api.WorkNoise;
 import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.core.work.api.Xp;
@@ -28,8 +29,8 @@ final class GleanNode extends PenNode {
     }
 
     @Override
-    public boolean ready(ServerLevel level) {
-        return lying(level) != null;
+    public Readiness readiness(ServerLevel level) {
+        return Readiness.of(lying(level) != null);
     }
 
     @Override

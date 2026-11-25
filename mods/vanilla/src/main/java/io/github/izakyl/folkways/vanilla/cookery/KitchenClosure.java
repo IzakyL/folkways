@@ -9,6 +9,7 @@ public final class KitchenClosure {
     private final Consumer<Ending> release;
     private final Runnable changed;
     private final String refreshFailure;
+    private Runnable unlisten = () -> { };
     private boolean closed;
 
     public KitchenClosure(Consumer<Ending> release, Runnable changed) {
@@ -25,11 +26,20 @@ public final class KitchenClosure {
         return closed;
     }
 
+    public void onWithdrawal(KitchenBookings bookings, io.github.izakyl.folkways.core.world.api.WorldPos at,
+            Runnable withdrawn) {
+        unlisten.run();
+        if (!closed) {
+            unlisten = bookings.whenWithdrawn(at, withdrawn);
+        }
+    }
+
     public void close(Ending how) {
         if (closed) {
             return;
         }
         closed = true;
+        unlisten.run();
         release.accept(how);
         refresh();
     }

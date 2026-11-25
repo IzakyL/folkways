@@ -126,7 +126,7 @@ final class Pipeline {
                 }
             });
             lay(scheduleThread, new Scheduler.Input(result.delta(), result.crew(), result.ways(), result.retry(),
-                tick), laid);
+                tick, result.readyTimes()), laid);
         }));
     }
 

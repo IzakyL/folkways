@@ -5,6 +5,7 @@ import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import io.github.izakyl.folkways.core.work.api.Amount;
 import io.github.izakyl.folkways.core.work.api.Outcome;
 import io.github.izakyl.folkways.core.world.api.Stances;
+import io.github.izakyl.folkways.core.work.api.Readiness;
 import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.core.work.api.Workload;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
@@ -15,6 +16,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 
 final class TakeCookedNode extends CraftNode {
 
@@ -34,16 +36,26 @@ final class TakeCookedNode extends CraftNode {
     }
 
     @Override
-    public boolean ready(ServerLevel level) {
+    public Readiness readiness(ServerLevel level) {
         if (!level.isLoaded(cell())) {
-            return false;
+            return Readiness.notYet();
         }
         if (!standing(level)) {
-            return true;
+            return Readiness.READY;
         }
         Optional<Container> machine = machine(level);
-        return machine.isEmpty()
-            || Goods.matches(machine.get().getItem(Machines.RESULT_SLOT), produces);
+        if (machine.isEmpty() || Goods.matches(machine.get().getItem(Machines.RESULT_SLOT), produces)) {
+            return Readiness.READY;
+        }
+        var state = level.getBlockState(cell());
+        if (machine.get() instanceof FurnaceTraining furnace && state.getOptionalValue(BlockStateProperties.LIT)
+                .orElse(false) && machine.get().getItem(Machines.RESULT_SLOT).isEmpty()) {
+            long ticks = furnace.folkways$cookingTicks();
+            if (ticks > 0) {
+                return Readiness.notYet(ticks);
+            }
+        }
+        return Readiness.notYet();
     }
 
     @Override

@@ -5,6 +5,8 @@ import io.github.izakyl.folkways.core.work.api.Ending;
 import io.github.izakyl.folkways.core.work.api.Hold;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -17,6 +19,7 @@ public final class KitchenBookings {
 
     private final Map<WorldPos, LinkedHashMap<UUID, Long>> turns = new LinkedHashMap<>();
     private final Map<WorldPos, Station> stations = new LinkedHashMap<>();
+    private final Map<WorldPos, Set<Runnable>> withdrawn = new LinkedHashMap<>();
     private long epoch;
     private long revision;
 
@@ -29,9 +32,29 @@ public final class KitchenBookings {
         }
     }
 
-    public synchronized void withdraw(WorldPos at) {
-        stations.put(at, new Station(++revision, false));
-        turns.remove(at);
+    public void withdraw(WorldPos at) {
+        Set<Runnable> listeners;
+        synchronized (this) {
+            stations.put(at, new Station(++revision, false));
+            turns.remove(at);
+            listeners = withdrawn.remove(at);
+        }
+        if (listeners != null) {
+            listeners.forEach(Runnable::run);
+        }
+    }
+
+    // Station changes can invalidate turns that are waiting for inputs or have no worker yet.
+    public synchronized Runnable whenWithdrawn(WorldPos at, Runnable listener) {
+        withdrawn.computeIfAbsent(at, ignored -> new LinkedHashSet<>()).add(listener);
+        return () -> unlisten(at, listener);
+    }
+
+    private synchronized void unlisten(WorldPos at, Runnable listener) {
+        withdrawn.computeIfPresent(at, (cell, listeners) -> {
+            listeners.remove(listener);
+            return listeners.isEmpty() ? null : listeners;
+        });
     }
 
     public synchronized boolean free(WorldPos at) {
@@ -149,9 +172,15 @@ public final class KitchenBookings {
         return stations.getOrDefault(at, new Station(epoch, true));
     }
 
-    public synchronized void clear() {
-        epoch = ++revision;
-        turns.clear();
-        stations.clear();
+    public void clear() {
+        List<Runnable> listeners;
+        synchronized (this) {
+            epoch = ++revision;
+            turns.clear();
+            stations.clear();
+            listeners = withdrawn.values().stream().flatMap(Set::stream).toList();
+            withdrawn.clear();
+        }
+        listeners.forEach(Runnable::run);
     }
 }

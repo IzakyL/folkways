@@ -7,6 +7,7 @@ import io.github.izakyl.folkways.core.work.api.Ending;
 import io.github.izakyl.folkways.core.work.api.Node;
 import io.github.izakyl.folkways.core.work.api.NodeSpec;
 import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Readiness;
 import io.github.izakyl.folkways.core.work.api.WorkGesture;
 import io.github.izakyl.folkways.core.work.api.WorkSite;
 import io.github.izakyl.folkways.core.work.api.Worker;
@@ -16,6 +17,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Consumer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
 
@@ -49,8 +51,13 @@ abstract class FarmNode implements Node {
 
     @Override
     public final Optional<RefusalKind> planned(ServerLevel level) {
+        return planned(level, why -> { });
+    }
+
+    @Override
+    public final Optional<RefusalKind> planned(ServerLevel level, Consumer<RefusalKind> fail) {
         if (!chore.tending().permits(chore)) return Optional.of(FarmRefusal.GROUND_TAKEN);
-        chore.tending().planned(chore);
+        chore.tending().planned(chore, fail);
         return Optional.empty();
     }
 
@@ -60,13 +67,8 @@ abstract class FarmNode implements Node {
     }
 
     @Override
-    public final boolean ready(ServerLevel level) {
-        return level.isLoaded(chore.job().cell());
-    }
-
-    @Override
-    public final Optional<RefusalKind> refusal(ServerLevel level) {
-        return chore.tending().permits(chore) ? Optional.empty() : Optional.of(FarmRefusal.GROUND_TAKEN);
+    public final Readiness readiness(ServerLevel level) {
+        return Readiness.of(level.isLoaded(chore.job().cell()));
     }
 
     @Override

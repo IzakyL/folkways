@@ -6,11 +6,13 @@ import io.github.izakyl.folkways.core.resident.api.RefusalKind;
 import io.github.izakyl.folkways.core.vocation.api.Vocation;
 import io.github.izakyl.folkways.core.vocation.api.Vocations;
 import io.github.izakyl.folkways.core.work.api.Amount;
+import io.github.izakyl.folkways.core.work.api.Ending;
 import io.github.izakyl.folkways.core.work.api.LaborRefusal;
 import io.github.izakyl.folkways.core.work.api.Node;
 import io.github.izakyl.folkways.core.work.api.NodeSpec;
 import io.github.izakyl.folkways.core.work.api.Outcome;
 import io.github.izakyl.folkways.core.world.api.Stances;
+import io.github.izakyl.folkways.core.work.api.Readiness;
 import io.github.izakyl.folkways.core.work.api.WorkGesture;
 import io.github.izakyl.folkways.core.work.api.WorkNoise;
 import io.github.izakyl.folkways.core.work.api.WorkSite;
@@ -19,19 +21,29 @@ import io.github.izakyl.folkways.core.work.api.Workload;
 import io.github.izakyl.folkways.core.work.support.Leaves;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
 import java.nio.charset.StandardCharsets;
+import java.util.IdentityHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Consumer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
+import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.event.entity.EntityLeaveLevelEvent;
 
 public final class PickUp implements Node {
 
     public static final net.minecraft.resources.ResourceLocation DOMAIN =
         net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("folkways_core", "salvage");
 
+    private static final Map<ItemEntity, LinkedHashSet<PickUp>> WATCHED = new IdentityHashMap<>();
+
     private final UUID drop;
+    private ItemEntity watched;
+    private Consumer<RefusalKind> fail;
     private final NodeSpec spec;
 
     public PickUp(UUID drop, WorldPos at, ItemSpec what, long count, Stances stances) {
@@ -69,13 +81,52 @@ public final class PickUp implements Node {
     }
 
     @Override
-    public boolean ready(ServerLevel level) {
-        return lying(level).isPresent();
+    public Readiness readiness(ServerLevel level) {
+        return Readiness.of(lying(level).isPresent());
     }
 
     @Override
-    public Optional<RefusalKind> refusal(ServerLevel level) {
-        return lying(level).isPresent() ? Optional.empty() : Optional.of(LaborRefusal.GOODS_GONE);
+    public Optional<RefusalKind> planned(ServerLevel level, Consumer<RefusalKind> fail) {
+        Optional<ItemEntity> entity = lying(level);
+        if (entity.isEmpty()) {
+            return Optional.of(LaborRefusal.GOODS_GONE);
+        }
+        watched = entity.get();
+        this.fail = fail;
+        WATCHED.computeIfAbsent(watched, ignored -> new LinkedHashSet<>()).add(this);
+        return Optional.empty();
+    }
+
+    @Override
+    public void ended(ServerLevel level, Ending how) {
+        stopWatching();
+    }
+
+    private void stopWatching() {
+        if (watched != null) {
+            WATCHED.computeIfPresent(watched, (entity, pickups) -> {
+                pickups.remove(this);
+                return pickups.isEmpty() ? null : pickups;
+            });
+            watched = null;
+        }
+    }
+
+    public static void install() {
+        NeoForge.EVENT_BUS.addListener(PickUp::left);
+    }
+
+    private static void left(EntityLeaveLevelEvent event) {
+        if (!(event.getLevel() instanceof ServerLevel) || !(event.getEntity() instanceof ItemEntity drop)) {
+            return;
+        }
+        var pickups = WATCHED.remove(drop);
+        if (pickups != null) {
+            for (PickUp pickup : pickups) {
+                pickup.watched = null;
+                pickup.fail.accept(LaborRefusal.GOODS_GONE);
+            }
+        }
     }
 
     @Override
@@ -86,6 +137,8 @@ public final class PickUp implements Node {
         }
         ItemEntity entity = found.get();
         ItemStack taken = entity.getItem().copy();
+        // A successful collection removes the drop itself before the runtime receives the outcome.
+        stopWatching();
         entity.discard();
         return new Outcome.Done(List.of(WorkNoise.stowed()), List.of(taken), Optional.empty());
     }

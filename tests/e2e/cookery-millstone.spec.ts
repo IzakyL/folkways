@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { writeFileSync } from "node:fs";
 import { defineTask, javaTask, player, screen, tick, world, type MinecraftClient, type MinecraftServer } from "@izakyl/blockwright-minecraft";
-import { clickElement } from "../ldlib2";
+import { clickElement, scrollElementIntoView } from "../ldlib2";
 import { foundColonyFast, foundingBox, optInViaBook, vocationPriority, waitForGroundedPlayer } from "../shared/colony/colony-founding";
 import { deliverOrderViaCard, filedOrdersAt } from "../shared/colony/membership-optin";
 import { runColonyTask } from "../shared/colony/colony-tasks";
@@ -126,10 +126,17 @@ async function crafting(server: MinecraftServer, client: MinecraftClient, name: 
     await showVocationColumn(server, client, "folkways.resident", CRAFTING, cell);
     await scrollCellIntoView(server, client, row, cell);
     let priority = evidence.before as number;
-    if ((priority === 0) !== (target === 0)) { await clickElement(client, { id: cell }); await tick.sprint(server, 5); priority = await vocationPriority(server, uuid, CRAFTING); }
+    if ((priority === 0) !== (target === 0)) {
+      await clickElement(client, { id: cell }, { scrollIntoView: true });
+      await tick.sprint(server, 5);
+      priority = await vocationPriority(server, uuid, CRAFTING);
+    }
     for (let step = 0; step < 4 && priority !== target && target !== 0; step++) {
-      await scrollCellIntoView(server, client, row, cell); await wheelCell(server, client, cell, target > priority ? 1 : -1);
-      await tick.sprint(server, 5); priority = await vocationPriority(server, uuid, CRAFTING);
+      await scrollCellIntoView(server, client, row, cell);
+      await scrollElementIntoView(client, { id: cell });
+      await wheelCell(server, client, cell, target > priority ? 1 : -1);
+      await tick.sprint(server, 5);
+      priority = await vocationPriority(server, uuid, CRAFTING);
     }
     evidence.after = priority; expect(priority, "the actual book vocation control reaches the requested state").toBe(target); return evidence;
   } finally { await screen.dismiss(client); }

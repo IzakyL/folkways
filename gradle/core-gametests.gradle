@@ -10,10 +10,6 @@ def suites = ["gameTestFixtures", "coreGametest", "coreCookeryTest",
 
 suites.each { suite ->
     def sources = sourceSets.create(suite)
-    def coreDir = [coreGametest: "gametest", coreCookeryTest: "cookeryTest"].get(suite, suite)
-    def coreTests = rootProject.file("tests/gametest/core/${coreDir}")
-    sources.java.srcDir(new File(coreTests, "java"))
-    sources.resources.srcDir(new File(coreTests, "resources"))
     neoForge.addModdingDependenciesTo(sources)
     configurations["${suite}CompileOnly"].extendsFrom configurations.compileOnly
     configurations["${suite}Implementation"].extendsFrom configurations.implementation
@@ -50,34 +46,4 @@ tasks.named("compileCoreGametestJava", JavaCompile) {
     // CURRENT is inlined into assertions; a version change must also rebuild otherwise unchanged tests.
     inputs.file(core.file("src/main/java/io/github/izakyl/folkways/core/base/persist/upgrade/DataVersion.java"))
         .withPropertyName("dataVersion")
-}
-
-// Compile and register only the requested Core fixtures in focused runs.
-def coreGameTestClasses = providers.gradleProperty("coreGameTestClasses").getOrElse("")
-if (coreGameTestClasses) {
-    def includes = coreGameTestClasses.split(",").collect { "**/${it.trim()}.java" }
-    ["coreGametest", "ae2Test", "rs2Test"].each { suite ->
-        def sources = sourceSets[suite]
-        def nativePort = suite in ["ae2Test", "rs2Test"]
-        sources.java.setIncludes(nativePort ? includes + ["**/NetworkRig.java"] : includes)
-        def focusedClasses = layout.buildDirectory.dir(
-            "classes/java/focusedGametest/${suite}/${coreGameTestClasses.hashCode()}")
-        tasks.named(sources.compileJavaTaskName, JavaCompile) {
-            destinationDirectory = focusedClasses
-        }
-        sources.output.classesDirs.setFrom(focusedClasses)
-    }
-}
-if (coreGameTestClasses || providers.gradleProperty("vanillaGameTestClasses").isPresent()
-    || providers.gradleProperty("accessoryProfile").isPresent() || project.findProperty("sableTests") == "true") {
-    def selectedFixtures = coreGameTestClasses.split(",").collect { it.trim() + ".java" }
-    sourceSets.gameTestFixtures.java.exclude {
-        it.name.endsWith("GameTests.java")
-            && !selectedFixtures.contains(it.name)
-    }
-    def focusedFixtures = layout.buildDirectory.dir("classes/java/focusedGameTestFixtures")
-    tasks.named("compileGameTestFixturesJava", JavaCompile) {
-        destinationDirectory = focusedFixtures
-    }
-    sourceSets.gameTestFixtures.output.classesDirs.setFrom(focusedFixtures)
 }

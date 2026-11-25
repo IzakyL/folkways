@@ -15,6 +15,7 @@ import io.github.izakyl.folkways.core.work.api.Need;
 import io.github.izakyl.folkways.core.work.api.NodeSpec;
 import io.github.izakyl.folkways.core.work.api.Outcome;
 import io.github.izakyl.folkways.core.work.api.PreemptReason;
+import io.github.izakyl.folkways.core.work.api.Readiness;
 import io.github.izakyl.folkways.core.work.api.SoftPreempt;
 import io.github.izakyl.folkways.core.world.api.Stances;
 import io.github.izakyl.folkways.core.work.api.WorkAction;
@@ -38,6 +39,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Consumer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
 
@@ -106,8 +108,20 @@ final class MillstoneWork implements KitchenWork {
         if (refused.isEmpty()) { MillstoneStation.keep(colony, at, recoveryGoal, generation); }
         return refused;
     }
-    public boolean ready(ServerLevel level) {
-        return bookings.cancelled(at, id(), generation) || bookings.first(at, id()) && MillstoneStation.mill(level, at).isPresent();
+    @Override
+    public Optional<RefusalKind> planned(ServerLevel level, Consumer<RefusalKind> fail) {
+        Optional<RefusalKind> refused = planned(level);
+        if (refused.isEmpty()) {
+            if (closure.closed() || bookings.cancelled(at, id(), generation)) {
+                return Optional.of(CookeryRefusal.STATION_CHANGED);
+            }
+            closure.onWithdrawal(bookings, at, () -> fail.accept(CookeryRefusal.STATION_CHANGED));
+        }
+        return refused;
+    }
+
+    public Readiness readiness(ServerLevel level) {
+        return Readiness.of(bookings.cancelled(at, id(), generation) || bookings.first(at, id()) && MillstoneStation.mill(level, at).isPresent());
     }
     public Optional<RefusalKind> refusal(ServerLevel level) {
         if (closure.closed()) {

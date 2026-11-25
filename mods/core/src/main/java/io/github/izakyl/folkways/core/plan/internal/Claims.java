@@ -43,10 +43,6 @@ public final class Claims {
         return totals;
     }
 
-    public List<Claim> on(Resource on) {
-        return List.copyOf(byResource.getOrDefault(on, List.of()));
-    }
-
     public void release(UUID owner) {
         List<Claim> held = byOwner.remove(owner);
         if (held == null) {

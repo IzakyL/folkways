@@ -16,6 +16,9 @@ import io.github.izakyl.folkways.core.world.api.Reach;
 import io.github.izakyl.folkways.core.world.api.WorldSpaces;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Consumer;
+import net.minecraft.world.level.levelgen.structure.BoundingBox;
+import io.github.izakyl.folkways.core.world.api.BlockChanges;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.LivingEntity;
@@ -29,6 +32,7 @@ final class SleepAction implements Node {
     private final int ticks;
     private int sleptTicks;
     private LivingEntity sleeper;
+    private BlockChanges.Heard blockWatch;
     private boolean credited;
 
     SleepAction(LivingPresence works, ServerLevel level, BlockPos bed, int ticks) {
@@ -68,6 +72,25 @@ final class SleepAction implements Node {
     @Override
     public NodeSpec spec() {
         return spec;
+    }
+
+    @Override
+    public Optional<RefusalKind> planned(ServerLevel level, Consumer<RefusalKind> fail) {
+        BlockPos bed = spec.site().cell();
+        blockWatch = BlockChanges.afterWrites(level, BoundingBox.fromCorners(bed, bed), () -> {
+            if (!bedExists(level)) {
+                fail.accept(LaborRefusal.WORK_BROKE);
+            }
+        });
+        return Optional.empty();
+    }
+
+    @Override
+    public void ended(ServerLevel level, Ending how) {
+        if (blockWatch != null) {
+            blockWatch.close();
+            blockWatch = null;
+        }
     }
 
     @Override

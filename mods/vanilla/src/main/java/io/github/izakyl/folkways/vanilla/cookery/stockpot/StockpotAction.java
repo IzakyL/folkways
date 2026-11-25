@@ -3,6 +3,7 @@ package io.github.izakyl.folkways.vanilla.cookery.stockpot;
 import com.github.ysbbbbbb.kaleidoscopecookery.blockentity.kitchen.StockpotBlockEntity;
 import io.github.izakyl.folkways.core.resident.api.RefusalKind;
 import io.github.izakyl.folkways.core.work.api.NodeSpec;
+import io.github.izakyl.folkways.core.work.api.Readiness;
 import io.github.izakyl.folkways.core.work.api.Recourse;
 import io.github.izakyl.folkways.core.world.api.Stances;
 import io.github.izakyl.folkways.core.work.api.WorkAction;
@@ -47,7 +48,7 @@ abstract class StockpotAction implements WorkAction {
         return spec.id();
     }
 
-    public abstract boolean ready(ServerLevel level);
+    public abstract Readiness readiness(ServerLevel level);
 
     final Optional<StockpotBlockEntity> pot(ServerLevel level) {
         return at.in(level)

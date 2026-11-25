@@ -21,7 +21,7 @@ import { newRunId } from "../shared/harness/run-id";
 const CONFIG_PATH = "blockwright.toml";
 
 const SKIN = path.join(MODEL_ASSETS, "steve", "textures", "tartaric_acid.png");
-const BLUEPRINT = path.join(REPO_ROOT, "tests/gametest/vanilla/gametest/resources/data/folkways_vanilla/folkways/blueprint/test_hut.nbt");
+const BLUEPRINT = path.join(REPO_ROOT, "tests/gametest/vanilla/resources/data/folkways_vanilla/folkways/blueprint/test_hut.nbt");
 const PATTERN = `accepts = ["zone"]
 
 def draw(site):

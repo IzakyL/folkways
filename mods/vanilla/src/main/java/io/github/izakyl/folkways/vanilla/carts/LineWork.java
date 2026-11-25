@@ -14,6 +14,7 @@ import io.github.izakyl.folkways.core.work.api.Need;
 import io.github.izakyl.folkways.core.work.api.Node;
 import io.github.izakyl.folkways.core.work.api.NodeSpec;
 import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Readiness;
 import io.github.izakyl.folkways.core.work.api.Recourse;
 import io.github.izakyl.folkways.core.world.api.Stances;
 import io.github.izakyl.folkways.core.work.api.WorkGesture;
@@ -97,8 +98,8 @@ final class LineWork {
         }
 
         @Override
-        public boolean ready(ServerLevel level) {
-            return at.at().in(level) && level.isLoaded(at.at().block(level));
+        public Readiness readiness(ServerLevel level) {
+            return Readiness.of(at.at().in(level) && level.isLoaded(at.at().block(level)));
         }
 
         @Override
@@ -151,8 +152,8 @@ final class LineWork {
         }
 
         @Override
-        public boolean ready(ServerLevel level) {
-            return state.cart(level).isPresent();
+        public Readiness readiness(ServerLevel level) {
+            return Readiness.of(state.cart(level).isPresent());
         }
 
         @Override
@@ -194,7 +195,7 @@ final class LineWork {
 
         @Override
         public Recourse failing(ServerLevel level, RefusalKind why) {
-            if (why == CartRefusal.NOT_HITCHED || state.cart(level).isEmpty() || !ready(level)) {
+            if (why == CartRefusal.NOT_HITCHED || state.cart(level).isEmpty() || !readiness(level).isReady()) {
                 return Recourse.FAIL;
             }
             // A transient blocked path must not complete this lap and reverse the line halfway to its station.
@@ -202,8 +203,8 @@ final class LineWork {
         }
 
         @Override
-        public boolean ready(ServerLevel level) {
-            return to.at().in(level) && level.isLoaded(to.at().block(level));
+        public Readiness readiness(ServerLevel level) {
+            return Readiness.of(to.at().in(level) && level.isLoaded(to.at().block(level)));
         }
 
         @Override
@@ -239,8 +240,8 @@ final class LineWork {
         }
 
         @Override
-        public boolean ready(ServerLevel level) {
-            return state.aboard.get(sent.id) == sent && state.parkedAt(level, line, sent.from);
+        public Readiness readiness(ServerLevel level) {
+            return Readiness.of(state.aboard.get(sent.id) == sent && state.parkedAt(level, line, sent.from));
         }
 
         @Override
@@ -288,17 +289,17 @@ final class LineWork {
         }
 
         @Override
-        public boolean ready(ServerLevel level) {
+        public Readiness readiness(ServerLevel level) {
             // Dispatch the handler while the batch travels. Waiting until the cart parks can leave a handler
             // a whole ride away, unable to reach the station during its dwell.
-            return sent.loaded && state.aboard.get(sent.id) == sent && state.cart(level).isPresent()
+            return Readiness.of(sent.loaded && state.aboard.get(sent.id) == sent && state.cart(level).isPresent()
                 && line.station(sent.to).filter(mark -> mark.at().in(level)
-                    && level.isLoaded(mark.at().block(level))).isPresent();
+                    && level.isLoaded(mark.at().block(level))).isPresent());
         }
 
         @Override
         public Recourse failing(ServerLevel level, RefusalKind why) {
-            return why == CartRefusal.NOT_AT_STATION && ready(level) ? Recourse.waitFor(20) : Recourse.FAIL;
+            return why == CartRefusal.NOT_AT_STATION && readiness(level).isReady() ? Recourse.waitFor(20) : Recourse.FAIL;
         }
 
         @Override
@@ -338,9 +339,9 @@ final class LineWork {
         }
 
         @Override
-        public boolean ready(ServerLevel level) {
-            return state.parked(level, line).isPresent()
-                && state.cart(level).map(cart -> !state.stray(cart).isEmpty()).orElse(false);
+        public Readiness readiness(ServerLevel level) {
+            return Readiness.of(state.parked(level, line).isPresent()
+                && state.cart(level).map(cart -> !state.stray(cart).isEmpty()).orElse(false));
         }
 
         @Override

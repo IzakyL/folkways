@@ -14,6 +14,7 @@ import io.github.izakyl.folkways.core.work.api.Node;
 import io.github.izakyl.folkways.core.work.api.NodeSpec;
 import io.github.izakyl.folkways.core.work.api.NodeState;
 import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Readiness;
 import io.github.izakyl.folkways.core.work.api.Recourse;
 import io.github.izakyl.folkways.core.world.api.Stances;
 import io.github.izakyl.folkways.core.work.api.Unmet;
@@ -32,6 +33,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Consumer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.item.ItemStack;
@@ -112,6 +114,11 @@ final class ClothingWork implements Node {
     }
 
     public Optional<RefusalKind> planned(ServerLevel level) {
+        return planned(level, why -> { });
+    }
+
+    @Override
+    public Optional<RefusalKind> planned(ServerLevel level, Consumer<RefusalKind> fail) {
 
         this.level = level;
 
@@ -124,7 +131,11 @@ final class ClothingWork implements Node {
             io.github.izakyl.folkways.core.resident.api.TaskTools.release(id());
             return Optional.of(failure != null ? failure : CookeryRefusal.STATION_CHANGED);
         }
-        var refused = original.planned(level);
+        var refused = original.planned(level, why -> {
+            if (!workDone) {
+                fail.accept(why);
+            }
+        });
         if (refused.isPresent()) {
             io.github.izakyl.folkways.core.resident.api.TaskTools.release(id());
             return refused;
@@ -134,20 +145,23 @@ final class ClothingWork implements Node {
     }
 
     // Adopted demand can bootstrap one shared piece while the resident stays free to make it.
-    public boolean ready(ServerLevel level) {
-        if (workDone) { return true; }
-        if (!original.ready(level)) { return false; }
+    public Readiness readiness(ServerLevel level) {
+        if (workDone) { return Readiness.READY; }
+        Readiness readiness = original.readiness(level);
+        if (!readiness.isReady()) {
+            return readiness;
+        }
         if (!resolved) {
-            if (borrower == null || !service.stock.observed(borrower)) { return false; }
+            if (borrower == null || !service.stock.observed(borrower)) { return Readiness.notYet(); }
             service.stock.body(borrower).ifPresent(this::resolve);
-            if (!resolved || failure != null || families.size() > loanRoom) { return false; }
+            if (!resolved || failure != null || families.size() > loanRoom) { return Readiness.notYet(); }
         }
         for (ItemSpec family : families) {
             var status = service.pool.request(service.colony.id(), id(), family, service.stock.read(level,
                 family).inventory()).status();
-            if (status != KitchenTools.Status.AVAILABLE && status != KitchenTools.Status.BORROWED) { return false; }
+            if (status != KitchenTools.Status.AVAILABLE && status != KitchenTools.Status.BORROWED) { return Readiness.notYet(); }
         }
-        return true;
+        return Readiness.READY;
     }
 
     public boolean acceptsInput(Stash from) { return original.acceptsInput(from); }
@@ -380,6 +394,12 @@ final class ClothingWork implements Node {
     }
 
     public void released(ServerLevel level, Worker who, Ending how) {
+        if (how instanceof Ending.Replaced) {
+            if (!originalReleased) {
+                original.released(level, who, how);
+            }
+            return;
+        }
         releaseOriginal(level, who, how);
         if (!(how instanceof Ending.Done)) {
             ended(level, how);

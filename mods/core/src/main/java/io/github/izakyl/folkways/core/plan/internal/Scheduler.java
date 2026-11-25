@@ -31,10 +31,16 @@ public final class Scheduler {
     private Set<UUID> packBlocked = Set.of();
     private Crew crew = new Crew(List.of());
     private Ways ways;
+    private Map<UUID, Long> readyTimes = Map.of();
 
     // What one weave handed on: what changed, and the crew and ways it was woven for. A wake from time alone hands
     // on no change, and is laid for the crew and ways last heard of.
-    public record Input(WeaveDelta delta, Crew crew, Ways ways, boolean retry, long tick) {
+    public record Input(WeaveDelta delta, Crew crew, Ways ways, boolean retry, long tick,
+                        Map<UUID, Long> readyTimes) {
+
+        public Input(WeaveDelta delta, Crew crew, Ways ways, boolean retry, long tick) {
+            this(delta, crew, ways, retry, tick, Map.of());
+        }
 
         public static Input wake(long tick) {
             return new Input(WeaveDelta.NONE, null, null, false, tick);
@@ -63,6 +69,7 @@ public final class Scheduler {
             if (input.crew() != null) {
                 crew = input.crew();
                 ways = input.ways();
+                readyTimes = input.readyTimes();
             }
             retry |= input.retry();
             tick = Math.max(tick, input.tick());
@@ -74,7 +81,7 @@ public final class Scheduler {
         }
         Schedule schedule;
         try {
-            schedule = tours.schedule(weave, fresh, crew, ways, tick, retry);
+            schedule = tours.schedule(weave, fresh, crew, ways, tick, retry, readyTimes);
         } catch (RuntimeException | Error broken) {
             // Inputs are now part of the weave. Only the route projection is suspect: rebuilding it must not
             // replay messages, regrow material demands, or discard the last routes handed to the colony.
@@ -136,5 +143,6 @@ public final class Scheduler {
         packBlocked = Set.of();
         crew = new Crew(List.of());
         ways = null;
+        readyTimes = Map.of();
     }
 }

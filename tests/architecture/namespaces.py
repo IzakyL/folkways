@@ -10,7 +10,8 @@ def main():
     errors = []
     catalogs = {}
     resource_roots = [*Path("mods").glob("*/src/main/resources"),
-                      *Path("tests/gametest").glob("*/*/resources")]
+                      *Path("tests/gametest").glob("*/resources"),
+                      *Path("tests/gametest").glob("fixtures/*/resources")]
     vanilla_resources = Path("mods/vanilla/src/main/resources")
     for path in vanilla_resources.rglob("folkways_core"):
         if path.is_dir() and path.parent.name in {"assets", "data"}:

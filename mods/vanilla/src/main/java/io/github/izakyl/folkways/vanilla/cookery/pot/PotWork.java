@@ -16,6 +16,7 @@ import io.github.izakyl.folkways.core.work.api.HoldingStep;
 import io.github.izakyl.folkways.core.work.api.Need;
 import io.github.izakyl.folkways.core.work.api.NodeSpec;
 import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Readiness;
 import io.github.izakyl.folkways.core.work.api.ToolNeed;
 import io.github.izakyl.folkways.core.work.api.ToolUse;
 import io.github.izakyl.folkways.core.work.api.WorkAction;
@@ -42,6 +43,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -144,8 +146,30 @@ final class PotWork implements KitchenWork, ProcessLoop.Steps {
         return refused;
     }
 
-    public boolean ready(ServerLevel level) {
-        return bookings.valid(at, id(), generation) && bookings.first(at, id()) && PotStation.pot(level, at).isPresent();
+    @Override
+    public Optional<RefusalKind> planned(ServerLevel level, Consumer<RefusalKind> fail) {
+        Optional<RefusalKind> refused = planned(level);
+        if (refused.isEmpty()) {
+            if (closure.closed() || bookings.cancelled(at, id(), generation)) {
+                return Optional.of(CookeryRefusal.STATION_CHANGED);
+            }
+            closure.onWithdrawal(bookings, at, () -> fail.accept(CookeryRefusal.STATION_CHANGED));
+        }
+        return refused;
+    }
+
+    public Readiness readiness(ServerLevel level) {
+        var found = PotStation.pot(level, at);
+        if (!bookings.valid(at, id(), generation) || found.isEmpty()) {
+            return Readiness.notYet();
+        }
+        if (bookings.first(at, id())) {
+            return Readiness.READY;
+        }
+        var pot = found.get();
+        // This is the remaining cook time of the batch ahead. Stirring and clearing can extend the wait.
+        return pot.getStatus() == IPot.COOKING && pot.hasHeatSource(level) && pot.getCurrentTick() > 0
+            ? Readiness.notYet(pot.getCurrentTick()) : Readiness.notYet();
     }
 
     public Optional<RefusalKind> refusal(ServerLevel level) {

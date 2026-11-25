@@ -66,17 +66,8 @@ public final class OnFoot implements Conveyance {
         if (WorkStances.standingIn(body, new Stances.Cells(allowed(level, body, to)))) {
             return Going.ARRIVED;
         }
-        // Only dimension-local work areas permit relocation; aboard coordinates keep their usual travel.
-        if (to.stream().allMatch(cell -> cell.realm() instanceof Realm.Dimension)
-                && permitsRelocation(body) && siteTravel.toward(level, body, cells)) {
-            closest = Double.MAX_VALUE;
-            sinceProgress = 0;
-            settling = 0;
-            repath(body, cells);
-            return WorkStances.standingIn(body, new Stances.Cells(allowed(level, body, to))) ? Going.ARRIVED : Going.UNDERWAY;
-        }
         if (!closingIn(body, to)) {
-            return new Going.Failed(lost);
+            return recover(level, body, to, cells);
         }
         if (++walkingTicks % 10 == 0 && to.stream().anyMatch(cell -> cell.realm() instanceof Realm.Dimension)) {
             var current = Structures.obstacles(level, body.getBoundingBox().inflate(4.0D));
@@ -95,9 +86,23 @@ public final class OnFoot implements Conveyance {
             return Going.UNDERWAY;
         }
         if (settling >= SETTLE_TICKS) {
-            return new Going.Failed(lost);
+            return recover(level, body, to, cells);
         }
         return Going.UNDERWAY;
+    }
+
+    private Going recover(ServerLevel level, Mob body, Set<WorldPos> to, Set<BlockPos> cells) {
+        // Only dimension-local work areas permit relocation; aboard coordinates keep their usual travel.
+        if (to.stream().allMatch(cell -> cell.realm() instanceof Realm.Dimension)
+                && permitsRelocation(body) && siteTravel.toward(level, body, cells)) {
+            closest = Double.MAX_VALUE;
+            sinceProgress = 0;
+            settling = 0;
+            repath(body, cells);
+            return WorkStances.standingIn(body, new Stances.Cells(allowed(level, body, to)))
+                ? Going.ARRIVED : Going.UNDERWAY;
+        }
+        return new Going.Failed(lost);
     }
 
     @Override

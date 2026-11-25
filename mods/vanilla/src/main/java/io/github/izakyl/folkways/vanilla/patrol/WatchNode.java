@@ -4,6 +4,7 @@ import io.github.izakyl.folkways.core.work.api.Ending;
 import io.github.izakyl.folkways.core.work.api.Node;
 import io.github.izakyl.folkways.core.work.api.NodeSpec;
 import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Readiness;
 import io.github.izakyl.folkways.core.work.api.Unmet;
 import io.github.izakyl.folkways.core.work.api.WorkSite;
 import io.github.izakyl.folkways.core.work.api.Worker;
@@ -52,8 +53,8 @@ final class WatchNode implements Node {
     }
 
     @Override
-    public boolean ready(ServerLevel level) {
-        return stop.in(level) && level.isLoaded(stop.block(level));
+    public Readiness readiness(ServerLevel level) {
+        return Readiness.of(stop.in(level) && level.isLoaded(stop.block(level)));
     }
 
     @Override

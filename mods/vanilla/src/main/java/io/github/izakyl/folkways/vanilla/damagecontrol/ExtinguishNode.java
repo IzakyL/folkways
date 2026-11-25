@@ -10,6 +10,7 @@ import io.github.izakyl.folkways.core.work.api.Ending;
 import io.github.izakyl.folkways.core.work.api.Node;
 import io.github.izakyl.folkways.core.work.api.NodeSpec;
 import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Readiness;
 import io.github.izakyl.folkways.core.work.api.Recourse;
 import io.github.izakyl.folkways.core.world.api.Stances;
 import io.github.izakyl.folkways.core.work.api.WorkGesture;
@@ -106,13 +107,13 @@ final class ExtinguishNode implements Node {
     }
 
     @Override
-    public boolean ready(ServerLevel level) {
+    public Readiness readiness(ServerLevel level) {
         if (result instanceof Outcome.Done) {
-            return true;
+            return Readiness.READY;
         }
-        return !closed && enabled.getAsBoolean() && target.in(level) && level.isLoaded(target.block(level))
+        return Readiness.of(!closed && enabled.getAsBoolean() && target.in(level) && level.isLoaded(target.block(level))
             && incidents.claim(target, worker, id(),
-                FolkwaysVanillaConfig.damageControlConcurrency());
+                FolkwaysVanillaConfig.damageControlConcurrency()));
     }
 
     private boolean advance(ServerLevel level, Worker who) {
@@ -188,7 +189,7 @@ final class ExtinguishNode implements Node {
         if (result != null) {
             return result;
         }
-        if (!ready(level)) {
+        if (!readiness(level).isReady()) {
             return Outcome.failed(DamageControlRefusal.NOT_LOADED);
         }
         BlockPos at = target.block(level);

@@ -6,6 +6,7 @@ import java.util.Map;
 import java.util.WeakHashMap;
 import java.util.function.Consumer;
 import net.minecraft.core.BlockPos;
+import net.minecraft.server.TickTask;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
 
@@ -37,6 +38,34 @@ public final class BlockChanges {
             if (listeners != null && listeners.remove(listener) && listeners.isEmpty()) {
                 LISTENING.remove(level);
             }
+        };
+    }
+
+    public static Heard afterWrites(ServerLevel level, BoundingBox box, Runnable observe) {
+        // Native setters can make several dependent changes before the final block is in place.
+        class Deferred implements Consumer<BlockPos> {
+            boolean queued;
+            boolean closed;
+
+            @Override
+            public void accept(BlockPos cell) {
+                if (!queued && !closed) {
+                    queued = true;
+                    var server = level.getServer();
+                    server.tell(new TickTask(server.getTickCount(), () -> {
+                        queued = false;
+                        if (!closed) {
+                            observe.run();
+                        }
+                    }));
+                }
+            }
+        }
+        Deferred deferred = new Deferred();
+        Heard pending = listen(level, box, deferred);
+        return () -> {
+            deferred.closed = true;
+            pending.close();
         };
     }
 

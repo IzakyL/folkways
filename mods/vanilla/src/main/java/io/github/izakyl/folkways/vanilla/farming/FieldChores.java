@@ -1,6 +1,7 @@
 package io.github.izakyl.folkways.vanilla.farming;
 
 import io.github.izakyl.folkways.core.plan.api.Grown;
+import io.github.izakyl.folkways.core.resident.api.RefusalKind;
 import io.github.izakyl.folkways.core.work.api.Ending;
 import io.github.izakyl.folkways.core.work.api.Node;
 import io.github.izakyl.folkways.core.front.api.PastDay;
@@ -10,6 +11,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Consumer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 
@@ -27,7 +29,7 @@ final class FieldChores {
     private final PastDay made;
 
     // A cell in the plan, as it was asked for: its work stands until that work ends, whatever the field says since.
-    private record Busy(Crop crop, Job job) {
+    private record Busy(Crop crop, Job job, Consumer<RefusalKind> fail) {
     }
 
     private volatile Crop crop;
@@ -55,11 +57,21 @@ final class FieldChores {
         this.allowed = Set.copyOf(allowed);
         standing = List.copyOf(jobs);
         spent.clear();
+        releaseDisallowed();
     }
 
     void close() {
         allowed = Set.of();
         standing = List.of();
+        releaseDisallowed();
+    }
+
+    private void releaseDisallowed() {
+        for (Busy work : List.copyOf(busy.values())) {
+            if (!allowed.contains(work.job().cell())) {
+                work.fail().accept(FarmRefusal.GROUND_TAKEN);
+            }
+        }
     }
 
     boolean permits(FarmNode.Chore chore) {
@@ -105,7 +117,11 @@ final class FieldChores {
     }
 
     void planned(FarmNode.Chore chore) {
-        busy.putIfAbsent(chore.job().cell(), new Busy(chore.crop(), chore.job()));
+        planned(chore, why -> { });
+    }
+
+    void planned(FarmNode.Chore chore, Consumer<RefusalKind> fail) {
+        busy.putIfAbsent(chore.job().cell(), new Busy(chore.crop(), chore.job(), fail));
         changed.run();
     }
 

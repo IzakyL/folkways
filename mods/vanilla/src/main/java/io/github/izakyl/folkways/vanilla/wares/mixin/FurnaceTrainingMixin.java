@@ -51,6 +51,18 @@ public abstract class FurnaceTrainingMixin implements FurnaceTraining {
     }
 
     @Override
+    public long folkways$cookingTicks() {
+        if (cookingTotalTime <= cookingProgress || folkways$batches.isEmpty()) {
+            return 0;
+        }
+        // The first tick of a batch never gets training. Each later tick can advance the fractional bonus.
+        int start = cookingProgress == 0 ? 1 : 0;
+        double speed = Required.doubleValue(folkways$batches.getFirst(), "speed");
+        return start + (long) Math.ceil(Math.max(0, cookingTotalTime - cookingProgress - start - folkways$fraction)
+            / (1 + speed));
+    }
+
+    @Override
     public void folkways$removed() {
         folkways$sync(((AbstractFurnaceBlockEntity) (Object) this).getItem(0).getCount());
     }

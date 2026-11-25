@@ -1,0 +1,542 @@
+{
+  "sources": {
+    "vanilla": {"project": "vanilla", "owner": "vanilla", "sourceSet": "gametest", "directory": "vanilla"},
+    "airline": {"project": "airline", "owner": "airline", "sourceSet": "gametest", "directory": "airline"},
+    "assistant": {"project": "assistant", "owner": "assistant", "sourceSet": "gametest", "directory": "assistant"},
+    "core": {"project": "vanilla", "owner": "core", "sourceSet": "coreGametest", "directory": "core"},
+    "core-fixtures": {"project": "vanilla", "owner": "core", "sourceSet": "gameTestFixtures", "directory": "fixtures/core-fixtures"},
+    "vanilla-fixtures": {"project": "vanilla", "owner": "vanilla", "sourceSet": "vanillaGameTestFixtures", "directory": "fixtures/vanilla-fixtures"},
+    "ae2": {"project": "vanilla", "owner": "core", "sourceSet": "ae2Test", "directory": "ae2"},
+    "cbc": {"project": "vanilla", "owner": "core", "sourceSet": "cbcTest", "directory": "cbc"},
+    "curios": {"project": "vanilla", "owner": "core", "sourceSet": "curiosTest", "directory": "curios"},
+    "accessories": {"project": "vanilla", "owner": "core", "sourceSet": "accessoriesTest", "directory": "accessories"},
+    "letitwalk": {"project": "vanilla", "owner": "core", "sourceSet": "letItWalkTest", "directory": "letitwalk"},
+    "rs2": {"project": "vanilla", "owner": "core", "sourceSet": "rs2Test", "directory": "rs2"},
+    "storage-common": {"project": "vanilla", "owner": "core", "sourceSet": "storageTest", "directory": "fixtures/storage-common"},
+    "storage-sophisticated-storage": {"project": "vanilla", "owner": "core", "sourceSet": "sophisticatedStorageTest", "directory": "storage-sophisticated-storage"},
+    "storage-sophisticated-backpacks": {"project": "vanilla", "owner": "core", "sourceSet": "sophisticatedBackpacksTest", "directory": "storage-sophisticated-backpacks"},
+    "storage-drawers": {"project": "vanilla", "owner": "core", "sourceSet": "drawersTest", "directory": "storage-drawers"},
+    "storage-functional": {"project": "vanilla", "owner": "core", "sourceSet": "functionalTest", "directory": "storage-functional"},
+    "storage-create": {"project": "vanilla", "owner": "core", "sourceSet": "createStorageTest", "directory": "storage-create"},
+    "storage-toms": {"project": "vanilla", "owner": "core", "sourceSet": "tomsTest", "directory": "storage-toms"},
+    "storage-colossal": {"project": "vanilla", "owner": "core", "sourceSet": "colossalTest", "directory": "storage-colossal"},
+    "storage-qio": {"project": "vanilla", "owner": "core", "sourceSet": "qioTest", "directory": "storage-qio"},
+    "core-cookery": {"project": "vanilla", "owner": "core", "sourceSet": "coreCookeryTest", "directory": "core-cookery"},
+    "golems": {"project": "vanilla", "owner": "core", "sourceSet": "golemsTest", "directory": "golems"},
+    "ae2-labor": {"project": "vanilla", "owner": "core", "sourceSet": "ae2LaborTest", "directory": "ae2-labor"},
+    "rs2-labor": {"project": "vanilla", "owner": "core", "sourceSet": "rs2LaborTest", "directory": "rs2-labor"},
+    "network-labor": {"project": "vanilla", "owner": "core", "sourceSet": "networkLaborTest", "directory": "fixtures/network-labor"},
+    "storage-labor": {"project": "vanilla", "owner": "core", "sourceSet": "storageLaborTest", "directory": "fixtures/storage-labor"},
+    "create-adapters": {"project": "vanilla", "owner": "core", "sourceSet": "coreCreateTest", "directory": "fixtures/create-adapters"},
+    "carving": {"project": "vanilla", "owner": "vanilla", "sourceSet": "chiselsandbitsTest", "directory": "carving"},
+    "cookery": {"project": "vanilla", "owner": "vanilla", "sourceSet": "cookeryIntegrationTest", "directory": "cookery"},
+    "cookery-base": {"project": "vanilla", "owner": "vanilla", "sourceSet": "cookeryTest", "directory": "cookery-base"},
+    "carts": {"project": "vanilla", "owner": "vanilla", "sourceSet": "cartsIntegrationTest", "directory": "carts"},
+    "create": {"project": "vanilla", "owner": "vanilla", "sourceSet": "createTest", "directory": "create"},
+    "firefighting": {"project": "vanilla", "owner": "vanilla", "sourceSet": "firefightingTest", "directory": "firefighting"},
+    "sable": {"project": "vanilla", "owner": "vanilla", "sourceSet": "sableTest", "directory": "sable"},
+    "save-upgrade": {"project": "vanilla", "owner": "vanilla", "sourceSet": "saveUpgradeTest", "directory": "save-upgrade"},
+    "epicfight": {"project": "vanilla", "owner": "vanilla", "sourceSet": "epicfightTest", "directory": "epicfight"},
+    "tacz": {"project": "vanilla", "owner": "vanilla", "sourceSet": "taczTest", "directory": "tacz"},
+    "warfare": {"project": "vanilla", "owner": "vanilla", "sourceSet": "warfareTest", "directory": "warfare"}
+  },
+  "suites": {
+    "core": {
+      "modules": ["core", "vanilla", "assistant"],
+      "libs": ["create"],
+      "sources": ["core-fixtures", "core"],
+      "namespaces": ["folkways_core", "ldlib2"],
+      "directory": "run/gametest/core",
+      "properties": {"folkways.core.integrationTests": "false"}
+    },
+    "vanilla": {
+      "modules": ["core", "vanilla", "assistant"],
+      "libs": ["create", "geckolib"],
+      "sources": ["core-fixtures", "vanilla-fixtures", "vanilla"],
+      "namespaces": ["folkways_core", "folkways_vanilla", "folkways_assistant"],
+      "directory": "run/gametest/vanilla",
+      "properties": {"folkways.core.integrationTests": "false"}
+    },
+    "assistant": {
+      "modules": ["core", "vanilla", "assistant"],
+      "libs": ["create"],
+      "sources": ["core-fixtures", "vanilla-fixtures", "assistant"],
+      "namespaces": ["folkways_core", "folkways_vanilla", "folkways_assistant"],
+      "directory": "run/gametest/assistant",
+      "properties": {"folkways.core.integrationTests": "false"}
+    },
+    "airline": {
+      "modules": ["core", "vanilla", "assistant", "airline"],
+      "libs": ["create", "sable", "sable-companion"],
+      "sources": ["core-fixtures", "airline"],
+      "namespaces": ["folkways_core", "folkways_vanilla", "folkways_assistant", "folkways_airline"],
+      "directory": "run/gametest/airline",
+      "properties": {"folkways.core.integrationTests": "false"},
+      "mode": "airline"
+    },
+    "core-cookery": {
+      "modules": ["core", "vanilla", "assistant"],
+      "libs": ["create", "kaleidoscope_cookery"],
+      "sources": ["core-fixtures", "core", "core-cookery"],
+      "namespaces": ["folkways_core", "ldlib2"],
+      "directory": "run/gametest/core-cookery",
+      "properties": {"folkways.core.integrationTests": "false"}
+    },
+    "cookery": {
+      "modules": ["core", "vanilla", "assistant"],
+      "libs": ["create", "geckolib", "kaleidoscope_cookery"],
+      "sources": ["core-fixtures", "vanilla-fixtures", "cookery"],
+      "namespaces": ["folkways_core", "folkways_vanilla", "folkways_assistant"],
+      "directory": "run/gametest/cookery",
+      "properties": {"folkways.core.integrationTests": "false"}
+    },
+    "cookery-base": {
+      "modules": ["core", "vanilla", "assistant"],
+      "libs": ["create", "geckolib", "kaleidoscope_cookery"],
+      "sources": ["core-fixtures", "vanilla-fixtures", "cookery", "cookery-base", "vanilla"],
+      "namespaces": ["folkways_core", "folkways_vanilla", "folkways_assistant"],
+      "directory": "run/gametest/cookery-base",
+      "properties": {"folkways.core.integrationTests": "false"}
+    },
+    "tavern": {
+      "modules": ["core", "vanilla", "assistant"],
+      "libs": ["create", "geckolib", "kaleidoscope_cookery", "kaleidoscope_tavern"],
+      "sources": ["core-fixtures", "vanilla-fixtures", "cookery"],
+      "namespaces": ["folkways_core", "folkways_vanilla", "folkways_assistant"],
+      "directory": "run/gametest/tavern",
+      "properties": {"folkways.core.integrationTests": "false"}
+    },
+    "carts": {
+      "modules": ["core", "vanilla", "assistant"],
+      "libs": ["create", "geckolib", "astikorcartsredux"],
+      "sources": ["core-fixtures", "vanilla-fixtures", "carts"],
+      "namespaces": ["folkways_core", "folkways_vanilla", "folkways_assistant"],
+      "directory": "run/gametest/carts",
+      "properties": {"folkways.core.integrationTests": "false"}
+    },
+    "create": {
+      "modules": ["core", "vanilla", "assistant"],
+      "libs": ["create", "geckolib"],
+      "sources": ["core-fixtures", "vanilla-fixtures", "create-adapters", "create"],
+      "namespaces": ["folkways_core", "folkways_vanilla", "folkways_assistant"],
+      "directory": "run/gametest/create",
+      "properties": {"folkways.core.integrationTests": "false"}
+    },
+    "firefighting": {
+      "modules": ["core", "vanilla", "assistant"],
+      "libs": ["create", "geckolib", "createfirefightingadd"],
+      "sources": ["core-fixtures", "vanilla-fixtures", "create-adapters", "create", "firefighting"],
+      "namespaces": ["folkways_core", "folkways_vanilla", "folkways_assistant"],
+      "directory": "run/gametest/firefighting",
+      "properties": {"folkways.core.integrationTests": "false"}
+    },
+    "golems": {
+      "modules": ["core", "vanilla", "assistant"],
+      "libs": ["create", "modulargolems", "l2library", "l2core", "l2serial"],
+      "sources": ["core-fixtures", "golems"],
+      "namespaces": ["folkways_core"],
+      "directory": "run/gametest/golems",
+      "properties": {"folkways.core.integrationTests": "true"}
+    },
+    "tacz": {
+      "modules": ["core", "vanilla", "assistant"],
+      "libs": ["create", "geckolib", "tacz"],
+      "sources": ["core-fixtures", "vanilla-fixtures", "tacz"],
+      "namespaces": ["folkways_core", "folkways_vanilla", "folkways_assistant"],
+      "directory": "run/gametest/tacz",
+      "properties": {"folkways.core.integrationTests": "false"}
+    },
+    "warfare": {
+      "modules": ["core", "vanilla", "assistant", "airline"],
+      "libs": ["create", "geckolib", "superbwarfare", "kotlinforforge", "sable", "sable-companion"],
+      "sources": ["core-fixtures", "vanilla-fixtures", "warfare"],
+      "namespaces": ["folkways_core", "folkways_vanilla", "folkways_assistant", "folkways_airline"],
+      "directory": "run/gametest/warfare",
+      "properties": {"folkways.core.integrationTests": "false"}
+    },
+    "carving": {
+      "modules": ["core", "vanilla", "assistant"],
+      "libs": ["chiselsandbits"],
+      "sources": ["core-fixtures", "carving"],
+      "namespaces": ["folkways_core"],
+      "directory": "run/gametest/carving",
+      "properties": {"folkways.core.integrationTests": "true"},
+      "saeculariaRuntime": true
+    },
+    "create-placement": {
+      "modules": ["core", "vanilla", "assistant"],
+      "libs": ["chiselsandbits", "create"],
+      "sources": ["core-fixtures", "carving"],
+      "namespaces": ["folkways_core"],
+      "directory": "run/gametest/create-placement",
+      "properties": {"folkways.core.integrationTests": "true", "folkways.chiselsandbits.createPlacementTests": "true"},
+      "saeculariaRuntime": true
+    },
+    "sable": {
+      "modules": ["core", "vanilla", "assistant"],
+      "libs": ["create", "geckolib", "sable", "sable-companion"],
+      "sources": ["core-fixtures", "vanilla-fixtures", "sable"],
+      "namespaces": ["folkways_core", "folkways_vanilla", "folkways_assistant"],
+      "directory": "run/gametest/sable",
+      "properties": {"folkways.core.integrationTests": "true"}
+    },
+    "epicfight": {
+      "modules": ["core", "vanilla", "assistant"],
+      "libs": ["create", "geckolib", "epicfight"],
+      "sources": ["core-fixtures", "vanilla-fixtures", "epicfight"],
+      "namespaces": ["folkways_core"],
+      "directory": "run/gametest/epicfight",
+      "properties": {"folkways.core.integrationTests": "true"}
+    },
+    "cbc": {
+      "modules": ["core", "vanilla", "assistant"],
+      "libs": ["create", "createbigcannons", "ritchiesprojectilelib"],
+      "sources": ["core-fixtures", "cbc"],
+      "namespaces": ["folkways_core"],
+      "directory": "run/gametest/cbc",
+      "properties": {"folkways.core.integrationTests": "true"}
+    },
+    "cbc-sable": {
+      "modules": ["core", "vanilla", "assistant"],
+      "libs": ["create", "createbigcannons", "ritchiesprojectilelib", "sable", "sable-companion"],
+      "sources": ["core-fixtures", "cbc"],
+      "namespaces": ["folkways_core"],
+      "directory": "run/gametest/cbc-sable",
+      "properties": {"folkways.core.integrationTests": "true"}
+    },
+    "letitwalk": {
+      "modules": ["core", "vanilla", "assistant"],
+      "libs": ["create", "sable", "sable-companion", "let_it_walk"],
+      "sources": ["core-fixtures", "letitwalk"],
+      "namespaces": ["folkways_core"],
+      "directory": "run/gametest/letitwalk",
+      "properties": {"folkways.core.integrationTests": "true"}
+    },
+    "storage-sophisticated-storage": {
+      "modules": ["core", "vanilla"],
+      "libs": ["sophisticatedstorage", "sophisticatedcore"],
+      "sources": ["core-fixtures", "storage-common", "storage-sophisticated-storage"],
+      "namespaces": ["folkways_core"],
+      "directory": "run/gametest/storage-sophisticated-storage",
+      "properties": {"folkways.core.integrationTests": "true", "folkways.storage.profile": "sophisticatedStorage"},
+      "exclusiveGroups": {"nativeStorage": "sophisticatedStorage"}
+    },
+    "storage-sophisticated-storage-labor": {
+      "modules": ["core", "vanilla"],
+      "libs": ["sophisticatedstorage", "sophisticatedcore"],
+      "sources": ["core-fixtures", "storage-common", "storage-sophisticated-storage", "storage-labor"],
+      "namespaces": ["folkways_core"],
+      "directory": "run/gametest/storage-sophisticated-storage-labor",
+      "properties": {"folkways.core.integrationTests": "true", "folkways.storage.profile": "sophisticatedStorage"},
+      "exclusiveGroups": {"nativeStorage": "sophisticatedStorage"}
+    },
+    "storage-sophisticated-storage-no-vanilla": {
+      "modules": ["core"],
+      "libs": ["sophisticatedstorage", "sophisticatedcore"],
+      "sources": ["core-fixtures", "storage-common", "storage-sophisticated-storage"],
+      "namespaces": ["folkways_core"],
+      "directory": "run/gametest/storage-sophisticated-storage-no-vanilla",
+      "properties": {"folkways.core.integrationTests": "true", "folkways.storage.profile": "sophisticatedStorage"},
+      "exclusiveGroups": {"nativeStorage": "sophisticatedStorage"},
+      "excludesModules": ["vanilla"]
+    },
+    "storage-sophisticated-backpacks": {
+      "modules": ["core", "vanilla"],
+      "libs": ["sophisticatedbackpacks", "sophisticatedcore"],
+      "sources": ["core-fixtures", "storage-common", "storage-sophisticated-backpacks"],
+      "namespaces": ["folkways_core"],
+      "directory": "run/gametest/storage-sophisticated-backpacks",
+      "properties": {"folkways.core.integrationTests": "true", "folkways.storage.profile": "sophisticatedBackpacks"},
+      "exclusiveGroups": {"nativeStorage": "sophisticatedBackpacks"}
+    },
+    "storage-sophisticated-backpacks-labor": {
+      "modules": ["core", "vanilla"],
+      "libs": ["sophisticatedbackpacks", "sophisticatedcore"],
+      "sources": ["core-fixtures", "storage-common", "storage-sophisticated-backpacks", "storage-labor"],
+      "namespaces": ["folkways_core"],
+      "directory": "run/gametest/storage-sophisticated-backpacks-labor",
+      "properties": {"folkways.core.integrationTests": "true", "folkways.storage.profile": "sophisticatedBackpacks"},
+      "exclusiveGroups": {"nativeStorage": "sophisticatedBackpacks"}
+    },
+    "storage-sophisticated-backpacks-no-vanilla": {
+      "modules": ["core"],
+      "libs": ["sophisticatedbackpacks", "sophisticatedcore"],
+      "sources": ["core-fixtures", "storage-common", "storage-sophisticated-backpacks"],
+      "namespaces": ["folkways_core"],
+      "directory": "run/gametest/storage-sophisticated-backpacks-no-vanilla",
+      "properties": {"folkways.core.integrationTests": "true", "folkways.storage.profile": "sophisticatedBackpacks"},
+      "exclusiveGroups": {"nativeStorage": "sophisticatedBackpacks"},
+      "excludesModules": ["vanilla"]
+    },
+    "storage-drawers": {
+      "modules": ["core", "vanilla"],
+      "libs": ["storagedrawers"],
+      "sources": ["core-fixtures", "storage-common", "storage-drawers"],
+      "namespaces": ["folkways_core"],
+      "directory": "run/gametest/storage-drawers",
+      "properties": {"folkways.core.integrationTests": "true", "folkways.storage.profile": "drawers"},
+      "exclusiveGroups": {"nativeStorage": "drawers"}
+    },
+    "storage-drawers-labor": {
+      "modules": ["core", "vanilla"],
+      "libs": ["storagedrawers"],
+      "sources": ["core-fixtures", "storage-common", "storage-drawers", "storage-labor"],
+      "namespaces": ["folkways_core"],
+      "directory": "run/gametest/storage-drawers-labor",
+      "properties": {"folkways.core.integrationTests": "true", "folkways.storage.profile": "drawers"},
+      "exclusiveGroups": {"nativeStorage": "drawers"}
+    },
+    "storage-drawers-no-vanilla": {
+      "modules": ["core"],
+      "libs": ["storagedrawers"],
+      "sources": ["core-fixtures", "storage-common", "storage-drawers"],
+      "namespaces": ["folkways_core"],
+      "directory": "run/gametest/storage-drawers-no-vanilla",
+      "properties": {"folkways.core.integrationTests": "true", "folkways.storage.profile": "drawers"},
+      "exclusiveGroups": {"nativeStorage": "drawers"},
+      "excludesModules": ["vanilla"]
+    },
+    "storage-functional": {
+      "modules": ["core", "vanilla"],
+      "libs": ["functionalstorage", "titanium"],
+      "sources": ["core-fixtures", "storage-common", "storage-functional"],
+      "namespaces": ["folkways_core"],
+      "directory": "run/gametest/storage-functional",
+      "properties": {"folkways.core.integrationTests": "true", "folkways.storage.profile": "functional"},
+      "exclusiveGroups": {"nativeStorage": "functional"}
+    },
+    "storage-functional-labor": {
+      "modules": ["core", "vanilla"],
+      "libs": ["functionalstorage", "titanium"],
+      "sources": ["core-fixtures", "storage-common", "storage-functional", "storage-labor"],
+      "namespaces": ["folkways_core"],
+      "directory": "run/gametest/storage-functional-labor",
+      "properties": {"folkways.core.integrationTests": "true", "folkways.storage.profile": "functional"},
+      "exclusiveGroups": {"nativeStorage": "functional"}
+    },
+    "storage-functional-no-vanilla": {
+      "modules": ["core"],
+      "libs": ["functionalstorage", "titanium"],
+      "sources": ["core-fixtures", "storage-common", "storage-functional"],
+      "namespaces": ["folkways_core"],
+      "directory": "run/gametest/storage-functional-no-vanilla",
+      "properties": {"folkways.core.integrationTests": "true", "folkways.storage.profile": "functional"},
+      "exclusiveGroups": {"nativeStorage": "functional"},
+      "excludesModules": ["vanilla"]
+    },
+    "storage-create": {
+      "modules": ["core", "vanilla"],
+      "libs": ["fxntstorage", "create"],
+      "sources": ["core-fixtures", "storage-common", "storage-create"],
+      "namespaces": ["folkways_core"],
+      "directory": "run/gametest/storage-create",
+      "properties": {"folkways.core.integrationTests": "true", "folkways.storage.profile": "createStorage"},
+      "exclusiveGroups": {"nativeStorage": "createStorage"}
+    },
+    "storage-create-labor": {
+      "modules": ["core", "vanilla"],
+      "libs": ["fxntstorage", "create"],
+      "sources": ["core-fixtures", "storage-common", "storage-create", "storage-labor"],
+      "namespaces": ["folkways_core"],
+      "directory": "run/gametest/storage-create-labor",
+      "properties": {"folkways.core.integrationTests": "true", "folkways.storage.profile": "createStorage"},
+      "exclusiveGroups": {"nativeStorage": "createStorage"}
+    },
+    "storage-create-no-vanilla": {
+      "modules": ["core"],
+      "libs": ["fxntstorage", "create"],
+      "sources": ["core-fixtures", "storage-common", "storage-create"],
+      "namespaces": ["folkways_core"],
+      "directory": "run/gametest/storage-create-no-vanilla",
+      "properties": {"folkways.core.integrationTests": "true", "folkways.storage.profile": "createStorage"},
+      "exclusiveGroups": {"nativeStorage": "createStorage"},
+      "excludesModules": ["vanilla"]
+    },
+    "storage-toms": {
+      "modules": ["core", "vanilla"],
+      "libs": ["toms_storage"],
+      "sources": ["core-fixtures", "storage-common", "storage-toms"],
+      "namespaces": ["folkways_core"],
+      "directory": "run/gametest/storage-toms",
+      "properties": {"folkways.core.integrationTests": "true", "folkways.storage.profile": "toms"},
+      "exclusiveGroups": {"nativeStorage": "toms"}
+    },
+    "storage-toms-labor": {
+      "modules": ["core", "vanilla"],
+      "libs": ["toms_storage"],
+      "sources": ["core-fixtures", "storage-common", "storage-toms", "storage-labor"],
+      "namespaces": ["folkways_core"],
+      "directory": "run/gametest/storage-toms-labor",
+      "properties": {"folkways.core.integrationTests": "true", "folkways.storage.profile": "toms"},
+      "exclusiveGroups": {"nativeStorage": "toms"}
+    },
+    "storage-toms-no-vanilla": {
+      "modules": ["core"],
+      "libs": ["toms_storage"],
+      "sources": ["core-fixtures", "storage-common", "storage-toms"],
+      "namespaces": ["folkways_core"],
+      "directory": "run/gametest/storage-toms-no-vanilla",
+      "properties": {"folkways.core.integrationTests": "true", "folkways.storage.profile": "toms"},
+      "exclusiveGroups": {"nativeStorage": "toms"},
+      "excludesModules": ["vanilla"]
+    },
+    "storage-colossal": {
+      "modules": ["core", "vanilla"],
+      "libs": ["colossalchests", "cyclopscore"],
+      "sources": ["core-fixtures", "storage-common", "storage-colossal"],
+      "namespaces": ["folkways_core"],
+      "directory": "run/gametest/storage-colossal",
+      "properties": {"folkways.core.integrationTests": "true", "folkways.storage.profile": "colossal"},
+      "exclusiveGroups": {"nativeStorage": "colossal"}
+    },
+    "storage-colossal-labor": {
+      "modules": ["core", "vanilla"],
+      "libs": ["colossalchests", "cyclopscore"],
+      "sources": ["core-fixtures", "storage-common", "storage-colossal", "storage-labor"],
+      "namespaces": ["folkways_core"],
+      "directory": "run/gametest/storage-colossal-labor",
+      "properties": {"folkways.core.integrationTests": "true", "folkways.storage.profile": "colossal"},
+      "exclusiveGroups": {"nativeStorage": "colossal"}
+    },
+    "storage-colossal-no-vanilla": {
+      "modules": ["core"],
+      "libs": ["colossalchests", "cyclopscore"],
+      "sources": ["core-fixtures", "storage-common", "storage-colossal"],
+      "namespaces": ["folkways_core"],
+      "directory": "run/gametest/storage-colossal-no-vanilla",
+      "properties": {"folkways.core.integrationTests": "true", "folkways.storage.profile": "colossal"},
+      "exclusiveGroups": {"nativeStorage": "colossal"},
+      "excludesModules": ["vanilla"]
+    },
+    "storage-qio": {
+      "modules": ["core", "vanilla"],
+      "libs": ["mekanism"],
+      "sources": ["core-fixtures", "storage-common", "storage-qio"],
+      "namespaces": ["folkways_core"],
+      "directory": "run/gametest/storage-qio",
+      "properties": {"folkways.core.integrationTests": "true", "folkways.storage.profile": "qio"},
+      "exclusiveGroups": {"nativeStorage": "qio"}
+    },
+    "storage-qio-labor": {
+      "modules": ["core", "vanilla"],
+      "libs": ["mekanism"],
+      "sources": ["core-fixtures", "storage-common", "storage-qio", "storage-labor"],
+      "namespaces": ["folkways_core"],
+      "directory": "run/gametest/storage-qio-labor",
+      "properties": {"folkways.core.integrationTests": "true", "folkways.storage.profile": "qio"},
+      "exclusiveGroups": {"nativeStorage": "qio"}
+    },
+    "storage-qio-no-vanilla": {
+      "modules": ["core"],
+      "libs": ["mekanism"],
+      "sources": ["core-fixtures", "storage-common", "storage-qio"],
+      "namespaces": ["folkways_core"],
+      "directory": "run/gametest/storage-qio-no-vanilla",
+      "properties": {"folkways.core.integrationTests": "true", "folkways.storage.profile": "qio"},
+      "exclusiveGroups": {"nativeStorage": "qio"},
+      "excludesModules": ["vanilla"]
+    },
+    "ae2": {
+      "modules": ["core", "vanilla"],
+      "libs": ["ae2", "guideme"],
+      "sources": ["core-fixtures", "ae2"],
+      "namespaces": ["folkways_core"],
+      "directory": "run/gametest/ae2",
+      "properties": {"folkways.core.integrationTests": "true"},
+      "exclusiveGroups": {"nativeStorage": "ae2"}
+    },
+    "ae2-labor": {
+      "modules": ["core", "vanilla"],
+      "libs": ["ae2", "guideme"],
+      "sources": ["core-fixtures", "ae2", "ae2-labor", "network-labor"],
+      "namespaces": ["folkways_core"],
+      "directory": "run/gametest/ae2-labor",
+      "properties": {"folkways.core.integrationTests": "true", "folkways.ae2.laborTests": "true"},
+      "exclusiveGroups": {"nativeStorage": "ae2"}
+    },
+    "ae2-no-vanilla": {
+      "modules": ["core"],
+      "libs": ["ae2", "guideme"],
+      "sources": ["core-fixtures", "ae2"],
+      "namespaces": ["folkways_core"],
+      "directory": "run/gametest/ae2-no-vanilla",
+      "properties": {"folkways.core.integrationTests": "true"},
+      "exclusiveGroups": {"nativeStorage": "ae2"},
+      "excludesModules": ["vanilla"]
+    },
+    "rs2": {
+      "modules": ["core", "vanilla"],
+      "libs": ["refinedstorage"],
+      "sources": ["core-fixtures", "rs2"],
+      "namespaces": ["folkways_core"],
+      "directory": "run/gametest/rs2",
+      "properties": {"folkways.core.integrationTests": "true"},
+      "exclusiveGroups": {"nativeStorage": "rs2"}
+    },
+    "rs2-labor": {
+      "modules": ["core", "vanilla"],
+      "libs": ["refinedstorage"],
+      "sources": ["core-fixtures", "rs2", "rs2-labor", "network-labor"],
+      "namespaces": ["folkways_core"],
+      "directory": "run/gametest/rs2-labor",
+      "properties": {"folkways.core.integrationTests": "true", "folkways.rs2.laborTests": "true"},
+      "exclusiveGroups": {"nativeStorage": "rs2"}
+    },
+    "rs2-no-vanilla": {
+      "modules": ["core"],
+      "libs": ["refinedstorage"],
+      "sources": ["core-fixtures", "rs2"],
+      "namespaces": ["folkways_core"],
+      "directory": "run/gametest/rs2-no-vanilla",
+      "properties": {"folkways.core.integrationTests": "true"},
+      "exclusiveGroups": {"nativeStorage": "rs2"},
+      "excludesModules": ["vanilla"]
+    },
+    "curios": {
+      "modules": ["core", "vanilla"],
+      "libs": ["curios", "sophisticatedbackpacks", "sophisticatedcore"],
+      "sources": ["core-fixtures", "curios"],
+      "namespaces": ["folkways_core"],
+      "directory": "run/gametest/curios",
+      "properties": {"folkways.core.integrationTests": "true"},
+      "exclusiveGroups": {"accessory": "curios"}
+    },
+    "curios-coexistence": {
+      "modules": ["core", "vanilla"],
+      "libs": ["curios", "sophisticatedbackpacks", "sophisticatedcore", "accessories", "owo"],
+      "sources": ["core-fixtures", "curios"],
+      "namespaces": ["folkways_core"],
+      "directory": "run/gametest/curios-coexistence",
+      "properties": {"folkways.core.integrationTests": "true"},
+      "exclusiveGroups": {"accessory": "curios"}
+    },
+    "accessories": {
+      "modules": ["core", "vanilla"],
+      "libs": ["accessories", "sophisticatedbackpacks", "sophisticatedcore", "owo"],
+      "sources": ["core-fixtures", "accessories"],
+      "namespaces": ["folkways_core"],
+      "directory": "run/gametest/accessories",
+      "properties": {"folkways.core.integrationTests": "true"},
+      "exclusiveGroups": {"accessory": "accessories"}
+    },
+    "accessories-compat": {
+      "modules": ["core", "vanilla"],
+      "libs": ["accessories", "sophisticatedbackpacks", "sophisticatedcore", "owo", "cclayer"],
+      "sources": ["core-fixtures", "accessories"],
+      "namespaces": ["folkways_core"],
+      "directory": "run/gametest/accessories-compat",
+      "properties": {"folkways.core.integrationTests": "true"},
+      "exclusiveGroups": {"accessory": "accessories"}
+    },
+    "save-upgrade": {
+      "modules": ["core", "vanilla", "assistant", "airline"],
+      "libs": ["create", "tacz", "chiselsandbits", "kaleidoscope_cookery", "astikorcartsredux", "epicfight", "geckolib", "kaleidoscope_tavern", "superbwarfare", "kotlinforforge", "sable", "sable-companion", "modulargolems", "l2library", "l2core", "l2serial"],
+      "sources": ["core-fixtures", "save-upgrade"],
+      "namespaces": ["folkways_save_upgrade"],
+      "directory": "build/save-upgrade",
+      "mode": "save-upgrade",
+      "exclusiveRun": true,
+      "saeculariaRuntime": true
+    }
+  }
+}

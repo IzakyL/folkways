@@ -16,7 +16,7 @@ import net.minecraft.world.level.pathfinder.PathType;
 import net.minecraft.world.level.pathfinder.WalkNodeEvaluator;
 import net.minecraft.world.phys.Vec3;
 
-/** Construction may move a resident within its closed work area; travel beyond it remains a walk. */
+/** When walking fails, a resident can relocate within a closed work area and resume walking from there. */
 public final class SiteTravel {
 
     private final Set<Closures.Closed> departed = new HashSet<>();
@@ -53,7 +53,7 @@ public final class SiteTravel {
             if (landing != null) {
                 boolean moved = place(level, body, landing);
                 // Once at this exit, allow native navigation to detour along or back into the site.
-                // Re-selecting the closest boundary every tick would keep pulling that detour back.
+                // Re-selecting the same boundary on another failure could restart the same failed detour.
                 if (inside.isEmpty() && (moved || body.blockPosition().equals(landing))) {
                     departed.add(site);
                 }

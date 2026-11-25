@@ -1,12 +1,15 @@
 package io.github.izakyl.folkways.vanilla.build;
 
 import io.github.izakyl.folkways.core.facility.api.Facilities;
+import io.github.izakyl.folkways.core.item.api.Containers;
+import io.github.izakyl.folkways.core.item.api.Goods;
 import io.github.izakyl.folkways.core.resident.api.Doing;
 import io.github.izakyl.folkways.core.resident.api.Doings;
 import io.github.izakyl.folkways.core.vocation.api.Vocation;
 import io.github.izakyl.folkways.core.work.api.ActionSpec;
 import io.github.izakyl.folkways.core.work.api.Amount;
 import io.github.izakyl.folkways.core.work.api.BlockData;
+import io.github.izakyl.folkways.core.work.api.LaborRefusal;
 import io.github.izakyl.folkways.core.work.api.Need;
 import io.github.izakyl.folkways.core.work.api.Outcome;
 import io.github.izakyl.folkways.core.world.api.Stances;
@@ -19,12 +22,14 @@ import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.core.work.api.Workload;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.core.work.support.BreakingProgress;
+import io.github.izakyl.folkways.core.work.support.Staged;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Predicate;
+import java.util.function.UnaryOperator;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
@@ -32,6 +37,49 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.state.BlockState;
 
 abstract class BuildAction implements WorkAction {
+
+    // A private piece takes what its hand is carrying. The turn's planned draws only bring goods to the site.
+    record FromPack(BuildAction action) implements WorkAction, Staged {
+
+        @Override
+        public ActionSpec spec() {
+            return action.spec();
+        }
+
+        @Override
+        public Outcome commit(ServerLevel level, Worker who) {
+            return action.commit(level, who);
+        }
+
+        @Override
+        public Drawn draw(ServerLevel level, Worker who) {
+            List<ItemStack> goods = new ArrayList<>();
+            for (Need need : spec().needs()) {
+                long left = need.count();
+                while (left > 0) {
+                    ItemStack stack = Containers.extract(who.pack(), one -> Goods.matches(one, need.spec()),
+                        (int) Math.min(left, Integer.MAX_VALUE));
+                    if (stack.isEmpty()) {
+                        restore(level, who, goods);
+                        return new Short(LaborRefusal.GOODS_GONE);
+                    }
+                    goods.add(stack);
+                    left -= stack.getCount();
+                }
+            }
+            return new Taken(goods);
+        }
+
+        @Override
+        public void restore(ServerLevel level, Worker who, List<ItemStack> goods) {
+            for (ItemStack stack : goods) {
+                ItemStack left = Containers.insert(who.pack(), stack);
+                if (!left.isEmpty()) {
+                    who.spill(left);
+                }
+            }
+        }
+    }
 
     Carving.Cache cache = new Carving.Cache(() -> { });
 
@@ -42,6 +90,7 @@ abstract class BuildAction implements WorkAction {
     private Emptying emptying;
     private boolean onlyReplaceable;
     private Predicate<BlockPos> demolition = cell -> false;
+    private UnaryOperator<Outcome.Done> settled = done -> done;
 
     BuildAction(BuildJob job) {
         this.job = job;
@@ -178,6 +227,11 @@ abstract class BuildAction implements WorkAction {
         return this;
     }
 
+    final BuildAction settling(UnaryOperator<Outcome.Done> settle) {
+        settled = settle;
+        return this;
+    }
+
     final BuildAction emptying(Emptying emptying) {
         this.emptying = emptying;
         return this;
@@ -217,7 +271,7 @@ abstract class BuildAction implements WorkAction {
             return refuse(BuildRefusal.CELL_NOT_LOADED);
         }
         if (finished(level)) {
-            return new Outcome.Done(List.of(), List.of(), Optional.empty(), who.supplied());
+            return settled.apply(new Outcome.Done(List.of(), List.of(), Optional.empty(), who.supplied()));
         }
         if (onlyReplaceable && job.after().entrySet().stream().anyMatch(entry -> {
             BlockPos cell = entry.getKey().block(level);
@@ -234,7 +288,7 @@ abstract class BuildAction implements WorkAction {
         if (emptying != null) {
             emptying.removed(level);
         }
-        return outcome;
+        return outcome instanceof Outcome.Done done ? settled.apply(done) : outcome;
     }
 
     abstract Outcome work(ServerLevel level, Worker who);

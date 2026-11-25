@@ -10,6 +10,7 @@ import io.github.izakyl.folkways.core.work.api.Need;
 import io.github.izakyl.folkways.core.work.api.Node;
 import io.github.izakyl.folkways.core.work.api.NodeSpec;
 import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Readiness;
 import io.github.izakyl.folkways.core.work.api.Recourse;
 import io.github.izakyl.folkways.core.work.api.SchematicPrinter;
 import io.github.izakyl.folkways.core.world.api.Stances;
@@ -128,13 +129,13 @@ public final class MaintenanceOrders {
                 }
 
                 @Override
-                public boolean ready(ServerLevel world) {
-                    return enabled.getAsBoolean() && lay.ready(world) && after.keySet().stream().allMatch(available);
+                public Readiness readiness(ServerLevel world) {
+                    return Readiness.of(enabled.getAsBoolean() && lay.readiness(world).isReady() && after.keySet().stream().allMatch(available));
                 }
 
                 @Override
                 public Outcome commit(ServerLevel world, Worker who) {
-                    if (!ready(world)) {
+                    if (!readiness(world).isReady()) {
                         return Outcome.failed(BuildRefusal.CELL_NOT_LOADED);
                     }
                     if (after.entrySet().stream().allMatch(cell ->

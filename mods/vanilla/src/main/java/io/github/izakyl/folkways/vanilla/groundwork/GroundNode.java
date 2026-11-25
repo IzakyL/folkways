@@ -8,6 +8,7 @@ import io.github.izakyl.folkways.core.work.api.Ending;
 import io.github.izakyl.folkways.core.work.api.Node;
 import io.github.izakyl.folkways.core.work.api.NodeSpec;
 import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Readiness;
 import io.github.izakyl.folkways.core.work.api.WorkGesture;
 import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.core.work.api.Workload;
@@ -55,8 +56,8 @@ abstract class GroundNode implements Node {
     }
 
     @Override
-    public boolean ready(ServerLevel level) {
-        return level.isLoaded(chore.job().cell());
+    public Readiness readiness(ServerLevel level) {
+        return Readiness.of(level.isLoaded(chore.job().cell()));
     }
 
     @Override

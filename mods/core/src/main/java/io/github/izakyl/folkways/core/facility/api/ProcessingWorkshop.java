@@ -125,6 +125,20 @@ final class ProcessingWorkshop {
         return Optional.of(new Contribution.Workshop(offered));
     }
 
+    private final Map<WorkshopScriptWork, Runnable> placed = new java.util.IdentityHashMap<>();
+
+    boolean admit(WorkshopScriptWork work, Runnable fail) {
+        if (!active) {
+            return false;
+        }
+        placed.put(work, fail);
+        return true;
+    }
+
+    void unadmit(WorkshopScriptWork work) {
+        placed.remove(work);
+    }
+
     boolean active() {
         return active;
     }
@@ -141,6 +155,9 @@ final class ProcessingWorkshop {
 
     void close() {
         active = false;
+        for (Runnable fail : List.copyOf(placed.values())) {
+            fail.run();
+        }
         if (run != null) {
             run.stop();
         }

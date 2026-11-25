@@ -68,6 +68,9 @@ config = "folkways-vanilla-cookery-spit.mixins.json"
 config = "folkways-vanilla-cookery-steamer.mixins.json"
 
 [[mixins]]
+config = "folkways-vanilla-cookery-stockpot.mixins.json"
+
+[[mixins]]
 config = "folkways-vanilla-cookery-tavern.mixins.json"
 
 [[mixins]]

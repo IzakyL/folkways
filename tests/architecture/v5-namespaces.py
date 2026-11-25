@@ -38,7 +38,8 @@ def files(ref):
             yield Path(name)
     else:
         yield from Path("mods").glob("*/src/main/resources/**/*")
-        yield from Path("tests/gametest").glob("*/*/resources/**/*.nbt")
+        yield from Path("tests/gametest").glob("*/resources/**/*.nbt")
+        yield from Path("tests/gametest").glob("fixtures/*/resources/**/*.nbt")
         yield from Path("mods").glob("*/src/main/java/**/*.java")
 
 

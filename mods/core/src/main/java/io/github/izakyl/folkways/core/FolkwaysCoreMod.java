@@ -187,6 +187,8 @@ public final class FolkwaysCoreMod {
         WorkshopRecipes.install(Refinements::expand);
         EquipmentCoordinator.install();
         PackKeepRegistry.install();
+        Labor.installLooseGoods();
+        io.github.izakyl.folkways.core.work.internal.PickUp.install();
         TaskToolLoans.install();
         Seating.install();
         fitTheShell(modBus);

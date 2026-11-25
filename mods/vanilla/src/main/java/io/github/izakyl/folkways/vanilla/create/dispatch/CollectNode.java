@@ -11,6 +11,7 @@ import io.github.izakyl.folkways.core.work.api.Amount;
 import io.github.izakyl.folkways.core.work.api.Node;
 import io.github.izakyl.folkways.core.work.api.NodeSpec;
 import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Readiness;
 import io.github.izakyl.folkways.core.work.api.WorkGesture;
 import io.github.izakyl.folkways.core.work.api.WorkSite;
 import io.github.izakyl.folkways.core.work.api.Worker;
@@ -24,6 +25,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.UUID;
+import java.util.function.Consumer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
 
@@ -51,6 +53,7 @@ final class CollectNode implements Node {
     private volatile boolean adrift;
     private long adriftSince = -1;
     private boolean submitted;
+    private Consumer<RefusalKind> fail = why -> { };
     private volatile Optional<RefusalKind> refused = Optional.empty();
 
     CollectNode(WorldPos at, Stances stances, ItemSpec want, long count, int reachTicks,
@@ -209,17 +212,25 @@ final class CollectNode implements Node {
         return refused = place(level);
     }
 
-    void retry(ServerLevel level) {
+    @Override
+    public Optional<RefusalKind> planned(ServerLevel level, Consumer<RefusalKind> fail) {
+        this.fail = fail;
+        return planned(level);
+    }
+
+    void tend(ServerLevel level) {
         synchronized (reservations) {
             if (reservations.get(id()) == this && deferred && refused.isEmpty() && !placed()) {
                 refused = place(level);
             }
         }
+        if (!adrift) {
+            overdue(level).ifPresent(fail);
+        }
     }
 
     // An order long past its time was lost on the way: the route is shut for a while and the need looks elsewhere.
-    @Override
-    public Optional<RefusalKind> refusal(ServerLevel level) {
+    private Optional<RefusalKind> overdue(ServerLevel level) {
         if (refused.isEmpty() && placed() && !arrived && networkId.isPresent()
             && level.getGameTime() - placedAt > Eta.overdueAfter(spec.estimate())) {
             eta.lost(at, networkId.get(), level.getGameTime());
@@ -260,11 +271,11 @@ final class CollectNode implements Node {
     }
 
     @Override
-    public boolean ready(ServerLevel level) {
+    public Readiness readiness(ServerLevel level) {
         PackageNetwork network = PackageNetworks.get();
         if (!at.in(level) || !level.isLoaded(at.block(level))
             || !network.isPort(level.getBlockState(at.block(level)))) {
-            return false;
+            return Readiness.notYet();
         }
         boolean ready = placed() && present(level, network) >= count;
         if (ready && !arrived) {
@@ -274,7 +285,7 @@ final class CollectNode implements Node {
                     level.getGameTime() - placedAt));
             }
         }
-        return ready;
+        return Readiness.of(ready);
     }
 
     private long present(ServerLevel level, PackageNetwork network) {

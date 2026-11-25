@@ -10,7 +10,7 @@ public interface KitchenWork extends Node {
 
     @Override
     default void released(ServerLevel level, Worker who, Ending how) {
-        if (!(how instanceof Ending.Done)) {
+        if (!(how instanceof Ending.Done) && !(how instanceof Ending.Replaced)) {
             ended(level, how);
         }
     }

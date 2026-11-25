@@ -8,6 +8,7 @@ import io.github.izakyl.folkways.core.resident.api.RefusalKind;
 import io.github.izakyl.folkways.core.work.api.Need;
 import io.github.izakyl.folkways.core.work.api.Outcome;
 import io.github.izakyl.folkways.core.world.api.Stances;
+import io.github.izakyl.folkways.core.work.api.Readiness;
 import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
 import io.github.izakyl.folkways.vanilla.cookery.CookeryContent;
@@ -65,15 +66,15 @@ final class StockpotLoad extends StockpotAction {
         return ItemSpec.of(ModItems.STOCKPOT_LID.get());
     }
 
-    public boolean ready(ServerLevel level) {
+    public Readiness readiness(ServerLevel level) {
         if (bookings.cancelled(at, turn, generation)) {
-            return true;
+            return Readiness.READY;
         }
         if (!bookings.first(at, turn)) {
-            return false;
+            return Readiness.notYet();
         }
-        return pot(level).map(pot -> StockpotBatch.claimed(pot) ? false
-            : pot.getStatus() != IStockpot.PUT_SOUP_BASE || pot.hasHeatSource(level)).orElse(false);
+        return Readiness.of(pot(level).map(pot -> StockpotBatch.claimed(pot) ? false
+            : pot.getStatus() != IStockpot.PUT_SOUP_BASE || pot.hasHeatSource(level)).orElse(false));
     }
 
     public Optional<RefusalKind> refusal(ServerLevel level) {

@@ -11,7 +11,7 @@ if (args[0] === '--shards') {
     count = Number(args.splice(0, 2)[1]);
 }
 if (!Number.isSafeInteger(count) || count < 1 || count > 64
-    || args.some(arg => !arg.startsWith('-P') || /^-P(gameTestMod|gameTestShard|gameTestDirectory)=/.test(arg))) {
+    || args.some(arg => !arg.startsWith('-P') || /^-P(suite|listTests|gameTestShard|gameTestDirectory)=/.test(arg))) {
     throw new Error('Usage: npm run test:airline:shards -- [--shards N] [-Pproperty=value ...]');
 }
 
@@ -43,7 +43,7 @@ for (const signal of ['SIGINT', 'SIGTERM']) {
 await mkdir(path.join(root, 'build/airline-shards'), { recursive: true });
 const directory = await mkdtemp(path.join(root, 'build/airline-shards/run-'));
 console.log(`Logs: ${directory}`);
-const prepared = await run(['./gradlew', '--offline', '--console=plain', '-PgameTestMod=airline', ...args,
+const prepared = await run(['./gradlew', '--offline', '--console=plain', '-Psuite=airline', ...args,
     'exportAirlineGameTestLaunch'], { cwd: root, stdio: 'inherit' });
 if (prepared.code !== 0) {
     process.exit(1);
@@ -71,7 +71,7 @@ const results = await Promise.all(Array.from({ length: count }, async (_, index)
     const start = new Date();
     console.log(`START shard=${index}/${count} time=${start.toISOString()}`);
     const command = [...launch.command];
-    command.splice(command.indexOf('-cp'), 0, `-Dfolkways.airline.testShard=${index}/${count}`);
+    command.splice(command.indexOf('-cp'), 0, `-Dfolkways.testShard=${index}/${count}`);
     const result = await run(command, { cwd: world, env: { ...process.env, ...launch.environment },
         stdio: ['ignore', log, log] });
     await new Promise(resolve => log.end(resolve));
@@ -85,7 +85,7 @@ const results = await Promise.all(Array.from({ length: count }, async (_, index)
             throw error;
         }
     }
-    const selection = serverLog.match(/AIRLINE_TEST_SHARD shard=\S+ batches=(\d+) tests=(\d+) weight=(\d+)/);
+    const selection = serverLog.match(/GAMETEST_SHARD shard=\S+ batches=(\d+) tests=(\d+) weight=(\d+)/);
     const passed = result.code === 0 && (/All [0-9]+ required tests passed/.test(serverLog)
         || selection !== null && Number(selection[2]) === 0);
     const summary = { batches: selection ? Number(selection[1]) : null,

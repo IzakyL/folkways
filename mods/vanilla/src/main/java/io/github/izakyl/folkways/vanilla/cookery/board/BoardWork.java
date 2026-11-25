@@ -15,6 +15,7 @@ import io.github.izakyl.folkways.core.work.api.HoldingStep;
 import io.github.izakyl.folkways.core.work.api.Need;
 import io.github.izakyl.folkways.core.work.api.NodeSpec;
 import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Readiness;
 import io.github.izakyl.folkways.core.work.api.ToolNeed;
 import io.github.izakyl.folkways.core.work.api.ToolUse;
 import io.github.izakyl.folkways.core.work.api.WorkAction;
@@ -41,6 +42,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Consumer;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
@@ -138,10 +140,22 @@ final class BoardWork implements KitchenWork, ProcessLoop.Steps {
     }
 
     @Override
-    public boolean ready(ServerLevel level) {
-        return bookings.valid(at, id(), generation) && bookings.first(at, id())
+    public Optional<RefusalKind> planned(ServerLevel level, Consumer<RefusalKind> fail) {
+        Optional<RefusalKind> refused = planned(level);
+        if (refused.isEmpty()) {
+            if (closure.closed() || bookings.cancelled(at, id(), generation)) {
+                return Optional.of(CookeryRefusal.STATION_CHANGED);
+            }
+            closure.onWithdrawal(bookings, at, () -> fail.accept(CookeryRefusal.STATION_CHANGED));
+        }
+        return refused;
+    }
+
+    @Override
+    public Readiness readiness(ServerLevel level) {
+        return Readiness.of(bookings.valid(at, id(), generation) && bookings.first(at, id())
             && ChoppingBoardWorkshops.board(level, at).isPresent()
-            && (loop.isLoaded() ? owned(level) : empty(level));
+            && (loop.isLoaded() ? owned(level) : empty(level)));
     }
 
     @Override

@@ -633,7 +633,7 @@ function stationViews(layout: Layout): Shot[] {
   return shots;
 }
 
-const SELECT_TOWN = defineTask<{ player: string; colony: string }, boolean>({
+const SELECT_TOWN = defineTask<{ player: string; colony: string }, Record<string, any>>({
   name: "folkways.bench.select-town", side: "server",
   source: javaTask({ imports: [
     "io.github.izakyl.folkways.core.colony.api.Colonies",
@@ -646,7 +646,7 @@ var player = server.getPlayerList().getPlayerByName(args.string("player"));
 var colony = Colonies.of(server, UUID.fromString(args.string("colony"))).orElseThrow();
 Charters.keep(colony, Charters.of(server, colony).foundedBy(player.getUUID()));
 CurrentColony.choose(player, colony);
-return true;
+return Map.of("ok", true);
 ` }),
 });
 

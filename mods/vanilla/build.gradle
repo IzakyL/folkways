@@ -36,7 +36,7 @@ dependencies {
 }
 
 // Optional suites stay out of the base Vanilla test source set.
-["cookeryIntegrationTest", "cartsIntegrationTest"].each { name ->
+["cookeryIntegrationTest", "cookeryTest", "cartsIntegrationTest"].each { name ->
     def suite = sourceSets.create(name)
     neoForge.addModdingDependenciesTo(suite)
     configurations[suite.compileOnlyConfigurationName].extendsFrom(configurations.gametestCompileOnly)
@@ -44,6 +44,7 @@ dependencies {
     dependencies.add(suite.implementationConfigurationName, sourceSets.main.output)
 }
 dependencies {
+    cookeryTestImplementation sourceSets.gametest.output
     cookeryTestImplementation sourceSets.cookeryIntegrationTest.output
 }
 
@@ -81,82 +82,7 @@ dependencies {
     // The walker and hull cannon fixtures also probe a copy in the Assistant's sandbox.
     letItWalkTestImplementation project(":assistant")
     cbcTestImplementation project(":assistant")
-}
-
-if (project.findProperty("letItWalkTests") == "true" && project.findProperty("cbcTests") == "true") {
-    dependencies.add("cbcTestImplementation", sourceSets.letItWalkTest.output)
-} else {
-    sourceSets.cbcTest.java.exclude("**/CbcWalkerGameTests.java")
-}
-
-// Focused fixtures compile into a separate output, so stale broad-suite classes cannot register.
-def vanillaGameTestClassesProperty = providers.gradleProperty("vanillaGameTestClasses")
-if (vanillaGameTestClassesProperty.isPresent()) {
-    // The Core cart fixture only runs with the full cart suite.
-    sourceSets.cartsIntegrationTest.java.exclude("**/CartContentsGameTests.java")
-}
-def vanillaGameTestClasses = vanillaGameTestClassesProperty.getOrElse("")
-// Warfare fixtures share classes across the source set and are filtered when they register.
-if (vanillaGameTestClasses && project.findProperty("warfareTests") != "true") {
-    def suite = project.findProperty("createTests") == "true" ? sourceSets.createTest
-        : project.findProperty("taczTests") == "true" ? sourceSets.taczTest
-        : project.findProperty("cartsTests") == "true" ? sourceSets.cartsIntegrationTest
-        : project.findProperty("chiselsTests") == "true" ? sourceSets.chiselsandbitsTest
-        : project.findProperty("cookeryTests") == "true" && project.findProperty("vanillaBaseTests") != "true"
-            ? sourceSets.cookeryIntegrationTest
-        : sourceSets.gametest
-    def selectedClasses = vanillaGameTestClasses.split(",").collect { it.trim() }
-    def simpleNames = selectedClasses.collect { it.tokenize(".").last() }
-    // These helpers share Vanilla packages and have no tests to register.
-    def supportClasses = []
-    if (suite == sourceSets.createTest) {
-        // Focused Create runs can exercise the base pattern fixtures against native track.
-        sourceSets.gametest.java.srcDirs.each { suite.java.srcDir(it) }
-        if (simpleNames.any { it in ["RailwayPatternGameTests", "DraftRoadGameTests"] }) {
-            supportClasses.add("DraftKit")
-        }
-    }
-    if (suite == sourceSets.chiselsandbitsTest) {
-        supportClasses.addAll(["CandBTestData", "PatternChecks"])
-    }
-    if (suite == sourceSets.gametest && selectedClasses.contains("MineOneShotGameTests")) {
-        supportClasses.add("DraftKit")
-    }
-    if (suite == sourceSets.gametest
-        && selectedClasses.any { it in ["DiningFoodsGameTests", "LivingEatingGameTests", "LivingEffectsGameTests"] }) {
-        supportClasses.add("EatingFixture")
-    }
-    if (suite == sourceSets.taczTest && selectedClasses.contains("TaczSupplyGameTests")) {
-        supportClasses.add("TaczWeaponGameTests")
-    }
-    def sourceClasses = (selectedClasses + supportClasses).unique()
-    suite.java.setIncludes(sourceClasses.collect { it.contains(".") ? it.replace(".", "/") + ".java" : "**/${it}.java" })
-    def focused = layout.buildDirectory.dir("classes/java/focusedGametest/${suite.name}/${vanillaGameTestClasses.hashCode()}")
-    tasks.named(suite.compileJavaTaskName, JavaCompile) {
-        destinationDirectory = focused
-        doFirst {
-            def selected = source.files.collect { it.name }.sort()
-            def expected = sourceClasses.collect { "${it.tokenize('.').last()}.java" }.sort()
-            if (selected != expected) {
-                throw new GradleException("Focused Vanilla source filter differs: ${selected}")
-            }
-            logger.lifecycle("Focused Vanilla GameTests: ${selected.join(', ')}")
-        }
-    }
-    suite.output.classesDirs.setFrom(focused)
-}
-
-// The Create adapter fixtures register under Core even though their sources live here.
-def coreCreateGameTestClasses = project.findProperty("createTests") == "true"
-    ? providers.gradleProperty("coreGameTestClasses").getOrElse("") : ""
-if (coreCreateGameTestClasses) {
-    def suite = sourceSets.coreCreateTest
-    suite.java.setIncludes(coreCreateGameTestClasses.split(",").collect { "**/${it.trim()}.java" })
-    def focused = layout.buildDirectory.dir("classes/java/focusedGametest/${suite.name}/${coreCreateGameTestClasses.hashCode()}")
-    tasks.named(suite.compileJavaTaskName, JavaCompile) {
-        destinationDirectory = focused
-    }
-    suite.output.classesDirs.setFrom(focused)
+    cbcTestImplementation sourceSets.letItWalkTest.output
 }
 
 sourceSets { epicfightTest }

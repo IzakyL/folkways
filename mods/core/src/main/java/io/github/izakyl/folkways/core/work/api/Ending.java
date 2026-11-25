@@ -17,6 +17,11 @@ public sealed interface Ending {
     record Revoked() implements Ending {
     }
 
+    // Only sent to released(): the worker loses its placement while the node stays live.
+    record Replaced() implements Ending {
+    }
+
+    Ending REPLACED = new Replaced();
     Ending DONE = new Done();
     Ending DROPPED = new Dropped();
     Ending REVOKED = new Revoked();

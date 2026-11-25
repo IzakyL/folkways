@@ -16,6 +16,7 @@ import io.github.izakyl.folkways.core.front.api.Ghost;
 import io.github.izakyl.folkways.core.front.api.operation.Commissioning;
 import io.github.izakyl.folkways.core.front.api.GhostSource;
 import io.github.izakyl.folkways.core.front.api.Placard;
+import io.github.izakyl.folkways.core.colony.api.LooseGoods;
 import io.github.izakyl.folkways.core.item.api.Goods;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import io.github.izakyl.folkways.core.plan.api.Grown;
@@ -525,8 +526,11 @@ final class BuildPresence implements GhostSource {
                     ItemStack stack = Goods.display(amount.spec());
                     int count = (int) Math.min(left, stack.getMaxStackSize());
                     stack.setCount(count);
-                    level.addFreshEntity(new ItemEntity(level,
-                        at.getX() + 0.5, at.getY() + 1, at.getZ() + 0.5, stack));
+                    ItemEntity drop = new ItemEntity(level, at.getX() + 0.5, at.getY() + 1, at.getZ() + 0.5, stack);
+                    // What the site kept goes back to the stores the way anything a resident spilled does.
+                    if (level.addFreshEntity(drop)) {
+                        LooseGoods.left(colony.id(), drop);
+                    }
                     left -= count;
                 }
             }

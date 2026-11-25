@@ -286,6 +286,9 @@ public final class ColonyLabor implements WorkListener {
             }
             dropsToRead = List.of();
             pipeline.applyReady(level);
+            // Observe legacy native conditions at one point so querying readiness or holdings has no side effects.
+            phases.observeRefusals(this::failed);
+            personal.observeRefusals((id, why) -> { });
             settle(level);
             advanceRuns(level);
             Set<UUID> roster = enrolled();
@@ -620,7 +623,8 @@ public final class ColonyLabor implements WorkListener {
         }
         personal.entered(doing, level);
         try {
-            doing.planned(level).ifPresent(why -> personal.failed(doing.id(), why));
+            doing.planned(level, personal.ownerFailure(doing.id(), why -> { }))
+                .ifPresent(why -> personal.failed(doing.id(), why));
         } catch (RuntimeException | LinkageError broken) {
             personal.failed(doing.id(), LaborRefusal.WORK_BROKE);
         }
@@ -663,7 +667,7 @@ public final class ColonyLabor implements WorkListener {
         });
     }
 
-    // Work that went or was grown afresh ends as the plan says; new work enters it.
+    // The published plan and the runtime track the same nodes.
     LaborPlan planView() {
         return planView;
     }
@@ -679,10 +683,20 @@ public final class ColonyLabor implements WorkListener {
             }
         }
         Set<UUID> regrew = new LinkedHashSet<>();
-        for (UUID regrown : delta.fresh()) {
-            if (graph.has(regrown)) {
-                regrew.add(regrown);
+        Set<UUID> continued = new LinkedHashSet<>();
+        for (UUID id : delta.fresh()) {
+            Vertex before = graph.vertex(id);
+            if (before == null) {
+                continue;
             }
+            if (delta.put().get(id).node() == before.node()) {
+                continued.add(id);
+                // An owner can end the node while this weave is in flight. Keep its terminal phase and feedback.
+                if (phases.of(id).terminal()) {
+                    continue;
+                }
+            }
+            regrew.add(id);
         }
         Set<UUID> replaced = new LinkedHashSet<>(regrew);
         for (UUID gone : delta.removed()) {
@@ -690,10 +704,15 @@ public final class ColonyLabor implements WorkListener {
                 replaced.add(gone);
             }
         }
-        runners.letGo(replaced);
+        Set<UUID> released = new LinkedHashSet<>(continued);
+        released.retainAll(regrew);
+        runners.letGo(replaced, released);
         for (UUID regrown : regrew) {
-            phases.cancelled(regrown);
-            phases.forget(regrown);
+            // Explicit resubmission can replace the object under the same id.
+            if (!continued.contains(regrown)) {
+                phases.cancelled(regrown);
+                phases.forget(regrown);
+            }
             declined.remove(regrown);
             reportedFailures.remove(regrown);
         }
@@ -712,7 +731,7 @@ public final class ColonyLabor implements WorkListener {
         inputWorkers.keySet().retainAll(graph.vertices().keySet());
         declined.removeAll(delta.removed());
         reportedFailures.removeAll(delta.removed());
-        untaken.keySet().removeAll(delta.removed());
+        untaken.keySet().removeAll(replaced);
         // Work the plan gave up ends as the plan says; work it holds off the plan for now has not ended.
         Map<UUID, Ending> given = new LinkedHashMap<>();
         Set<UUID> worked = new LinkedHashSet<>();
@@ -760,13 +779,20 @@ public final class ColonyLabor implements WorkListener {
             ending(gone.node().id(), gone.how());
         }
         for (Node node : entered) {
-            submittedNodes++;
+            if (continued.contains(node.id())) {
+                if (regrew.contains(node.id())) {
+                    phases.restart(node.id());
+                }
+                continue;
+            }
             phases.entered(node, level);
+            submittedNodes++;
             if (node instanceof RunBoundary) {
                 runBoundaries.add(node.id());
             }
             try {
-                node.planned(level).ifPresent(why -> decline(node.id(), why));
+                node.planned(level, phases.ownerFailure(node.id(), why -> failed(node.id(), why)))
+                    .ifPresent(why -> decline(node.id(), why));
             } catch (RuntimeException | LinkageError broken) {
                 Labor.LOGGER.error("node {} threw accepting its plan", node.id(), broken);
                 decline(node.id(), LaborRefusal.WORK_BROKE);
@@ -809,6 +835,8 @@ public final class ColonyLabor implements WorkListener {
 
     private static UUID about(Message message) {
         return switch (message) {
+            case Message.NotReady(UUID node, long readyAt) -> node;
+            case Message.Ready(UUID node) -> node;
             case Message.Started(UUID node, var resident) -> node;
             case Message.Finished(UUID node) -> node;
             case Message.Failed(UUID node, var why) -> node;
@@ -1270,10 +1298,15 @@ public final class ColonyLabor implements WorkListener {
             return Optional.empty();
         }
         if (!phases.ready(vertex.node(), level)) {
+            long now = level.getGameTime();
+            phases.readinessUpdate(id, now).ifPresent(readyAt -> inbox.raise(new Message.NotReady(id, readyAt)));
             untaken.put(id, new Untaken(phases.waiting(id) ? "waiting"
                 : phases.of(id).terminal() ? "terminal:" + phases.of(id) : "not_ready", null));
             phases.failure(id).ifPresent(why -> failed(id, why));
             return Optional.empty();
+        }
+        if (phases.clearReadinessReport(id)) {
+            inbox.raise(new Message.Ready(id));
         }
         untaken.remove(id);
         return Optional.of(vertex.node());
@@ -1437,6 +1470,11 @@ public final class ColonyLabor implements WorkListener {
             }
         }
         return List.copyOf(ahead);
+    }
+
+    // Goods left lying for the colony without a resident spilling them; see LooseGoods.
+    public void leftLoose(ItemEntity drop) {
+        spilled(drop);
     }
 
     private void spilled(ItemEntity drop) {

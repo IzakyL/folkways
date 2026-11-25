@@ -14,6 +14,7 @@ import io.github.izakyl.folkways.core.work.api.Hold;
 import io.github.izakyl.folkways.core.work.api.Node;
 import io.github.izakyl.folkways.core.work.api.NodeSpec;
 import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Readiness;
 import io.github.izakyl.folkways.core.work.api.ToolNeed;
 import io.github.izakyl.folkways.core.work.api.ToolUse;
 import io.github.izakyl.folkways.core.work.api.WorkGesture;
@@ -122,8 +123,8 @@ public final class StoveWorkshops {
             if (refused.isEmpty()) { ACTIVE.put(new Key(colony, at), new Kept(goal, generation)); }
             return refused;
         }
-        public boolean ready(ServerLevel level) {
-            return refusal(level).isPresent() || bookings.first(at, id()) && ignition.ready(level);
+        public Readiness readiness(ServerLevel level) {
+            return Readiness.of(refusal(level).isPresent() || bookings.first(at, id()) && ignition.readiness(level).isReady());
         }
         public Optional<RefusalKind> refusal(ServerLevel level) {
             if (bookings.cancelled(at, id(), generation)) {

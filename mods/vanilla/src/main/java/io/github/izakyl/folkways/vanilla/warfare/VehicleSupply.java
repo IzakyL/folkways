@@ -17,6 +17,7 @@ import io.github.izakyl.folkways.core.work.api.Node;
 import io.github.izakyl.folkways.core.work.api.NodeSpec;
 import io.github.izakyl.folkways.core.work.api.Outcome;
 import io.github.izakyl.folkways.core.world.api.Stances;
+import io.github.izakyl.folkways.core.work.api.Readiness;
 import io.github.izakyl.folkways.core.work.api.WorkSite;
 import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.core.work.api.Workload;
@@ -103,7 +104,7 @@ final class VehicleSupply {
     List<Grown> goals(ColonyView view) {
         List<Grown> goals = new ArrayList<>();
         pending.entrySet().removeIf(entry -> view.level().getEntity(entry.getKey().hull()) != null
-            && !entry.getValue().ready(view.level()));
+            && !entry.getValue().readiness(view.level()).isReady());
         for (var entity : view.level().getAllEntities()) {
             if (!(entity instanceof VehicleEntity hull) || !available(hull, view)) {
                 continue;
@@ -178,19 +179,19 @@ final class VehicleSupply {
             }
 
             @Override
-            public boolean ready(ServerLevel level) {
-                return hull.level() == level && available(hull, view)
+            public Readiness readiness(ServerLevel level) {
+                return Readiness.of(hull.level() == level && available(hull, view)
                     && hull.position().distanceToSqr(destination) < 4
-                    && WarfareCrew.profile(hull, colony).equals(profile);
+                    && WarfareCrew.profile(hull, colony).equals(profile));
             }
 
             @Override
             public Outcome commit(ServerLevel level, Worker who) {
                 List<ItemStack> returned = new ArrayList<>();
-                int missing = ready(level) ? entry.target() - count(hull, entry) : 0;
+                int missing = readiness(level).isReady() ? entry.target() - count(hull, entry) : 0;
                 for (ItemStack supplied : who.supplied()) {
                     ItemStack rest = supplied.copy();
-                    if (energy && ready(level)) {
+                    if (energy && readiness(level).isReady()) {
                         var battery = rest.getCapability(Capabilities.EnergyStorage.ITEM);
                         if (battery != null) {
                             int wanted = (int) Math.max(0,

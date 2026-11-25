@@ -953,6 +953,7 @@ public final class DefinedFacilities {
             case Ending.Done ignored -> "done";
             case Ending.Dropped ignored -> "dropped";
             case Ending.Revoked ignored -> "revoked";
+            case Ending.Replaced ignored -> throw new IllegalStateException();
             case Ending.Failed ignored -> throw new IllegalStateException();
         });
     }

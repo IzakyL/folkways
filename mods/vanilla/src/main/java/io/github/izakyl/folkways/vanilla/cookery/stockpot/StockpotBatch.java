@@ -2,7 +2,9 @@ package io.github.izakyl.folkways.vanilla.cookery.stockpot;
 
 import com.github.ysbbbbbb.kaleidoscopecookery.api.blockentity.IStockpot;
 import com.github.ysbbbbbb.kaleidoscopecookery.blockentity.kitchen.StockpotBlockEntity;
+import io.github.izakyl.folkways.core.work.api.Readiness;
 import io.github.izakyl.folkways.core.world.api.BlockEntities;
+import io.github.izakyl.folkways.vanilla.cookery.stockpot.mixin.StockpotTimer;
 import java.util.Optional;
 import java.util.UUID;
 import net.minecraft.core.NonNullList;
@@ -41,6 +43,14 @@ record StockpotBatch(UUID colony, UUID id, StockpotPlan plan, CompoundTag inputs
         tag.putBoolean("replace_lid", replaceLid);
         pot.getPersistentData().put(KEY, tag);
         pot.setChanged();
+    }
+
+    static Readiness.NotYet cookingReadiness(StockpotBlockEntity pot, ServerLevel level) {
+        if (pot.getStatus() == IStockpot.COOKING && pot.hasHeatSource(level)) {
+            // The native pot finishes on the tick after the countdown reaches zero.
+            return Readiness.notYet(1L + Math.max(0, ((StockpotTimer) pot).folkways$cookingTicks()));
+        }
+        return Readiness.notYet();
     }
 
     static boolean ours(StockpotBlockEntity pot, UUID colony) {

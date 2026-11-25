@@ -19,6 +19,7 @@ import io.github.izakyl.folkways.core.work.api.HoldingContext;
 import io.github.izakyl.folkways.core.work.api.Need;
 import io.github.izakyl.folkways.core.work.api.NodeSpec;
 import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Readiness;
 import io.github.izakyl.folkways.core.work.api.WorkAction;
 import io.github.izakyl.folkways.core.work.api.WorkEffort;
 import io.github.izakyl.folkways.core.work.api.WorkGesture;
@@ -43,6 +44,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Consumer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
@@ -124,7 +126,38 @@ final class TeapotWork implements KitchenWork, ProcessLoop.Steps {
         }
         return refused;
     }
-    public boolean ready(ServerLevel level) { return bookings.cancelled(at, id(), generation) || bookings.first(at, id()); }
+    @Override
+    public Optional<RefusalKind> planned(ServerLevel level, Consumer<RefusalKind> fail) {
+        Optional<RefusalKind> refused = planned(level);
+        if (refused.isEmpty()) {
+            if (closure.closed() || bookings.cancelled(at, id(), generation)) {
+                return Optional.of(CookeryRefusal.STATION_CHANGED);
+            }
+            closure.onWithdrawal(bookings, at, () -> fail.accept(CookeryRefusal.STATION_CHANGED));
+        }
+        return refused;
+    }
+
+    public Readiness readiness(ServerLevel level) {
+        if (bookings.cancelled(at, id(), generation) || bookings.first(at, id())) {
+            return Readiness.READY;
+        }
+        return TeapotStation.pot(level, at).filter(pot -> pot.hasHeatSource(level))
+            .map(pot -> {
+                long ticks = Math.max(0, pot.getCurrentTick());
+                if (pot.getStatus() == ITeapot.PUT_INGREDIENT) {
+                    var ahead = TeaBatch.read(pot, level).filter(TeaBatch.Batch::loaded);
+                    if (ahead.isEmpty()) {
+                        return Readiness.notYet();
+                    }
+                    ticks += ahead.get().time() + 23L;
+                } else if (pot.getStatus() != ITeapot.PROCESSING) {
+                    return Readiness.notYet();
+                }
+                // Native tea updates in 23-tick steps. Collecting the batch ahead can extend the wait further.
+                return Readiness.notYet(ticks + 23);
+            }).orElseGet(Readiness::notYet);
+    }
     public Optional<RefusalKind> refusal(ServerLevel level) {
         if (closure.closed()) {
             return Optional.of(CookeryRefusal.STATION_CHANGED);

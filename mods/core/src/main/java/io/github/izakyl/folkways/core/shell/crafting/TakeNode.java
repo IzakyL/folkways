@@ -11,6 +11,7 @@ import io.github.izakyl.folkways.core.work.api.Amount;
 import io.github.izakyl.folkways.core.work.api.Node;
 import io.github.izakyl.folkways.core.work.api.NodeSpec;
 import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Readiness;
 import io.github.izakyl.folkways.core.work.api.WorkGesture;
 import io.github.izakyl.folkways.core.work.api.WorkNoise;
 import io.github.izakyl.folkways.core.work.api.WorkSite;
@@ -105,8 +106,8 @@ public final class TakeNode<P extends ItemPort> implements Node {
     }
 
     @Override
-    public boolean ready(ServerLevel level) {
-        return !collected && port(level).isPresent() && order.done(level);
+    public Readiness readiness(ServerLevel level) {
+        return Readiness.of(!collected && port(level).isPresent() && order.done(level));
     }
 
     private Optional<P> port(ServerLevel level) {
@@ -123,7 +124,7 @@ public final class TakeNode<P extends ItemPort> implements Node {
         if (collected) {
             return Outcome.done();
         }
-        if (!ready(level)) {
+        if (!readiness(level).isReady()) {
             return Outcome.failed(source.noDevice());
         }
         List<ItemStack> goods = order.collect();

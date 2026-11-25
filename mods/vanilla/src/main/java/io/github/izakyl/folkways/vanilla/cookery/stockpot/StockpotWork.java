@@ -9,6 +9,7 @@ import io.github.izakyl.folkways.core.work.api.HoldingContext;
 import io.github.izakyl.folkways.core.work.api.HoldingStep;
 import io.github.izakyl.folkways.core.work.api.NodeSpec;
 import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Readiness;
 import io.github.izakyl.folkways.core.work.api.WorkAction;
 import io.github.izakyl.folkways.core.work.api.WorkEffort;
 import io.github.izakyl.folkways.core.work.api.WorkGesture;
@@ -28,6 +29,7 @@ import io.github.izakyl.folkways.vanilla.wares.WaresContent;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Consumer;
 import net.minecraft.server.level.ServerLevel;
 
 // One production offer has one completion and one input budget. Its pieces use the real pot batch by batch;
@@ -98,8 +100,30 @@ final class StockpotWork implements KitchenWork, ProcessLoop.Steps {
     }
 
     @Override
-    public boolean ready(ServerLevel level) {
-        return bookings.cancelled(at, id(), generation) || bookings.first(at, id()) && loading.pot(level).isPresent();
+    public Optional<RefusalKind> planned(ServerLevel level, Consumer<RefusalKind> fail) {
+        Optional<RefusalKind> refused = planned(level);
+        if (refused.isEmpty()) {
+            if (closure.closed() || bookings.cancelled(at, id(), generation)) {
+                return Optional.of(CookeryRefusal.STATION_CHANGED);
+            }
+            closure.onWithdrawal(bookings, at, () -> fail.accept(CookeryRefusal.STATION_CHANGED));
+        }
+        return refused;
+    }
+
+    @Override
+    public Readiness readiness(ServerLevel level) {
+        if (bookings.cancelled(at, id(), generation)) {
+            return Readiness.READY;
+        }
+        var found = loading.pot(level);
+        if (found.isEmpty()) {
+            return Readiness.notYet();
+        }
+        if (bookings.first(at, id())) {
+            return Readiness.READY;
+        }
+        return StockpotBatch.cookingReadiness(found.get(), level);
     }
 
     @Override
@@ -137,7 +161,7 @@ final class StockpotWork implements KitchenWork, ProcessLoop.Steps {
 
     @Override
     public boolean loadable(ServerLevel level) {
-        return loading.ready(level);
+        return loading.readiness(level).isReady();
     }
 
     @Override
@@ -147,7 +171,7 @@ final class StockpotWork implements KitchenWork, ProcessLoop.Steps {
 
     @Override
     public boolean outputReady(ServerLevel level) {
-        return taking.ready(level);
+        return taking.readiness(level).isReady();
     }
 
     @Override

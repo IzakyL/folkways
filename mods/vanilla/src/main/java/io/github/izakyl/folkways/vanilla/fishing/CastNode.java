@@ -5,6 +5,7 @@ import io.github.izakyl.folkways.core.work.api.Ending;
 import io.github.izakyl.folkways.core.work.api.Node;
 import io.github.izakyl.folkways.core.work.api.NodeSpec;
 import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Readiness;
 import io.github.izakyl.folkways.core.work.api.ToolNeed;
 import io.github.izakyl.folkways.core.work.api.ToolUse;
 import io.github.izakyl.folkways.core.work.api.WorkGesture;
@@ -68,8 +69,8 @@ final class CastNode implements Node {
     }
 
     @Override
-    public boolean ready(ServerLevel level) {
-        return water.in(level) && level.isLoaded(water.block(level));
+    public Readiness readiness(ServerLevel level) {
+        return Readiness.of(water.in(level) && level.isLoaded(water.block(level)));
     }
 
     @Override

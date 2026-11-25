@@ -8,6 +8,7 @@ import io.github.izakyl.folkways.core.work.api.Need;
 import io.github.izakyl.folkways.core.work.api.Node;
 import io.github.izakyl.folkways.core.work.api.NodeSpec;
 import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Readiness;
 import io.github.izakyl.folkways.core.work.api.WorkGesture;
 import io.github.izakyl.folkways.core.work.api.WorkSite;
 import io.github.izakyl.folkways.core.work.api.Worker;
@@ -77,12 +78,12 @@ final class RefillNode implements Node {
         return Optional.of(worker);
     }
 
-    public boolean ready(ServerLevel level) {
-        return enabled.getAsBoolean() && source.in(level) && level.isLoaded(source.block(level));
+    public Readiness readiness(ServerLevel level) {
+        return Readiness.of(enabled.getAsBoolean() && source.in(level) && level.isLoaded(source.block(level)));
     }
 
     public Outcome commit(ServerLevel level, Worker who) {
-        if (!ready(level)) {
+        if (!readiness(level).isReady()) {
             return Outcome.failed(DamageControlRefusal.NOT_LOADED);
         }
         ItemStack stack = NativeExtinguisher.find(who.pack());

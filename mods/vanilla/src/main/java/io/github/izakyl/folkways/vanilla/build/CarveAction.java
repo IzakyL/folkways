@@ -137,7 +137,7 @@ final class CarveAction extends BuildAction {
         }
         rubble.forEach((pos, state) -> state.spawnAfterBreak(level, pos, tool, true));
         // Commits run on the server thread: no other worker can spend between this quote and this write.
-        cache.accept(quote);
+        made.addAll(cache.accept(quote));
         BuildingPerks.interrupt(who);
         List<WorkNoise> heard = new ArrayList<>();
         rubble.forEach((pos, state) -> heard.add(WorkNoise.broke(pos, state)));

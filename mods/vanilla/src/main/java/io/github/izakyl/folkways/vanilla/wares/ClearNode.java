@@ -2,6 +2,7 @@ package io.github.izakyl.folkways.vanilla.wares;
 
 import io.github.izakyl.folkways.core.work.api.Outcome;
 import io.github.izakyl.folkways.core.world.api.Stances;
+import io.github.izakyl.folkways.core.work.api.Readiness;
 import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.core.work.api.Workload;
 import io.github.izakyl.folkways.core.work.support.Leaves;
@@ -30,9 +31,9 @@ final class ClearNode extends CraftNode {
     }
 
     @Override
-    public boolean ready(ServerLevel level) {
-        return standing(level) && Machines.finished(level, cell())
-            .filter(machine -> stray.test(machine.getItem(Machines.RESULT_SLOT))).isPresent();
+    public Readiness readiness(ServerLevel level) {
+        return Readiness.of(standing(level) && Machines.finished(level, cell())
+            .filter(machine -> stray.test(machine.getItem(Machines.RESULT_SLOT))).isPresent());
     }
 
     @Override

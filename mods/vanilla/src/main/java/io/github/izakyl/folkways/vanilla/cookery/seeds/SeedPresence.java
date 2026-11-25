@@ -25,6 +25,7 @@ import io.github.izakyl.folkways.core.work.api.Node;
 import io.github.izakyl.folkways.core.work.api.NodeSpec;
 import io.github.izakyl.folkways.core.work.api.Outcome;
 import io.github.izakyl.folkways.core.world.api.Stances;
+import io.github.izakyl.folkways.core.work.api.Readiness;
 import io.github.izakyl.folkways.core.work.api.WorkGesture;
 import io.github.izakyl.folkways.core.work.api.WorkSite;
 import io.github.izakyl.folkways.core.work.api.Worker;
@@ -273,7 +274,7 @@ public final class SeedPresence implements HoldingKind {
             return refused;
         }
 
-        public boolean ready(ServerLevel level) { return ground.in(level) && bookings.first(anchor, id()); }
+        public Readiness readiness(ServerLevel level) { return Readiness.of(ground.in(level) && bookings.first(anchor, id())); }
 
         public Optional<RefusalKind> refusal(ServerLevel level) {
             return bookings.cancelled(anchor, id(), generation) || zone(level, zone)

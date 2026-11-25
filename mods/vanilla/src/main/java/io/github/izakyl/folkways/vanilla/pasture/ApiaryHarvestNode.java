@@ -9,6 +9,7 @@ import io.github.izakyl.folkways.core.work.api.Node;
 import io.github.izakyl.folkways.core.work.api.NodeSpec;
 import io.github.izakyl.folkways.core.work.api.Outcome;
 import io.github.izakyl.folkways.core.world.api.Stances;
+import io.github.izakyl.folkways.core.work.api.Readiness;
 import io.github.izakyl.folkways.core.work.api.ToolNeed;
 import io.github.izakyl.folkways.core.work.api.ToolUse;
 import io.github.izakyl.folkways.core.work.api.WorkGesture;
@@ -22,6 +23,9 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Consumer;
+import net.minecraft.world.level.levelgen.structure.BoundingBox;
+import io.github.izakyl.folkways.core.world.api.BlockChanges;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.level.ServerLevel;
@@ -42,6 +46,9 @@ final class ApiaryHarvestNode implements Node {
     private final Runnable changed;
     private final NodeSpec spec;
     private boolean claimed;
+    private BlockChanges.Heard blockWatch;
+    private Consumer<RefusalKind> fail;
+    private boolean harvested;
     private volatile boolean retired;
 
     ApiaryHarvestNode(WorldPos at, Stances stances, boolean bottles, PastDay made, Runnable changed) {
@@ -60,7 +67,12 @@ final class ApiaryHarvestNode implements Node {
         spec = builder.done();
     }
 
-    void retire() { retired = true; }
+    void retire() {
+        retired = true;
+        if (fail != null && !harvested) {
+            fail.accept(PastureRefusal.HIVE_GONE);
+        }
+    }
 
     synchronized boolean claimed() { return claimed; }
 
@@ -73,16 +85,39 @@ final class ApiaryHarvestNode implements Node {
         return Optional.empty();
     }
 
+    @Override
+    public synchronized Optional<RefusalKind> planned(ServerLevel level, Consumer<RefusalKind> fail) {
+        Optional<RefusalKind> refused = planned(level);
+        if (refused.isEmpty()) {
+            this.fail = fail;
+            harvested = false;
+            BlockPos hive = at.block(level);
+            var smoke = new BoundingBox(hive.getX(), hive.getY() - 5, hive.getZ(),
+                hive.getX(), hive.getY(), hive.getZ());
+            blockWatch = BlockChanges.afterWrites(level, smoke, () -> refusal(level).ifPresent(fail));
+        }
+        return refused;
+    }
+
     @Override public synchronized void ended(ServerLevel level, Ending how) {
         claimed = false;
+        fail = null;
+        if (blockWatch != null) {
+            blockWatch.close();
+            blockWatch = null;
+        }
         changed.run();
     }
 
-    @Override public boolean ready(ServerLevel level) {
-        return refusal(level).isEmpty();
+    @Override public Readiness readiness(ServerLevel level) {
+        return Readiness.of(condition(level).isEmpty());
     }
 
     @Override public Optional<RefusalKind> refusal(ServerLevel level) {
+        return harvested && claimed ? Optional.empty() : condition(level);
+    }
+
+    private Optional<RefusalKind> condition(ServerLevel level) {
         if (retired || !at.in(level)) return Optional.of(PastureRefusal.HIVE_GONE);
         BlockPos pos = at.block(level);
         if (!level.isLoaded(pos)) return Optional.of(PastureRefusal.HIVE_GONE);
@@ -95,10 +130,11 @@ final class ApiaryHarvestNode implements Node {
 
     @Override public Outcome commit(ServerLevel level, Worker who) {
         // The player, smoke or another harvest may have changed since the plan was made.
-        Optional<RefusalKind> refusal = refusal(level);
+        Optional<RefusalKind> refusal = condition(level);
         if (refusal.isPresent()) return Outcome.failed(refusal.get());
         BlockPos pos = at.block(level);
         BlockState state = level.getBlockState(pos);
+        harvested = true;
         ((BeehiveBlock) state.getBlock()).resetHoneyLevel(level, state, pos);
         Outcome done = new Outcome.Done(List.of(),
             List.of(new ItemStack(bottles ? Items.HONEY_BOTTLE : Items.HONEYCOMB, bottles ? 1 : 3)),

@@ -2,6 +2,7 @@ package io.github.izakyl.folkways.vanilla.groundwork;
 
 import io.github.izakyl.folkways.core.work.api.Amount;
 import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Readiness;
 import io.github.izakyl.folkways.core.work.api.WorkNoise;
 import io.github.izakyl.folkways.core.work.api.WorkSite;
 import io.github.izakyl.folkways.core.work.api.Worker;
@@ -37,8 +38,8 @@ final class HaulNode extends GroundNode {
     }
 
     @Override
-    public boolean ready(ServerLevel level) {
-        return lying(level) != null;
+    public Readiness readiness(ServerLevel level) {
+        return Readiness.of(lying(level) != null);
     }
 
     @Override

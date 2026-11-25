@@ -26,23 +26,12 @@ java {
 neoForge { version = project.neoforge_version }
 
 if (project.modId != "folkways_core") {
-    sourceSets {
-        gametest
-        cookeryTest
-    }
-
-    neoForge {
-        addModdingDependenciesTo sourceSets.gametest
-        addModdingDependenciesTo sourceSets.cookeryTest
-    }
-
+    sourceSets { gametest }
+    neoForge.addModdingDependenciesTo(sourceSets.gametest)
     configurations {
         gametestCompileOnly.extendsFrom compileOnly
         gametestImplementation.extendsFrom implementation
         gametestRuntimeOnly.extendsFrom runtimeOnly
-        cookeryTestCompileOnly.extendsFrom gametestCompileOnly
-        cookeryTestImplementation.extendsFrom gametestImplementation
-        cookeryTestRuntimeOnly.extendsFrom gametestRuntimeOnly
     }
 }
 
@@ -57,11 +46,8 @@ ext.lib = { String name ->
 }
 
 if (project.modId != "folkways_core") {
-    // Optional integration tests reuse their own mod's tests; cross-mod helpers have a separate fixtures output.
     dependencies {
         gametestImplementation sourceSets.main.output
-        cookeryTestImplementation sourceSets.main.output
-        cookeryTestImplementation sourceSets.gametest.output
     }
 }
 

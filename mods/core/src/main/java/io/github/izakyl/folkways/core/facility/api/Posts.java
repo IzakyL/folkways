@@ -12,6 +12,7 @@ import io.github.izakyl.folkways.core.work.api.Ending;
 import io.github.izakyl.folkways.core.work.api.Node;
 import io.github.izakyl.folkways.core.work.api.NodeSpec;
 import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Readiness;
 import io.github.izakyl.folkways.core.work.api.Urge;
 import io.github.izakyl.folkways.core.work.api.WorkEffort;
 import io.github.izakyl.folkways.core.work.api.Worker;
@@ -84,7 +85,7 @@ public final class Posts {
 
     public Optional<Worker> occupant(ServerLevel level, PostKey key, Object leaseKey) {
         var duty = leases.get(leaseKey);
-        if (duty == null || !duty.post.key().equals(key) || !duty.ready(level) || colony.isSuspended(duty.id())) {
+        if (duty == null || !duty.post.key().equals(key) || !duty.readiness(level).isReady() || colony.isSuspended(duty.id())) {
             return Optional.empty();
         }
         return Optional.ofNullable(duty.occupant).filter(worker -> duty.retained.stream().allMatch(Lease::open)
@@ -237,9 +238,9 @@ public final class Posts {
         }
 
         @Override
-        public boolean ready(ServerLevel world) {
-            return !closed && (level == null || level == world) && demanded.getAsBoolean()
-                && (occupant != null || post.station().available(world, post));
+        public Readiness readiness(ServerLevel world) {
+            return Readiness.of(!closed && (level == null || level == world) && demanded.getAsBoolean()
+                && (occupant != null || post.station().available(world, post)));
         }
 
         @Override
@@ -273,7 +274,7 @@ public final class Posts {
 
         @Override
         public boolean holds(ServerLevel world, Worker worker) {
-            if (!ready(world) || !admits(world, worker.body())) {
+            if (!readiness(world).isReady() || !admits(world, worker.body())) {
                 return false;
             }
             if (occupant != null) {

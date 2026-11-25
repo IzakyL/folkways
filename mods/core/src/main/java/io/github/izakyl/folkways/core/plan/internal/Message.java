@@ -16,6 +16,12 @@ public sealed interface Message {
     record Offered() implements Message {
     }
 
+    record NotReady(UUID node, long readyAt) implements Message {
+    }
+
+    record Ready(UUID node) implements Message {
+    }
+
     record Started(UUID node, UUID resident) implements Message {
     }
 

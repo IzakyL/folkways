@@ -7,6 +7,7 @@ import io.github.izakyl.folkways.core.world.api.Stances;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Consumer;
 import net.minecraft.server.level.ServerLevel;
 
 public interface Node extends WorkAction {
@@ -57,6 +58,12 @@ public interface Node extends WorkAction {
         return Optional.empty();
     }
 
+    // An owner can fail this placement when its resources disappear. The callback is server-thread only and
+    // expires when the node leaves the runtime.
+    default Optional<RefusalKind> planned(ServerLevel level, Consumer<RefusalKind> fail) {
+        return planned(level);
+    }
+
     // A reusable input already owned but temporarily unavailable must not trigger another manufacture.
     default boolean permitsProduction(io.github.izakyl.folkways.core.item.api.ItemSpec input) {
         return true;
@@ -75,8 +82,9 @@ public interface Node extends WorkAction {
         return false;
     }
 
-    default boolean ready(ServerLevel level) {
-        return true;
+    // Whether work can start now, possibly with an estimate in game ticks when it must wait.
+    default Readiness readiness(ServerLevel level) {
+        return Readiness.READY;
     }
 
     // Work that goes on in the same wind-up as the work just done, like reaching into the same store again. The
@@ -103,6 +111,7 @@ public interface Node extends WorkAction {
     default void ended(ServerLevel level, Ending how) {
     }
 
+    // Fallback for native state without a complete change notification. Observed once per labor cycle.
     default Optional<RefusalKind> refusal(ServerLevel level) {
         return Optional.empty();
     }

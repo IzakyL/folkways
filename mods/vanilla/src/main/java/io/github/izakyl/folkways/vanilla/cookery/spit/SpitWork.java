@@ -14,6 +14,7 @@ import io.github.izakyl.folkways.core.work.api.Need;
 import io.github.izakyl.folkways.core.work.api.NodeSpec;
 import io.github.izakyl.folkways.core.work.api.Outcome;
 import io.github.izakyl.folkways.core.world.api.Stances;
+import io.github.izakyl.folkways.core.work.api.Readiness;
 import io.github.izakyl.folkways.core.work.api.ToolNeed;
 import io.github.izakyl.folkways.core.work.api.ToolUse;
 import io.github.izakyl.folkways.core.work.api.WorkAction;
@@ -37,6 +38,7 @@ import io.github.izakyl.folkways.vanilla.wares.WaresContent;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Consumer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.RecipeType;
@@ -102,7 +104,26 @@ final class SpitWork implements KitchenWork {
         if (refused.isEmpty()) { SpitStation.keep(colony, at, recoveryGoal, generation); }
         return refused;
     }
-    public boolean ready(ServerLevel level) { return bookings.cancelled(at, id(), generation) || bookings.first(at, id()); }
+    @Override
+    public Optional<RefusalKind> planned(ServerLevel level, Consumer<RefusalKind> fail) {
+        Optional<RefusalKind> refused = planned(level);
+        if (refused.isEmpty()) {
+            if (closure.closed() || bookings.cancelled(at, id(), generation)) {
+                return Optional.of(CookeryRefusal.STATION_CHANGED);
+            }
+            closure.onWithdrawal(bookings, at, () -> fail.accept(CookeryRefusal.STATION_CHANGED));
+        }
+        return refused;
+    }
+
+    public Readiness readiness(ServerLevel level) {
+        if (bookings.cancelled(at, id(), generation) || bookings.first(at, id())) {
+            return Readiness.READY;
+        }
+        // The native roast must finish before the booking ahead can carve and release it.
+        return SpitStation.spit(level, part).filter(spit -> spit.cookTime > 0 && !spit.cookingItem.isEmpty())
+            .map(spit -> Readiness.notYet(spit.cookTime)).orElseGet(Readiness::notYet);
+    }
     public Optional<RefusalKind> refusal(ServerLevel level) {
         if (closure.closed()) {
             return Optional.of(CookeryRefusal.STATION_CHANGED);

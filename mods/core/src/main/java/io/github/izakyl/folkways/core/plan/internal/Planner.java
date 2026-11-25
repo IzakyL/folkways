@@ -26,6 +26,8 @@ public final class Planner {
 
     private final Map<UUID, UUID> inHand = new LinkedHashMap<>();
 
+    private final Map<UUID, Long> readyTimes = new HashMap<>();
+
     public record Timing(long messageNanos, long weaveNanos) {
     }
 
@@ -35,7 +37,8 @@ public final class Planner {
     public record Woven(WeaveDelta delta, Crew crew, Ways ways, boolean retry, List<Shortfall> shortfalls,
                         List<Refused> refused, List<Stall> stalls, Asks asks, Timing timing, int nodes,
                         Map<UUID, Cooldowns.Bar> cooldowns, PlanInputs inputs, long tick,
-                        List<PlanTask> attempted, boolean wanted, Map<UUID, List<Claim>> claims) {
+                        List<PlanTask> attempted, boolean wanted, Map<UUID, List<Claim>> claims,
+                        Map<UUID, Long> readyTimes) {
 
         public Woven {
             shortfalls = List.copyOf(shortfalls);
@@ -46,19 +49,20 @@ public final class Planner {
             Map<UUID, List<Claim>> copy = new LinkedHashMap<>();
             claims.forEach((owner, entries) -> copy.put(owner, List.copyOf(entries)));
             claims = Map.copyOf(copy);
+            readyTimes = Map.copyOf(readyTimes);
         }
 
         public Woven(WeaveDelta delta, Crew crew, Ways ways, boolean retry, List<Shortfall> shortfalls,
                      List<Refused> refused, List<Stall> stalls, Asks asks, Timing timing, int nodes) {
             this(delta, crew, ways, retry, shortfalls, refused, stalls, asks, timing, nodes, Map.of(),
-                PlanInputs.EMPTY, -1, List.of(), false, Map.of());
+                PlanInputs.EMPTY, -1, List.of(), false, Map.of(), Map.of());
         }
 
         public Woven(WeaveDelta delta, Crew crew, Ways ways, boolean retry, List<Shortfall> shortfalls,
                      List<Refused> refused, List<Stall> stalls, Asks asks, Timing timing, int nodes,
                      Map<UUID, List<Claim>> claims) {
             this(delta, crew, ways, retry, shortfalls, refused, stalls, asks, timing, nodes, Map.of(),
-                PlanInputs.EMPTY, -1, List.of(), false, claims);
+                PlanInputs.EMPTY, -1, List.of(), false, claims, Map.of());
         }
     }
 
@@ -72,8 +76,7 @@ public final class Planner {
         this.weaver = new Weaver(claims, cooldowns, colony);
     }
 
-    // `tours` are the routes the schedule last laid, as far as this stage has heard: work that finishes on one is
-    // the toured worker's from then on.
+    // The last tours can identify the worker when a step finishes without a start report.
     public Woven handle(Known known, List<Message> inbox, long tick, Map<UUID, Tour> tours) {
         return handle(known, inbox, tick, tours, false);
     }
@@ -88,21 +91,33 @@ public final class Planner {
             switch (message) {
                 case Message.Submitted(var owner, var work) -> weaver.submit(owner, work);
                 case Message.Withdrawn(var owner, UUID node) -> weaver.withdraw(owner, node);
+                case Message.NotReady(UUID node, long readyAt) -> {
+                    if (weaver.contains(node) && !inHand.containsValue(node)) {
+                        readyTimes.put(node, readyAt);
+                    }
+                }
+                case Message.Ready(UUID node) -> readyTimes.remove(node);
                 case Message.Started(UUID node, UUID resident) -> {
+                    readyTimes.remove(node);
                     inHand.put(resident, node);
                     weaver.heldBy(node, resident, false);
                 }
                 case Message.Finished(UUID node) -> {
+                    readyTimes.remove(node);
+                    UUID worker = inHand.entrySet().stream().filter(held -> node.equals(held.getValue()))
+                        .map(Map.Entry::getKey).findFirst().orElse(null);
                     letGo(node);
-                    if (touring == null) {
-                        touring = new HashMap<>();
-                        for (Tour tour : tours.values()) {
-                            for (UUID planned : tour.nodes()) {
-                                touring.put(planned, tour.resident());
+                    if (worker == null) {
+                        if (touring == null) {
+                            touring = new HashMap<>();
+                            for (Tour tour : tours.values()) {
+                                for (UUID planned : tour.nodes()) {
+                                    touring.put(planned, tour.resident());
+                                }
                             }
                         }
+                        worker = touring.get(node);
                     }
-                    UUID worker = touring.get(node);
                     if (worker != null) {
                         weaver.heldBy(node, worker, true);
                     }
@@ -110,6 +125,7 @@ public final class Planner {
                     weaver.finished(node);
                 }
                 case Message.Failed(UUID node, var why) -> {
+                    readyTimes.remove(node);
                     letGo(node);
                     cooldowns.behind(node).ifPresent(cooldowns::failed);
                     weaver.failed(node, why);
@@ -136,6 +152,9 @@ public final class Planner {
 
         long digested = System.nanoTime();
         WeaveDelta delta = weaver.grow(retry);
+        readyTimes.keySet().removeAll(delta.removed());
+        readyTimes.keySet().removeAll(delta.fresh());
+        readyTimes.keySet().removeIf(node -> !weaver.contains(node));
         // A committed node can leave the plan before its settlement is reported. Its runner has already
         // let go, so no later Released message is guaranteed to clear the planner's old holding.
         if (inHand.values().removeIf(delta.removed()::contains)) {
@@ -158,7 +177,7 @@ public final class Planner {
         }
         return new Woven(delta, crew, known.world().ways(), retry, shortfalls, weaver.refused(),
             weaver.stalls(), asks(shortfalls, crew), new Timing(digested - started, woven - digested), weaver.size(),
-            cooling, captured, tick, attempted, wanted, claims.snapshot());
+            cooling, captured, tick, attempted, wanted, claims.snapshot(), readyTimes);
     }
 
     public long rounds() {
@@ -167,6 +186,7 @@ public final class Planner {
 
     public void closed() {
         weaver.closed();
+        readyTimes.clear();
         inHand.clear();
     }
 

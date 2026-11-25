@@ -467,8 +467,8 @@ public final class DispatchPresence implements ResidentLines, MemberPointing, Co
         }
         for (ColonyView view : views) {
             for (CollectNode node : List.copyOf(collecting.values())) {
-                if (node.deferred() && node.port().in(view.level())) {
-                    node.retry(view.level());
+                if (node.port().in(view.level())) {
+                    node.tend(view.level());
                 }
             }
         }

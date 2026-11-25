@@ -12,6 +12,7 @@ import io.github.izakyl.folkways.core.work.api.Need;
 import io.github.izakyl.folkways.core.work.api.Node;
 import io.github.izakyl.folkways.core.work.api.Outcome;
 import io.github.izakyl.folkways.core.world.api.Stances;
+import io.github.izakyl.folkways.core.work.api.Readiness;
 import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.core.work.api.Xp;
 import io.github.izakyl.folkways.core.work.support.Leaves;
@@ -73,22 +74,25 @@ class StockpotTake extends StockpotAction {
         return Leaves.unpromised(spec().leaves(), promised);
     }
 
-    public boolean ready(ServerLevel level) {
+    public Readiness readiness(ServerLevel level) {
         if (bookings.cancelled(at, turn, generation)) {
-            return true;
+            return Readiness.READY;
         }
         if (!bookings.first(at, turn)) {
-            return false;
+            return Readiness.notYet();
         }
         return pot(level).map(pot -> {
             if (!StockpotBatch.claimed(pot)) {
                 // The load dependency gates execution. A lost claim must reach commit and fail, not hold
                 // its kitchen booking forever after a player change or a recovery sweep.
-                return true;
+                return Readiness.READY;
             }
             Optional<StockpotBatch> batch = batch(pot, level);
-            return batch.isEmpty() || !batch.get().valid(pot, level) || pot.getStatus() == IStockpot.FINISHED;
-        }).orElse(false);
+            if (batch.isEmpty() || !batch.get().valid(pot, level) || pot.getStatus() == IStockpot.FINISHED) {
+                return Readiness.READY;
+            }
+            return StockpotBatch.cookingReadiness(pot, level);
+        }).orElseGet(Readiness::notYet);
     }
 
     public Optional<RefusalKind> refusal(ServerLevel level) {
@@ -229,7 +233,7 @@ class StockpotTake extends StockpotAction {
 
         @Override
         public void released(ServerLevel level, Worker who, Ending how) {
-            if (!(how instanceof Ending.Done)) {
+            if (!(how instanceof Ending.Done) && !(how instanceof Ending.Replaced)) {
                 ended(level, how);
             }
         }

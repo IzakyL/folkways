@@ -66,73 +66,92 @@ npm run typecheck
 CI 会运行构建检查、按模组划分的 GameTests，以及真实客户端的建村冒烟测试，
 但不会运行全部客户端和素材录制套件。完整矩阵见 `.github/workflows/build.yml`。
 
-GameTests 统一使用以下模板，按需加上下表中的开关：
+使用 `-Psuite` 选择 GameTest 套件。省略时运行 `core`。逗号分隔可兼容的套件，例如
+`-Psuite=letitwalk,cbc`，同时运行步行机炮架测试。Gradle 会报告配置冲突。
 
 ```sh
-./gradlew --offline -PgameTestMod=<mod> [-P<开关>=<值> ...] runGameTestServer
+./gradlew --offline -Psuite=core -Ptests=PlanLifecycleGameTests runGameTestServer
+./gradlew --offline -Psuite=vanilla -PlistTests=build/vanilla-tests.txt runGameTestServer
 ```
 
-| 属性 | 启用内容 | 限制 |
+`-Ptests` 接受逗号分隔的类简单名、类全名、`Class#method` 或 `/正则/`。
+正则对完整的 `类全名#方法名` 匹配并忽略大小写。省略时运行套件的全部测试。
+`-PlistTests` 将筛选及分片后的测试按排序写入指定文件，随后退出。
+输出路径相对于仓库根目录。默认运行目录见下方套件表的链接，可用 `-PgameTestDirectory` 覆盖。
+性能 GameTest 默认使用 `-PperfBudget=strict`。CI 使用 `-PperfBudget=warn`，将计时超预算记录在运行目录的
+`perf-warnings.txt` 中，仅在超过计时预算四倍时失败；非计时断言始终正常判定失败。
+启动服务器前，在运行目录准备 `eula.txt`，接受 Minecraft EULA 后写入 `eula=true`。
+
+| 套件 | 内容 | 主要依赖或条件 |
 |---|---|---|
-| `gameTestMod` | 单个模组的测试套件，取值为 `mods/` 下的目录名；扩展所联动的模组会自动加载 | 省略时只启用 Core 的基础套件 |
-| `cookeryTests` | 森罗厨房及其联动夹具 | `gameTestMod=vanilla` 运行厨房玩法套件，`gameTestMod=core` 加入 Core 的厨房夹具；默认关闭 |
-| `cartsTests` | AstikorCarts Redux 及货箱、马车线路夹具 | 使用 `gameTestMod=vanilla` 运行套件；默认关闭 |
-| `modularGolemsTests`、`chiselsTests` | 分别加载模块化傀儡、Chisels & Bits 及对应的 Core 联动夹具 | 需要 `gameTestMod=core`，默认关闭；只运行所选联动夹具 |
-| `epicfightTests` | 加载 Epic Fight 和人类居民联动夹具 | 使用 `gameTestMod=vanilla`，默认关闭 |
-| `sableTests` | Sable 设施夹具 | 闸边搭配 `gameTestMod=vanilla`，炮架搭配 `gameTestMod=core` 和 `cbcTests=true`。默认关闭 |
-| `taczTests`、`warfareTests` | TACZ 或卓越前线集成夹具 | 使用 `gameTestMod=vanilla`。默认关闭，`warfareTests` 也加载 Airline |
-| `cbcTests` | Create Big Cannons 炮架夹具，同时加载机械动力和 Ritchie’s Projectile Library | 使用 `gameTestMod=core`，默认关闭 |
-| `letItWalkTests` | Let it Walk! 步行机夹具（驾驶、驻停、居民乘员），同时加载机械动力和 Sable | 使用 `gameTestMod=core`，默认关闭 |
-| `createTests` | 机械动力集成套件 | 使用 `gameTestMod=vanilla`，默认关闭 |
-| `firefightingTests` | 机械动力集成套件及消防附加夹具 | 使用 `gameTestMod=vanilla`，默认关闭 |
-| `vanillaBaseTests` | 在 Vanilla 的厨房联动测试中加入原有 Vanilla 夹具和原版套件 | 与 `gameTestMod=vanilla`、`cookeryTests=true` 一起使用 |
-| `tavernTests` | 森罗酒馆夹具（Cookery） | 需要 `cookeryTests` |
-| `createPlacementTests` | 为 Chisels & Bits 套件加入 Create 与打印放置夹具 | 需要 `gameTestMod=core` 和 `chiselsTests=true` |
-| `storageProfile` | 单个仓储模组：`sophisticatedStorage`、`sophisticatedBackpacks`、`drawers`、`functional`、`createStorage`、`toms`、`colossal` 或 `qio` | 仅限 Core；AE2、RS2 与存储 profile 互斥 |
-| `ae2Tests`、`rs2Tests` | Applied Energistics 2 或 Refined Storage 2 夹具 | 仅限 Core；两者互斥，也不能与存储 profile 同时使用 |
-| `storageLaborTests`、`ae2LaborTests`、`rs2LaborTests` | 在原生端口测试之外加入居民劳动测试 | 需要对应的 profile 或套件，以及 Vanilla |
-| `storageVanilla`、`ae2Vanilla`、`rs2Vanilla` | 设为 `false` 时在不装 Folkways Vanilla 的情况下测试原生端口 | 不能与劳动测试同用 |
-| `accessoryProfile` | `curios` 或 `accessories`，并加载 Sophisticated Backpacks | 仅限 Core；不加载 Core 基础套件 |
-| `accessoryCoexistence`、`accessoryCompat` | 在 Curios 旁加入真实 Accessories，或在 Accessories 中加入旧 cclayer | 只要设置即生效，与取值无关；分别搭配 `accessoryProfile=curios` 或 `accessories` |
-| `coreGameTestClasses`、`vanillaGameTestClasses` | 只编译并注册列出的 GameTest 类（逗号分隔） | 搭配 `gameTestMod=vanilla` 和 `createTests=true` 时，Core 开关筛选适配测试，Vanilla 开关筛选玩法测试 |
-| `gameTestFilter` | Airline 测试全名的正则（忽略大小写，方法名不带类名前缀） | 与 `gameTestMethods` 一起先过滤再分片 |
-| `gameTestShard` | Airline batch 分片 `i/n`，`i` 从 0 开始 | 要求 `0 <= i < n`；先过滤再分片 |
-| `gameTestMethods` | 只重跑列出的测试方法（限支持该功能的夹具） | — |
-| `gameTestNamespaces`、`gameTestDirectory` | 覆盖启用的命名空间或运行目录 | 否则每种开关组合在 `run/gametest/` 下使用独立世界 |
-| `saveUpgradeTests` | 加载并重新保存发布版 V4 集成夹具 | 单独使用 `-PsaveUpgradeTests=true` |
+| `core` | Core 引擎、存档夹具和 LDLib2 测试 | 机械动力 |
+| `vanilla` | Vanilla 玩法与居民夹具 | 机械动力、GeckoLib |
+| `assistant` | 助手工具与脚本 | 机械动力 |
+| `airline` | 机场、飞机与空中交通 | 机械动力、Sable |
+| `core-cookery` | Core 与厨房适配 | 森罗厨房 |
+| `cookery` | Vanilla 厨房联动 | 森罗厨房 |
+| `cookery-base` | 厨房联动、Vanilla 基础测试及额外厨房夹具 | 森罗厨房 |
+| `tavern` | 加载 Tavern 的厨房联动 | 森罗厨房、森罗酒馆 |
+| `carts` | 马车货箱与线路 | AstikorCarts Redux |
+| `create` | Core 适配与 Vanilla 机械动力联动 | 机械动力 |
+| `firefighting` | 机械动力及消防夹具 | 机械动力消防附加 |
+| `golems` | 模块化傀儡居民 | 模块化傀儡 |
+| `tacz` | TACZ 武器与补给 | TACZ |
+| `warfare` | 卓越前线联动，加载 Airline | 卓越前线、Sable |
+| `carving` | 雕凿工艺 | 雕凿工艺 |
+| `create-placement` | 雕凿与机械动力打印 | 雕凿工艺、机械动力 |
+| `epicfight` | 居民动画联动 | Epic Fight、GeckoLib |
+| `sable` | 移动设施与闸门夹具 | Sable |
+| `cbc` | 炮架与乘员夹具 | 机械动力大炮、Ritchie’s Projectile Library |
+| `cbc-sable` | 含 Sable 结构的炮架测试 | 机械动力大炮、Sable |
+| `letitwalk` | 步行机驾驶、驻停与乘员 | Let it Walk!、机械动力、Sable |
+| `storage-sophisticated-storage` | 箱柜仓储端口 | 精妙存储 |
+| `storage-sophisticated-backpacks` | 背包仓储端口 | 精妙背包 |
+| `storage-drawers` | 抽屉仓储端口 | 储物抽屉 |
+| `storage-functional` | 实用存储端口 | 实用存储 |
+| `storage-create` | 机械动力仓储端口 | 机械动力、FXNT Storage |
+| `storage-toms` | 汤姆的简易存储端口 | 汤姆的简易存储 |
+| `storage-colossal` | 巨型箱子仓储端口 | 巨型箱子 |
+| `storage-qio` | QIO 仓储端口 | 通用机械 |
+| `ae2`、`rs2` | 网络仓储联动 | 应用能源 2 或精致存储 2 |
+| `curios`、`curios-coexistence` | Curios 饰品栏，可与 Accessories 共存 | Curios、精妙背包 |
+| `accessories`、`accessories-compat` | Accessories 饰品栏，可加载 cclayer | Accessories、精妙背包 |
+| `save-upgrade` | 加载并重新保存发布版 V4 夹具 | 单独运行 |
+
+各 `storage-*`、`ae2` 和 `rs2` 套件可加 `-labor` 后缀以加入居民劳作夹具，
+或加 `-no-vanilla` 后缀以只加载 Core 和对应仓储模组。一次运行选择一种仓储联动。
+完整的加载清单和运行目录见 `tests/gametest/suites.json`。
 
 先运行一次 `npm run setup` 下载锁定的测试模组，再联网运行 `./gradlew build` 解析依赖（包括从 JitPack 获取的助手依赖 jpi-mini）。之后 Gradle 一律使用 `--offline`。原生模组套件在
 [`blockwright.toml`](blockwright.toml) 中有对应的 Blockwright profile（`ae2`、`rs2`、`storage_<名称>`、`curios`、`accessories`）。
-GameTest profile 请串行运行以控制内存占用。
+GameTest 套件请串行运行以控制内存占用。
 
 助手的 Blockwright profile 可用 JVM 属性 `folkways.assistant.provider`、
 `folkways.assistant.baseUrl` 和 `folkways.assistant.model` 覆盖客户端设置，并在一条警告中列出被覆盖的字段。
 
-运行 `./gradlew --offline -PsaveUpgradeTests=true runGameTestServer` 验证 V4 → V5 世界升级。
+运行 `./gradlew --offline -Psuite=save-upgrade runGameTestServer` 验证 V4 → V5 世界升级。
 每次运行时，测试会从 `tests/fixtures/saves/v4/` 复制一份存档到 `build/save-upgrade/`。
 夹具由 `20680d4b87a28940bb1ac6853320b7dde3737d8d`（`origin/master`，Folkways 数据版本 4）
 的 GameTest 服务器写出，保留了场景所在区块、聚落注册表，以及机械动力、TACZ 和雕凿工艺的旧服务器配置。
 二进制存档夹具放在 `tests/fixtures/saves/`，只保留测试所需的文件和区块。
 
-Airline GameTests：`./gradlew --offline -PgameTestMod=airline runGameTestServer`。
+Airline GameTests：`./gradlew --offline -Psuite=airline runGameTestServer`。
 
 用独立服务器进程并行运行 Airline（默认 3 个）：
 
 ```sh
 npm run test:airline:shards -- --shards 3
-npm run test:airline:shards -- --shards 2 '-PgameTestFilter=runway.*'
+npm run test:airline:shards -- --shards 2 '-Ptests=/.*runway.*/'
 ```
 
 脚本先由 Gradle 准备、编译一次并导出 Java 启动命令，再并行启动 JVM，避开 Gradle 项目锁。
 每个进程使用新的独立运行目录，自动写入 `eula.txt`，退出后删除世界。
 日志、起止时间、耗时及通过/失败汇总保留在 `build/airline-shards/`，任一分片失败即非零退出。
-额外 `-P` 参数会透传，包括 `gameTestMethods` ；
-`gameTestMod`、`gameTestShard`、`gameTestDirectory` 由脚本管理。
-每个服务器约需 6 GiB；Linux 上脚本等待可用内存达到 `6 × N + 2` GiB 后才启动。
+可传入 `-Ptests` 选择测试。脚本管理 `suite`、`gameTestShard` 和 `gameTestDirectory`。
+每个服务器约需 6 GiB。Linux 上可用内存不足时，脚本会减少分片数。
 分片保持 batch 完整：过滤后按 timeoutTicks 之和降序排列（同权按 batch 名），
 依次分给负载最小的分片（同负载按分片号）。直接调用 Gradle 也可用 `-PgameTestShard=0/3`，
 脚本在启动服务器前结束 Gradle，因此服务器执行不会被 Gradle 锁串行化，各分片也无需重复构建准备。
-`gameTestFilter` 匹配日志中的完整测试名，如 `runwaymarkingssurveyandaircraftfit`，不带类名前缀。
 Airline GameTest 模板与局部夹具使用单独分配的场地、带测试前缀的机场名，并在成功或失败时清理资源。
 普通原生夹具共用 batch；统计服务器全局勘测预算的测试保留独占 batch，
 在测试旁注明原因。生产环境的机场注册表与交通仍按维度共享。
@@ -220,11 +239,10 @@ feat(draft): add a dock pattern
 
 - 沿用周围代码的命名、注释密度和写法。
 - 不使用制表符和行尾空白；`./gradlew check` 会检查项目约定范围内的格式。
-- 模组测试源码放在 `tests/gametest/<mod>/<set>/java`，资源放在
-  `tests/gametest/<mod>/<set>/resources`，按行为所属的模组归档。
-  使用 Vanilla 居民或玩法的 Core 夹具可以放在 Vanilla 对应的目录中。
-  Vanilla 编译跨模组夹具，启动器将它们与 Core 一起加载，以便访问包内成员。
-  可复用的准备逻辑放在 `gameTestFixtures` 源集中。
+- GameTest 源码和资源分别放在 `tests/gametest/<suite>/{java,resources}`，
+  复用的夹具放在 `tests/gametest/fixtures/<name>/{java,resources}`。
+  套件表声明编译工程和运行时模组。Vanilla 编译跨模组夹具，启动器将 Core 的夹具与 Core 一起加载，
+  以便访问包内成员。
 - Assistant 在 `assistant/tool` 中维护工具注册表，以及权限检查、预览、确认令牌和助手的 Starlark 绑定。
   它通过 Core 接口读取领域数据并调用操作。Starlark 运行时及设施和卡片 API 由 Core 提供。
 - TypeScript 共享辅助代码放在 `tests/shared/`。套件可引用此处及 `tests/ldlib2/`，不可引用其他套件。

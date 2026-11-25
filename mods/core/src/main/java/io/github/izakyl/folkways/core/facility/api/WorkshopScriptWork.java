@@ -18,6 +18,7 @@ import io.github.izakyl.folkways.core.world.api.Stances;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Consumer;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
@@ -88,8 +89,9 @@ final class WorkshopScriptWork implements RunBoundary {
     }
 
     @Override
-    public Optional<RefusalKind> refusal(ServerLevel level) {
-        return workshop.active() ? Optional.empty() : Optional.of(FacilityRefusal.GONE);
+    public Optional<RefusalKind> planned(ServerLevel level, Consumer<RefusalKind> fail) {
+        return workshop.admit(this, () -> fail.accept(FacilityRefusal.GONE))
+            ? Optional.empty() : Optional.of(FacilityRefusal.GONE);
     }
 
     @Override
@@ -239,6 +241,7 @@ final class WorkshopScriptWork implements RunBoundary {
 
     @Override
     public void ended(ServerLevel level, Ending ending) {
+        workshop.unadmit(this);
         if (run == null || paused) {
             return;
         }

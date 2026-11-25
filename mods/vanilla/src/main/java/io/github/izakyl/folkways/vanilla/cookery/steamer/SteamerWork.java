@@ -14,6 +14,7 @@ import io.github.izakyl.folkways.core.work.api.Need;
 import io.github.izakyl.folkways.core.work.api.NodeSpec;
 import io.github.izakyl.folkways.core.work.api.Outcome;
 import io.github.izakyl.folkways.core.world.api.Stances;
+import io.github.izakyl.folkways.core.work.api.Readiness;
 import io.github.izakyl.folkways.core.work.api.WorkAction;
 import io.github.izakyl.folkways.core.work.api.WorkEffort;
 import io.github.izakyl.folkways.core.work.api.WorkGesture;
@@ -35,6 +36,7 @@ import io.github.izakyl.folkways.vanilla.wares.WaresContent;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Consumer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
@@ -98,7 +100,38 @@ final class SteamerWork implements KitchenWork {
         if (refused.isEmpty()) { SteamerStation.keep(colony, at, recoveryGoal, generation); }
         return refused;
     }
-    public boolean ready(ServerLevel level) { return bookings.cancelled(at, id(), generation) || bookings.first(at, id()); }
+    @Override
+    public Optional<RefusalKind> planned(ServerLevel level, Consumer<RefusalKind> fail) {
+        Optional<RefusalKind> refused = planned(level);
+        if (refused.isEmpty()) {
+            if (closure.closed() || bookings.cancelled(at, id(), generation)) {
+                return Optional.of(CookeryRefusal.STATION_CHANGED);
+            }
+            closure.onWithdrawal(bookings, at, () -> fail.accept(CookeryRefusal.STATION_CHANGED));
+        }
+        return refused;
+    }
+
+    public Readiness readiness(ServerLevel level) {
+        if (bookings.cancelled(at, id(), generation) || bookings.first(at, id())) {
+            return Readiness.READY;
+        }
+        var found = SteamerStation.steamer(level, part);
+        if (found.isEmpty() || !SteamerStation.heat(level, part.block(level))) {
+            return Readiness.notYet();
+        }
+        var steamer = found.get();
+        int[] progress = steamer.getCookingProgress();
+        int[] times = steamer.getCookingTime();
+        int ticks = 0;
+        for (int slot = 0; slot < progress.length; slot++) {
+            if (progress[slot] > 0 && !steamer.getItems().get(slot).isEmpty()) {
+                ticks = Math.max(ticks, times[slot] - progress[slot]);
+            }
+        }
+        // Every steaming slot of the batch ahead must finish before it can be unloaded.
+        return ticks > 0 ? Readiness.notYet(ticks) : Readiness.notYet();
+    }
     public Optional<RefusalKind> refusal(ServerLevel level) {
         if (closure.closed()) {
             return Optional.of(CookeryRefusal.STATION_CHANGED);

@@ -83,12 +83,6 @@ final class Bonds {
         return from == null ? Set.of() : from.keySet();
     }
 
-    // Every piece of work bound to `first` through any chain of sets, whether on the graph or not; the caller keeps
-    // what it wants of it.
-    Set<UUID> fellows(UUID first) {
-        return fellows(first, member -> true);
-    }
-
     // The work bound to `first` through chains of sets that pass only through work `through` admits; `first` is
     // always among it.
     Set<UUID> fellows(UUID first, Predicate<UUID> through) {

@@ -16,6 +16,10 @@ import io.github.izakyl.folkways.core.world.api.WorldPos;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Consumer;
+import net.minecraft.world.level.levelgen.structure.BoundingBox;
+import io.github.izakyl.folkways.core.world.api.BlockChanges;
+import io.github.izakyl.folkways.core.work.api.Ending;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
@@ -53,6 +57,26 @@ abstract class CraftNode implements Node {
             .vocation(WaresContent.trade())
             .gesture(WorkGesture.SWING)
             .focus(site.cell());
+    }
+
+    private BlockChanges.Heard blockWatch;
+
+    @Override
+    public Optional<RefusalKind> planned(ServerLevel level, Consumer<RefusalKind> fail) {
+        if (at.in(level)) {
+            BlockPos cell = at.block(level);
+            blockWatch = BlockChanges.afterWrites(level, BoundingBox.fromCorners(cell, cell),
+                () -> refusal(level).ifPresent(fail));
+        }
+        return refusal(level);
+    }
+
+    @Override
+    public void ended(ServerLevel level, Ending how) {
+        if (blockWatch != null) {
+            blockWatch.close();
+            blockWatch = null;
+        }
     }
 
     @Override

@@ -675,8 +675,14 @@ final class Routing implements Refinement {
                 return false;
             }
             if (last) {
-                if (transfer.to() instanceof To.Feeding feeding) {
-                    quote.carrier().ifPresent(who -> plan.by(feeding.edge().consumer(), who));
+                if (transfer.to() instanceof To.Feeding feeding && quote.carrier().isPresent()) {
+                    // Carried the whole way, the goods are used by whoever carries them: someone who could not do
+                    // the work they feed would leave it bound to no one able.
+                    UUID consumer = feeding.edge().consumer();
+                    plan.by(consumer, quote.carrier().get());
+                    if (!plan.fits(consumer)) {
+                        return false;
+                    }
                 }
                 delivered = finish(source, transfer, plan);
                 return delivered;

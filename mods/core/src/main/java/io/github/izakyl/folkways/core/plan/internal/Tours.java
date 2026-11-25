@@ -74,6 +74,8 @@ final class Tours {
     private final Map<UUID, UUID> seatOf = new LinkedHashMap<>();
     private final Map<UUID, Unassigned> waiting = new LinkedHashMap<>();
     private final Map<UUID, Placement> seen = new LinkedHashMap<>();
+    private Map<UUID, Long> readyTimes = Map.of();
+    private final Set<UUID> readinessChanged = new HashSet<>();
     private long origin = -1L;
 
     // The plan as this schedule keeps it, and the work grown afresh since the schedule last ran.
@@ -189,6 +191,20 @@ final class Tours {
 
     // A schedule for the plan as `weave` now holds it, `fresh` being the work grown afresh since the last one.
     Schedule schedule(WeaveView weave, Set<UUID> fresh, Crew crew, Ways ways, long tick, boolean retry) {
+        return schedule(weave, fresh, crew, ways, tick, retry, Map.of());
+    }
+
+    Schedule schedule(WeaveView weave, Set<UUID> fresh, Crew crew, Ways ways, long tick, boolean retry,
+                      Map<UUID, Long> readyTimes) {
+        readinessChanged.clear();
+        readinessChanged.addAll(this.readyTimes.keySet());
+        readinessChanged.addAll(readyTimes.keySet());
+        readinessChanged.removeIf(id -> java.util.Objects.equals(this.readyTimes.get(id), readyTimes.get(id)));
+        if (!readinessChanged.isEmpty()) {
+            declined.clear();
+            readinessChanged.forEach(beyondUntil::remove);
+        }
+        this.readyTimes = readyTimes;
         if (origin < 0L) {
             origin = tick;
         }
@@ -566,6 +582,9 @@ final class Tours {
 
     private boolean holds(Seat seat, UUID id, int at, Placed placed) {
         Vertex node = weave.vertex(id);
+        if (readinessChanged.contains(id) && !seat.hand.id().equals(fitness.heldBy.get(id))) {
+            return false;
+        }
         if (fresh.contains(id) || !node.plan().equals(seen.get(id))) {
             return false;
         }
@@ -1339,7 +1358,9 @@ final class Tours {
                     if (to == from) {
                         continue;
                     }
-                    if (guess(seat, from, length, to) > -SAVING) {
+                    // Moving work into a readiness gap can save time even with no walking saved.
+                    boolean fillsWait = to < from && waitsBetween(seat, to, from);
+                    if (!fillsWait && guess(seat, from, length, to) > -SAVING) {
                         continue;
                     }
                     List<UUID> order = moved(seat.route, from, length, to);
@@ -1354,6 +1375,17 @@ final class Tours {
                     }
                     decline(order);
                 }
+            }
+        }
+        return false;
+    }
+
+    private boolean waitsBetween(Seat seat, int from, int to) {
+        for (int at = from; at < to && at - from < MOST_TAIL; at++) {
+            UUID id = seat.route.get(at);
+            int before = at == 0 ? now : seat.when.get(at - 1).finish();
+            if (readyTick(id) > before) {
+                return true;
             }
         }
         return false;
@@ -1544,7 +1576,7 @@ final class Tours {
     }
 
     private int earliestAfter(UUID id) {
-        int soonest = 0;
+        int soonest = readyTick(id);
         for (UUID predecessor : weave.before(id)) {
             Placed placed = settled.get(predecessor);
             if (placed != null) {
@@ -1552,6 +1584,13 @@ final class Tours {
             }
         }
         return soonest;
+    }
+
+    private int readyTick(UUID id) {
+        Long estimate = readyTimes.get(id);
+        // Leave headroom for travel, work and placement scoring after even an extremely distant estimate.
+        return estimate == null || fitness.heldBy.containsKey(id) ? 0
+            : (int) Math.clamp(estimate - origin, 0L, Integer.MAX_VALUE / 4L);
     }
 
     private static int ticks(Journey by, double pace) {
@@ -1644,6 +1683,8 @@ final class Tours {
         fares.clear();
         sought.clear();
         changed.clear();
+        readyTimes = Map.of();
+        readinessChanged.clear();
         origin = -1L;
     }
 }

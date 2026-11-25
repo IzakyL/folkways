@@ -1,6 +1,7 @@
 package io.github.izakyl.folkways.core.facility.api;
 
 import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Readiness;
 import io.github.izakyl.folkways.core.work.api.Worker;
 import java.util.function.BiFunction;
 import java.util.function.Predicate;
@@ -10,8 +11,8 @@ import net.minecraft.server.level.ServerLevel;
 public record EnsureState(Predicate<ServerLevel> satisfied, Predicate<ServerLevel> available,
                           BiFunction<ServerLevel, Worker, Outcome> apply) {
 
-    public boolean ready(ServerLevel level) {
-        return satisfied.test(level) || available.test(level);
+    public Readiness readiness(ServerLevel level) {
+        return Readiness.of(satisfied.test(level) || available.test(level));
     }
 
     public Outcome commit(ServerLevel level, Worker who) {

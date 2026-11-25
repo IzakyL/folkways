@@ -35,6 +35,15 @@ for (const stage of twins()) test(stage.title("stove recovery: borrow real ignit
     const block = (cell: Vec) => commandPos(stage.at(cell));
     await world.command(server, "setblock " + block(cells.supply) + " minecraft:chest{Items:[]}");
     await world.command(server, "setblock " + block(cells.stove) + " kaleidoscope_cookery:stove[lit=false]");
+    // Founding only clears the first few blocks above the floor. Prepare the whole sky column
+    // at the actual world projection, not the ship's remote storage coordinates.
+    evidence.skyBeforeSetup = await read(server, stage, cells);
+    const { rainAt, overhead, maxBuildY } = evidence.skyBeforeSetup;
+    if (overhead.length > 0) {
+      evidence.fixtureChanges.push({ action: "clear the projected stove's sky column", at: rainAt, overhead });
+      await world.command(server, "fill " + commandPos(rainAt) + " "
+        + commandPos({ ...rainAt, y: maxBuildY }) + " minecraft:air");
+    }
     await world.command(server, "item replace block " + block(cells.supply) + " container.0 with " + FLINT + " 1");
     evidence.supplyMark = await optInViaBook(server, client, player.name, cells.supply, "worksite", stage);
     await tick.sprint(server, 85); evidence.beforeTask = await read(server, stage, cells);
@@ -74,7 +83,13 @@ for (const stage of twins()) test(stage.title("stove recovery: borrow real ignit
     evidence.rainStarted = await until(server, stage, cells, evidence, "the native global rain transition", state => state.globalRaining, 250);
     expect(evidence.rainStarted.precipitation, "the actual projected worksite has a rain-bearing biome").toBe("RAIN");
     await world.command(server, "setblock " + block({ ...cells.stove, y: cells.stove.y + 1 }) + " minecraft:air");
-    evidence.exposedToRain = await read(server, stage, cells);
+    // Removing the water changes skylight asynchronously. Wait for native sky visibility
+    // to catch up, without allowing ignition or consumption during the transition.
+    evidence.exposedToRain = await until(server, stage, cells, evidence, "the projected stove's sky light after removing water", state => {
+      expect(state.lit).toBe(false);
+      expect(quantity(state, CHARGE)).toBe(2);
+      return state.canSeeSky;
+    }, 100);
     expect(evidence.exposedToRain.canSeeSky, "the actual projected stove is exposed to the sky").toBe(true);
     expect(evidence.exposedToRain.rainingAt, "native rain reaches the stove before testing the waiting period").toBe(true);
     await tick.sprint(server, 85); evidence.raining = await read(server, stage, cells);
@@ -150,6 +165,13 @@ var at=WorldPos.of(level,stove);var world=WorldSpaces.world(level,at).orElseThro
 var out=new LinkedHashMap<String,Object>();out.put("lit",level.getBlockState(stove).getValue(StoveBlock.LIT));out.put("dry",StoveIgnition.dry(level,at));
 out.put("rainingAt",level.isRainingAt(rainAt));out.put("globalRaining",level.isRaining());
 out.put("canSeeSky",level.canSeeSky(rainAt));out.put("precipitation",level.getBiome(rainAt).value().getPrecipitationAt(rainAt).toString());
+var overhead=new ArrayList<Object>();
+for(int y=rainAt.getY();y<level.getMaxBuildHeight();y++){
+ var pos=new BlockPos(rainAt.getX(),y,rainAt.getZ());var state=level.getBlockState(pos);
+ if(!state.isAir()){overhead.add(Map.of("y",y,"block",state.toString()));}
+}
+out.put("rainAt",Map.of("x",rainAt.getX(),"y",rainAt.getY(),"z",rainAt.getZ()));
+out.put("overhead",overhead);out.put("maxBuildY",level.getMaxBuildHeight()-1);
 out.put("source",items);out.put("shared",shared);out.put("residents",residents);out.put("drops",drops);
 out.put("stovePoint",colony.claimAt(at).filter(holding->holding.owner().equals(CookeryContent.STOVE)&&holding.what() instanceof Claimed.Point).isPresent());
 return out;

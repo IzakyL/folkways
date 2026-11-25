@@ -64,7 +64,7 @@ final class ToolReturn implements Node {
 
         @Override
         protected boolean ready(HoldingContext context, WorkAction operation) {
-            return ((ToolAction.Return) operation).ready(context.level());
+            return ((ToolAction.Return) operation).readiness(context.level()).isReady();
         }
 
         @Override

@@ -239,6 +239,7 @@ final class ScriptRun {
             case Ending.Done ignored -> null;
             case Ending.Failed failed -> failed.why().translationKey();
             case Ending.Dropped ignored -> "folkways.facility.script.script_interrupted";
+            case Ending.Replaced ignored -> "folkways.facility.script.script_interrupted";
             case Ending.Revoked ignored -> "folkways.facility.script.script_interrupted";
         };
         var next = ending instanceof Ending.Failed failed ? handlers.get(failed.node()) : null;

@@ -99,7 +99,7 @@ final class Apiaries {
     List<Grown> goals(ColonyView view) {
         List<Grown> goals = new ArrayList<>();
         harvests.forEach((at, harvest) -> {
-            if (at.in(view.level()) && harvest.node().ready(view.level())) goals.add(Grown.of(harvest.node()));
+            if (at.in(view.level()) && harvest.node().readiness(view.level()).isReady()) goals.add(Grown.of(harvest.node()));
         });
         return List.copyOf(goals);
     }

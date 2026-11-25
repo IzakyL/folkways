@@ -2,6 +2,7 @@ package io.github.izakyl.folkways.vanilla.build;
 
 import io.github.izakyl.folkways.core.base.persist.Reader;
 import io.github.izakyl.folkways.core.base.persist.Writer;
+import io.github.izakyl.folkways.core.item.api.Goods;
 import io.github.izakyl.folkways.core.item.api.ItemSpec;
 import io.github.izakyl.folkways.core.work.api.Amount;
 import io.github.izakyl.folkways.core.work.api.BlockData;
@@ -13,10 +14,12 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.LevelReader;
 import net.minecraft.world.level.block.state.BlockState;
 
@@ -37,6 +40,12 @@ final class Carving {
     }
 
     static final class Cache {
+        static final int WHOLE_STACKS = 9;
+        private static final Fraction ZERO = new Fraction(BigInteger.ZERO, BigInteger.ONE);
+
+        // Reservations mark stock in the balance. A save or refund still sees every block.
+        private final Map<UUID, Map<ItemSpec, Integer>> reserved = new LinkedHashMap<>();
+        private final Map<ItemSpec, Integer> promised = new LinkedHashMap<>();
         private Map<ItemSpec, Fraction> balance = new LinkedHashMap<>();
         private final Runnable changed;
 
@@ -44,9 +53,131 @@ final class Carving {
             this.changed = changed;
         }
 
-        void accept(Quote quote) {
+        List<ItemStack> accept(Quote quote) {
+            Map<ItemSpec, Integer> before = stock();
             balance = new LinkedHashMap<>(quote.balance());
+            promised.forEach(this::add);
+            Map<ItemSpec, Integer> gained = new LinkedHashMap<>();
+            stock().forEach((item, count) -> {
+                int added = count - before.getOrDefault(item, 0);
+                if (added > 0) {
+                    gained.put(item, added);
+                    add(item, -added);
+                }
+            });
+            List<ItemStack> excess = new ArrayList<>();
+            gained.forEach((item, added) -> {
+                ItemStack stack = Goods.display(item);
+                int kept = Math.min(added, room(stack));
+                add(item, kept);
+                for (int left = added - kept; left > 0; left -= stack.getMaxStackSize()) {
+                    excess.add(stack.copyWithCount(Math.min(left, stack.getMaxStackSize())));
+                }
+            });
             changed.run();
+            return excess;
+        }
+
+        private void add(ItemSpec item, int count) {
+            Fraction next = balance.getOrDefault(item, ZERO).plus(count, 1);
+            if (next.count().signum() == 0) {
+                balance.remove(item);
+            } else {
+                balance.put(item, next);
+            }
+        }
+
+        private int whole(Fraction fraction) {
+            return fraction.count().divide(fraction.units()).intValueExact();
+        }
+
+        Map<ItemSpec, Integer> stock() {
+            Map<ItemSpec, Integer> stock = new LinkedHashMap<>();
+            balance.forEach((item, fraction) -> {
+                int count = whole(fraction);
+                if (count > 0) {
+                    stock.put(item, count);
+                }
+            });
+            return stock;
+        }
+
+        Map<ItemSpec, Integer> available(UUID stay, boolean shared) {
+            Map<ItemSpec, Integer> available = new LinkedHashMap<>(reserved.getOrDefault(stay, Map.of()));
+            if (shared) {
+                stock().forEach((item, count) -> {
+                    int publicCount = count - promised.getOrDefault(item, 0);
+                    if (publicCount > 0) {
+                        available.merge(item, publicCount, Integer::sum);
+                    }
+                });
+            }
+            return available;
+        }
+
+        void reserve(UUID stay, Map<ItemSpec, Integer> goods) {
+            if (!goods.isEmpty()) {
+                reserved.put(stay, goods);
+                goods.forEach((item, count) -> promised.merge(item, count, Integer::sum));
+            }
+        }
+
+        boolean release(UUID stay) {
+            Map<ItemSpec, Integer> goods = reserved.remove(stay);
+            if (goods == null || goods.isEmpty()) {
+                return false;
+            }
+            goods.forEach(this::unpromise);
+            return true;
+        }
+
+        private void unpromise(ItemSpec item, int count) {
+            promised.compute(item, (key, have) -> have == count ? null : have - count);
+        }
+
+        void take(UUID stay, ItemSpec item, int count) {
+            Map<ItemSpec, Integer> own = reserved.get(stay);
+            int used = own == null ? 0 : Math.min(count, own.getOrDefault(item, 0));
+            if (used > 0) {
+                own.compute(item, (key, have) -> have == used ? null : have - used);
+                unpromise(item, used);
+            }
+            add(item, -count);
+            changed.run();
+        }
+
+        int deposit(ItemStack stack, int limit) {
+            ItemSpec item = ItemSpec.of(stack.getItem());
+            if (!ItemStack.isSameItemSameComponents(stack, Goods.display(item))) {
+                item = Goods.specOf(stack);
+            }
+            int count = Math.min(Math.min(stack.getCount(), limit), room(stack));
+            if (count <= 0) {
+                return 0;
+            }
+            add(item, count);
+            changed.run();
+            return count;
+        }
+
+        // Count whole blocks by the space they would take if stacked together.
+        private int room(ItemStack stack) {
+            Fraction left = ZERO.plus(WHOLE_STACKS, 1);
+            for (var entry : stock().entrySet()) {
+                int size = Goods.stackSize(entry.getKey());
+                if (size > 0) {
+                    left = left.plus(-entry.getValue(), size);
+                }
+            }
+            return left.count().max(BigInteger.ZERO).multiply(BigInteger.valueOf(stack.getMaxStackSize()))
+                .divide(left.units()).intValueExact();
+        }
+
+        private Map<ItemSpec, Fraction> pricingBalance(boolean fractionsOnly) {
+            Map<ItemSpec, Fraction> available = new LinkedHashMap<>();
+            balance.forEach((item, fraction) -> available.put(item,
+                fraction.plus(-(fractionsOnly ? whole(fraction) : promised.getOrDefault(item, 0)), 1)));
+            return available;
         }
 
         CompoundTag save() {
@@ -71,6 +202,8 @@ final class Carving {
                 entry.getValue().count().divide(entry.getValue().units()).longValueExact()))
                 .filter(amount -> amount.count() > 0).toList();
             balance.clear();
+            reserved.clear();
+            promised.clear();
             changed.run();
             return refund;
         }
@@ -150,8 +283,11 @@ final class Carving {
     }
 
     static Quote priced(Quote quote, Cache cache) {
+        return priced(quote, cache.pricingBalance(false));
+    }
+
+    private static Quote priced(Quote quote, Map<ItemSpec, Fraction> balance) {
         List<Need> needs = new ArrayList<>();
-        Map<ItemSpec, Fraction> balance = new LinkedHashMap<>(cache.balance);
         quote.net().forEach((material, fraction) -> {
             Fraction old = balance.getOrDefault(material, new Fraction(BigInteger.ZERO, BigInteger.ONE));
             BigInteger units = fraction.units().multiply(old.units());
@@ -171,10 +307,14 @@ final class Carving {
     static List<Need> funding(List<Quote> quotes, Cache cache) {
         return combined(quotes.stream().map(quote -> new Quote(List.of(), List.of(), 1, Map.of(),
             quote.net().entrySet().stream().filter(entry -> entry.getValue().count().signum() > 0)
-                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)))).toList(), cache);
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)))).toList(), cache.pricingBalance(true));
     }
 
     static List<Need> combined(List<Quote> quotes, Cache cache) {
+        return combined(quotes, cache.pricingBalance(true));
+    }
+
+    private static List<Need> combined(List<Quote> quotes, Map<ItemSpec, Fraction> balance) {
         Map<ItemSpec, Fraction> net = new LinkedHashMap<>();
         quotes.forEach(quote -> quote.net().forEach((material, fraction) -> net.merge(material, fraction, (a, b) -> {
             BigInteger units = a.units().multiply(b.units());
@@ -182,7 +322,7 @@ final class Carving {
             BigInteger gcd = count.gcd(units);
             return new Fraction(count.divide(gcd), units.divide(gcd));
         })));
-        return priced(new Quote(List.of(), List.of(), 1, Map.of(), net), cache).needs();
+        return priced(new Quote(List.of(), List.of(), 1, Map.of(), net), balance).needs();
     }
 
     static StructureCompat.Voxels volume(StructureCompat.Handler handler, BlockState state, BlockData data) {

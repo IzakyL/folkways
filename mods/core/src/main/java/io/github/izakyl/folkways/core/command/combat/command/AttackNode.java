@@ -10,6 +10,7 @@ import io.github.izakyl.folkways.core.work.api.Node;
 import io.github.izakyl.folkways.core.work.api.NodeSpec;
 import io.github.izakyl.folkways.core.work.api.Outcome;
 import io.github.izakyl.folkways.core.world.api.Stances;
+import io.github.izakyl.folkways.core.work.api.Readiness;
 import io.github.izakyl.folkways.core.work.api.WorkSite;
 import io.github.izakyl.folkways.core.work.api.Worker;
 import io.github.izakyl.folkways.core.work.api.Workload;
@@ -63,8 +64,8 @@ final class AttackNode implements Node {
         return true;
     }
 
-    public boolean ready(ServerLevel level) {
-        return step.equals(order.step()) && commands.active(order);
+    public Readiness readiness(ServerLevel level) {
+        return Readiness.of(step.equals(order.step()) && commands.active(order));
     }
 
     public Outcome commit(ServerLevel level, Worker who) {

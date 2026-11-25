@@ -13,6 +13,7 @@ import io.github.izakyl.folkways.core.work.api.Node;
 import io.github.izakyl.folkways.core.work.api.NodeSpec;
 import io.github.izakyl.folkways.core.work.api.NodeState;
 import io.github.izakyl.folkways.core.work.api.Outcome;
+import io.github.izakyl.folkways.core.work.api.Readiness;
 import io.github.izakyl.folkways.core.work.api.Recourse;
 import io.github.izakyl.folkways.core.work.api.ToolUse;
 import io.github.izakyl.folkways.core.work.api.Unmet;
@@ -31,6 +32,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Consumer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
 
@@ -103,7 +105,16 @@ final class ToolWork implements Node {
 
     @Override
     public Optional<RefusalKind> planned(ServerLevel level) {
-        Optional<RefusalKind> refused = original.planned(level);
+        return planned(level, why -> { });
+    }
+
+    @Override
+    public Optional<RefusalKind> planned(ServerLevel level, Consumer<RefusalKind> fail) {
+        Optional<RefusalKind> refused = original.planned(level, why -> {
+            if (!workDone) {
+                fail.accept(why);
+            }
+        });
         if (refused.isPresent()) {
             return refused;
         }
@@ -118,16 +129,17 @@ final class ToolWork implements Node {
     }
 
     @Override
-    public boolean ready(ServerLevel level) {
+    public Readiness readiness(ServerLevel level) {
         // Completed native work only has its physical returns and settlement left.
-        if (workDone) { return true; }
-        if (!original.ready(level)) {
-            return false;
+        if (workDone) { return Readiness.READY; }
+        Readiness readiness = original.readiness(level);
+        if (!readiness.isReady()) {
+            return readiness;
         }
         if (!started && loans.isEmpty()) {
             List<ItemSpec> allowed = allowed();
             if (allowed.isEmpty()) {
-                return false;
+                return Readiness.notYet();
             }
             families = allowed;
         }
@@ -135,10 +147,10 @@ final class ToolWork implements Node {
             var state = service.pool.request(service.colony.id(), id(), family, service.stock.read(level,
                 family).inventory()).status();
             if (state != KitchenTools.Status.AVAILABLE && state != KitchenTools.Status.BORROWED) {
-                return false;
+                return Readiness.notYet();
             }
         }
-        return true;
+        return Readiness.READY;
     }
 
     @Override
@@ -299,6 +311,12 @@ final class ToolWork implements Node {
 
     @Override
     public void released(ServerLevel level, Worker who, Ending how) {
+        if (how instanceof Ending.Replaced) {
+            if (!originalReleased) {
+                original.released(level, who, how);
+            }
+            return;
+        }
         releaseOriginal(level, who, how);
         if (!(how instanceof Ending.Done)) {
             ended(level, how);

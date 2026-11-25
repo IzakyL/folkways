@@ -56,9 +56,9 @@ final class Runners {
         }
     }
 
-    void letGo(Set<UUID> nodes) {
+    void letGo(Set<UUID> nodes, Set<UUID> continued) {
         for (BodyRunner runner : byResident.values()) {
-            runner.cancelNodes(nodes);
+            runner.cancelNodes(nodes, continued);
         }
     }
 

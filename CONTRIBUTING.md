@@ -78,78 +78,98 @@ CI runs the build checks, per-mod GameTests and a focused real-client founding
 smoke test. It does not run every client or capture suite. See
 `.github/workflows/build.yml` for the exact matrix.
 
-Run GameTests with one template, adding switches from the table below:
+Choose a GameTest suite with `-Psuite`. The default is `core`. Separate compatible suites with commas,
+for example `-Psuite=letitwalk,cbc` also exercises the walker-mounted cannon. Gradle reports conflicting suite settings.
 
 ```sh
-./gradlew --offline -PgameTestMod=<mod> [-P<switch>=<value> ...] runGameTestServer
+./gradlew --offline -Psuite=core -Ptests=PlanLifecycleGameTests runGameTestServer
+./gradlew --offline -Psuite=vanilla -PlistTests=build/vanilla-tests.txt runGameTestServer
 ```
 
-| Property | Enables | Constraints |
+`-Ptests` accepts comma-separated simple class names, fully qualified class names, `Class#method` or
+`/regex/`. Regexes match the full `fully.qualified.Class#method` case-insensitively. Omit the selector to
+run the whole suite. `-PlistTests` writes a sorted list after selection and sharding, then exits.
+The list path is relative to the repository root. Override the default server directory with `-PgameTestDirectory`.
+Performance GameTests default to `-PperfBudget=strict`. CI uses `-PperfBudget=warn`, which records timing
+budget overruns in `perf-warnings.txt` in the run directory and fails only above four times the timing budget;
+non-timing assertions always fail normally.
+Before starting a server, place `eula.txt` containing `eula=true` in its run directory if you accept the Minecraft EULA.
+
+| Suite | Includes | Main requirements |
 |---|---|---|
-| `gameTestMod` | One mod's suite: a directory under `mods/`. An extension's target mod is loaded automatically | Without it, only Core's base suite is enabled |
-| `cookeryTests` | Kaleidoscope Cookery and its integration fixtures | Use `gameTestMod=vanilla` for the kitchen gameplay suite or `gameTestMod=core` to add Core's kitchen fixtures. Off by default |
-| `cartsTests` | AstikorCarts Redux and the cargo and cart line fixtures | Use `gameTestMod=vanilla` for the suite. Off by default |
-| `modularGolemsTests`, `chiselsTests` | Modular Golems or Chisels & Bits and the corresponding Core integration fixtures | Require `gameTestMod=core`; off by default; run only the selected integration fixtures |
-| `epicfightTests` | Epic Fight and the resident integration fixtures | Use `gameTestMod=vanilla`; off by default |
-| `sableTests` | Sable facility fixtures | Use `gameTestMod=vanilla` for the gate or pair with `gameTestMod=core` and `cbcTests=true` for the cannon mount. Off by default |
-| `taczTests`, `warfareTests` | TACZ or Superb Warfare integration fixtures | Use `gameTestMod=vanilla`. Off by default. `warfareTests` also loads Airline |
-| `cbcTests` | Create Big Cannons cannon mount fixtures, with Create and Ritchie’s Projectile Library | Use `gameTestMod=core`. Off by default |
-| `letItWalkTests` | Let it Walk! walker fixtures (drive, park, a resident crew aboard), with Create and Sable | Use `gameTestMod=core`. Off by default |
-| `createTests` | Create integration suite | Use `gameTestMod=vanilla`. Off by default |
-| `firefightingTests` | Create integration suite and FireFighting Additions fixtures | Use `gameTestMod=vanilla`. Off by default |
-| `vanillaBaseTests` | Adds the existing Vanilla Cookery fixtures and the Vanilla base suite | Pair with `gameTestMod=vanilla` and `cookeryTests=true` |
-| `tavernTests` | Kaleidoscope Tavern fixtures (Cookery) | Requires `cookeryTests` |
-| `createPlacementTests` | Adds Create and its printing fixture to the Chisels & Bits suite | Requires `gameTestMod=core` and `chiselsTests=true` |
-| `storageProfile` | One storage mod: `sophisticatedStorage`, `sophisticatedBackpacks`, `drawers`, `functional`, `createStorage`, `toms`, `colossal` or `qio` | Core only; AE2, RS2 and storage profiles are mutually exclusive |
-| `ae2Tests`, `rs2Tests` | Applied Energistics 2 or Refined Storage 2 fixtures | Core only; mutually exclusive with each other and storage profiles |
-| `storageLaborTests`, `ae2LaborTests`, `rs2LaborTests` | Resident labour tests on top of the native port tests | Require the matching profile or suite, and Vanilla |
-| `storageVanilla`, `ae2Vanilla`, `rs2Vanilla` | `false` runs the native ports without Folkways Vanilla | Not with labour tests |
-| `accessoryProfile` | `curios` or `accessories`, with Sophisticated Backpacks | Core only; does not load the base Core suite |
-| `accessoryCoexistence`, `accessoryCompat` | Adds genuine Accessories beside Curios, or the old cclayer beside Accessories | Enabled by being set, whatever the value; pair with `accessoryProfile=curios` or `accessories` |
-| `coreGameTestClasses`, `vanillaGameTestClasses` | Compile and register only the listed GameTest classes (comma-separated) | With `gameTestMod=vanilla` and `createTests=true`, use the Core selector for adapter tests and the Vanilla selector for gameplay tests |
-| `gameTestFilter` | Case-insensitive full-name regex for Airline tests (method names without class prefixes) | Applied before sharding, together with `gameTestMethods` |
-| `gameTestShard` | Airline batch shard `i/n`, with zero-based `i` | Requires `0 <= i < n`; filters run first |
-| `gameTestMethods` | Rerun only the listed methods of fixtures that support it | — |
-| `gameTestNamespaces`, `gameTestDirectory` | Override the enabled namespaces or the run directory | Each switch combination otherwise gets its own world under `run/gametest/` |
-| `saveUpgradeTests` | Reopens and resaves the published V4 integration fixture | Run on its own with `-PsaveUpgradeTests=true` |
+| `core` | Core engine, save fixtures and LDLib2 tests | Create |
+| `vanilla` | Vanilla gameplay and resident fixtures | Create, GeckoLib |
+| `assistant` | Assistant tools and scripting | Create |
+| `airline` | Airports, aircraft and traffic | Create, Sable |
+| `core-cookery` | Core and kitchen adapters | Cookery |
+| `cookery` | Vanilla kitchen integration | Cookery |
+| `cookery-base` | Cookery integration, Vanilla base and additional kitchen fixtures | Cookery |
+| `tavern` | Cookery integration with Tavern loaded | Cookery, Tavern |
+| `carts` | Cart cargo and cart lines | AstikorCarts Redux |
+| `create` | Core adapters and Vanilla Create integration | Create |
+| `firefighting` | Create and firefighting fixtures | Create FireFighting Additions |
+| `golems` | Modular Golems residents | Modular Golems |
+| `tacz` | TACZ weapons and supplies | TACZ |
+| `warfare` | Superb Warfare, with Airline loaded | Superb Warfare, Sable |
+| `carving` | Chisels & Bits carving | Chisels & Bits |
+| `create-placement` | Carving and Create printing | Chisels & Bits, Create |
+| `epicfight` | Resident animation integration | Epic Fight, GeckoLib |
+| `sable` | Moving facility and gate fixtures | Sable |
+| `cbc` | Cannon mount and crew fixtures | Create Big Cannons, Ritchie’s Projectile Library |
+| `cbc-sable` | Cannon mounts including Sable assemblies | Create Big Cannons, Sable |
+| `letitwalk` | Walker driving, parking and crew | Let it Walk!, Create, Sable |
+| `storage-sophisticated-storage` | Chest storage ports | Sophisticated Storage |
+| `storage-sophisticated-backpacks` | Backpack storage ports | Sophisticated Backpacks |
+| `storage-drawers` | Drawer storage ports | Storage Drawers |
+| `storage-functional` | Functional drawer storage ports | Functional Storage |
+| `storage-create` | Create storage ports | Create, FXNT Storage |
+| `storage-toms` | Tom’s storage ports | Tom’s Simple Storage |
+| `storage-colossal` | Colossal chest storage ports | Colossal Chests |
+| `storage-qio` | QIO storage ports | Mekanism |
+| `ae2`, `rs2` | Network storage integration | Applied Energistics 2 or Refined Storage 2 |
+| `curios`, `curios-coexistence` | Curios slots, optionally alongside Accessories | Curios, Sophisticated Backpacks |
+| `accessories`, `accessories-compat` | Accessories slots, optionally with cclayer | Accessories, Sophisticated Backpacks |
+| `save-upgrade` | Reloads and resaves the released V4 fixture | Run alone |
+
+Each `storage-*`, `ae2` and `rs2` suite has a `-labor` variant that adds resident labour fixtures
+and a `-no-vanilla` variant that loads Core and the selected storage integration. Choose one storage integration
+per run. See `tests/gametest/suites.json` for the full module lists and run directories.
 
 Run `npm run setup` once to download the pinned fixtures. Run `./gradlew build` online to resolve dependencies,
 including Assistant’s jpi-mini from JitPack, then keep Gradle `--offline`. Native-mod suites have matching
 Blockwright profiles in [`blockwright.toml`](blockwright.toml) (`ae2`, `rs2`, `storage_<name>`,
-`curios`, `accessories`). Run GameTest profiles serially to keep memory usage bounded.
+`curios`, `accessories`). Run GameTest suites serially to keep memory usage bounded.
 
 The Assistant Blockwright profiles can use the JVM properties `folkways.assistant.provider`,
 `folkways.assistant.baseUrl` and `folkways.assistant.model` to override the client settings,
 with one warning listing the overridden fields.
 
-Run the V4 → V5 world upgrade with `./gradlew --offline -PsaveUpgradeTests=true runGameTestServer`.
-The profile stages a fresh copy from `tests/fixtures/saves/v4/` in `build/save-upgrade/`.
+Run the V4 → V5 world upgrade with `./gradlew --offline -Psuite=save-upgrade runGameTestServer`.
+The suite stages a fresh copy from `tests/fixtures/saves/v4/` in `build/save-upgrade/`.
 The fixture was written by the GameTest server at `20680d4b87a28940bb1ac6853320b7dde3737d8d`
 (`origin/master`, Folkways data version 4) and retains the occupied chunk, colony registry,
 and the old Create, TACZ and Chisels & Bits server configs. Keep binary save fixtures in
 `tests/fixtures/saves/` and retain only the files and chunks the test needs.
 
-Airline GameTests: `./gradlew --offline -PgameTestMod=airline runGameTestServer`.
+Airline GameTests: `./gradlew --offline -Psuite=airline runGameTestServer`.
 
 Run Airline in independent server processes (three by default):
 
 ```sh
 npm run test:airline:shards -- --shards 3
-npm run test:airline:shards -- --shards 2 '-PgameTestFilter=runway.*'
+npm run test:airline:shards -- --shards 2 '-Ptests=/.*runway.*/'
 ```
 
 The script prepares/compiles once with Gradle, exports its Java launch command, then starts the JVMs
 concurrently without Gradle project locks. Each uses a fresh run directory with `eula.txt`; worlds are
 removed after exit. Logs, timestamps, durations and pass/fail summaries remain under `build/airline-shards/`.
-Any failed shard makes the command fail. Extra `-P` properties are forwarded, including `gameTestMethods`
-; the script owns `gameTestMod`, `gameTestShard` and `gameTestDirectory`.
-Allow about 6 GiB per server; on Linux the script waits for `6 × N + 2` GiB available before launching.
+Any failed shard makes the command fail. Pass `-Ptests` to select tests. The script sets `suite`,
+`gameTestShard` and `gameTestDirectory`.
+Allow about 6 GiB per server. On Linux the script uses fewer shards when available memory is low.
 Batches stay intact: after filtering, sort by summed timeout ticks descending (ties by batch name), then
 assign to the least-loaded shard (ties by shard index). `-PgameTestShard=0/3` also works with a direct
 Gradle invocation. The script finishes Gradle before starting servers, so Gradle locks cannot serialize
 server execution and each shard avoids repeating build preparation.
-`gameTestFilter` matches the whole logged test name, e.g. `runwaymarkingssurveyandaircraftfit`,
-without a class prefix.
 Airline GameTest structures and local fixtures use separately allocated sites, with scoped airport names and
 cleanup on both success and failure. Ordinary native fixtures share batches. Tests that measure server-wide
 survey budgets keep an exclusive batch, with the reason beside the test. Production airport registries and
@@ -260,11 +280,10 @@ Changing persisted data? Follow [save compatibility](SAVE_COMPATIBILITY.md).
 
 - Match the surrounding naming, comment density and idiom.
 - Use no tabs or trailing whitespace; `./gradlew check` checks scaffold formatting.
-- Put mod test sources in `tests/gametest/<mod>/<set>/java` and their resources in
-  `tests/gametest/<mod>/<set>/resources`. Use the mod that owns the behavior.
-  Core fixtures that use Vanilla residents or gameplay can live in Vanilla's matching
-  directory. Vanilla compiles the cross-mod fixtures and the launcher loads them with
-  Core for package-private access. Put reusable setup in the `gameTestFixtures` set.
+- Put GameTest sources and resources in `tests/gametest/<suite>/{java,resources}` and shared fixtures in
+  `tests/gametest/fixtures/<name>/{java,resources}`. The suite table declares the compiling project and
+  runtime module. Vanilla compiles cross-mod fixtures and the launcher loads Core's fixtures with Core for
+  package-private access.
 - Assistant owns the tool registries under `assistant/tool`, including permission checks,
   previews, confirmation tokens and the assistant's Starlark bindings. It reads domain data
   and invokes operations through Core interfaces. Core owns the Starlark runtime and

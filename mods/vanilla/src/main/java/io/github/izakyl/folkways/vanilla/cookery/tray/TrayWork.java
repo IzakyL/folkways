@@ -13,6 +13,7 @@ import io.github.izakyl.folkways.core.work.api.Need;
 import io.github.izakyl.folkways.core.work.api.NodeSpec;
 import io.github.izakyl.folkways.core.work.api.Outcome;
 import io.github.izakyl.folkways.core.world.api.Stances;
+import io.github.izakyl.folkways.core.work.api.Readiness;
 import io.github.izakyl.folkways.core.work.api.WorkAction;
 import io.github.izakyl.folkways.core.work.api.WorkEffort;
 import io.github.izakyl.folkways.core.work.api.WorkGesture;
@@ -31,9 +32,11 @@ import io.github.izakyl.folkways.vanilla.cookery.KitchenDelivery;
 import io.github.izakyl.folkways.core.facility.api.ProcessHolding;
 import io.github.izakyl.folkways.vanilla.cookery.KitchenWork;
 import io.github.izakyl.folkways.vanilla.wares.WaresContent;
+import io.github.izakyl.folkways.vanilla.cookery.tray.mixin.BambooTrayAccess;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Consumer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
 
@@ -103,8 +106,34 @@ final class TrayWork implements KitchenWork {
         }
         return refused;
     }
-    public boolean ready(ServerLevel level) {
-        return bookings.cancelled(at, id(), generation) || bookings.first(at, id()) && (loop.isLoaded() || TrayWeather.allows(level, at.block(level), job.subtype()));
+    @Override
+    public Optional<RefusalKind> planned(ServerLevel level, Consumer<RefusalKind> fail) {
+        Optional<RefusalKind> refused = planned(level);
+        if (refused.isEmpty()) {
+            if (closure.closed() || bookings.cancelled(at, id(), generation)) {
+                return Optional.of(CookeryRefusal.STATION_CHANGED);
+            }
+            closure.onWithdrawal(bookings, at, () -> fail.accept(CookeryRefusal.STATION_CHANGED));
+        }
+        return refused;
+    }
+
+    public Readiness readiness(ServerLevel level) {
+        if (bookings.cancelled(at, id(), generation)) {
+            return Readiness.READY;
+        }
+        if (bookings.first(at, id())) {
+            return Readiness.of(loop.isLoaded() || TrayWeather.allows(level, at.block(level), job.subtype()));
+        }
+        return TrayStation.tray(level, at).flatMap(tray -> TrayBatch.read(tray, level)
+            .filter(batch -> TrayWeather.allows(level, at.block(level), batch.subtype()))
+            .filter(batch -> !TrayBatch.ready(tray, level, batch))
+            .map(batch -> {
+                int progress = ((BambooTrayAccess) tray).folkways$progress()[batch.slot()];
+                // The native tray adds 19 ticks of progress per update while the weather allows it.
+                long left = Math.max(1L, (long) batch.time() - progress);
+                return Readiness.notYet(19 * Math.ceilDiv(left, 19));
+            })).orElseGet(Readiness::notYet);
     }
     public Optional<RefusalKind> refusal(ServerLevel level) {
         if (closure.closed()) {

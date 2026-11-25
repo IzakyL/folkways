@@ -8,6 +8,7 @@ import io.github.izakyl.folkways.core.work.api.Node;
 import io.github.izakyl.folkways.core.work.api.NodeSpec;
 import io.github.izakyl.folkways.core.work.api.Outcome;
 import io.github.izakyl.folkways.core.world.api.Stances;
+import io.github.izakyl.folkways.core.work.api.Readiness;
 import io.github.izakyl.folkways.core.work.api.WorkGesture;
 import io.github.izakyl.folkways.core.work.api.WorkSite;
 import io.github.izakyl.folkways.core.work.api.Worker;
@@ -54,12 +55,12 @@ final class StrayNode implements Node {
     }
 
     @Override
-    public boolean ready(ServerLevel level) {
+    public Readiness readiness(ServerLevel level) {
         if (!at.in(level) || !level.isLoaded(at.block(level))) {
-            return false;
+            return Readiness.notYet();
         }
-        return PackageNetworks.get().parcelsAt(level, at.block(level)).stream()
-            .anyMatch(parcel -> stray(collecting, at, parcel));
+        return Readiness.of(PackageNetworks.get().parcelsAt(level, at.block(level)).stream()
+            .anyMatch(parcel -> stray(collecting, at, parcel)));
     }
 
     @Override

@@ -541,7 +541,7 @@ final class Dining {
                 Stances.at(cabinet.level(), approach), Workload.Once.of(1)).effort(WorkEffort.NONE)
                 .doing(LivingContent.DINING_DRINKING).focus(cabinet.at()).done();
             public NodeSpec spec() { return spec; }
-            public Optional<io.github.izakyl.folkways.core.resident.api.RefusalKind> refusal(ServerLevel level) {
+            public Optional<io.github.izakyl.folkways.core.resident.api.RefusalKind> planned(ServerLevel level) {
                 return Optional.of(LivingRefusal.NOTHING_TO_EAT);
             }
             public Outcome commit(ServerLevel level, Worker worker) { return Outcome.failed(LivingRefusal.NOTHING_TO_EAT); }
@@ -564,6 +564,7 @@ final class Dining {
         final NodeSpec spec;
         final long expires;
         boolean finished;
+        boolean served;
         BarDrink(UUID token, Worker who, DiningSupplies.Cabinet cabinet, Seat seat, int slot, ItemStack bottle) {
             this.token = token; this.who = who; this.cabinet = cabinet; this.seat = seat;
             this.slot = slot; this.bottle = bottle;
@@ -586,7 +587,15 @@ final class Dining {
         }
         public NodeSpec spec() { return spec; }
 
+        public Optional<io.github.izakyl.folkways.core.resident.api.RefusalKind> planned(ServerLevel level) {
+            return refusal(level);
+        }
+
         public Optional<io.github.izakyl.folkways.core.resident.api.RefusalKind> refusal(ServerLevel level) {
+            // The reservation is released as soon as the drink is consumed, before settlement.
+            if (served) {
+                return Optional.empty();
+            }
             var stock = supplies.stock(cabinet);
             boolean serving = slot < stock.size() && !stock.get(slot).isEmpty()
                 && ItemStack.isSameItemSameComponents(stock.get(slot), bottle);
@@ -604,7 +613,7 @@ final class Dining {
 
         public Outcome commit(ServerLevel level, Worker worker) {
             try {
-                if (worker.body() != who.body() || refusal(level).isPresent()) {
+                if (finished || worker.body() != who.body() || refusal(level).isPresent()) {
                     return Outcome.failed(LivingRefusal.NOTHING_TO_EAT);
                 }
                 Container stock = DiningDrinks.supply(level, cabinet.at()).orElse(null);
@@ -617,6 +626,7 @@ final class Dining {
                 List<ItemStack> left = DiningDrinks.consume(level, who.body(), stock, slot);
                 supplies.observe(cabinet, stock);
                 if (who.body().getPersistentData().getInt("folkways_vanilla:table_drinks") == before) { return Outcome.failed(LivingRefusal.NOTHING_TO_EAT); }
+                served = true;
                 living.drank(who.resident().id(), level.getGameTime());
                 return new Outcome.Done(List.of(), left, Optional.empty());
             } finally { finish(); }
@@ -697,6 +707,7 @@ final class Dining {
         final long expires;
         final NodeSpec spec;
         volatile boolean finished;
+        private boolean served;
         Meal(UUID token, Worker who, Choice choice) {
             this.token = token; this.who = who; this.choice = choice;
             int duration = FolkwaysVanillaConfig.diningMealTicks();
@@ -721,14 +732,22 @@ final class Dining {
             return body.level() == level && body.isAlive() && !body.isRemoved()
                 && level.getEntity(body.getUUID()) == body;
         }
+        @Override
+        public Optional<io.github.izakyl.folkways.core.resident.api.RefusalKind> planned(ServerLevel level) {
+            return refusal(level);
+        }
+
         @Override public Optional<io.github.izakyl.folkways.core.resident.api.RefusalKind> refusal(ServerLevel level) {
+            if (served) {
+                return Optional.empty();
+            }
             return level != choice.table.level || finished || !present()
                     || !valid(choice.table) || !valid(choice.table, choice.seat) || unsafe(who.body())
                     || !DiningTables.available(level, choice.seat.chair, who.body())
                 ? Optional.of(LivingRefusal.NOTHING_TO_EAT) : Optional.empty();
         }
         @Override public Outcome commit(ServerLevel level, Worker eater) {
-            if (refusal(level).isPresent() || eater.body() != who.body()) {
+            if (finished || refusal(level).isPresent() || eater.body() != who.body()) {
                 finish(); return Outcome.failed(LivingRefusal.NOTHING_TO_EAT);
             }
             if (choice.version != null) {
@@ -756,6 +775,7 @@ final class Dining {
                     outcome = new Outcome.Done(List.of(), left, Optional.empty());
                 }
                 if (outcome instanceof Outcome.Done) {
+                    served = true;
                     living.dined(eater.resident().id(), level.getGameTime());
                 }
                 return outcome;

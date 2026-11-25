@@ -69,6 +69,8 @@ final class PlanReads {
             case SUBMITTED -> "Submitted";
             case WITHDRAWN -> "Withdrawn";
             case OFFERED -> "Offered";
+            case NOT_READY -> "NotReady";
+            case READY -> "Ready";
             case STARTED -> "Started";
             case FINISHED -> "Finished";
             case FAILED -> "Failed";

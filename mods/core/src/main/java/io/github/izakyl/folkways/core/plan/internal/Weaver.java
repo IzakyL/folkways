@@ -47,6 +47,8 @@ import io.github.izakyl.folkways.core.work.support.WorkStances;
 import io.github.izakyl.folkways.core.world.api.Stand;
 import io.github.izakyl.folkways.core.world.api.WorldPos;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -56,7 +58,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.SequencedSet;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.LongSupplier;
@@ -115,9 +116,8 @@ public final class Weaver {
     // The live makings by the goods they make, so a further edge for those goods can be added onto one.
     private final Map<ItemSpec, List<Expansion>> makings = new LinkedHashMap<>();
 
-    // Who has work in hand: carrying goods for it, or merely at it.
-    private final Map<UUID, UUID> pinned = new LinkedHashMap<>();
-    private final Map<UUID, UUID> holding = new LinkedHashMap<>();
+    // The goods handed off into a resident's pack, by the work that still needs them.
+    private final Map<UUID, List<Claim>> pinned = new LinkedHashMap<>();
 
     // What was asked for, the growth answering each ask, and what is waiting to be grown.
     private final Map<UUID, Request> asked = new LinkedHashMap<>();
@@ -148,7 +148,7 @@ public final class Weaver {
     private final List<Expansion> madeNow = new ArrayList<>();
     private Situation now;
     private TransportPublication publication;
-    private Crew crew;
+    private Crew crew = new Crew(List.of());
     private Costs costs;
     private Map<UUID, PlanTask> attempted = Map.of();
     private boolean wanted;
@@ -158,6 +158,7 @@ public final class Weaver {
     // What the crew could do when the plan was last checked against it, and whether it can do something else now.
     private List<Able> fitFor = List.of();
     private boolean refitting;
+    private final Set<UUID> refitDue = new LinkedHashSet<>();
     // Residents the plan already has at work: in hand, or bound to work on the graph.
     private final Set<UUID> occupied = new LinkedHashSet<>();
     private final Map<Set<Stand>, Boolean> unreachable = new HashMap<>();
@@ -195,6 +196,7 @@ public final class Weaver {
         @Override
         public void bound(UUID node) {
             dirty.add(node);
+            refitDue.add(node);
         }
     });
     private final Set<UUID> dirty = new LinkedHashSet<>();
@@ -321,6 +323,13 @@ public final class Weaver {
     void know(Situation now, Crew crew, boolean wanted) {
         this.wanted = wanted;
         this.now = now;
+        // A hand can disappear from the crew without releasing its work.
+        for (Crew.Hand hand : this.crew.hands()) {
+            hand.holding().filter(node -> !hand.id().equals(holderOf(crew, node))).ifPresent(dirty::add);
+        }
+        for (Crew.Hand hand : crew.hands()) {
+            hand.holding().filter(node -> !hand.id().equals(holderOf(this.crew, node))).ifPresent(dirty::add);
+        }
         this.crew = crew;
         this.sizing = new PackSizing(crew);
         List<Able> able = crew.hands().stream().map(hand -> Able.of(hand, now.workshops())).toList();
@@ -368,10 +377,14 @@ public final class Weaver {
         joinFailed.clear();
         choosing = null;
 
-        if (refitting && !crew.hands().isEmpty()) {
-            refitting = false;
-            refit();
-            reask();
+        if (!crew.hands().isEmpty()) {
+            List<UUID> due = List.copyOf(refitting ? nodes.keySet() : refitDue);
+            refitDue.clear();
+            refit(due);
+            if (refitting) {
+                refitting = false;
+                reask();
+            }
         }
         if (retry) {
             rechoose();
@@ -610,26 +623,26 @@ public final class Weaver {
         if (!nodes.containsKey(node)) {
             return;
         }
-        for (UUID id : together(node)) {
-            (carrying ? pinned : holding).put(id, worker);
-            dirty.add(id);
-            Expansion grown = grownBy.get(id);
-            if (grown != null) {
-                grown.started = true;
-            }
+        dirty.add(node);
+        Expansion grown = grownBy.get(node);
+        grown.started = true;
+        if (carrying) {
+            pinCargo(node, worker, grown);
         }
     }
 
     public void released(UUID node) {
-        if (nodes.containsKey(node)) {
-            for (UUID id : together(node)) {
-                holding.remove(id);
-                dirty.add(id);
-            }
-        }
+        dirty.add(node);
+        refitDue.add(node);
     }
 
     public void finished(UUID node) {
+        // Removing a step can split its group, so the remaining pieces each need checking.
+        for (UUID member : together(node)) {
+            if (!member.equals(node)) {
+                refitDue.add(member);
+            }
+        }
         var drawn = loans.remove(node);
         if (drawn != null) {
             drawn.forEach(PoolClaims.Loan::run);
@@ -682,18 +695,16 @@ public final class Weaver {
     }
 
     public void left(UUID resident) {
-        holding.entrySet().removeIf(held -> {
-            if (resident.equals(held.getValue())) {
-                dirty.add(held.getKey());
-                return true;
+        for (Crew.Hand hand : crew.hands()) {
+            if (resident.equals(hand.id())) {
+                hand.holding().ifPresent(this::released);
             }
-            return false;
-        });
+        }
         stowing.remove(resident);
         stowFresh.remove(resident);
         List<UUID> stranded = new ArrayList<>();
         for (UUID id : nodes.keySet()) {
-            if (resident.equals(pinned.get(id)) || resident.equals(pinOf(id))) {
+            if (cargoOwnersOf(id).contains(resident) || resident.equals(pinOf(id))) {
                 stranded.add(id);
             }
         }
@@ -812,7 +823,6 @@ public final class Weaver {
         live.clear();
         touched.clear();
         pinned.clear();
-        holding.clear();
         asked.clear();
         answering.clear();
         sprouting.clear();
@@ -843,11 +853,28 @@ public final class Weaver {
         sizing = new PackSizing(new Crew(List.of()));
         fitFor = List.of();
         refitting = false;
+        refitDue.clear();
+        crew = new Crew(List.of());
     }
 
-    // Goods a finished step leaves for the next one are that step's, not anyone else's: picked up into the pack the
-    // next step is done from, or put into the store it draws from, until the stores are read again. What the step
-    // put into a pack was claimed when it was planned, before anyone knew whose pack; now it is that resident's.
+    // A handed claim names the exact consumer of the goods just put into the pack. Keep the claim on its growth
+    // so taking that growth back releases both the goods and the work they bound.
+    private void pinCargo(UUID producer, UUID worker, Expansion grown) {
+        for (var it = grown.claims.listIterator(); it.hasNext(); ) {
+            Claim claim = it.next();
+            if (claim.on() instanceof Resource.Handed handed && producer.equals(handed.by())
+                    && nodes.containsKey(claim.owner())) {
+                Claim cargo = new Claim(new Resource.Cargo(worker, handed.spec()), claim.owner(), claim.amount());
+                claims.drop(claim);
+                claims.take(cargo);
+                it.set(cargo);
+                pinned.computeIfAbsent(cargo.owner(), key -> new ArrayList<>()).add(cargo);
+                refitDue.add(cargo.owner());
+            }
+        }
+    }
+
+    // Goods put into a store are held for the next step until the stores are read again.
     private void handOff(UUID carrier) {
         Expansion grown = grownBy.get(carrier);
         if (grown == null) {
@@ -858,21 +885,6 @@ public final class Weaver {
             if (flow.after().filter(carrier::equals).isPresent() && nodes.containsKey(flow.to())
                     && !next.contains(flow.to())) {
                 next.add(flow.to());
-            }
-        }
-        UUID hand = workerOf(carrier);
-        if (hand != null) {
-            Set<ItemSpec> put = new LinkedHashSet<>();
-            for (Touch touch : touched.getOrDefault(carrier, List.of())) {
-                if (touch.carrying() != null && touch.carrying().count() > 0) {
-                    put.add(touch.carrying().spec());
-                }
-            }
-            for (ItemSpec spec : put) {
-                for (Claim handed : claims.on(new Resource.Handed(carrier, spec))) {
-                    claims.drop(handed);
-                    claims.take(new Claim(new Resource.Cargo(hand, spec), handed.owner(), handed.amount()));
-                }
             }
         }
         for (Claim put : grown.claims) {
@@ -908,6 +920,10 @@ public final class Weaver {
             drop(grown.asked, how);
             return;
         }
+        lose(grown, how);
+    }
+
+    private void lose(Expansion grown, Ending how) {
         for (Edge edge : grown.fed()) {
             if (nodes.containsKey(edge.consumer())) {
                 reopened.add(edge);
@@ -934,33 +950,53 @@ public final class Weaver {
         }
     }
 
-    // The crew can do other things than it could: work no one is fit for any more goes back to what asked for it -
-    // an edge to be fed again, a request to be grown again - so the schedule is never left work no one can be given.
-    // Work a resident has in hand, or carries goods for, stays theirs.
-    private void refit() {
+    // Work in hand stays put. The rest goes back to its source or request if its owners conflict or it no
+    // longer has a hand that can do it. An owner outside the crew keeps the work until they return.
+    private void refit(Collection<UUID> due) {
         Set<UUID> seen = new HashSet<>();
-        for (UUID id : List.copyOf(nodes.keySet())) {
+        for (UUID id : due) {
             if (!nodes.containsKey(id) || seen.contains(id) || nodes.get(id) instanceof RunBoundary) {
                 continue;
             }
             Set<UUID> group = together(id);
             seen.addAll(group);
-            if (group.stream().anyMatch(member -> holding.containsKey(member) || pinned.containsKey(member))
-                    || Fitness.anyone(crew, work(group, peakLoad(group)))) {
+            if (crew.hands().stream().anyMatch(hand -> hand.holding().filter(group::contains).isPresent())) {
                 continue;
+            }
+            Set<UUID> owners = ownersOf(group);
+            Fitness.Work work = work(group, peakLoad(group));
+            if (owners.isEmpty() && Fitness.anyone(crew, work)) {
+                continue;
+            }
+            if (owners.size() == 1) {
+                UUID owner = owners.iterator().next();
+                if (crew.hands().stream().filter(hand -> owner.equals(hand.id()))
+                        .allMatch(hand -> Fitness.of(hand, work).isEmpty())) {
+                    continue;
+                }
             }
             Set<Expansion> grown = new LinkedHashSet<>();
             for (UUID member : group) {
-                Expansion one = grownBy.get(member);
-                if (one != null) {
-                    grown.add(one);
+                grown.add(grownBy.get(member));
+            }
+            Set<Expansion> fed = new LinkedHashSet<>();
+            grown.stream().filter(one -> !one.isRequest()).forEach(fed::add);
+            for (UUID member : group) {
+                List<Claim> cargo = pinned.remove(member);
+                dirty.add(member);
+                if (cargo != null && !fed.isEmpty()) {
+                    // A finished pickup may have left a feed with only its pack reservation still live.
+                    for (Expansion feed : feeding.getOrDefault(member, List.of())) {
+                        if (!Collections.disjoint(feed.claims, cargo)) {
+                            fed.add(feed);
+                        }
+                    }
                 }
             }
-            List<Expansion> fed = grown.stream().filter(one -> !one.isRequest()).toList();
             if (!fed.isEmpty()) {
                 for (Expansion one : fed) {
-                    if (!one.nodes.isEmpty()) {
-                        lose(one.nodes.getFirst(), Ending.DROPPED);
+                    if (live.contains(one)) {
+                        lose(one, Ending.DROPPED);
                     }
                 }
                 continue;
@@ -1358,7 +1394,7 @@ public final class Weaver {
 
     // Where whoever could do work for the consumer stands: whoever it is already bound to, or else anyone.
     private List<WorldPos> handsFor(UUID consumer) {
-        Set<UUID> bound = pinsOf(together(consumer));
+        Set<UUID> bound = ownersOf(together(consumer));
         nodes.get(consumer).worker().ifPresent(bound::add);
         List<WorldPos> at = new ArrayList<>();
         for (Crew.Hand hand : crew.hands()) {
@@ -1432,7 +1468,7 @@ public final class Weaver {
         }
         // Whoever the consumer's work is already bound to - through any step it must be done together with -
         // is the only one whose pack can feed it: goods from another's pack would split the work between two.
-        Set<UUID> bound = pinsOf(together(consumer.id()));
+        Set<UUID> bound = ownersOf(together(consumer.id()));
         consumer.worker().ifPresent(bound::add);
         if (bound.size() > 1) {
             return 0;
@@ -1992,7 +2028,7 @@ public final class Weaver {
             return false;
         }
         for (UUID id : grown.nodes) {
-            if (holding.containsKey(id) || pinned.containsKey(id)) {
+            if (holderOf(crew, id) != null || pinned.containsKey(id)) {
                 return false;
             }
             for (Expansion fed : feeding.getOrDefault(id, List.of())) {
@@ -2463,7 +2499,13 @@ public final class Weaver {
             forget(id);
         }
         grown.nodes.clear();
-        grown.claims.forEach(claims::drop);
+        for (Claim claim : grown.claims) {
+            claims.drop(claim);
+            List<Claim> cargo = pinned.get(claim.owner());
+            if (cargo != null && cargo.remove(claim) && cargo.isEmpty()) {
+                pinned.remove(claim.owner());
+            }
+        }
         for (var loan : grown.loans) {
             loans.computeIfPresent(loan.draw.owner(), (id, draws) -> {
                 draws.remove(loan);
@@ -2550,7 +2592,6 @@ public final class Weaver {
         grownBy.remove(node);
         grownNow.remove(node);
         pinned.remove(node);
-        holding.remove(node);
         touched.remove(node);
     }
 
@@ -2558,9 +2599,7 @@ public final class Weaver {
 
     // The nodes one worker must do together with this one.
     private Set<UUID> together(UUID first) {
-        Set<UUID> group = bonds.fellows(first);
-        group.removeIf(id -> !id.equals(first) && !nodes.containsKey(id));
-        return group;
+        return bonds.fellows(first, nodes::containsKey);
     }
 
     private UUID pinOf(UUID node) {
@@ -2572,27 +2611,45 @@ public final class Weaver {
         return null;
     }
 
-    // Everyone some node of the group is bound to.
-    private Set<UUID> pinsOf(Set<UUID> group) {
-        Set<UUID> pins = new LinkedHashSet<>();
-        for (UUID id : group) {
-            if (nodes.containsKey(id)) {
-                UUID pin = workerOf(id);
-                if (pin != null) {
-                    pins.add(pin);
-                }
+    private List<UUID> cargoOwnersOf(UUID node) {
+        return pinned.getOrDefault(node, List.of()).stream()
+            .map(claim -> ((Resource.Cargo) claim.on()).resident()).toList();
+    }
+
+    // A group follows whoever is doing a step or whose pack supplies one.
+    private Set<UUID> ownersOf(Set<UUID> group) {
+        Set<UUID> owners = new LinkedHashSet<>();
+        for (Crew.Hand hand : crew.hands()) {
+            if (hand.holding().filter(group::contains).isPresent()) {
+                owners.add(hand.id());
             }
         }
-        return pins;
+        for (UUID node : group) {
+            owners.addAll(cargoOwnersOf(node));
+            UUID worker = pinOf(node);
+            if (worker != null) {
+                owners.add(worker);
+            }
+        }
+        return owners;
+    }
+
+    private static UUID holderOf(Crew crew, UUID node) {
+        for (Crew.Hand hand : crew.hands()) {
+            if (hand.holding().filter(node::equals).isPresent()) {
+                return hand.id();
+            }
+        }
+        return null;
     }
 
     private UUID workerOf(UUID node) {
-        UUID holder = holding.get(node);
+        UUID holder = holderOf(crew, node);
         if (holder != null) {
             return holder;
         }
-        UUID carrier = pinned.get(node);
-        return carrier != null ? carrier : pinOf(node);
+        List<UUID> carriers = cargoOwnersOf(node);
+        return carriers.isEmpty() ? pinOf(node) : carriers.getFirst();
     }
 
     // Who must do the node: whoever has it in hand or carries goods for it, whoever a growth named, or whoever the
@@ -2771,20 +2828,19 @@ public final class Weaver {
                 continue;
             }
             // Groups are shown joined only through work still on the graph: work done binds nothing together.
-            Set<UUID> group = bonds.fellows(id, nodes::containsKey);
+            Set<UUID> group = together(id);
             grouped.addAll(group);
-            // A group is done by one resident: whoever has some of it in hand, or else whoever any of it is bound
-            // to. Two of them in one group is a plan the schedule cannot keep, and a bug in how it was grown.
-            SequencedSet<UUID> owners = new LinkedHashSet<>();
-            group.stream().map(holding::get).filter(Objects::nonNull).forEach(owners::add);
-            group.forEach(member -> ownerOf(member).ifPresent(owners::add));
+            Set<UUID> owners = ownersOf(group);
+            for (UUID member : group) {
+                nodes.get(member).worker().ifPresent(owners::add);
+            }
             if (owners.size() > 1) {
                 LOGGER.error("work that one resident must do together is bound to {}: {}", owners, group);
             }
             Set<UUID> together = group.size() > 1 ? Set.copyOf(group) : null;
             for (UUID member : group) {
                 UUID pin = together == null ? ownerOf(member).orElse(null)
-                    : owners.isEmpty() ? null : owners.getFirst();
+                    : owners.isEmpty() ? null : owners.iterator().next();
                 if (!Objects.equals(together, shownGroups.get(member))) {
                     if (together == null) {
                         shownGroups.remove(member);
@@ -2944,7 +3000,7 @@ public final class Weaver {
 
     // The work of a group as fitness reads it: each step, everyone any of it is bound to, and the room it needs.
     private Fitness.Work work(Set<UUID> group, long cells) {
-        Set<UUID> bound = pinsOf(group);
+        Set<UUID> bound = ownersOf(group);
         List<NodeSpec> steps = new ArrayList<>(group.size());
         for (UUID id : group) {
             Node node = nodes.get(id);
