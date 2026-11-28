@@ -18,6 +18,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.Set;
 import java.util.TreeMap;
 import javax.annotation.Nullable;
@@ -79,6 +80,8 @@ final class Layering {
 
     private static final int REACH = 2;
     private static final int MOST_FLOODED = 1 << 21;
+    // Heights this close to the nearest one to home count as the same way in.
+    private static final int HOME_SLACK = 3;
     static final int MOST_CARVED = 32;
     static final int CARVE_SPAN = 8;
     private static final int MOST_DRAINED = 256;
@@ -98,13 +101,16 @@ final class Layering {
     private final Map<BlockPos, BuildRefusal> refused = new LinkedHashMap<>();
     private final Map<Integer, Set<Integer>> hard = new HashMap<>();
     private final Set<BlockPos> latched;
+    // The height residents come from: that of the colony's nearest other holding, when it has one.
+    private final OptionalInt home;
     private final Map<BlockPos, Long> changedAt = new HashMap<>();
     private final Map<BlockPos, BlockState> changedTo = new HashMap<>();
 
-    private Layering(LevelReader level, BuildTarget target, Set<BlockPos> latched) {
+    private Layering(LevelReader level, BuildTarget target, Set<BlockPos> latched, OptionalInt home) {
         this.level = level;
         this.target = target;
         this.latched = latched;
+        this.home = home;
     }
 
     private static final class Draft {
@@ -136,11 +142,15 @@ final class Layering {
 
     /** Plans what is left of the target: every cell not met yet, and not one of {@code latched}, met once already. */
     static Plan of(LevelReader level, BuildTarget target, Set<BlockPos> latched) {
-        return new Layering(level, target, latched).plan();
+        return of(level, target, latched, OptionalInt.empty());
+    }
+
+    static Plan of(LevelReader level, BuildTarget target, Set<BlockPos> latched, OptionalInt home) {
+        return new Layering(level, target, latched, home).plan();
     }
 
     static List<Step> carves(LevelReader level, BuildTarget target, Set<BlockPos> met) {
-        Layering layering = new Layering(level, target, met);
+        Layering layering = new Layering(level, target, met, OptionalInt.empty());
         List<BlockPos> pending = layering.pending();
         Set<BlockPos> open = new HashSet<>(pending);
         for (BlockPos cell : pending) {
@@ -152,8 +162,8 @@ final class Layering {
         return layering.live().stream().map(draft -> draft.step).toList();
     }
 
-    static Planning planning(LevelReader level, BuildTarget target, Set<BlockPos> met) {
-        return new Layering(level, target, met).new Planning();
+    static Planning planning(LevelReader level, BuildTarget target, Set<BlockPos> met, OptionalInt home) {
+        return new Layering(level, target, met, home).new Planning();
     }
 
     private Plan plan() {
@@ -643,7 +653,9 @@ final class Layering {
     /**
      * The plane the build goes out from: the height a body stands at, on the ground the world has now and open to
      * the outside, where the most such places touch the work. That is where the work is come to, not where most of
-     * it lies. Failing any, the bottom of the work.
+     * it lies. Open is not the way in, though: a cave the work cuts through is open too. With a home height, only
+     * the heights nearest it count, so a mine is begun from its mouth rather than from a cavern at its foot. Failing
+     * any, the height of the work nearest home, or else its bottom.
      */
     private Opening opening() {
         BlockPos min = null;
@@ -657,11 +669,13 @@ final class Layering {
                 new LongOpenHashSet());
         }
         int lowest = min.getY();
+        int highest = max.getY();
         min = min.offset(-REACH, -REACH, -REACH);
         max = max.offset(REACH, REACH, REACH);
         long volume = (long) (max.getX() - min.getX() + 1) * (max.getY() - min.getY() + 1) * (max.getZ() - min.getZ() + 1);
         if (volume > MOST_FLOODED) {
-            return new Opening(lowest, new LongOpenHashSet());
+            int plane = home.isPresent() ? Math.clamp(home.getAsInt(), lowest, highest) : lowest;
+            return new Opening(plane, new LongOpenHashSet());
         }
         LongOpenHashSet outside = outside(min, max);
         TreeMap<Integer, Integer> come = new TreeMap<>();
@@ -682,9 +696,14 @@ final class Layering {
                 }
             }
         });
-        int plane = lowest;
+        int plane = home.isPresent() ? Math.clamp(home.getAsInt(), lowest, highest) : lowest;
         int most = 0;
+        int nearest = home.isPresent() ? come.keySet().stream().mapToInt(y -> Math.abs(y - home.getAsInt())).min()
+            .orElse(0) : 0;
         for (Map.Entry<Integer, Integer> height : come.entrySet()) {
+            if (home.isPresent() && Math.abs(height.getKey() - home.getAsInt()) > nearest + HOME_SLACK) {
+                continue;
+            }
             if (height.getValue() > most) {
                 most = height.getValue();
                 plane = height.getKey();

@@ -1,5 +1,6 @@
 package io.github.izakyl.folkways.vanilla.build;
 
+import io.github.izakyl.folkways.core.colony.api.Claim;
 import io.github.izakyl.folkways.core.colony.api.Colony;
 import io.github.izakyl.folkways.core.item.api.Containers;
 import io.github.izakyl.folkways.core.plan.api.Grown;
@@ -56,13 +57,15 @@ final class SiteRig implements BuildSite.Asks {
     final BuildSite site;
     private final Map<UUID, UUID> holders = new HashMap<>();
     private final Map<UUID, Shift> shifts = new HashMap<>();
+    private final List<Claim> claims = new ArrayList<>();
     private final Colony colony = (Colony) Proxy.newProxyInstance(SiteRig.class.getClassLoader(),
         new Class<?>[] {Colony.class}, (proxy, method, args) -> switch (method.getName()) {
             case "holder" -> Optional.ofNullable(holders.get((UUID) args[0]));
             case "isHeld" -> holders.containsKey((UUID) args[0]);
             case "isSuspended", "isApproaching" -> false;
             case "hold", "claimAt", "claimOf", "claim", "store" -> Optional.empty();
-            case "storesIn", "storeRules", "claims" -> List.of();
+            case "storesIn", "storeRules" -> List.of();
+            case "claims" -> List.copyOf(claims);
             default -> method.isDefault()
                 ? java.lang.reflect.InvocationHandler.invokeDefault(proxy, method, args) : null;
         });
@@ -83,6 +86,14 @@ final class SiteRig implements BuildSite.Asks {
 
     static SiteRig start(ServerLevel level, UUID order, BuildTarget target) {
         SiteRig rig = new SiteRig(order, target, new TemporaryScaffolds(() -> { }));
+        rig.site.start(level, Set.of(), Set.of());
+        return rig;
+    }
+
+    // A site whose colony already holds these, elsewhere.
+    static SiteRig start(ServerLevel level, BuildTarget target, List<Claim> held) {
+        SiteRig rig = new SiteRig(UUID.randomUUID(), target, new TemporaryScaffolds(() -> { }));
+        rig.claims.addAll(held);
         rig.site.start(level, Set.of(), Set.of());
         return rig;
     }

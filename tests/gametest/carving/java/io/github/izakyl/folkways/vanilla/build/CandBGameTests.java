@@ -1332,6 +1332,7 @@ public final class CandBGameTests {
             case "kept" -> saved.get();
             case "keep" -> { saved.set(((CompoundTag) args[1]).copy()); yield null; }
             case "views" -> List.of(view);
+            case "claims" -> List.of();
             default -> throw new AssertionError(method.getName());
         });
     }

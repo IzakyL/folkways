@@ -1,5 +1,6 @@
 package io.github.izakyl.folkways.vanilla.build;
 
+import io.github.izakyl.folkways.core.colony.api.Claim;
 import io.github.izakyl.folkways.core.colony.api.Colony;
 import io.github.izakyl.folkways.core.colony.api.PackKeeps;
 import io.github.izakyl.folkways.core.inventory.api.InventorySnapshot;
@@ -55,6 +56,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -182,6 +184,8 @@ final class BuildSite {
 
     // How far past the work the shared ways are closed, including room for its working surfaces.
     private static final int CLOSED_MARGIN = 2;
+    // A holding this near the work is taken for its own, not one the residents come from.
+    private static final int HOME_MARGIN = 2;
 
     private static final int FAR = Integer.MAX_VALUE / 2;
 
@@ -414,7 +418,51 @@ final class BuildSite {
         latched.retainAll(target.cells().keySet());
         metJoints.forEach(joint -> joined.add(joint.moved(target.storageOrigin())));
         joined.retainAll(target.joints());
-        planning = Layering.planning(level, target, latched);
+        planning = Layering.planning(level, target, latched, home());
+    }
+
+    /**
+     * The height residents come to the site from: that of the colony's nearest other holding, beside the site rather
+     * than in it. Nearest by ground distance alone, since its height is what is asked.
+     */
+    private OptionalInt home() {
+        if (!(target.realm() instanceof Realm.Dimension) || target.cells().isEmpty()) {
+            return OptionalInt.empty();
+        }
+        BlockPos min = null;
+        BlockPos max = null;
+        for (BlockPos cell : target.cells().keySet()) {
+            min = min == null ? cell : BlockPos.min(min, cell);
+            max = max == null ? cell : BlockPos.max(max, cell);
+        }
+        BlockPos low = min.offset(-HOME_MARGIN, -HOME_MARGIN, -HOME_MARGIN);
+        BlockPos high = max.offset(HOME_MARGIN, HOME_MARGIN, HOME_MARGIN);
+        long best = Long.MAX_VALUE;
+        OptionalInt height = OptionalInt.empty();
+        for (Claim claim : asks.colony().map(Colony::claims).orElse(List.of())) {
+            List<WorldPos> cells = claim.what().cells();
+            if (cells.stream().anyMatch(at -> at.realm().equals(target.realm()) && inside(at.cell(), low, high))) {
+                continue;
+            }
+            for (WorldPos at : cells) {
+                if (!at.realm().equals(target.realm())) {
+                    continue;
+                }
+                BlockPos cell = at.cell();
+                long dx = Math.max(0, Math.max(min.getX() - cell.getX(), cell.getX() - max.getX()));
+                long dz = Math.max(0, Math.max(min.getZ() - cell.getZ(), cell.getZ() - max.getZ()));
+                if (dx * dx + dz * dz < best) {
+                    best = dx * dx + dz * dz;
+                    height = OptionalInt.of(cell.getY());
+                }
+            }
+        }
+        return height;
+    }
+
+    private static boolean inside(BlockPos cell, BlockPos low, BlockPos high) {
+        return cell.getX() >= low.getX() && cell.getX() <= high.getX() && cell.getY() >= low.getY()
+            && cell.getY() <= high.getY() && cell.getZ() >= low.getZ() && cell.getZ() <= high.getZ();
     }
 
     String startingStage() {

@@ -2,6 +2,7 @@ package io.github.izakyl.folkways.vanilla.build;
 
 import io.github.izakyl.folkways.core.base.persist.Reader;
 import io.github.izakyl.folkways.core.colony.api.Claim;
+import io.github.izakyl.folkways.core.colony.api.Claimed;
 import io.github.izakyl.folkways.core.colony.api.Colony;
 import io.github.izakyl.folkways.core.colony.api.ColonyView;
 import io.github.izakyl.folkways.core.item.api.Goods;
@@ -36,6 +37,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -1191,6 +1193,67 @@ public final class BuildPlanningGameTests {
             max.getX() - min.getX() + 1, max.getY() - min.getY() + 1, max.getZ() - min.getZ() + 1).orElseThrow(), 0L);
         return BuildTarget.of(BlueprintBuildOrder.create(blueprint.id(), "printed", WorldPos.of(level, min),
             java.util.Optional.empty(), "", 0L), blueprint.confirm(level));
+    }
+
+    @GameTest(template = "empty_large", templateNamespace = "folkways_core", timeoutTicks = 100)
+    public static void aCaveAtTheFootDoesNotDrawThePlaneDownFromHome(GameTestHelper helper) {
+        Map<BlockPos, BlockState> cells = shaftIntoCave(helper);
+        BuildTarget target = target(helper.getLevel(), cells);
+        int surface = at(helper, 0, 18, 0).getY();
+        int cave = at(helper, 0, 7, 0).getY();
+        helper.assertValueEqual(Layering.of(helper.getLevel(), target).plane(), cave,
+            "with no home, the cavern floor touches the most of the work");
+        helper.assertValueEqual(Layering.of(helper.getLevel(), target, Set.of(), OptionalInt.of(surface)).plane(),
+            surface, "from a home on the surface, the work goes out from the shaft mouth");
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty_large", templateNamespace = "folkways_core", timeoutTicks = 100)
+    public static void aSiteGoesOutFromTheHeightOfTheNearestOtherHolding(GameTestHelper helper) {
+        Map<BlockPos, BlockState> cells = shaftIntoCave(helper);
+        WorldPos far = WorldPos.of(helper.getLevel(), at(helper, 1, 7, 1));
+        WorldPos near = WorldPos.of(helper.getLevel(), at(helper, 3, 18, 11));
+        WorldPos own = WorldPos.of(helper.getLevel(), at(helper, 11, 18, 11));
+        ResourceLocation owner = ResourceLocation.fromNamespaceAndPath(FolkwaysVanillaMod.ID, "test");
+        SiteRig rig = SiteRig.start(helper.getLevel(), target(helper.getLevel(), cells), List.of(
+            new Claim(UUID.randomUUID(), owner, new Claimed.Point(far)),
+            new Claim(UUID.randomUUID(), owner, new Claimed.Point(near)),
+            new Claim(UUID.randomUUID(), owner, new Claimed.Point(own))));
+        BuildSite.Piece first = rig.site.pieces().stream()
+            .min(java.util.Comparator.comparingLong(piece -> piece.work().key())).orElseThrow();
+        helper.assertTrue(first.work().focus().getY() >= at(helper, 0, 16, 0).getY(),
+            "the shaft is begun at its mouth, not at " + first.work().focus());
+        rig.site.close();
+        helper.succeed();
+    }
+
+    // A 3x3 shaft from the surface into a wide cavern, walled round in the cavern as a mine seals what it cuts.
+    private static Map<BlockPos, BlockState> shaftIntoCave(GameTestHelper helper) {
+        for (BlockPos cell : BlockPos.betweenClosed(at(helper, 1, 1, 1), at(helper, 22, 17, 22))) {
+            boolean hollow = cell.getY() >= at(helper, 0, 7, 0).getY() && cell.getY() <= at(helper, 0, 9, 0).getY()
+                && cell.getX() >= at(helper, 2, 0, 0).getX() && cell.getX() <= at(helper, 21, 0, 0).getX()
+                && cell.getZ() >= at(helper, 0, 0, 2).getZ() && cell.getZ() <= at(helper, 0, 0, 21).getZ();
+            helper.getLevel().setBlock(cell,
+                hollow ? Blocks.AIR.defaultBlockState() : Blocks.STONE.defaultBlockState(), 2);
+        }
+        Map<BlockPos, BlockState> cells = new LinkedHashMap<>();
+        for (int y = 10; y <= 17; y++) {
+            for (int x = 10; x <= 12; x++) {
+                for (int z = 10; z <= 12; z++) {
+                    cells.put(at(helper, x, y, z), Blocks.AIR.defaultBlockState());
+                }
+            }
+        }
+        for (int y = 7; y <= 9; y++) {
+            for (int x = 9; x <= 13; x++) {
+                for (int z = 9; z <= 13; z++) {
+                    if (x == 9 || x == 13 || z == 9 || z == 13) {
+                        cells.put(at(helper, x, y, z), Blocks.COBBLESTONE.defaultBlockState());
+                    }
+                }
+            }
+        }
+        return cells;
     }
 
     private static BlockPos at(GameTestHelper helper, int x, int y, int z) {
